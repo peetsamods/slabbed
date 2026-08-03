@@ -1,6 +1,7 @@
 package com.slabbed.placement;
 
 import com.slabbed.compat.CompatHooks;
+import com.slabbed.util.SlabSupport;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.world.InteractionResult;
@@ -9,6 +10,7 @@ import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.BedBlock;
 import net.minecraft.world.level.block.EntityBlock;
 import net.minecraft.world.level.block.FlowerPotBlock;
+import net.minecraft.world.level.block.PointedDripstoneBlock;
 import net.minecraft.world.level.block.SlabBlock;
 import net.minecraft.world.level.block.state.BlockBehaviour;
 import net.minecraft.world.level.block.state.BlockState;
@@ -130,6 +132,19 @@ public final class LandingHitValidationPolicy {
         if (heldFamily == LandingResolver.Family.UNSUPPORTED) {
             return Double.NaN;
         }
+        if (pointedDripstoneSideContinuationDirection(
+                ownerPos, ownerState, ownerDy, hitFace, hitPos, heldState) != null) {
+            return ownerDy;
+        }
+        if (isPointedDripstoneOwnerFacingHit(ownerState, hitFace)
+                && insideTranslatedCell(ownerPos, ownerDy, hitPos)) {
+            return ownerDy;
+        }
+        if (SlabSupport.isBeta35VerticalChainVisibleOwnerObject(ownerState)
+                && hitFace == Direction.DOWN
+                && insideTranslatedCell(ownerPos, ownerDy, hitPos)) {
+            return ownerDy;
+        }
         if (ownerState.getBlock() instanceof SlabBlock) {
             return insideTranslatedSlabShape(ownerPos, ownerState, ownerDy, hitPos)
                     ? ownerDy
@@ -150,6 +165,43 @@ public final class LandingHitValidationPolicy {
                 && hitPos.z >= ownerPos.getZ() - EPSILON
                 && hitPos.z <= ownerPos.getZ() + 1.0d + EPSILON;
         return insideOwnerEnvelope ? ownerDy : Double.NaN;
+    }
+
+    /**
+     * Shared admission contract for a horizontal hit on a translated pointed-dripstone owner.
+     *
+     * @return the owner's vertical continuation direction, or {@code null} when vanilla remains
+     *         authoritative
+     */
+    public static Direction pointedDripstoneSideContinuationDirection(
+            BlockPos ownerPos,
+            BlockState ownerState,
+            double ownerDy,
+            Direction hitFace,
+            Vec3 hitPos,
+            BlockState heldState
+    ) {
+        if (ownerPos == null
+                || ownerState == null
+                || hitFace == null
+                || hitPos == null
+                || heldState == null
+                || !Double.isFinite(ownerDy)
+                || !(ownerDy < -EPSILON)
+                || !hitFace.getAxis().isHorizontal()
+                || !(ownerState.getBlock() instanceof PointedDripstoneBlock)
+                || !(heldState.getBlock() instanceof PointedDripstoneBlock)
+                || !ownerState.hasProperty(PointedDripstoneBlock.TIP_DIRECTION)
+                || !insideTranslatedCell(ownerPos, ownerDy, hitPos)) {
+            return null;
+        }
+        return ownerState.getValue(PointedDripstoneBlock.TIP_DIRECTION);
+    }
+
+    private static boolean isPointedDripstoneOwnerFacingHit(BlockState state, Direction hitFace) {
+        return state.getBlock() instanceof PointedDripstoneBlock
+                && state.hasProperty(PointedDripstoneBlock.TIP_DIRECTION)
+                && state.getValue(PointedDripstoneBlock.TIP_DIRECTION) == hitFace;
     }
 
     private static String directNoItemUseMethodName() {

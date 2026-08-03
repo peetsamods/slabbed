@@ -69,6 +69,14 @@ public final class SlabEnsembleCoherence {
         BlockPos upperPos = lowerPos.above();
         BlockState lower = world.getBlockState(lowerPos);
         BlockState upper = world.getBlockState(upperPos);
+        return classifyVerticalPair(lower, dyLower, upper, dyUpper);
+    }
+
+    /**
+     * Classify two vertically adjacent states using their already-resolved offsets.
+     */
+    public static Verdict classifyVerticalPair(BlockState lower, double dyLower,
+                                               BlockState upper, double dyUpper) {
         if (lower.isAir() || upper.isAir() || isTsOwned(lower) || isTsOwned(upper)) {
             return Verdict.COHERENT;
         }
@@ -105,6 +113,70 @@ public final class SlabEnsembleCoherence {
                                            double dyLower, double dyUpper) {
         Verdict verdict = classifyVerticalPair(world, lowerPos, dyLower, dyUpper);
         return verdict.kind() == Kind.GAP ? verdict.depth() : 0.0;
+    }
+
+    /**
+     * Whether relative frozen translation introduces or increases strict collision-body overlap
+     * beyond the same states' canonical adjacent-cell baseline. Face, edge, and corner contact remain legal.
+     */
+    public static boolean relativeTranslationIncreasesBodyOverlap(
+            BlockState firstState,
+            BlockPos firstPos,
+            double firstDy,
+            BlockState secondState,
+            BlockPos secondPos,
+            double secondDy
+    ) {
+        if (firstState == null || firstPos == null || secondState == null || secondPos == null
+                || firstState.isAir() || secondState.isAir()
+                || isTransitionEnvelopeExcluded(firstState)
+                || isTransitionEnvelopeExcluded(secondState)
+                || !Double.isFinite(firstDy) || !Double.isFinite(secondDy)) {
+            return false;
+        }
+
+        VoxelShape firstBody = vanillaCollisionShape(firstState);
+        VoxelShape secondBody = vanillaCollisionShape(secondState);
+        if (firstBody.isEmpty() || secondBody.isEmpty()) {
+            return false;
+        }
+
+        for (AABB firstBox : firstBody.toAabbs()) {
+            for (AABB secondBox : secondBody.toAabbs()) {
+                double xDepth = Math.min(
+                        firstBox.maxX + firstPos.getX(),
+                        secondBox.maxX + secondPos.getX())
+                        - Math.max(
+                        firstBox.minX + firstPos.getX(),
+                        secondBox.minX + secondPos.getX());
+                double zDepth = Math.min(
+                        firstBox.maxZ + firstPos.getZ(),
+                        secondBox.maxZ + secondPos.getZ())
+                        - Math.max(
+                        firstBox.minZ + firstPos.getZ(),
+                        secondBox.minZ + secondPos.getZ());
+                if (xDepth <= EPS || zDepth <= EPS) {
+                    continue;
+                }
+
+                double vanillaYDepth = Math.min(
+                        firstBox.maxY + firstPos.getY(),
+                        secondBox.maxY + secondPos.getY())
+                        - Math.max(
+                        firstBox.minY + firstPos.getY(),
+                        secondBox.minY + secondPos.getY());
+                double translatedYDepth = Math.min(
+                        firstBox.maxY + firstPos.getY() + firstDy,
+                        secondBox.maxY + secondPos.getY() + secondDy)
+                        - Math.max(
+                        firstBox.minY + firstPos.getY() + firstDy,
+                        secondBox.minY + secondPos.getY() + secondDy);
+                if (translatedYDepth > EPS && translatedYDepth > vanillaYDepth + EPS) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     /**

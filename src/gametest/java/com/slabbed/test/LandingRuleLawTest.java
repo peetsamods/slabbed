@@ -4,6 +4,7 @@ import com.slabbed.Slabbed;
 import com.slabbed.anchor.SlabAnchorAttachment;
 import com.slabbed.placement.LandingHitValidationPolicy;
 import com.slabbed.placement.LandingResolver;
+import com.slabbed.util.SlabEnsembleCoherence;
 import com.slabbed.util.SlabSupport;
 import com.slabbed.util.SlabbedOffsetRaycast;
 import it.unimi.dsi.fastutil.longs.Long2DoubleOpenHashMap;
@@ -34,6 +35,7 @@ import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.DoorBlock;
 import net.minecraft.world.level.block.FlowerPotBlock;
+import net.minecraft.world.level.block.PointedDripstoneBlock;
 import net.minecraft.world.level.block.SlabBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.BedPart;
@@ -2885,5 +2887,907 @@ public final class LandingRuleLawTest {
 
     private static String test32Fact(SlabAnchorAttachment.PlacementDyFact fact) {
         return fact.present() ? Double.toString(Double.longBitsToDouble(fact.rawBits())) : "absent";
+    }
+
+    /**
+     * TEST37 server-admission RED: Minecraft's packet handler validates a use hit against the vanilla
+     * block center before {@code BlockItem.useOn}. A DOWN-face hit on a -0.5 chain remains within the
+     * mapped component tolerance without help; the recorder's -1.0 chain hit is 1.5 below its vanilla
+     * center and must therefore receive the owner's exact frozen offset from the pure policy.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void chainOwnerFollowerHitShiftsServerValidationCenter(GameTestHelper h) {
+        final double serverComponentTolerance = 1.0000001d;
+        BlockState chainOwner = Blocks.IRON_CHAIN.defaultBlockState()
+                .setValue(BlockStateProperties.AXIS, Direction.Axis.Y);
+        BlockState heldLantern = Blocks.LANTERN.defaultBlockState();
+
+        // TEST37 PASS owner 1031,-59,665, owner-local DOWN-face hit Y=-0.5 (absolute -59.5).
+        BlockPos controlOwner = new BlockPos(1031, -59, 665);
+        Vec3 controlHit = new Vec3(1031.5d, -59.5d, 665.5d);
+        double controlDelta = Math.abs(controlHit.y - Vec3.atCenterOf(controlOwner).y);
+        if (Double.doubleToRawLongBits(controlDelta) != Double.doubleToRawLongBits(1.0d)
+                || controlDelta > serverComponentTolerance) {
+            throw h.assertionException(BlockPos.ZERO,
+                    "TEST37 control premise: -0.5 chain DOWN hit must remain within vanilla component tolerance; "
+                            + "delta=" + controlDelta + " tolerance=" + serverComponentTolerance);
+        }
+
+        // TEST37 RED owner 1030,-58,666, owner-local DOWN-face hit Y=-1.0 (absolute -59.0).
+        BlockPos redOwner = new BlockPos(1030, -58, 666);
+        Vec3 redHit = new Vec3(1030.5d, -59.0d, 666.5d);
+        double unshiftedDelta = Math.abs(redHit.y - Vec3.atCenterOf(redOwner).y);
+        if (unshiftedDelta <= serverComponentTolerance) {
+            throw h.assertionException(BlockPos.ZERO,
+                    "TEST37 RED premise contradicted: -1.0 chain DOWN hit must be outside vanilla component tolerance; "
+                            + "delta=" + unshiftedDelta + " tolerance=" + serverComponentTolerance);
+        }
+
+        BlockState horizontalChainOwner = chainOwner.setValue(BlockStateProperties.AXIS, Direction.Axis.X);
+        BlockState nonChainObjectOwner = Blocks.OAK_FENCE.defaultBlockState();
+        Vec3 outsideTranslatedX = new Vec3(redOwner.getX() + 1.5d, redHit.y, redHit.z);
+        Vec3 outsideTranslatedY = new Vec3(redHit.x, redOwner.getY() - 1.25d, redHit.z);
+
+        double horizontalChain = LandingHitValidationPolicy.shiftedCenterDy(
+                redOwner, horizontalChainOwner, -1.0d, Direction.DOWN, redHit, heldLantern);
+        double nonChainObject = LandingHitValidationPolicy.shiftedCenterDy(
+                redOwner, nonChainObjectOwner, -1.0d, Direction.DOWN, redHit, heldLantern);
+        double upFace = LandingHitValidationPolicy.shiftedCenterDy(
+                redOwner, chainOwner, -1.0d, Direction.UP, redHit, heldLantern);
+        double horizontalFace = LandingHitValidationPolicy.shiftedCenterDy(
+                redOwner, chainOwner, -1.0d, Direction.EAST, redHit, heldLantern);
+        double outsideX = LandingHitValidationPolicy.shiftedCenterDy(
+                redOwner, chainOwner, -1.0d, Direction.DOWN, outsideTranslatedX, heldLantern);
+        double outsideY = LandingHitValidationPolicy.shiftedCenterDy(
+                redOwner, chainOwner, -1.0d, Direction.DOWN, outsideTranslatedY, heldLantern);
+        double flatOwner = LandingHitValidationPolicy.shiftedCenterDy(
+                redOwner, chainOwner, 0.0d, Direction.DOWN, redHit, heldLantern);
+        double nullHeld = LandingHitValidationPolicy.shiftedCenterDy(
+                redOwner, chainOwner, -1.0d, Direction.DOWN, redHit, null);
+        double unsupportedHeld = LandingHitValidationPolicy.shiftedCenterDy(
+                redOwner, chainOwner, -1.0d, Direction.DOWN, redHit, Blocks.AIR.defaultBlockState());
+
+        java.util.function.Predicate<BlockState> previousCompatOverride =
+                LandingResolver.compatFinalStateTestOverride;
+        double compatHeld;
+        try {
+            LandingResolver.compatFinalStateTestOverride = state -> state.is(Blocks.LANTERN);
+            compatHeld = LandingHitValidationPolicy.shiftedCenterDy(
+                    redOwner, chainOwner, -1.0d, Direction.DOWN, redHit, heldLantern);
+        } finally {
+            LandingResolver.compatFinalStateTestOverride = previousCompatOverride;
+        }
+
+        if (!Double.isNaN(horizontalChain)
+                || !Double.isNaN(nonChainObject)
+                || !Double.isNaN(upFace)
+                || !Double.isNaN(horizontalFace)
+                || !Double.isNaN(outsideX)
+                || !Double.isNaN(outsideY)
+                || !Double.isNaN(flatOwner)
+                || !Double.isNaN(nullHeld)
+                || !Double.isNaN(unsupportedHeld)
+                || !Double.isNaN(compatHeld)) {
+            throw h.assertionException(BlockPos.ZERO,
+                    "TEST37 hit-policy negative control widened: horizontalChain=" + horizontalChain
+                            + " nonChainObject=" + nonChainObject + " upFace=" + upFace
+                            + " horizontalFace=" + horizontalFace + " outsideX=" + outsideX
+                            + " outsideY=" + outsideY + " flatOwner=" + flatOwner + " nullHeld=" + nullHeld
+                            + " unsupportedHeld=" + unsupportedHeld + " compatHeld=" + compatHeld);
+        }
+        Slabbed.LOGGER.info(
+                "TEST37-HIT-POLICY-NEGATIVES | PASS horizontalChain nonChainObject upFace horizontalFace "
+                        + "outsideX outsideY flatOwner nullHeld unsupportedHeld compatHeld");
+
+        double shiftedMinus1 = LandingHitValidationPolicy.shiftedCenterDy(
+                redOwner, chainOwner, -1.0d, Direction.DOWN, redHit, heldLantern);
+
+        // TEST37 deeper lantern RED: owner 1031,-57,667; translated DOWN hit at exact dy=-1.5.
+        BlockPos minus15Owner = new BlockPos(1031, -57, 667);
+        Vec3 minus15Hit = new Vec3(1031.464385d, -58.5d, 667.502332d);
+        double minus15UnshiftedDelta = Math.abs(minus15Hit.y - Vec3.atCenterOf(minus15Owner).y);
+        if (Double.doubleToRawLongBits(minus15UnshiftedDelta) != Double.doubleToRawLongBits(2.0d)
+                || minus15UnshiftedDelta <= serverComponentTolerance) {
+            throw h.assertionException(BlockPos.ZERO,
+                    "TEST37 -1.5 premise: translated chain hit must be exactly 2.0 from vanilla center "
+                            + "and outside tolerance; delta=" + minus15UnshiftedDelta
+                            + " tolerance=" + serverComponentTolerance);
+        }
+        double shiftedMinus15 = LandingHitValidationPolicy.shiftedCenterDy(
+                minus15Owner, chainOwner, -1.5d, Direction.DOWN, minus15Hit, heldLantern);
+
+        // TEST37 chain-on-chain corroboration: owner 1037,-52,665; translated DOWN hit at exact dy=-4.0.
+        BlockPos minus4Owner = new BlockPos(1037, -52, 665);
+        Vec3 minus4Hit = new Vec3(1037.522279d, -56.0d, 665.501499d);
+        double minus4UnshiftedDelta = Math.abs(minus4Hit.y - Vec3.atCenterOf(minus4Owner).y);
+        if (Double.doubleToRawLongBits(minus4UnshiftedDelta) != Double.doubleToRawLongBits(4.5d)
+                || minus4UnshiftedDelta <= serverComponentTolerance) {
+            throw h.assertionException(BlockPos.ZERO,
+                    "TEST37 -4.0 premise: translated chain hit must be exactly 4.5 from vanilla center "
+                            + "and outside tolerance; delta=" + minus4UnshiftedDelta
+                            + " tolerance=" + serverComponentTolerance);
+        }
+        double shiftedMinus4 = LandingHitValidationPolicy.shiftedCenterDy(
+                minus4Owner, chainOwner, -4.0d, Direction.DOWN, minus4Hit, chainOwner);
+
+        long minus1ExpectedBits = Double.doubleToRawLongBits(-1.0d);
+        long minus15ExpectedBits = Double.doubleToRawLongBits(-1.5d);
+        long minus4ExpectedBits = Double.doubleToRawLongBits(-4.0d);
+        Slabbed.LOGGER.info(
+                "TEST37-HIT-POLICY-POSITIVES | controlDy=-0.5 controlDelta={} "
+                        + "ownerDy=-1.0 delta={} shift={} raw={} "
+                        + "ownerDy=-1.5 delta={} shift={} raw={} "
+                        + "ownerDy=-4.0 delta={} shift={} raw={}",
+                controlDelta,
+                unshiftedDelta, shiftedMinus1,
+                String.format("%016x", Double.doubleToRawLongBits(shiftedMinus1)),
+                minus15UnshiftedDelta, shiftedMinus15,
+                String.format("%016x", Double.doubleToRawLongBits(shiftedMinus15)),
+                minus4UnshiftedDelta, shiftedMinus4,
+                String.format("%016x", Double.doubleToRawLongBits(shiftedMinus4)));
+        if (Double.doubleToRawLongBits(shiftedMinus1) != minus1ExpectedBits) {
+            throw h.assertionException(BlockPos.ZERO,
+                    "TEST37 chain-owner follower hit policy must shift the server validation center by exact -1.0; "
+                            + "observed=" + shiftedMinus1 + " raw="
+                            + String.format("%016x", Double.doubleToRawLongBits(shiftedMinus1))
+                            + " expectedRaw=" + String.format("%016x", minus1ExpectedBits));
+        }
+        if (Double.doubleToRawLongBits(shiftedMinus15) != minus15ExpectedBits) {
+            throw h.assertionException(BlockPos.ZERO,
+                    "TEST37 chain-owner follower hit policy must follow exact owner dy=-1.5; observed="
+                            + shiftedMinus15 + " raw="
+                            + String.format("%016x", Double.doubleToRawLongBits(shiftedMinus15))
+                            + " expectedRaw=" + String.format("%016x", minus15ExpectedBits));
+        }
+        if (Double.doubleToRawLongBits(shiftedMinus4) != minus4ExpectedBits) {
+            throw h.assertionException(BlockPos.ZERO,
+                    "TEST37 chain-on-chain hit policy must follow exact owner dy=-4.0; observed="
+                            + shiftedMinus4 + " raw="
+                            + String.format("%016x", Double.doubleToRawLongBits(shiftedMinus4))
+                            + " expectedRaw=" + String.format("%016x", minus4ExpectedBits));
+        }
+        h.succeed();
+    }
+
+    /**
+     * TEST39 RED 1: the downward pointed-dripstone follower hit recorded at frozen dy=-1.5 must
+     * reach the server's shifted validation center. This is intentionally a policy-level fixture:
+     * GameTest can invoke {@link ItemStack#useOn(UseOnContext)}, but not the preceding server packet
+     * component-distance guard which rejects this hit before {@code useOn} is reached.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void pointedDripstoneFollowerHitAtMinusOnePointFiveIsAdmitted(GameTestHelper h) {
+        final double serverComponentTolerance = 1.0000001d;
+        BlockPos owner = new BlockPos(1014, -53, 663);
+        BlockState downwardTip = Blocks.POINTED_DRIPSTONE.defaultBlockState()
+                .setValue(PointedDripstoneBlock.TIP_DIRECTION, Direction.DOWN);
+        BlockState heldDripstone = Blocks.POINTED_DRIPSTONE.defaultBlockState();
+        Vec3 translatedDownFace = new Vec3(owner.getX() + 0.5d, owner.getY() - 1.5d, owner.getZ() + 0.5d);
+        double unshiftedDelta = Math.abs(translatedDownFace.y - Vec3.atCenterOf(owner).y);
+        if (unshiftedDelta <= serverComponentTolerance) {
+            throw h.assertionException(owner,
+                    "TEST39 pointed-dripstone premise: dy=-1.5 DOWN hit must be outside vanilla component "
+                            + "tolerance; delta=" + unshiftedDelta + " tolerance=" + serverComponentTolerance);
+        }
+
+        double admitted = LandingHitValidationPolicy.shiftedCenterDy(
+                owner, downwardTip, -1.5d, Direction.DOWN, translatedDownFace, heldDripstone);
+        double nonDripstoneOwner = LandingHitValidationPolicy.shiftedCenterDy(
+                owner, Blocks.OAK_FENCE.defaultBlockState(),
+                -1.5d, Direction.DOWN, translatedDownFace, heldDripstone);
+        double upwardTipOwner = LandingHitValidationPolicy.shiftedCenterDy(
+                owner, Blocks.POINTED_DRIPSTONE.defaultBlockState()
+                        .setValue(PointedDripstoneBlock.TIP_DIRECTION, Direction.UP),
+                -1.5d, Direction.DOWN, translatedDownFace, heldDripstone);
+        double nonDownFace = LandingHitValidationPolicy.shiftedCenterDy(
+                owner, downwardTip, -1.5d, Direction.UP, translatedDownFace, heldDripstone);
+        double outsideTranslatedY = LandingHitValidationPolicy.shiftedCenterDy(
+                owner, downwardTip, -1.5d, Direction.DOWN,
+                new Vec3(translatedDownFace.x, owner.getY() - 2.6d, translatedDownFace.z), heldDripstone);
+        double outsideTranslatedX = LandingHitValidationPolicy.shiftedCenterDy(
+                owner, downwardTip, -1.5d, Direction.DOWN,
+                new Vec3(owner.getX() + 1.25d, translatedDownFace.y, translatedDownFace.z), heldDripstone);
+        double flatOwner = LandingHitValidationPolicy.shiftedCenterDy(
+                owner, downwardTip, 0.0d, Direction.DOWN, translatedDownFace, heldDripstone);
+        double nullHeld = LandingHitValidationPolicy.shiftedCenterDy(
+                owner, downwardTip, -1.5d, Direction.DOWN, translatedDownFace, null);
+        double unsupportedHeld = LandingHitValidationPolicy.shiftedCenterDy(
+                owner, downwardTip, -1.5d, Direction.DOWN, translatedDownFace, Blocks.AIR.defaultBlockState());
+
+        if (!Double.isNaN(nonDripstoneOwner)
+                || !Double.isNaN(upwardTipOwner)
+                || !Double.isNaN(nonDownFace)
+                || !Double.isNaN(outsideTranslatedY)
+                || !Double.isNaN(outsideTranslatedX)
+                || !Double.isNaN(flatOwner)
+                || !Double.isNaN(nullHeld)
+                || !Double.isNaN(unsupportedHeld)) {
+            throw h.assertionException(owner, "TEST39 pointed-dripstone admission negative control widened: "
+                    + "nonDripstoneOwner=" + nonDripstoneOwner + " nonDownFace=" + nonDownFace
+                    + " upwardTipOwner=" + upwardTipOwner
+                    + " outsideTranslatedY=" + outsideTranslatedY + " outsideTranslatedX=" + outsideTranslatedX
+                    + " flatOwner=" + flatOwner + " nullHeld=" + nullHeld + " unsupportedHeld=" + unsupportedHeld);
+        }
+        if (Double.doubleToRawLongBits(admitted) != Double.doubleToRawLongBits(-1.5d)) {
+            throw h.assertionException(owner,
+                    "TEST39 pointed-dripstone follower: dy=-1.5 DOWN hit must shift the server validation "
+                            + "center by raw-exact -1.5; observed=" + admitted + " raw="
+                            + String.format("%016x", Double.doubleToRawLongBits(admitted)));
+        }
+        h.succeed();
+    }
+
+    /**
+     * TEST39: a high-interior side click stays in the translated visible BOTTOM half of a frozen
+     * dy=-1.0 slab while preserving that exact frozen landing height.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void loweredSideHighInteriorPlacementStaysInTranslatedVisibleBottomHalf(GameTestHelper h) {
+        ServerLevel w = h.getLevel();
+        BlockPos owner = h.absolutePos(new BlockPos(3, 4, 3));
+        BlockPos highInteriorTarget = owner.east();
+        BlockPos lowerControlOwner = h.absolutePos(new BlockPos(8, 4, 3));
+        BlockPos lowerTarget = lowerControlOwner.east();
+        BlockPos flatOwner = h.absolutePos(new BlockPos(13, 4, 3));
+        BlockPos flatTarget = flatOwner.east();
+        BlockState ownerState = Blocks.BIRCH_SLAB.defaultBlockState().setValue(SlabBlock.TYPE, SlabType.BOTTOM);
+
+        w.setBlock(owner, ownerState, 3);
+        w.setBlock(highInteriorTarget, Blocks.AIR.defaultBlockState(), 3);
+        w.setBlock(lowerControlOwner, ownerState, 3);
+        w.setBlock(lowerTarget, Blocks.AIR.defaultBlockState(), 3);
+        w.setBlock(flatOwner, ownerState, 3);
+        w.setBlock(flatTarget, Blocks.AIR.defaultBlockState(), 3);
+        forceStore(w, owner, -1.0d);
+        forceStore(w, lowerControlOwner, -1.0d);
+
+        withFrozen(() -> {
+            if (!w.getBlockState(highInteriorTarget).isAir()
+                    || !w.getBlockState(lowerTarget).isAir()
+                    || !w.getBlockState(flatTarget).isAir()
+                    || Double.doubleToRawLongBits(liveDy(w, owner)) != Double.doubleToRawLongBits(-1.0d)
+                    || Double.doubleToRawLongBits(liveDy(w, lowerControlOwner)) != Double.doubleToRawLongBits(-1.0d)) {
+                throw h.assertionException(owner, "TEST39 slab premise: targets must start air and lowered owners "
+                        + "must have raw-exact dy=-1.0");
+            }
+
+            // Visible translated BOTTOM body spans owner-local Y [-1.0, -0.5]; -0.6 is high interior.
+            Vec3 highInteriorHit = new Vec3(owner.getX() + 1.0d, owner.getY() - 0.6d, owner.getZ() + 0.5d);
+            Vec3 lowerHit = new Vec3(lowerControlOwner.getX() + 1.0d, lowerControlOwner.getY() - 0.9d,
+                    lowerControlOwner.getZ() + 0.5d);
+            Vec3 flatHit = new Vec3(flatOwner.getX() + 1.0d, flatOwner.getY() + 0.4d, flatOwner.getZ() + 0.5d);
+            test32UseItemOn(h, Items.BIRCH_SLAB, owner, Direction.EAST, highInteriorHit);
+            test32UseItemOn(h, Items.BIRCH_SLAB, lowerControlOwner, Direction.EAST, lowerHit);
+            test32UseItemOn(h, Items.BIRCH_SLAB, flatOwner, Direction.EAST, flatHit);
+
+            BlockState highInteriorPlaced = w.getBlockState(highInteriorTarget);
+            BlockState lowerPlaced = w.getBlockState(lowerTarget);
+            BlockState flatPlaced = w.getBlockState(flatTarget);
+            if (highInteriorPlaced.getBlock() != Blocks.BIRCH_SLAB
+                    || lowerPlaced.getBlock() != Blocks.BIRCH_SLAB
+                    || flatPlaced.getBlock() != Blocks.BIRCH_SLAB) {
+                throw h.assertionException(owner, "TEST39 slab premise: real useOn must place birch slabs in all "
+                        + "three adjacent air targets; highInterior=" + highInteriorPlaced + " lower=" + lowerPlaced
+                        + " flat=" + flatPlaced);
+            }
+            if (lowerPlaced.getValue(SlabBlock.TYPE) != SlabType.BOTTOM
+                    || flatPlaced.getValue(SlabBlock.TYPE) != SlabType.BOTTOM) {
+                throw h.assertionException(owner, "TEST39 slab controls changed: lower-half and flat-owner clicks "
+                        + "must remain BOTTOM; lower=" + lowerPlaced + " flat=" + flatPlaced);
+            }
+            if (Double.doubleToRawLongBits(storedDy(w, highInteriorTarget)) != Double.doubleToRawLongBits(-1.0d)
+                    || Double.doubleToRawLongBits(liveDy(w, highInteriorTarget)) != Double.doubleToRawLongBits(-1.0d)) {
+                throw h.assertionException(highInteriorTarget, "TEST39 slab height regression: high-interior side placement "
+                        + "must retain raw-exact dy=-1.0; stored=" + storedDy(w, highInteriorTarget)
+                        + " live=" + liveDy(w, highInteriorTarget));
+            }
+            if (highInteriorPlaced.getValue(SlabBlock.TYPE) != SlabType.BOTTOM) {
+                throw h.assertionException(highInteriorTarget, "TEST39 high-interior side placement: visible BOTTOM "
+                        + "body click on a dy=-1.0 slab must place BOTTOM, not "
+                        + highInteriorPlaced.getValue(SlabBlock.TYPE));
+            }
+        });
+        h.succeed();
+    }
+
+    /**
+     * TEST39 adjacent-merge regression: a visible-upper-half side click on a frozen dy=-1.0 slab
+     * owner must merge the compatible slab already occupying the intended adjacent cell, without
+     * merging the clicked owner or spilling into the next outward cell.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void loweredSidePlacementMergesCompatibleAdjacentTarget(GameTestHelper h) {
+        ServerLevel w = h.getLevel();
+        BlockPos owner = h.absolutePos(new BlockPos(3, 4, 3));
+        BlockPos target = owner.east();
+        BlockPos outward = target.east();
+        BlockState bottomBirch = Blocks.BIRCH_SLAB.defaultBlockState()
+                .setValue(SlabBlock.TYPE, SlabType.BOTTOM);
+
+        w.setBlock(owner, bottomBirch, 3);
+        w.setBlock(target, bottomBirch, 3);
+        w.setBlock(outward, Blocks.AIR.defaultBlockState(), 3);
+        forceStore(w, owner, -1.0d);
+        forceStore(w, target, -1.0d);
+
+        withFrozen(() -> {
+            if (!w.getBlockState(owner).equals(bottomBirch)
+                    || !w.getBlockState(target).equals(bottomBirch)
+                    || !w.getBlockState(outward).isAir()
+                    || Double.doubleToRawLongBits(storedDy(w, owner)) != Double.doubleToRawLongBits(-1.0d)
+                    || Double.doubleToRawLongBits(liveDy(w, owner)) != Double.doubleToRawLongBits(-1.0d)
+                    || Double.doubleToRawLongBits(storedDy(w, target)) != Double.doubleToRawLongBits(-1.0d)
+                    || Double.doubleToRawLongBits(liveDy(w, target)) != Double.doubleToRawLongBits(-1.0d)) {
+                throw h.assertionException(owner, "TEST39 adjacent-merge premise: owner and intended target must "
+                        + "begin as non-DOUBLE bottom birch slabs at raw-exact dy=-1.0, with outward air");
+            }
+
+            Vec3 upperHit = new Vec3(
+                    owner.getX() + 1.0d, owner.getY() - 0.6d, owner.getZ() + 0.5d);
+            InteractionResult result = test32UseItemOn(
+                    h, Items.BIRCH_SLAB, owner, Direction.EAST, upperHit);
+            BlockState ownerAfter = w.getBlockState(owner);
+            BlockState targetAfter = w.getBlockState(target);
+            BlockState outwardAfter = w.getBlockState(outward);
+
+            if (result == null || !result.consumesAction()) {
+                throw h.assertionException(target,
+                        "TEST39 adjacent-merge premise: real useOn did not consume the compatible merge; result="
+                                + result);
+            }
+            if (!ownerAfter.equals(bottomBirch)
+                    || Double.doubleToRawLongBits(storedDy(w, owner)) != Double.doubleToRawLongBits(-1.0d)
+                    || Double.doubleToRawLongBits(liveDy(w, owner)) != Double.doubleToRawLongBits(-1.0d)) {
+                throw h.assertionException(owner, "TEST39 adjacent-merge: clicked owner must remain its original "
+                        + "non-DOUBLE state at raw-exact dy=-1.0; state=" + ownerAfter
+                        + " stored=" + storedDy(w, owner) + " live=" + liveDy(w, owner));
+            }
+            if (targetAfter.getBlock() != Blocks.BIRCH_SLAB
+                    || targetAfter.getValue(SlabBlock.TYPE) != SlabType.DOUBLE
+                    || Double.doubleToRawLongBits(storedDy(w, target)) != Double.doubleToRawLongBits(-1.0d)
+                    || Double.doubleToRawLongBits(liveDy(w, target)) != Double.doubleToRawLongBits(-1.0d)) {
+                throw h.assertionException(target, "TEST39 adjacent-merge: compatible intended target must become "
+                        + "DOUBLE and retain raw-exact dy=-1.0; state=" + targetAfter
+                        + " stored=" + storedDy(w, target) + " live=" + liveDy(w, target));
+            }
+            if (!outwardAfter.isAir()
+                    || SlabAnchorAttachment.rawPlacementDyFact(w, outward).present()) {
+                throw h.assertionException(outward, "TEST39 adjacent-merge: next outward cell must remain "
+                        + "unchanged air with no stored dy; state=" + outwardAfter);
+            }
+        });
+        h.succeed();
+    }
+
+    /**
+     * TEST39 recorded DOUBLE-owner regression: horizontal placement must interpret the player's
+     * upper/lower aim inside the owner's translated visible full-height body, not its vanilla cell.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void loweredDoubleSideUpperHalfPlacementKeepsTopSlabType(GameTestHelper h) {
+        ServerLevel w = h.getLevel();
+        BlockPos upperOwner = h.absolutePos(new BlockPos(3, 4, 3));
+        BlockPos upperTarget = upperOwner.east();
+        BlockPos lowerOwner = h.absolutePos(new BlockPos(9, 4, 3));
+        BlockPos lowerTarget = lowerOwner.east();
+        BlockState doubleBirch = Blocks.BIRCH_SLAB.defaultBlockState()
+                .setValue(SlabBlock.TYPE, SlabType.DOUBLE);
+
+        w.setBlock(upperOwner, doubleBirch, 3);
+        w.setBlock(upperTarget, Blocks.AIR.defaultBlockState(), 3);
+        w.setBlock(lowerOwner, doubleBirch, 3);
+        w.setBlock(lowerTarget, Blocks.AIR.defaultBlockState(), 3);
+        forceStore(w, upperOwner, -1.0d);
+        forceStore(w, lowerOwner, -1.0d);
+
+        withFrozen(() -> {
+            if (!w.getBlockState(upperOwner).equals(doubleBirch)
+                    || !w.getBlockState(lowerOwner).equals(doubleBirch)
+                    || !w.getBlockState(upperTarget).isAir()
+                    || !w.getBlockState(lowerTarget).isAir()
+                    || Double.doubleToRawLongBits(storedDy(w, upperOwner)) != Double.doubleToRawLongBits(-1.0d)
+                    || Double.doubleToRawLongBits(liveDy(w, upperOwner)) != Double.doubleToRawLongBits(-1.0d)
+                    || Double.doubleToRawLongBits(storedDy(w, lowerOwner)) != Double.doubleToRawLongBits(-1.0d)
+                    || Double.doubleToRawLongBits(liveDy(w, lowerOwner)) != Double.doubleToRawLongBits(-1.0d)) {
+                throw h.assertionException(upperOwner, "TEST39 DOUBLE-owner premise: both owners must begin "
+                        + "DOUBLE at raw-exact dy=-1.0 with adjacent air");
+            }
+
+            Vec3 upperHit = new Vec3(
+                    upperOwner.getX() + 1.0d, upperOwner.getY() - 0.124d, upperOwner.getZ() + 0.5d);
+            Vec3 lowerHit = new Vec3(
+                    lowerOwner.getX() + 1.0d, lowerOwner.getY() - 0.75d, lowerOwner.getZ() + 0.5d);
+            InteractionResult upperResult = test32UseItemOn(
+                    h, Items.BIRCH_SLAB, upperOwner, Direction.EAST, upperHit);
+            InteractionResult lowerResult = test32UseItemOn(
+                    h, Items.BIRCH_SLAB, lowerOwner, Direction.EAST, lowerHit);
+
+            BlockState upperOwnerAfter = w.getBlockState(upperOwner);
+            BlockState upperPlaced = w.getBlockState(upperTarget);
+            BlockState lowerOwnerAfter = w.getBlockState(lowerOwner);
+            BlockState lowerPlaced = w.getBlockState(lowerTarget);
+            if (upperResult == null || !upperResult.consumesAction()
+                    || lowerResult == null || !lowerResult.consumesAction()) {
+                throw h.assertionException(upperOwner, "TEST39 DOUBLE-owner premise: both real useOn calls must "
+                        + "consume; upperResult=" + upperResult + " lowerResult=" + lowerResult);
+            }
+            if (!upperOwnerAfter.equals(doubleBirch)
+                    || Double.doubleToRawLongBits(storedDy(w, upperOwner)) != Double.doubleToRawLongBits(-1.0d)
+                    || Double.doubleToRawLongBits(liveDy(w, upperOwner)) != Double.doubleToRawLongBits(-1.0d)) {
+                throw h.assertionException(upperOwner, "TEST39 DOUBLE-owner upper scene: clicked owner must remain "
+                        + "DOUBLE at raw-exact dy=-1.0; state=" + upperOwnerAfter
+                        + " stored=" + storedDy(w, upperOwner) + " live=" + liveDy(w, upperOwner));
+            }
+            if (upperPlaced.getBlock() != Blocks.BIRCH_SLAB
+                    || upperPlaced.getValue(SlabBlock.TYPE) != SlabType.TOP
+                    || Double.doubleToRawLongBits(storedDy(w, upperTarget)) != Double.doubleToRawLongBits(-1.0d)
+                    || Double.doubleToRawLongBits(liveDy(w, upperTarget)) != Double.doubleToRawLongBits(-1.0d)) {
+                throw h.assertionException(upperTarget, "TEST39 DOUBLE-owner upper-half side placement must place "
+                        + "TOP at raw-exact dy=-1.0; state=" + upperPlaced
+                        + " stored=" + storedDy(w, upperTarget) + " live=" + liveDy(w, upperTarget));
+            }
+            if (!lowerOwnerAfter.equals(doubleBirch)
+                    || Double.doubleToRawLongBits(storedDy(w, lowerOwner)) != Double.doubleToRawLongBits(-1.0d)
+                    || Double.doubleToRawLongBits(liveDy(w, lowerOwner)) != Double.doubleToRawLongBits(-1.0d)) {
+                throw h.assertionException(lowerOwner, "TEST39 DOUBLE-owner lower scene: clicked owner must remain "
+                        + "DOUBLE at raw-exact dy=-1.0; state=" + lowerOwnerAfter
+                        + " stored=" + storedDy(w, lowerOwner) + " live=" + liveDy(w, lowerOwner));
+            }
+            if (lowerPlaced.getBlock() != Blocks.BIRCH_SLAB
+                    || lowerPlaced.getValue(SlabBlock.TYPE) != SlabType.BOTTOM
+                    || Double.doubleToRawLongBits(storedDy(w, lowerTarget)) != Double.doubleToRawLongBits(-1.0d)
+                    || Double.doubleToRawLongBits(liveDy(w, lowerTarget)) != Double.doubleToRawLongBits(-1.0d)) {
+                throw h.assertionException(lowerTarget, "TEST39 DOUBLE-owner lower-half control must place BOTTOM "
+                        + "at raw-exact dy=-1.0; state=" + lowerPlaced
+                        + " stored=" + storedDy(w, lowerTarget) + " live=" + liveDy(w, lowerTarget));
+            }
+        });
+        h.succeed();
+    }
+
+    /**
+     * TEST42 RED: two strict interior side hits inside one translated visible half-slab body must
+     * author the same half. The full translated cell midpoint, rather than the midpoint of an
+     * individual half-body, is the placement-time boundary.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void loweredSlabSideHitsStayInVisibleAuthoredHalf(GameTestHelper h) {
+        ServerLevel w = h.getLevel();
+        double[] depths = {-1.0d, -1.5d};
+        SlabType[] ownerTypes = {SlabType.BOTTOM, SlabType.TOP};
+        String[] interiors = {"low-interior", "high-interior"};
+        double[][] hitOffsets = {
+                {-0.875d, -0.625d, -0.375d, -0.125d},
+                {-1.375d, -1.125d, -0.875d, -0.625d}
+        };
+        BlockPos[] owners = new BlockPos[8];
+        BlockPos[] targets = new BlockPos[8];
+        SlabType[] expectedTypes = new SlabType[8];
+        double[] expectedDys = new double[8];
+        String[] rows = new String[8];
+
+        int row = 0;
+        for (int depthIndex = 0; depthIndex < depths.length; depthIndex++) {
+            for (int ownerIndex = 0; ownerIndex < ownerTypes.length; ownerIndex++) {
+                for (int interiorIndex = 0; interiorIndex < interiors.length; interiorIndex++) {
+                    BlockPos owner = h.absolutePos(new BlockPos(3 + ownerIndex * 6 + interiorIndex * 2,
+                            4, 3 + depthIndex * 6));
+                    owners[row] = owner;
+                    targets[row] = owner.east();
+                    expectedTypes[row] = ownerTypes[ownerIndex];
+                    expectedDys[row] = depths[depthIndex];
+                    rows[row] = "dy=" + depths[depthIndex] + " " + ownerTypes[ownerIndex] + " "
+                            + interiors[interiorIndex];
+                    w.setBlock(owner, Blocks.BIRCH_SLAB.defaultBlockState()
+                            .setValue(SlabBlock.TYPE, ownerTypes[ownerIndex]), 3);
+                    w.setBlock(targets[row], Blocks.AIR.defaultBlockState(), 3);
+                    forceStore(w, owner, depths[depthIndex]);
+                    row++;
+                }
+            }
+        }
+
+        withFrozen(() -> {
+            for (int index = 0; index < owners.length; index++) {
+                if (!w.getBlockState(targets[index]).isAir()
+                        || Double.doubleToRawLongBits(storedDy(w, owners[index]))
+                        != Double.doubleToRawLongBits(expectedDys[index])
+                        || Double.doubleToRawLongBits(liveDy(w, owners[index]))
+                        != Double.doubleToRawLongBits(expectedDys[index])) {
+                    throw h.assertionException(owners[index], "TEST42 premise: owner and target must begin at "
+                            + rows[index] + " with raw-exact frozen dy=" + expectedDys[index]);
+                }
+            }
+
+            for (int index = 0; index < owners.length; index++) {
+                int depthIndex = index / 4;
+                int ownerIndex = (index / 2) % 2;
+                int interiorIndex = index % 2;
+                double hitY = owners[index].getY() + hitOffsets[depthIndex][ownerIndex * 2 + interiorIndex];
+                InteractionResult result = test32UseItemOn(h, Items.BIRCH_SLAB, owners[index], Direction.EAST,
+                        new Vec3(owners[index].getX() + 1.0d, hitY, owners[index].getZ() + 0.5d));
+                BlockState placed = w.getBlockState(targets[index]);
+                if (result == null || !result.consumesAction() || placed.getBlock() != Blocks.BIRCH_SLAB) {
+                    throw h.assertionException(targets[index], "TEST42 premise: real useOn must place the held "
+                            + "birch slab for " + rows[index] + "; result=" + result + " state=" + placed);
+                }
+                if (placed.getValue(SlabBlock.TYPE) != expectedTypes[index]) {
+                    throw h.assertionException(targets[index], "TEST42 side-aim state: both strict interior hits "
+                            + "in the translated visible " + expectedTypes[index] + " body must author "
+                            + expectedTypes[index] + "; row=" + rows[index] + " actual="
+                            + placed.getValue(SlabBlock.TYPE));
+                }
+                if (Double.doubleToRawLongBits(storedDy(w, targets[index]))
+                        != Double.doubleToRawLongBits(expectedDys[index])
+                        || Double.doubleToRawLongBits(liveDy(w, targets[index]))
+                        != Double.doubleToRawLongBits(expectedDys[index])) {
+                    throw h.assertionException(targets[index], "TEST42 height: target must retain raw-exact owner "
+                            + "dy for " + rows[index] + "; stored=" + storedDy(w, targets[index])
+                            + " live=" + liveDy(w, targets[index]));
+                }
+            }
+
+            for (int index = 0; index < targets.length; index++) {
+                BlockState stateBeforeNeighbor = w.getBlockState(targets[index]);
+                long storedBeforeNeighbor = Double.doubleToRawLongBits(storedDy(w, targets[index]));
+                long liveBeforeNeighbor = Double.doubleToRawLongBits(liveDy(w, targets[index]));
+                w.setBlock(targets[index].above(), Blocks.STONE.defaultBlockState(), 3);
+                if (!w.getBlockState(targets[index]).equals(stateBeforeNeighbor)
+                        || Double.doubleToRawLongBits(storedDy(w, targets[index])) != storedBeforeNeighbor
+                        || Double.doubleToRawLongBits(liveDy(w, targets[index])) != liveBeforeNeighbor) {
+                    throw h.assertionException(targets[index], "TEST42 stability: harmless neighbor edit changed "
+                            + "the exact target state or raw-exact target dy for " + rows[index]
+                            + "; before=" + stateBeforeNeighbor + " after=" + w.getBlockState(targets[index]));
+                }
+            }
+        });
+        h.succeed();
+    }
+
+    /**
+     * TEST43 RED: a downward pointed-dripstone candidate must be refused when its frozen
+     * translated body would strictly interpenetrate an already-frozen downward neighbor.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void translatedVerticalPointedDripstoneInterpenetrationIsRefused(GameTestHelper h) {
+        ServerLevel world = h.getLevel();
+        final double upperDy = -1.5d;
+        final double sideOwnerDy = -1.0d;
+        final double candidateDy = -1.0d;
+        BlockPos upper = h.absolutePos(new BlockPos(3, 5, 3));
+        BlockPos candidate = upper.below();
+        BlockPos sideOwner = candidate.west();
+        BlockState downwardTip = Blocks.POINTED_DRIPSTONE.defaultBlockState()
+                .setValue(PointedDripstoneBlock.TIP_DIRECTION, Direction.DOWN);
+
+        world.setBlock(upper, downwardTip, Block.UPDATE_ALL);
+        world.setBlock(sideOwner, Blocks.STONE.defaultBlockState(), Block.UPDATE_ALL);
+        world.setBlock(candidate, Blocks.AIR.defaultBlockState(), Block.UPDATE_ALL);
+        forceStore(world, upper, upperDy);
+        forceStore(world, sideOwner, sideOwnerDy);
+
+        withFrozen(() -> {
+            BlockState upperBefore = world.getBlockState(upper);
+            BlockState sideOwnerBefore = world.getBlockState(sideOwner);
+            long upperStoredBefore = Double.doubleToRawLongBits(storedDy(world, upper));
+            long upperLiveBefore = Double.doubleToRawLongBits(liveDy(world, upper));
+            long sideOwnerStoredBefore = Double.doubleToRawLongBits(storedDy(world, sideOwner));
+            long sideOwnerLiveBefore = Double.doubleToRawLongBits(liveDy(world, sideOwner));
+            SlabAnchorAttachment.PlacementDyFact candidateFactBefore =
+                    SlabAnchorAttachment.rawPlacementDyFact(world, candidate);
+            if (!upperBefore.equals(downwardTip)
+                    || !sideOwnerBefore.is(Blocks.STONE)
+                    || !world.getBlockState(candidate).isAir()
+                    || upperStoredBefore != Double.doubleToRawLongBits(upperDy)
+                    || upperLiveBefore != Double.doubleToRawLongBits(upperDy)
+                    || sideOwnerStoredBefore != Double.doubleToRawLongBits(sideOwnerDy)
+                    || sideOwnerLiveBefore != Double.doubleToRawLongBits(sideOwnerDy)
+                    || candidateFactBefore.present()) {
+                throw h.assertionException(candidate,
+                        "TEST43 premise: upper downward tip must be frozen at -1.5, separate side owner at -1.0, "
+                                + "and candidate air/factless; upper=" + upperBefore + " side=" + sideOwnerBefore
+                                + " candidate=" + world.getBlockState(candidate));
+            }
+
+            VoxelShape upperShape = upperBefore.getCollisionShape(
+                            EmptyBlockGetter.INSTANCE, BlockPos.ZERO, CollisionContext.empty())
+                    .move(upper.getX(), upper.getY() + upperDy, upper.getZ());
+            VoxelShape candidateShape = downwardTip.getCollisionShape(
+                            EmptyBlockGetter.INSTANCE, BlockPos.ZERO, CollisionContext.empty())
+                    .move(candidate.getX(), candidate.getY() + candidateDy, candidate.getZ());
+            double overlapDepth = strictPositiveAabbOverlapDepthY(upperShape, candidateShape);
+            double heightInversionDepth = candidateDy - upperDy;
+            if (overlapDepth <= EPS
+                    || Double.doubleToRawLongBits(heightInversionDepth)
+                    != Double.doubleToRawLongBits(0.5d)
+                    || Math.abs(heightInversionDepth - 0.5d) > EPS) {
+                throw h.assertionException(candidate,
+                        "TEST43 premise: translated downward pointed-dripstone collision overlap must be strict and "
+                                + "the recorder-equivalent height inversion must be exactly 0.5; collisionDepth="
+                                + overlapDepth + " heightInversionDepth=" + heightInversionDepth);
+            }
+            if (!SlabEnsembleCoherence.relativeTranslationIncreasesBodyOverlap(
+                    downwardTip, candidate, candidateDy, upperBefore, upper, upperDy)) {
+                throw h.assertionException(candidate,
+                        "TEST43 baseline-delta authority: translated candidate/upper pair must be unsafe");
+            }
+
+            Player mock = h.makeMockServerPlayer(GameType.SURVIVAL);
+            if (!(mock instanceof ServerPlayer player)) {
+                throw h.assertionException(candidate, "TEST43 premise: fixture did not create a ServerPlayer");
+            }
+            ItemStack held = new ItemStack(Items.POINTED_DRIPSTONE);
+            held.set(DataComponents.BLOCK_STATE, BlockItemStateProperties.EMPTY
+                    .with(PointedDripstoneBlock.TIP_DIRECTION, Direction.DOWN));
+            player.setItemInHand(InteractionHand.MAIN_HAND, held);
+            int heldBefore = held.getCount();
+            var heldItemBefore = held.getItem();
+            var heldBlockStateBefore = held.get(DataComponents.BLOCK_STATE);
+            InteractionResult result = held.useOn(new UseOnContext(player, InteractionHand.MAIN_HAND,
+                    new BlockHitResult(new Vec3(sideOwner.getX() + 1.0d, sideOwner.getY() - 0.5d,
+                            sideOwner.getZ() + 0.5d), Direction.EAST, sideOwner, false)));
+
+            BlockState candidateAfter = world.getBlockState(candidate);
+            SlabAnchorAttachment.PlacementDyFact candidateFactAfter =
+                    SlabAnchorAttachment.rawPlacementDyFact(world, candidate);
+            ItemStack playerHeldAfter = player.getItemInHand(InteractionHand.MAIN_HAND);
+            if (candidateAfter.is(Blocks.POINTED_DRIPSTONE)) {
+                if (candidateAfter.getValue(PointedDripstoneBlock.TIP_DIRECTION) != Direction.DOWN
+                        || Double.doubleToRawLongBits(storedDy(world, candidate))
+                        != Double.doubleToRawLongBits(candidateDy)
+                        || Double.doubleToRawLongBits(liveDy(world, candidate))
+                        != Double.doubleToRawLongBits(candidateDy)
+                        || !candidateFactAfter.present()) {
+                    throw h.assertionException(candidate,
+                            "TEST43 premise: real side useOn must create the downward candidate at raw-exact -1.0; "
+                                    + "result=" + result + " state=" + candidateAfter + " stored="
+                                    + storedDy(world, candidate) + " live=" + liveDy(world, candidate));
+                }
+                SlabEnsembleCoherence.Verdict ensemble = SlabEnsembleCoherence.classifyVerticalPair(
+                        world, candidate, candidateDy, upperDy);
+                if (ensemble.kind() != SlabEnsembleCoherence.Kind.INTERPENETRATION
+                        || Math.abs(ensemble.depth() - 0.5d) > EPS) {
+                    throw h.assertionException(candidate,
+                            "TEST43 premise: live two-cell ensemble must report strict vertical interpenetration "
+                                    + "depth 0.5; verdict=" + ensemble);
+                }
+                throw h.assertionException(candidate,
+                        "TEST43 translated vertical interpenetration: unsafe downward pointed-dripstone candidate "
+                                + "was placed through ItemStack.useOn; collisionOverlapDepth=" + overlapDepth
+                                + " ensembleDepth=" + ensemble.depth() + " (expected refusal), result=" + result
+                                + " state=" + candidateAfter);
+            }
+
+            if (!candidateAfter.isAir()
+                    || candidateFactAfter.present()
+                    || held.getCount() != heldBefore
+                    || playerHeldAfter.getCount() != heldBefore
+                    || held.getItem() != heldItemBefore
+                    || !held.get(DataComponents.BLOCK_STATE).equals(heldBlockStateBefore)
+                    || playerHeldAfter.getItem() != heldItemBefore
+                    || !playerHeldAfter.get(DataComponents.BLOCK_STATE).equals(heldBlockStateBefore)
+                    || !world.getBlockState(upper).equals(upperBefore)
+                    || !world.getBlockState(sideOwner).equals(sideOwnerBefore)
+                    || Double.doubleToRawLongBits(storedDy(world, upper)) != upperStoredBefore
+                    || Double.doubleToRawLongBits(liveDy(world, upper)) != upperLiveBefore
+                    || Double.doubleToRawLongBits(storedDy(world, sideOwner)) != sideOwnerStoredBefore
+                    || Double.doubleToRawLongBits(liveDy(world, sideOwner)) != sideOwnerLiveBefore) {
+                throw h.assertionException(candidate,
+                        "TEST43 refusal contract failed: candidate must remain air/factless, both held stacks "
+                                + "must retain item identity/BLOCK_STATE/count, and both existing owners byte-identical "
+                                + "with raw-exact frozen dy; result=" + result
+                                + " candidate=" + candidateAfter + " candidateFact=" + candidateFactAfter.present());
+            }
+        });
+        h.succeed();
+    }
+
+    /**
+     * TEST43 RED: a horizontal click strictly inside a translated pointed-dripstone body must
+     * continue that visible vertical column in the tip direction, rather than target horizontal air.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void pointedDripstoneSideHitContinuesVisibleColumn(GameTestHelper h) {
+        ServerLevel world = h.getLevel();
+        final double[] depths = {-1.0d, -1.5d, -2.0d};
+        final Direction horizontalFace = Direction.EAST;
+
+        // The legal control is deliberately separate from the side-hit matrix: ordinary end-face
+        // continuation at the recorder-backed -1.5 depth already works before the focused fix.
+        BlockPos controlOwner = h.absolutePos(new BlockPos(3, 8, 3));
+        BlockPos controlCandidate = controlOwner.below();
+        BlockState controlTip = Blocks.POINTED_DRIPSTONE.defaultBlockState()
+                .setValue(PointedDripstoneBlock.TIP_DIRECTION, Direction.DOWN);
+        world.setBlock(controlOwner, controlTip, Block.UPDATE_ALL);
+        world.setBlock(controlCandidate, Blocks.AIR.defaultBlockState(), Block.UPDATE_ALL);
+        forceStore(world, controlOwner, -1.5d);
+
+        withFrozen(() -> {
+            ItemStack controlHeld = new ItemStack(Items.POINTED_DRIPSTONE);
+            controlHeld.set(DataComponents.BLOCK_STATE, BlockItemStateProperties.EMPTY
+                    .with(PointedDripstoneBlock.TIP_DIRECTION, Direction.DOWN));
+            Player controlMock = h.makeMockServerPlayer(GameType.SURVIVAL);
+            if (!(controlMock instanceof ServerPlayer controlPlayer)) {
+                throw h.assertionException(controlOwner, "TEST43 control premise: fixture did not create a ServerPlayer");
+            }
+            controlPlayer.setItemInHand(InteractionHand.MAIN_HAND, controlHeld);
+            InteractionResult controlResult = controlHeld.useOn(new UseOnContext(controlPlayer, InteractionHand.MAIN_HAND,
+                    new BlockHitResult(new Vec3(controlOwner.getX() + 0.5d, controlOwner.getY() - 1.5d,
+                            controlOwner.getZ() + 0.5d), Direction.DOWN, controlOwner, false)));
+            BlockState controlAfter = world.getBlockState(controlCandidate);
+            if (controlResult == null || !controlResult.consumesAction()
+                    || !controlAfter.is(Blocks.POINTED_DRIPSTONE)
+                    || controlAfter.getValue(PointedDripstoneBlock.TIP_DIRECTION) != Direction.DOWN
+                    || Double.doubleToRawLongBits(storedDy(world, controlCandidate))
+                    != Double.doubleToRawLongBits(-1.5d)
+                    || Double.doubleToRawLongBits(liveDy(world, controlCandidate))
+                    != Double.doubleToRawLongBits(-1.5d)) {
+                throw h.assertionException(controlCandidate,
+                        "TEST43 vertical end-face control: ordinary downward continuation at raw-exact dy=-1.5 "
+                                + "must remain legal; result=" + controlResult + " state=" + controlAfter
+                                + " stored=" + storedDy(world, controlCandidate)
+                                + " live=" + liveDy(world, controlCandidate));
+            }
+
+            int row = 0;
+            for (Direction direction : new Direction[]{Direction.DOWN, Direction.UP}) {
+                for (double depth : depths) {
+                    BlockPos owner = h.absolutePos(new BlockPos(8 + row * 4, 8, 8));
+                    BlockPos expectedCandidate = owner.relative(direction);
+                    BlockPos horizontalAttempt = owner.relative(horizontalFace);
+                    // The production interpenetration guard (slabbed$hasUnsafeVerticalTranslationOverlap)
+                    // inspects exactly candidatePos.below()/above() — i.e. one more step past the
+                    // candidate in the continuation direction. GameTest's ambient platform can leave a
+                    // solid block there even though the fixture never places one; force it to air so the
+                    // guard evaluates the intended open scene rather than an accidental one.
+                    BlockPos beyondCandidate = expectedCandidate.relative(direction);
+                    BlockState ownerState = Blocks.POINTED_DRIPSTONE.defaultBlockState()
+                            .setValue(PointedDripstoneBlock.TIP_DIRECTION, direction);
+                    world.setBlock(owner, ownerState, Block.UPDATE_ALL);
+                    world.setBlock(expectedCandidate, Blocks.AIR.defaultBlockState(), Block.UPDATE_ALL);
+                    world.setBlock(horizontalAttempt, Blocks.AIR.defaultBlockState(), Block.UPDATE_ALL);
+                    world.setBlock(beyondCandidate, Blocks.AIR.defaultBlockState(), Block.UPDATE_ALL);
+                    forceStore(world, owner, depth);
+
+                    long ownerBits = Double.doubleToRawLongBits(depth);
+                    if (!world.getBlockState(owner).equals(ownerState)
+                            || !world.getBlockState(expectedCandidate).isAir()
+                            || !world.getBlockState(horizontalAttempt).isAir()
+                            || !world.getBlockState(beyondCandidate).isAir()
+                            || SlabAnchorAttachment.rawPlacementDyFact(world, expectedCandidate).present()
+                            || SlabAnchorAttachment.rawPlacementDyFact(world, horizontalAttempt).present()
+                            || Double.doubleToRawLongBits(storedDy(world, owner)) != ownerBits
+                            || Double.doubleToRawLongBits(liveDy(world, owner)) != ownerBits) {
+                        throw h.assertionException(owner, "TEST43 side premise: fresh owner/vertical/horizontal/"
+                                + "beyondCandidate cells must begin isolated at raw-exact dy=" + depth
+                                + " direction=" + direction);
+                    }
+
+                    ItemStack held = new ItemStack(Items.POINTED_DRIPSTONE);
+                    held.set(DataComponents.BLOCK_STATE, BlockItemStateProperties.EMPTY
+                            .with(PointedDripstoneBlock.TIP_DIRECTION, direction));
+                    Player mock = h.makeMockServerPlayer(GameType.SURVIVAL);
+                    if (!(mock instanceof ServerPlayer player)) {
+                        throw h.assertionException(owner, "TEST43 side premise: fixture did not create a ServerPlayer");
+                    }
+                    player.setItemInHand(InteractionHand.MAIN_HAND, held);
+                    Vec3 visibleSideHit = new Vec3(owner.getX() + 1.0d, owner.getY() + depth + 0.5d,
+                            owner.getZ() + 0.5d);
+                    InteractionResult result = held.useOn(new UseOnContext(player, InteractionHand.MAIN_HAND,
+                            new BlockHitResult(visibleSideHit, horizontalFace, owner, false)));
+
+                    BlockState candidateAfter = world.getBlockState(expectedCandidate);
+                    if (!candidateAfter.is(Blocks.POINTED_DRIPSTONE)) {
+                        throw h.assertionException(expectedCandidate,
+                                "TEST43 pointed-dripstone side continuation: horizontal side hit did not create "
+                                        + "the expected vertical continuation; row=direction=" + direction
+                                        + " depth=" + depth + " result=" + result + " candidate=" + candidateAfter
+                                        + " horizontal=" + world.getBlockState(horizontalAttempt));
+                    }
+                    if (candidateAfter.getValue(PointedDripstoneBlock.TIP_DIRECTION) != direction
+                            || Double.doubleToRawLongBits(storedDy(world, expectedCandidate)) != ownerBits
+                            || Double.doubleToRawLongBits(liveDy(world, expectedCandidate)) != ownerBits
+                            || !world.getBlockState(horizontalAttempt).isAir()
+                            || SlabAnchorAttachment.rawPlacementDyFact(world, horizontalAttempt).present()
+                            || !world.getBlockState(owner).getValue(PointedDripstoneBlock.TIP_DIRECTION).equals(direction)
+                            || Double.doubleToRawLongBits(storedDy(world, owner)) != ownerBits
+                            || Double.doubleToRawLongBits(liveDy(world, owner)) != ownerBits) {
+                        throw h.assertionException(expectedCandidate,
+                                "TEST43 side continuation contract: candidate direction/dy, horizontal air, and "
+                                        + "frozen owner must remain exact; row=direction=" + direction + " depth=" + depth
+                                        + " candidate=" + candidateAfter + " stored=" + storedDy(world, expectedCandidate)
+                                        + " live=" + liveDy(world, expectedCandidate));
+                    }
+                    row++;
+                }
+            }
+        });
+        h.succeed();
+    }
+
+    /**
+     * TEST43 packet RED: translated horizontal pointed-dripstone side hits require the owner's
+     * already-frozen dy as their server validation-center shift.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void pointedDripstoneSideHitUsesFrozenValidationCenter(GameTestHelper h) {
+        final double serverComponentTolerance = 1.0000001d;
+        final double[] depths = {-1.0d, -1.5d, -2.0d};
+        final Direction horizontalFace = Direction.EAST;
+        final BlockState nonPointedOwner = Blocks.OAK_FENCE.defaultBlockState();
+        final BlockState noPointedHeldBlock = Blocks.AIR.defaultBlockState();
+
+        int row = 0;
+        for (Direction direction : new Direction[]{Direction.DOWN, Direction.UP}) {
+            for (double depth : depths) {
+                BlockPos owner = new BlockPos(1030 + row * 3, -58, 666);
+                BlockState pointedOwner = Blocks.POINTED_DRIPSTONE.defaultBlockState()
+                        .setValue(PointedDripstoneBlock.TIP_DIRECTION, direction);
+                BlockState pointedHeld = Blocks.POINTED_DRIPSTONE.defaultBlockState()
+                        .setValue(PointedDripstoneBlock.TIP_DIRECTION, direction);
+                Vec3 translatedSideHit = new Vec3(owner.getX() + 1.0d, owner.getY() + depth + 0.25d,
+                        owner.getZ() + 0.5d);
+                Vec3 vanillaCenter = Vec3.atCenterOf(owner);
+                double unshiftedDistance = translatedSideHit.distanceTo(vanillaCenter);
+                if (unshiftedDistance <= serverComponentTolerance) {
+                    throw h.assertionException(owner,
+                            "TEST43 packet premise: recorder-equivalent horizontal side hit must be outside "
+                                    + "the unshifted server component tolerance; row=direction=" + direction
+                                    + " depth=" + depth + " distance=" + unshiftedDistance);
+                }
+
+                double actual = LandingHitValidationPolicy.shiftedCenterDy(
+                        owner, pointedOwner, depth, horizontalFace, translatedSideHit, pointedHeld);
+                double flatOwner = LandingHitValidationPolicy.shiftedCenterDy(
+                        owner, pointedOwner, 0.0d, horizontalFace, translatedSideHit, pointedHeld);
+                double unrelatedOwner = LandingHitValidationPolicy.shiftedCenterDy(
+                        owner, nonPointedOwner, depth, horizontalFace, translatedSideHit, pointedHeld);
+                double noPointedHeld = LandingHitValidationPolicy.shiftedCenterDy(
+                        owner, pointedOwner, depth, horizontalFace, translatedSideHit, noPointedHeldBlock);
+                double outsideTranslatedY = LandingHitValidationPolicy.shiftedCenterDy(
+                        owner, pointedOwner, depth, horizontalFace,
+                        new Vec3(translatedSideHit.x, owner.getY() + depth - 0.01d, translatedSideHit.z), pointedHeld);
+                double outsideCellX = LandingHitValidationPolicy.shiftedCenterDy(
+                        owner, pointedOwner, depth, horizontalFace,
+                        new Vec3(owner.getX() + 1.01d, translatedSideHit.y, translatedSideHit.z), pointedHeld);
+                double outsideCellZ = LandingHitValidationPolicy.shiftedCenterDy(
+                        owner, pointedOwner, depth, horizontalFace,
+                        new Vec3(translatedSideHit.x, translatedSideHit.y, owner.getZ() + 1.01d), pointedHeld);
+                double ordinaryNonBlockUse = LandingHitValidationPolicy.shiftedCenterDy(
+                        owner, pointedOwner, depth, horizontalFace, translatedSideHit, null);
+                if (!Double.isNaN(flatOwner)
+                        || !Double.isNaN(unrelatedOwner)
+                        || !Double.isNaN(noPointedHeld)
+                        || !Double.isNaN(outsideTranslatedY)
+                        || !Double.isNaN(outsideCellX)
+                        || !Double.isNaN(outsideCellZ)
+                        || !Double.isNaN(ordinaryNonBlockUse)) {
+                    throw h.assertionException(owner,
+                            "TEST43 packet negative controls widened: flatOwner=" + flatOwner
+                                    + " unrelatedOwner=" + unrelatedOwner + " noPointedHeld=" + noPointedHeld
+                                    + " outsideY=" + outsideTranslatedY + " outsideX=" + outsideCellX
+                                    + " outsideZ=" + outsideCellZ + " ordinaryNonBlockUse=" + ordinaryNonBlockUse);
+                }
+
+                long expectedBits = Double.doubleToRawLongBits(depth);
+                if (Double.doubleToRawLongBits(actual) != expectedBits) {
+                    throw h.assertionException(owner,
+                            "TEST43 pointed-dripstone side packet validation: horizontal side hit must return "
+                                    + "the raw-exact frozen owner dy instead of NaN; row=direction=" + direction
+                                    + " depth=" + depth + " observed=" + actual + " raw="
+                                    + String.format("%016x", Double.doubleToRawLongBits(actual)));
+                }
+
+                double shiftedDistance = translatedSideHit.distanceTo(vanillaCenter.add(0.0d, actual, 0.0d));
+                if (shiftedDistance > serverComponentTolerance) {
+                    throw h.assertionException(owner,
+                            "TEST43 packet shifted-center contract: returned frozen dy must put the same side hit "
+                                    + "inside server component tolerance; row=direction=" + direction + " depth=" + depth
+                                    + " distance=" + shiftedDistance);
+                }
+                row++;
+            }
+        }
+        h.succeed();
     }
 }
