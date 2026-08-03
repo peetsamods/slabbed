@@ -338,14 +338,14 @@ public abstract class SlabSupportStateMixin {
                 shape = Shapes.block();
             }
             shape = shape.move(0.0, yOff, 0.0);
-            if (SlabSupport.isVerticalChainDirectlyUnderCeilingSupport(world, pos, self)) {
-                shape = SlabSupport.ceilingBridgedVerticalChainSelectionShape(world, pos, self, shape);
+            if (SlabSupport.usesCeilingBridgeGeometry(world, pos, self, yOff)) {
+                shape = SlabSupport.ceilingBridgedVerticalChainSelectionShape(world, pos, self, yOff, shape);
             }
             cir.setReturnValue(shape);
             return;
         }
-        if (SlabSupport.isVerticalChainDirectlyUnderCeilingSupport(world, pos, self)) {
-            cir.setReturnValue(SlabSupport.ceilingBridgedVerticalChainSelectionShape(world, pos, self, shape));
+        if (SlabSupport.usesCeilingBridgeGeometry(world, pos, self, yOff)) {
+            cir.setReturnValue(SlabSupport.ceilingBridgedVerticalChainSelectionShape(world, pos, self, yOff, shape));
         }
     }
 
@@ -431,8 +431,8 @@ public abstract class SlabSupportStateMixin {
             changed = true;
         }
 
-        if (SlabSupport.isVerticalChainDirectlyUnderCeilingSupport(world, pos, self)) {
-            shape = SlabSupport.ceilingBridgedVerticalChainSelectionShape(world, pos, self, shape);
+        if (SlabSupport.usesCeilingBridgeGeometry(world, pos, self, yOff)) {
+            shape = SlabSupport.ceilingBridgedVerticalChainSelectionShape(world, pos, self, yOff, shape);
             changed = true;
         }
 
