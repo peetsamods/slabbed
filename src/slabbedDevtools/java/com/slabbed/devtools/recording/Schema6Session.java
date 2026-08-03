@@ -70,6 +70,7 @@ public final class Schema6Session implements AutoCloseable {
     private long renderedOutlineRows;
     private long mismatchRows;
     private long placementSideDySplitRows;
+    private long placementSideCellSplitRows;
     private long storedPublicationTimingRows;
     private long rigCaseRows;
     private long rigCaseExactRows;
@@ -227,7 +228,7 @@ public final class Schema6Session implements AutoCloseable {
             phase = proxyOrigin ? "AUTO_PROXY_CLIENT" : "CLIENT_PREDICTION";
             playerProof = proxyOrigin ? "ABSENT" : "PRESENT";
         } else {
-            client = pollMatchingClient(pendingKey(origin, row), nowNanos);
+            client = pollMatchingClient(origin, row, nowNanos);
             logicalAttemptId = client == null
                     ? nextLogicalAttemptId()
                     : client.logicalAttemptId();
@@ -235,12 +236,18 @@ public final class Schema6Session implements AutoCloseable {
             playerProof = playerOrigin && client != null ? "PRESENT" : "ABSENT";
             if (client != null) {
                 boolean liveDySplit = liveAfterDyDiffers(client.row(), row);
+                boolean liveCellSplit = placementCellDiffers(client.row(), row);
                 if (liveDySplit) {
                     row.put("clientAfterDy", client.row().getOrDefault("afterDy", "none"));
                     marker = appendMarker(marker, "LIVE_PLACEMENT_SIDE_DY_SPLIT");
                     placementSideDySplitRows++;
                 }
-                if (!liveDySplit && storedPublicationDiffers(client.row(), row)) {
+                if (liveCellSplit) {
+                    row.put("clientPlacementPos", client.row().getOrDefault("placementPos", "none"));
+                    marker = appendMarker(marker, "LIVE_PLACEMENT_SIDE_CELL_SPLIT");
+                    placementSideCellSplitRows++;
+                }
+                if (!liveDySplit && !liveCellSplit && storedPublicationDiffers(client.row(), row)) {
                     marker = appendMarker(marker, "INFO_STORED_PUBLICATION_TIMING");
                     storedPublicationTimingRows++;
                 }
@@ -261,7 +268,7 @@ public final class Schema6Session implements AutoCloseable {
                     logicalAttemptId, nowNanos, copy(row)));
         } else if (playerOrigin && client != null) {
             writeTerminal("MERGED_CLIENT_SERVER", logicalAttemptId, origin, "PRESENT",
-                    client.row(), row, marker.contains("LIVE_PLACEMENT_SIDE_DY_SPLIT") ? "RED" : "INCONCLUSIVE");
+                    client.row(), row, marker.contains("LIVE_") ? "RED" : "INCONCLUSIVE");
         } else if (playerOrigin) {
             writeTerminal("SERVER_ONLY", logicalAttemptId, origin, "ABSENT",
                     null, row, marker.contains("LIVE_") ? "RED" : "INCONCLUSIVE");
@@ -380,21 +387,46 @@ public final class Schema6Session implements AutoCloseable {
         }
     }
 
-    private PendingClientAttempt pollMatchingClient(String key, long nowNanos) {
+    /**
+     * Finds the pending client observation this server row belongs to. Same-cell candidates
+     * always win; failing that, a candidate at an adjacent cell (Chebyshev distance <= 1) is
+     * accepted so a genuine client/server landing disagreement still forms one logical
+     * attempt instead of two orphaned, unmarked rows. Anything farther away is left alone —
+     * that is a different action, not this one landing somewhere unexpected.
+     */
+    private PendingClientAttempt pollMatchingClient(
+            String origin, Map<String, String> serverRow, long nowNanos) {
+        String key = pendingKey(origin, serverRow);
         ArrayDeque<PendingClientAttempt> queue = pendingClients.get(key);
-        if (queue == null) {
+        if (queue == null || queue.isEmpty()) {
             return null;
         }
-        PendingClientAttempt candidate = queue.peekFirst();
-        if (candidate == null || nowNanos - candidate.recordedNanos() > PAIR_WINDOW_NANOS) {
+        String serverPos = serverRow.get("placementPos");
+        PendingClientAttempt exact = null;
+        PendingClientAttempt adjacent = null;
+        for (PendingClientAttempt candidate : queue) {
+            if (nowNanos - candidate.recordedNanos() > PAIR_WINDOW_NANOS) {
+                continue;
+            }
+            String candidatePos = candidate.row().get("placementPos");
+            if (candidatePos != null && candidatePos.equals(serverPos)) {
+                exact = candidate;
+                break;
+            }
+            if (adjacent == null && isAdjacentCell(candidatePos, serverPos)) {
+                adjacent = candidate;
+            }
+        }
+        PendingClientAttempt chosen = exact != null ? exact : adjacent;
+        if (chosen == null) {
             return null;
         }
-        queue.removeFirst();
+        queue.remove(chosen);
         pendingClientCount--;
         if (queue.isEmpty()) {
             pendingClients.remove(key);
         }
-        return candidate;
+        return chosen;
     }
 
     private void finalizeExpiredClients(long nowNanos) throws IOException {
@@ -540,6 +572,7 @@ public final class Schema6Session implements AutoCloseable {
                 + "renderedOutlineRows=" + renderedOutlineRows + "\n"
                 + "mismatchRows=" + mismatchRows + "\n"
                 + "placementSideDySplitRows=" + placementSideDySplitRows + "\n"
+                + "placementSideCellSplitRows=" + placementSideCellSplitRows + "\n"
                 + "storedPublicationTimingRows=" + storedPublicationTimingRows + "\n"
                 + "rigCaseRows=" + rigCaseRows + "\n"
                 + "rigCaseExactRows=" + rigCaseExactRows + "\n"
@@ -602,10 +635,16 @@ public final class Schema6Session implements AutoCloseable {
                     row.getOrDefault("playerUuid", "none"),
                     row.getOrDefault("dimensionId", "none"));
         }
+        // Deliberately excludes placementPos. An adjacent-cell client/server disagreement
+        // (the client predicts one cell, the server authors its neighbour) is exactly the
+        // case this correlation must still pair up so recordAction can grade it as one
+        // logical attempt — not silently split into two INCONCLUSIVE client-only/server-only
+        // rows that hide the disagreement from every counter. Position is compared
+        // afterward, in pollMatchingClient, to keep merges scoped to the same or an
+        // adjacent cell rather than any same-identity action in the pairing window.
         return String.join("|", "fallback",
                 row.getOrDefault("actionType", "none"),
                 row.getOrDefault("heldItem", "none"),
-                row.getOrDefault("placementPos", "none"),
                 row.getOrDefault("rigCaseId", "none"),
                 row.getOrDefault("playerUuid", "none"),
                 row.getOrDefault("dimensionId", "none"));
@@ -625,6 +664,47 @@ public final class Schema6Session implements AutoCloseable {
             Map<String, String> client,
             Map<String, String> server) {
         return dyDiffers(client.get("afterDy"), server.get("afterDy"));
+    }
+
+    private static boolean placementCellDiffers(
+            Map<String, String> client,
+            Map<String, String> server) {
+        String clientPos = client.getOrDefault("placementPos", "none");
+        String serverPos = server.getOrDefault("placementPos", "none");
+        return !"none".equals(clientPos)
+                && !"none".equals(serverPos)
+                && !clientPos.equals(serverPos);
+    }
+
+    private static boolean isAdjacentCell(String first, String second) {
+        int[] a = parsePos(first);
+        int[] b = parsePos(second);
+        if (a == null || b == null) {
+            return false;
+        }
+        return Math.abs(a[0] - b[0]) <= 1
+                && Math.abs(a[1] - b[1]) <= 1
+                && Math.abs(a[2] - b[2]) <= 1;
+    }
+
+    /** Parses a BlockPos.toShortString()-style "x, y, z" (comma- or space-separated) triple. */
+    private static int[] parsePos(String value) {
+        if (value == null || value.isBlank() || "none".equals(value)) {
+            return null;
+        }
+        String[] parts = value.trim().split("[,\\s]+");
+        if (parts.length != 3) {
+            return null;
+        }
+        try {
+            return new int[] {
+                    Integer.parseInt(parts[0]),
+                    Integer.parseInt(parts[1]),
+                    Integer.parseInt(parts[2])
+            };
+        } catch (NumberFormatException ignored) {
+            return null;
+        }
     }
 
     private static boolean storedPublicationDiffers(

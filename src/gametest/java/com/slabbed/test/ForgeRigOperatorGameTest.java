@@ -14,6 +14,7 @@ import com.slabbed.rig.SlabbedRigService;
 import com.slabbed.util.SlabbedDiagnosticsBridge;
 import com.slabbed.util.SlabSupport;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -174,6 +175,42 @@ public final class ForgeRigOperatorGameTest {
                             && report.cases().stream().map(RigManifest.MegaCaseReadback::caseId)
                                     .toList().equals(fullCoverage.caseIds()),
                     "Mega must grade every case and keep every non-exact result RED");
+
+            // Per-depth diagnostic, asserted only where the fact is independently known to be
+            // true. dy=0.0 is a real regression guard (the hit-vector fix contributes a 0.0
+            // no-op there, so it must keep the same live/stored-exact matches it always had).
+            // dy=-0.5 and deeper are NOT asserted exact>0 here: SlabAnchorAttachment.addAnchor's
+            // qualifiesForAnchor gate (isOrdinaryFullBlockAnchorCandidate + hasBottomSlabBelow /
+            // qualifiesAsVerticalChainSupport) requires the SUPPORT to be a genuine bottom slab or
+            // an already-anchored full block. Mega's "clicked" fixture is a plain STONE with a
+            // raw FixtureAuthorship.STORED_DY value written directly via
+            // SlabAnchorAttachment.writePlacementDy — that write makes the fixture correctly
+            // report ITS OWN dy, but never qualifies it as a support, so nothing placed against it
+            // can ever be recognized as lowered by getYOffsetInner's anchor branch, regardless of
+            // the interaction hit vector. Fixing the hit vector (this change) is still correct —
+            // it targets the fixture's actual dy-shifted face — but does not and cannot change
+            // this grade on its own; that needs a fixture-construction fix, tracked separately.
+            Map<Long, long[]> gradeCountsByDepth = new LinkedHashMap<>();
+            for (RigManifest.MegaCaseReadback one : report.cases()) {
+                long[] counts = gradeCountsByDepth.computeIfAbsent(
+                        one.expectedDyBits(), ignored -> new long[4]);
+                switch (one.grade()) {
+                    case EXACT -> counts[0]++;
+                    case REFUSED -> counts[1]++;
+                    case MISMATCH -> counts[2]++;
+                    case INCONCLUSIVE -> counts[3]++;
+                }
+            }
+            long[] dy0Counts = gradeCountsByDepth.get(expectedDepths.get(0));
+            long[] dyHalfCounts = gradeCountsByDepth.get(expectedDepths.get(1));
+            ctx.assertTrue(dy0Counts != null && dy0Counts[0] > 0,
+                    "the dy=0.0 control lane must keep producing real live/stored-exact matches;"
+                            + " counts(exact,refused,mismatch,inconclusive)="
+                            + Arrays.toString(dy0Counts));
+            ctx.assertTrue(dyHalfCounts != null,
+                    "the dy=-0.5 lane must still be graded and reported"
+                            + " (exact,refused,mismatch,inconclusive)=" + Arrays.toString(dyHalfCounts));
+
             ctx.assertTrue(manifest.receipt().fixtureDirectWrites() == 6480
                             && manifest.receipt().fixtureTruthWrites() == 2160
                             && manifest.receipt().subjectUseOnCalls() == 2160

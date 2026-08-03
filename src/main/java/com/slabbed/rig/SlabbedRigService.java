@@ -2246,10 +2246,20 @@ public final class SlabbedRigService {
                 InteractionResult[] result = {InteractionResult.PASS};
                 RuntimeException[] thrown = {null};
                 ItemStack proxy = new ItemStack(action.item());
-                Vec3 hitVector = Vec3.atCenterOf(action.clicked()).add(
-                        action.face().getStepX() * 0.5d,
-                        action.face().getStepY() * 0.5d,
-                        action.face().getStepZ() * 0.5d);
+                // The clicked fixture was just authored to SlabAnchorAttachment's stored dy
+                // (see the truth-authoring loop above), so its ACTUAL visible/interaction face
+                // sits expectedDy away from the unshifted cell center — exactly what a real
+                // client's SlabbedOffsetRaycast would report. A hit built at the unshifted face
+                // (the prior bug) always resolves the same unlowered world-space point regardless
+                // of the row's depth, which is why every lowered rung read 0 exact/live.
+                BlockState clickedState = world.getBlockState(action.clicked());
+                double clickedDy = SlabSupport.getYOffset(world, action.clicked(), clickedState);
+                Vec3 hitVector = Vec3.atCenterOf(action.clicked())
+                        .add(0.0d, clickedDy, 0.0d)
+                        .add(
+                                action.face().getStepX() * 0.5d,
+                                action.face().getStepY() * 0.5d,
+                                action.face().getStepZ() * 0.5d);
                 BlockHitResult hit = new BlockHitResult(
                         hitVector, action.face(), action.clicked(), false);
                 BlockPlaceContext placementContext = new BlockPlaceContext(

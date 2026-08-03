@@ -69,6 +69,18 @@ public final class Schema6ContractHarness {
         session.recordAction(publicationClient, "PLAYER_AUTHORED");
         session.recordAction(action("server", "6, 3, 3", "-0.5"), "PLAYER_AUTHORED");
 
+        // Adjacent-cell disagreement: client predicts one cell, server authors its neighbour,
+        // same dy. Exact-position correlation used to miss this entirely (two separate
+        // INCONCLUSIVE client-only/server-only rows, zero side-split counter). It must now
+        // merge into one logical attempt and RED.
+        session.recordAction(action("client", "20, 3, 3", "-0.5"), "PLAYER_AUTHORED");
+        session.recordAction(action("server", "21, 3, 3", "-0.5"), "PLAYER_AUTHORED");
+
+        // Two cells apart is NOT "adjacent" — this must stay split, not merge into the
+        // unrelated pending client below it in the same identity bucket.
+        session.recordAction(action("client", "50, 3, 3", "-0.5"), "PLAYER_AUTHORED");
+        session.recordAction(action("server", "52, 3, 3", "-0.5"), "PLAYER_AUTHORED");
+
         session.recordRigCase(rigCase("case.exact", "EXACT"));
         session.recordRigCase(rigCase("case.refused", "REFUSED"));
         session.recordRigCase(rigCase("case.mismatch", "MISMATCH"));
@@ -100,8 +112,16 @@ public final class Schema6ContractHarness {
                 "GameTest evidence must remain separate");
         require(jsonl.contains("\"attemptStatus\":\"CLIENT_ONLY\""),
                 "stop must finalize pending client observations");
+        require(count(jsonl, "\"attemptStatus\":\"CLIENT_ONLY\"") == 2,
+                "an unmatched pending client and a too-far-apart pending client must both flush"
+                        + " client-only, never silently vanish or wrongly merge");
+        require(count(jsonl, "\"attemptStatus\":\"MERGED_CLIENT_SERVER\"") == 4,
+                "exactly the same-cell and adjacent-cell pairs merge; two cells apart stays split");
         require(jsonl.contains("LIVE_PLACEMENT_SIDE_DY_SPLIT"),
                 "raw client/server dy disagreement must be a recorded RED");
+        require(jsonl.contains("LIVE_PLACEMENT_SIDE_CELL_SPLIT"),
+                "an adjacent-cell client/server landing disagreement must be a recorded RED,"
+                        + " not two orphaned INCONCLUSIVE rows");
         require(jsonl.contains("INFO_STORED_PUBLICATION_TIMING"),
                 "transient stored publication disagreement must remain named evidence");
         require(jsonl.contains("LIVE_RIG_CASE_REFUSED")
@@ -119,6 +139,7 @@ public final class Schema6ContractHarness {
                 "TSV must preserve all three trusted origins");
         String mismatches = Files.readString(requested.resolve("mismatches.tsv"));
         require(mismatches.contains("LIVE_PLACEMENT_SIDE_DY_SPLIT")
+                        && mismatches.contains("LIVE_PLACEMENT_SIDE_CELL_SPLIT")
                         && mismatches.contains("LIVE_MODEL_STALE_DIVERGENT")
                         && mismatches.contains("LIVE_MODEL_STALE_ABSENT")
                         && mismatches.contains("LIVE_RIG_CASE_REFUSED")
@@ -131,16 +152,17 @@ public final class Schema6ContractHarness {
                 "yellow liveness evidence must not impersonate a mismatch RED");
         String summary = Files.readString(requested.resolve("summary.md"));
         require(summary.contains("placementSideDySplitRows=2")
+                        && summary.contains("placementSideCellSplitRows=1")
                         && summary.contains("storedPublicationTimingRows=1")
                         && summary.contains("rigCaseRows=4")
                         && summary.contains("rigCaseExactRows=1")
                         && summary.contains("rigCaseRefusedRows=1")
                         && summary.contains("rigCaseMismatchRows=1")
                         && summary.contains("rigCaseInconclusiveRows=1")
-                        && summary.contains("mergedClientServerAttemptRows=3")
+                        && summary.contains("mergedClientServerAttemptRows=4")
                         && summary.contains("autoProxyLogicalAttemptRows=1")
                         && summary.contains("gametestLogicalAttemptRows=1")
-                        && summary.contains("clientOnlyLogicalAttemptRows=1")
+                        && summary.contains("clientOnlyLogicalAttemptRows=2")
                         && summary.contains("modelStaleDivergentRows=3")
                         && summary.contains("modelStaleAbsentRows=1"),
                 "summary triage counters must match the recorded evidence");
