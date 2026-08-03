@@ -447,12 +447,21 @@ public abstract class BlockItemPlacementIntentMixin {
 
         long rawBits;
         CellSnapshot primarySnapshot = frame.snapshots.get(primary);
-        if (finalState.getBlock() instanceof SlabBlock
+        boolean occupiedSingleSlabBecameDouble = finalState.getBlock() instanceof SlabBlock
                 && finalState.hasProperty(SlabBlock.TYPE)
                 && finalState.getValue(SlabBlock.TYPE) == SlabType.DOUBLE
                 && primarySnapshot != null
-                && primarySnapshot.priorBacking().present()) {
-            rawBits = primarySnapshot.priorBacking().rawBits();
+                && primarySnapshot.priorState().getBlock() == finalState.getBlock()
+                && primarySnapshot.priorState().hasProperty(SlabBlock.TYPE)
+                && primarySnapshot.priorState().getValue(SlabBlock.TYPE) != SlabType.DOUBLE;
+        if (occupiedSingleSlabBecameDouble) {
+            SlabAnchorAttachment.PlacementDyFact priorBacking = primarySnapshot.priorBacking();
+            double priorDy = priorBacking.present()
+                    ? Double.longBitsToDouble(priorBacking.rawBits())
+                    : Double.NaN;
+            rawBits = priorBacking.present() && Double.isFinite(priorDy)
+                    ? priorBacking.rawBits()
+                    : Double.doubleToRawLongBits(0.0d);
         } else {
             LandingResolver.Family family = LandingResolver.classify(finalState);
             LandingResolver.PlacementResolution resolution = frame.rootAim == null
@@ -2212,6 +2221,16 @@ public abstract class BlockItemPlacementIntentMixin {
         BlockPos remappedTargetPos = remapIntoAdjacentSlabCell
                 ? targetPos.relative(effectiveSide)
                 : targetPos;
+        BlockState remappedTargetState = context.getLevel().getBlockState(remappedTargetPos);
+        boolean remappedTargetIsCompatibleSingleSlab = remapIntoAdjacentSlabCell
+                && remappedTargetState.getBlock() == heldState.getBlock()
+                && remappedTargetState.getBlock() instanceof SlabBlock
+                && remappedTargetState.getValue(SlabBlock.TYPE) != SlabType.DOUBLE;
+        if (remappedTargetIsCompatibleSingleSlab) {
+            SlabType occupiedType = remappedTargetState.getValue(SlabBlock.TYPE);
+            SlabType complementaryType = occupiedType == SlabType.BOTTOM ? SlabType.TOP : SlabType.BOTTOM;
+            remappedY = slabbed$placementYForType(remappedTargetPos, complementaryType);
+        }
         Vec3 remappedHitPos = new Vec3(originalHitPos.x, remappedY, originalHitPos.z);
         slabbed$recordRemapAttempt(
                 context,
