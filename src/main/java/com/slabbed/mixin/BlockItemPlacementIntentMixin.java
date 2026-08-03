@@ -7,6 +7,7 @@ import com.slabbed.anchor.SlabAnchorAttachment;
 import com.slabbed.compat.CompatHooks;
 import com.slabbed.network.PlacementDyCorrectionServer;
 import com.slabbed.network.PlacementDyPredictionBridge;
+import com.slabbed.placement.LandingHitValidationPolicy;
 import com.slabbed.placement.LandingResolver;
 import com.slabbed.util.SlabbedDiagnosticsBridge;
 import com.slabbed.util.PlacementIntentState;
@@ -18,6 +19,9 @@ import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.CraftingTableBlock;
+import net.minecraft.world.level.block.PointedDripstoneBlock;
+import net.minecraft.world.level.block.SpeleothemBlock;
+import net.minecraft.world.level.block.state.properties.SpeleothemThickness;
 import net.minecraft.world.phys.shapes.CollisionContext;
 import net.minecraft.world.level.block.SlabBlock;
 import net.minecraft.world.level.block.state.properties.SlabType;
@@ -77,6 +81,22 @@ public abstract class BlockItemPlacementIntentMixin {
     }
 
     private record CompoundVisibleOwnerTopIntent(BlockPos sourcePos, BlockPos candidatePos) {
+    }
+
+    private static final ThreadLocal<PointedDripstoneContinuationIntent>
+            POINTED_DRIPSTONE_CONTINUATION_INTENT = new ThreadLocal<>();
+
+    /**
+     * One placement-time intent window for a translated pointed-dripstone side hit. Vanilla derives
+     * the candidate's tip direction from the player's look direction, so a remapped side hit can be
+     * re-derived as the OPPOSING tip; this pins the direction the aim actually named. Placement-time
+     * only: it never revisits an already-placed block.
+     */
+    private record PointedDripstoneContinuationIntent(
+            BlockPos ownerPos,
+            BlockPos candidatePos,
+            Direction tipDirection
+    ) {
     }
 
     private static final ThreadLocal<Integer> C3_USE_ON_DEPTH = ThreadLocal.withInitial(() -> 0);
@@ -155,6 +175,7 @@ public abstract class BlockItemPlacementIntentMixin {
                 COMPOUND_VISIBLE_SIDE_UPPER_INTENT.remove();
                 COMPOUND_VISIBLE_SIDE_DOUBLE_INTENT.remove();
                 COMPOUND_VISIBLE_OWNER_TOP_INTENT.remove();
+                POINTED_DRIPSTONE_CONTINUATION_INTENT.remove();
             } else {
                 C3_USE_ON_DEPTH.set(remaining);
             }
@@ -200,6 +221,7 @@ public abstract class BlockItemPlacementIntentMixin {
                 COMPOUND_VISIBLE_SIDE_UPPER_INTENT.remove();
                 COMPOUND_VISIBLE_SIDE_DOUBLE_INTENT.remove();
                 COMPOUND_VISIBLE_OWNER_TOP_INTENT.remove();
+                POINTED_DRIPSTONE_CONTINUATION_INTENT.remove();
             }
         }
     }
@@ -222,6 +244,26 @@ public abstract class BlockItemPlacementIntentMixin {
             PlacementDyCorrectionServer.observe(actual.getClickedPos());
         }
         return actual;
+    }
+
+    /**
+     * Pins the pointed-dripstone continuation candidate's TIP_DIRECTION before vanilla's OWN
+     * internal {@code canPlace(context, state)} call (inside {@code getPlacementState}) evaluates
+     * it. Patching only {@code getPlacementState}'s return value is too late: vanilla vetoes on the
+     * raw, possibly opposing-direction/differently-shaped state first, so the interpenetration
+     * guard would judge the wrong geometry and refuse a candidate this pin would otherwise fix.
+     */
+    @WrapOperation(
+            method = "getPlacementState",
+            at = @At(value = "INVOKE",
+                    target = "Lnet/minecraft/world/level/block/Block;getStateForPlacement(Lnet/minecraft/world/item/context/BlockPlaceContext;)Lnet/minecraft/world/level/block/state/BlockState;")
+    )
+    private BlockState slabbed$c3PinBeforeCanPlace(
+            Block block,
+            BlockPlaceContext context,
+            Operation<BlockState> original
+    ) {
+        return slabbed$pinPointedDripstoneContinuationDirection(context, original.call(block, context));
     }
 
     @WrapOperation(
@@ -303,6 +345,40 @@ public abstract class BlockItemPlacementIntentMixin {
             }
         }
         original.call(stack, amount, entity);
+    }
+
+    /**
+     * Consumes the pointed-dripstone continuation intent exactly once, pinning only TIP_DIRECTION.
+     * Thickness stays vanilla's job: the new segment is the column's tip, so it merges only when it
+     * meets an opposing tip. Nothing here reads or writes an already-placed block's dy.
+     */
+    private static BlockState slabbed$pinPointedDripstoneContinuationDirection(
+            BlockPlaceContext context,
+            BlockState placementState
+    ) {
+        PointedDripstoneContinuationIntent intent = POINTED_DRIPSTONE_CONTINUATION_INTENT.get();
+        if (intent == null
+                || placementState == null
+                || !context.getClickedPos().equals(intent.candidatePos())
+                || !(placementState.getBlock() instanceof PointedDripstoneBlock)
+                || !placementState.hasProperty(SpeleothemBlock.TIP_DIRECTION)
+                || !placementState.hasProperty(SpeleothemBlock.THICKNESS)) {
+            return placementState;
+        }
+        POINTED_DRIPSTONE_CONTINUATION_INTENT.remove();
+        if (placementState.getValue(SpeleothemBlock.TIP_DIRECTION) == intent.tipDirection()) {
+            return placementState;
+        }
+        BlockState beyondTip = context.getLevel()
+                .getBlockState(intent.candidatePos().relative(intent.tipDirection()));
+        boolean opposingTipBeyond = beyondTip.getBlock() instanceof PointedDripstoneBlock
+                && beyondTip.hasProperty(SpeleothemBlock.TIP_DIRECTION)
+                && beyondTip.getValue(SpeleothemBlock.TIP_DIRECTION)
+                == intent.tipDirection().getOpposite();
+        return placementState
+                .setValue(SpeleothemBlock.TIP_DIRECTION, intent.tipDirection())
+                .setValue(SpeleothemBlock.THICKNESS,
+                        opposingTipBeyond ? SpeleothemThickness.TIP_MERGE : SpeleothemThickness.TIP);
     }
 
     private static RootAim slabbed$c3CaptureRootAim(UseOnContext context) {
@@ -682,18 +758,22 @@ public abstract class BlockItemPlacementIntentMixin {
     }
 
 
-    private static SlabType slabbed$getExpectedLoweredSidePlacementType(BlockState targetState) {
-        if (!targetState.hasProperty(SlabBlock.TYPE)) {
-            return SlabType.BOTTOM;
-        }
-        return targetState.getValue(SlabBlock.TYPE) == SlabType.BOTTOM
-                ? SlabType.BOTTOM
-                : SlabType.TOP;
+    private static SlabType slabbed$getExpectedLoweredSidePlacementType(
+            BlockPos targetPos,
+            double yOffset,
+            Vec3 originalHitPos
+    ) {
+        double translatedMidY = targetPos.getY() + yOffset + 0.5d;
+        boolean exactMid = Math.abs(originalHitPos.y - translatedMidY) <= LOWERED_VISUAL_BOUNDARY_EPSILON;
+        return (originalHitPos.y < translatedMidY || exactMid) ? SlabType.BOTTOM : SlabType.TOP;
     }
 
-    private static SlabType slabbed$getLoweredDoubleHitIntentType(BlockPos targetPos, Vec3 hitPos) {
-        // Lowered DOUBLE occupies [y-0.5, y+0.5]. Its visual half split is at block y.
-        double loweredMidY = targetPos.getY();
+    private static SlabType slabbed$getLoweredDoubleHitIntentType(
+            BlockPos targetPos,
+            double yOffset,
+            Vec3 hitPos
+    ) {
+        double loweredMidY = targetPos.getY() + yOffset + 0.5d;
         boolean exactMid = Math.abs(hitPos.y - loweredMidY) <= LOWERED_VISUAL_BOUNDARY_EPSILON;
         return (hitPos.y < loweredMidY || exactMid) ? SlabType.BOTTOM : SlabType.TOP;
     }
@@ -1591,10 +1671,15 @@ public abstract class BlockItemPlacementIntentMixin {
 
         Level world = context.getLevel();
         BlockPos placePos = resolution.targetCell();
-        if (SlabAnchorAttachment.FROZEN_DY_ENABLED
-                && slabbed$overlapsVerticalOpenTransitionEnvelope(
-                        world, placePos, state, resolution.landingDy())) {
-            return false;
+        if (SlabAnchorAttachment.FROZEN_DY_ENABLED) {
+            if (slabbed$hasUnsafeVerticalTranslationOverlap(
+                    world, placePos, state, resolution.landingDy())) {
+                return false;
+            }
+            if (slabbed$overlapsVerticalOpenTransitionEnvelope(
+                    world, placePos, state, resolution.landingDy())) {
+                return false;
+            }
         }
 
         OccludedOccupancyFrame occupancyFrame = OCCLUDED_OCCUPANCY_FRAME.get();
@@ -1612,6 +1697,29 @@ public abstract class BlockItemPlacementIntentMixin {
                 candidateShape,
                 occupancyFrame.translatedShape(),
                 BooleanOp.AND);
+    }
+
+    private static boolean slabbed$hasUnsafeVerticalTranslationOverlap(
+            Level world,
+            BlockPos candidatePos,
+            BlockState candidateState,
+            double candidateDy
+    ) {
+        BlockPos belowPos = candidatePos.below();
+        BlockState belowState = world.getBlockState(belowPos);
+        double belowDy = SlabSupport.getYOffset(world, belowPos, belowState);
+        boolean overlapsBelow = SlabEnsembleCoherence.relativeTranslationIncreasesBodyOverlap(
+                belowState, belowPos, belowDy,
+                candidateState, candidatePos, candidateDy);
+
+        BlockPos abovePos = candidatePos.above();
+        BlockState aboveState = world.getBlockState(abovePos);
+        double aboveDy = SlabSupport.getYOffset(world, abovePos, aboveState);
+        boolean overlapsAbove = SlabEnsembleCoherence.relativeTranslationIncreasesBodyOverlap(
+                candidateState, candidatePos, candidateDy,
+                aboveState, abovePos, aboveDy);
+
+        return overlapsBelow || overlapsAbove;
     }
 
     private static boolean slabbed$overlapsVerticalOpenTransitionEnvelope(
@@ -1727,6 +1835,67 @@ public abstract class BlockItemPlacementIntentMixin {
         }
 
         boolean itemIsSlab = ((BlockItem) (Object) this).getBlock() instanceof SlabBlock;
+        BlockState heldState = ((BlockItem) (Object) this).getBlock().defaultBlockState();
+        double targetDy = SlabSupport.getYOffset(context.getLevel(), targetPos, targetState);
+        Direction pointedDripstoneContinuation =
+                LandingHitValidationPolicy.pointedDripstoneSideContinuationDirection(
+                        targetPos,
+                        targetState,
+                        targetDy,
+                        originalSide,
+                        originalHitPos,
+                        heldState);
+        if (pointedDripstoneContinuation != null) {
+            double continuationY = pointedDripstoneContinuation == Direction.DOWN
+                    ? targetPos.getY() + targetDy
+                    : targetPos.getY() + targetDy + 1.0d;
+            Vec3 continuationHitPos = new Vec3(
+                    originalHitPos.x, continuationY, originalHitPos.z);
+            BlockHitResult continuationHit = new BlockHitResult(
+                    continuationHitPos,
+                    pointedDripstoneContinuation,
+                    targetPos,
+                    context.isInside(),
+                    false);
+            UseOnContext continuationContext = new UseOnContext(
+                    context.getLevel(),
+                    context.getPlayer(),
+                    context.getHand(),
+                    context.getItemInHand(),
+                    continuationHit) {
+            };
+            // The C3 root aim was captured from the ORIGINAL horizontal click, before this remap.
+            // Left stale, every downstream authority (the translated-occupancy guard and the dy
+            // freeze) resolves the horizontal formula and lands dy 0.0 — a body that coincides with
+            // the owner's own translated body, so the guard correctly refuses its own continuation.
+            // Re-aiming here, and only here, puts this placement on the vertical end-face path that
+            // already resolves the owner's frozen dy. Root use only: a nested useOn must not
+            // reinstall the aim, and depth-0 exit still clears it.
+            if (C3_USE_ON_DEPTH.get() == 1) {
+                C3_ROOT_AIM.set(slabbed$c3CaptureRootAim(continuationContext));
+            }
+            BlockPos continuationCandidatePos = targetPos.relative(pointedDripstoneContinuation);
+            POINTED_DRIPSTONE_CONTINUATION_INTENT.set(new PointedDripstoneContinuationIntent(
+                    targetPos.immutable(),
+                    continuationCandidatePos.immutable(),
+                    pointedDripstoneContinuation));
+            slabbed$recordRemapAttempt(
+                    context,
+                    true,
+                    true,
+                    targetState.isSolidRender(),
+                    false,
+                    false,
+                    targetDy,
+                    false,
+                    true,
+                    "pointed_dripstone_side_continuation",
+                    continuationHitPos,
+                    pointedDripstoneContinuation,
+                    "pointed_dripstone_side_continuation");
+            return slabbed$inspectReturn(
+                    context, continuationContext, "pointed_dripstone_side_continuation");
+        }
         if (!itemIsSlab) {
             slabbed$recordRemapAttempt(
                     context,
@@ -2017,9 +2186,12 @@ public abstract class BlockItemPlacementIntentMixin {
                 expectedType = SlabType.DOUBLE;
             } else if (targetState.getValue(SlabBlock.TYPE) == SlabType.DOUBLE
                     && effectiveSide.getAxis().isHorizontal()) {
-                expectedType = slabbed$getLoweredDoubleHitIntentType(targetPos, originalHitPos);
+                expectedType = slabbed$getLoweredDoubleHitIntentType(targetPos, yOffset, originalHitPos);
             } else {
-                expectedType = slabbed$getExpectedLoweredSidePlacementType(targetState);
+                expectedType = slabbed$getExpectedLoweredSidePlacementType(
+                        targetPos,
+                        yOffset,
+                        originalHitPos);
             }
             remappedY = slabbed$placementYForType(targetPos, expectedType);
         } else {
@@ -2034,6 +2206,12 @@ public abstract class BlockItemPlacementIntentMixin {
         if (originalSide == Direction.UP && expectedType == SlabType.BOTTOM) {
             remappedY = targetPos.getY() + 0.501d;
         }
+        boolean remapIntoAdjacentSlabCell = targetState.getBlock() instanceof SlabBlock
+                && targetState.getValue(SlabBlock.TYPE) != SlabType.DOUBLE
+                && effectiveSide.getAxis().isHorizontal();
+        BlockPos remappedTargetPos = remapIntoAdjacentSlabCell
+                ? targetPos.relative(effectiveSide)
+                : targetPos;
         Vec3 remappedHitPos = new Vec3(originalHitPos.x, remappedY, originalHitPos.z);
         slabbed$recordRemapAttempt(
                 context,
@@ -2052,7 +2230,7 @@ public abstract class BlockItemPlacementIntentMixin {
         BlockHitResult remappedHit = new BlockHitResult(
                 remappedHitPos,
                 effectiveSide,
-                targetPos,
+                remappedTargetPos,
                 context.isInside(),
                 false
         );
