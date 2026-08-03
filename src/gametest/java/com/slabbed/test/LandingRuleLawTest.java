@@ -997,15 +997,18 @@ public final class LandingRuleLawTest {
                 world.getBlockState(owner),
                 compoundSource,
                 world.getBlockState(compoundSource));
+        forceStore(world, owner, -1.0d);
         BlockPos pot = owner.above();
         long expectedBits = Double.doubleToRawLongBits(-1.5d);
         long supportBits = Double.doubleToRawLongBits(-1.0d);
 
         withFrozen(() -> {
+            double supportStored = storedDy(world, owner);
             double supportLive = liveDy(world, owner);
-            if (Double.doubleToRawLongBits(supportLive) != supportBits) {
-                throw h.assertionException(owner, "premise: marked side-lower slab must read exact dy=-1.0; live="
-                        + supportLive);
+            if (Double.doubleToRawLongBits(supportStored) != supportBits
+                    || Double.doubleToRawLongBits(supportLive) != supportBits) {
+                throw h.assertionException(owner, "premise: marked side-lower slab must have exact dy=-1.0; stored="
+                        + supportStored + " live=" + supportLive);
             }
             place(h, Items.FLOWER_POT, owner, Direction.UP, 0.0d);
             if (!world.getBlockState(pot).is(Blocks.FLOWER_POT)) {
@@ -3254,6 +3257,130 @@ public final class LandingRuleLawTest {
                     || SlabAnchorAttachment.rawPlacementDyFact(w, outward).present()) {
                 throw h.assertionException(outward, "TEST39 adjacent-merge: next outward cell must remain "
                         + "unchanged air with no stored dy; state=" + outwardAfter);
+            }
+        });
+        h.succeed();
+    }
+
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void missingAdjacentMergeTargetFactStaysStableFlat(GameTestHelper h) {
+        ServerLevel w = h.getLevel();
+        BlockPos owner = h.absolutePos(new BlockPos(3, 4, 3));
+        BlockPos target = owner.east();
+        BlockPos outward = target.east();
+        BlockState bottomBirch = Blocks.BIRCH_SLAB.defaultBlockState()
+                .setValue(SlabBlock.TYPE, SlabType.BOTTOM);
+        long negativeOneBits = Double.doubleToRawLongBits(-1.0d);
+        long positiveZeroBits = Double.doubleToRawLongBits(0.0d);
+
+        w.setBlock(owner, bottomBirch, 3);
+        w.setBlock(target, bottomBirch, 3);
+        w.setBlock(outward, Blocks.AIR.defaultBlockState(), 3);
+        forceStore(w, owner, -1.0d);
+
+        withFrozen(() -> {
+            if (!w.getBlockState(owner).equals(bottomBirch)
+                    || !w.getBlockState(target).equals(bottomBirch)
+                    || !w.getBlockState(outward).isAir()
+                    || Double.doubleToRawLongBits(storedDy(w, owner)) != negativeOneBits
+                    || Double.doubleToRawLongBits(liveDy(w, owner)) != negativeOneBits
+                    || SlabAnchorAttachment.rawPlacementDyFact(w, target).present()
+                    || Double.doubleToRawLongBits(liveDy(w, target)) != positiveZeroBits
+                    || SlabAnchorAttachment.rawPlacementDyFact(w, outward).present()) {
+                throw h.assertionException(target, "missing-target merge premise: owner must be raw -1.0, target "
+                        + "must be occupied/factless at raw positive 0.0, and outward must be air/factless");
+            }
+
+            Vec3 upperHit = new Vec3(
+                    owner.getX() + 1.0d, owner.getY() - 0.6d, owner.getZ() + 0.5d);
+            InteractionResult result = test32UseItemOn(
+                    h, Items.BIRCH_SLAB, owner, Direction.EAST, upperHit);
+            BlockState targetAfter = w.getBlockState(target);
+            if (result == null || !result.consumesAction()) {
+                throw h.assertionException(target,
+                        "missing-target merge premise: real useOn did not consume; result=" + result);
+            }
+            if (!w.getBlockState(owner).equals(bottomBirch)
+                    || Double.doubleToRawLongBits(storedDy(w, owner)) != negativeOneBits
+                    || Double.doubleToRawLongBits(liveDy(w, owner)) != negativeOneBits) {
+                throw h.assertionException(owner, "missing-target merge: clicked owner changed from raw -1.0");
+            }
+            if (!w.getBlockState(outward).isAir()
+                    || SlabAnchorAttachment.rawPlacementDyFact(w, outward).present()) {
+                throw h.assertionException(outward, "missing-target merge: outward must remain air/factless");
+            }
+            SlabAnchorAttachment.PlacementDyFact targetFactAfter =
+                    SlabAnchorAttachment.rawPlacementDyFact(w, target);
+            double targetStoredAfter = storedDy(w, target);
+            double targetLiveAfter = liveDy(w, target);
+            if (targetAfter.getBlock() != Blocks.BIRCH_SLAB
+                    || targetAfter.getValue(SlabBlock.TYPE) != SlabType.DOUBLE
+                    || !targetFactAfter.present()
+                    || targetFactAfter.rawBits() != positiveZeroBits
+                    || Double.doubleToRawLongBits(targetStoredAfter) != positiveZeroBits
+                    || Double.doubleToRawLongBits(targetLiveAfter) != positiveZeroBits) {
+                throw h.assertionException(target, "missing-target merge must become DOUBLE at raw positive 0.0; "
+                        + "state=" + targetAfter + " factPresent=" + targetFactAfter.present()
+                        + " factRaw=" + Long.toHexString(targetFactAfter.rawBits())
+                        + " stored=" + targetStoredAfter + " live=" + targetLiveAfter);
+            }
+        });
+        h.succeed();
+    }
+
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void topAdjacentMergeTargetPreservesExplicitDy(GameTestHelper h) {
+        ServerLevel w = h.getLevel();
+        BlockPos owner = h.absolutePos(new BlockPos(3, 4, 3));
+        BlockPos target = owner.east();
+        BlockPos outward = target.east();
+        BlockState bottomBirch = Blocks.BIRCH_SLAB.defaultBlockState()
+                .setValue(SlabBlock.TYPE, SlabType.BOTTOM);
+        BlockState topBirch = Blocks.BIRCH_SLAB.defaultBlockState()
+                .setValue(SlabBlock.TYPE, SlabType.TOP);
+        long negativeOneBits = Double.doubleToRawLongBits(-1.0d);
+
+        w.setBlock(owner, bottomBirch, 3);
+        w.setBlock(target, topBirch, 3);
+        w.setBlock(outward, Blocks.AIR.defaultBlockState(), 3);
+        forceStore(w, owner, -1.0d);
+        forceStore(w, target, -1.0d);
+
+        withFrozen(() -> {
+            if (!w.getBlockState(owner).equals(bottomBirch)
+                    || !w.getBlockState(target).equals(topBirch)
+                    || !w.getBlockState(outward).isAir()
+                    || Double.doubleToRawLongBits(storedDy(w, owner)) != negativeOneBits
+                    || Double.doubleToRawLongBits(liveDy(w, owner)) != negativeOneBits
+                    || Double.doubleToRawLongBits(storedDy(w, target)) != negativeOneBits
+                    || Double.doubleToRawLongBits(liveDy(w, target)) != negativeOneBits) {
+                throw h.assertionException(target, "TOP-target merge premise: owner and target must begin at raw -1.0");
+            }
+
+            Vec3 lowerHit = new Vec3(
+                    owner.getX() + 1.0d, owner.getY() - 0.9d, owner.getZ() + 0.5d);
+            InteractionResult result = test32UseItemOn(
+                    h, Items.BIRCH_SLAB, owner, Direction.EAST, lowerHit);
+            BlockState targetAfter = w.getBlockState(target);
+            if (result == null || !result.consumesAction()) {
+                throw h.assertionException(target,
+                        "TOP-target merge premise: real useOn did not consume; result=" + result);
+            }
+            if (!w.getBlockState(owner).equals(bottomBirch)
+                    || Double.doubleToRawLongBits(storedDy(w, owner)) != negativeOneBits
+                    || Double.doubleToRawLongBits(liveDy(w, owner)) != negativeOneBits) {
+                throw h.assertionException(owner, "TOP-target merge: clicked owner changed from raw -1.0");
+            }
+            if (targetAfter.getBlock() != Blocks.BIRCH_SLAB
+                    || targetAfter.getValue(SlabBlock.TYPE) != SlabType.DOUBLE
+                    || Double.doubleToRawLongBits(storedDy(w, target)) != negativeOneBits
+                    || Double.doubleToRawLongBits(liveDy(w, target)) != negativeOneBits) {
+                throw h.assertionException(target, "TOP-target merge must become DOUBLE at raw -1.0; state="
+                        + targetAfter + " stored=" + storedDy(w, target) + " live=" + liveDy(w, target));
+            }
+            if (!w.getBlockState(outward).isAir()
+                    || SlabAnchorAttachment.rawPlacementDyFact(w, outward).present()) {
+                throw h.assertionException(outward, "TOP-target merge: outward must remain air/factless");
             }
         });
         h.succeed();
