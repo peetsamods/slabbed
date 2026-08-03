@@ -88,9 +88,9 @@ public final class ChainCeilingGeometry {
         return ChainBridgeTextureVariant.values();
     }
 
-    /** True for a Y-axis chain whose block directly above is a ceiling support (TOP/DOUBLE slab). */
-    public static boolean usesAlternateGeometry(BlockGetter world, BlockPos pos, BlockState state) {
-        return SlabSupport.isVerticalChainDirectlyUnderCeilingSupport(world, pos, state);
+    /** True when the frozen chain dy and its ceiling support select the extended bridge route. */
+    public static boolean usesAlternateGeometry(BlockGetter world, BlockPos pos, BlockState state, double frozenDy) {
+        return SlabSupport.usesCeilingBridgeGeometry(world, pos, state, frozenDy);
     }
 
     /**
@@ -99,8 +99,8 @@ public final class ChainCeilingGeometry {
      */
     public static boolean emitIfPresent(FabricBlockStateModel fallback, QuadEmitter emitter,
                                         BlockAndTintGetter world, BlockPos pos, BlockState state,
-                                        RandomSource random, Predicate<Direction> cullTest) {
-        if (!usesAlternateGeometry(world, pos, state)) {
+                                        double frozenDy, RandomSource random, Predicate<Direction> cullTest) {
+        if (!usesAlternateGeometry(world, pos, state, frozenDy)) {
             return false;
         }
         BlockStateModel alternate = alternateModel(ChainBridgeTextureVariant.forBlock(state));
