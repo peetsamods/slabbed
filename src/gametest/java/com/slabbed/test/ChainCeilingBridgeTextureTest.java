@@ -57,6 +57,47 @@ public final class ChainCeilingBridgeTextureTest {
     private static final double EPS = 1.0e-6;
 
     /**
+     * Route discriminator for the lowered-TOP ghost bridge: a chain whose already-frozen model dy is
+     * lowered must use its normal 16px model/selection, while the flush dy=0 TOP control keeps the
+     * deliberate 24px bridge. This calls the shared server-loadable policy directly so its RED is a
+     * missing or incorrect production route, not a test-side approximation.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void loweredTopChainFrozenDySelectsNormalRouteWhileFlushTopSelectsBridge(GameTestHelper helper) {
+        BlockState chain = Blocks.IRON_CHAIN.defaultBlockState()
+                .setValue(BlockStateProperties.AXIS, Direction.Axis.Y);
+        BlockState top = Blocks.OAK_SLAB.defaultBlockState()
+                .setValue(SlabBlock.TYPE, SlabType.TOP);
+        BlockState doubleSlab = Blocks.OAK_SLAB.defaultBlockState()
+                .setValue(SlabBlock.TYPE, SlabType.DOUBLE);
+
+        boolean loweredRoute = SlabSupport.usesCeilingBridgeGeometry(chain, top, -1.5d);
+        boolean flushRoute = SlabSupport.usesCeilingBridgeGeometry(chain, top, 0.0d);
+        boolean loweredDoubleRoute = SlabSupport.usesCeilingBridgeGeometry(chain, doubleSlab, -1.5d);
+        boolean flushDoubleRoute = SlabSupport.usesCeilingBridgeGeometry(chain, doubleSlab, 0.0d);
+
+        if (loweredRoute) {
+            throw helper.assertionException(BlockPos.ZERO,
+                    "a lowered TOP chain at frozen dy=-1.5 must use the normal shifted 16px route, "
+                            + "not the 24px ceiling bridge");
+        }
+        if (!flushRoute) {
+            throw helper.assertionException(BlockPos.ZERO,
+                    "the flush TOP control at frozen dy=0 must retain the 24px ceiling bridge");
+        }
+        if (loweredDoubleRoute) {
+            throw helper.assertionException(BlockPos.ZERO,
+                    "changing the support from TOP to DOUBLE must not enable the bridge for an "
+                            + "already-lowered chain at frozen dy=-1.5");
+        }
+        if (!flushDoubleRoute) {
+            throw helper.assertionException(BlockPos.ZERO,
+                    "the existing DOUBLE control at frozen dy=0 must retain its bridge route");
+        }
+        helper.succeed();
+    }
+
+    /**
      * RED anchor for the fix: the pure selector maps every chain block to the bridge texture variant
      * matching its OWN texture (waxed variants share their unwaxed texture). Before the fix there was
      * a single iron bridge; mutating {@link ChainBridgeTextureVariant#forBlock} to always return IRON
@@ -203,6 +244,10 @@ public final class ChainCeilingBridgeTextureTest {
             throw helper.assertionException(new BlockPos(3, 2, 2),
                     "a bridged vertical chain must stay at grid-height dy=0.0 (intentional ceiling-mount "
                             + "bridge geometry), got " + chainDy);
+        }
+        if (!SlabSupport.usesCeilingBridgeGeometry(chainState, doubleState, chainDy)) {
+            throw helper.assertionException(new BlockPos(3, 2, 2),
+                    "the existing DOUBLE ceiling control must retain its grid-height bridge route");
         }
         helper.succeed();
     }

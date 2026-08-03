@@ -240,11 +240,41 @@ public final class SlabSupport {
                 && isCeilingSupportBottomSurface(world, pos.above());
     }
 
+    /**
+     * Shared bridge-routing policy for a vertical chain directly under a slab ceiling.
+     *
+     * <p>A TOP ceiling only owns the extended 24px bridge while the chain's already-frozen dy is
+     * flush. A lowered TOP chain instead keeps its ordinary 16px model and shifted native outline.
+     * DOUBLE ceilings retain their established grid-height bridge route unchanged.
+     */
+    public static boolean usesCeilingBridgeGeometry(
+            BlockState chainState, BlockState ceilingSupportState, double frozenDy
+    ) {
+        if (!isBeta35VerticalChainVisibleOwnerObject(chainState)
+                || ceilingSupportState == null
+                || !isSupportingSlab(ceilingSupportState)) {
+            return false;
+        }
+        return switch (ceilingSupportState.getValue(SlabBlock.TYPE)) {
+            case TOP, DOUBLE -> frozenDy == 0.0d;
+            case BOTTOM -> false;
+        };
+    }
+
+    /** World-view overload so render and shape routes apply the same frozen-dy policy. */
+    public static boolean usesCeilingBridgeGeometry(
+            BlockGetter world, BlockPos pos, BlockState chainState, double frozenDy
+    ) {
+        return world != null
+                && pos != null
+                && usesCeilingBridgeGeometry(chainState, world.getBlockState(pos.above()), frozenDy);
+    }
+
     public static VoxelShape ceilingBridgedVerticalChainSelectionShape(
-            BlockGetter world, BlockPos pos, BlockState state, VoxelShape fallback
+            BlockGetter world, BlockPos pos, BlockState state, double frozenDy, VoxelShape fallback
     ) {
         VoxelShape base = fallback == null ? Shapes.empty() : fallback;
-        if (!isVerticalChainDirectlyUnderCeilingSupport(world, pos, state)) {
+        if (!usesCeilingBridgeGeometry(world, pos, state, frozenDy)) {
             return base;
         }
         if (base.isEmpty()) {

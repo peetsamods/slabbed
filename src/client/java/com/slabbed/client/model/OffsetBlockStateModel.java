@@ -54,28 +54,9 @@ public final class OffsetBlockStateModel implements BlockStateModel {
     @Override
     public void emitQuads(QuadEmitter emitter, BlockAndTintGetter view, BlockPos pos, BlockState state, RandomSource random,
                           Predicate<Direction> cullTest) {
-        // A Y-axis chain hanging under a slab ceiling emits extended geometry so the column connects
-        // continuously to the slab (no gap) — the chainable connect rule, distinct from lantern follow.
-        // Guarded: its support probe reads pos.above(), which can step outside the render-region border
-        // for a block at the section's top edge (26.x throws on OOB) — fall through to normal emission.
-        try {
-            if (ChainCeilingGeometry.emitIfPresent(fabricWrapped, emitter, view, pos, state, random, cullTest)) {
-                // MODEL_STALE sentinel: the bridge renders at grid height by design — record dy=0 so an
-                // armed chain cell is not misread as "never re-baked" by the absence rule.
-                if (SlabbedDiagnosticsBridge.shouldCaptureModelBake()
-                        && SlabbedDiagnosticsBridge.isModelBakeArmed(pos.asLong())) {
-                    SlabbedDiagnosticsBridge.recordModelBake(pos, 0.0f);
-                }
-                return;
-            }
-        } catch (IndexOutOfBoundsException outsideRenderRegion) {
-            // fall through to the standard offset emission below (also render-region guarded)
-        }
-        // MODEL_STALE sentinel capture — SUBJECT emissions only (a neighbor probe from another section's
-        // bake pass recomputes fresh dy and would mask that this pos's own mesh is stale), and never the
-        // render-region OOB fallback (that 0.0 is a border artifact, not a dy decision — the section
-        // re-bakes with fuller bounds a frame later). Gate order is load-bearing (perf contract): one
-        // volatile read, then the armed-set binary search, before any other work.
+        // Resolve the frozen model dy before deciding whether this chain owns the special bridge.
+        // A lowered TOP chain must take the ordinary shifted emitter path; only a flush TOP chain
+        // keeps the 24px bridge. DOUBLE retains its existing bridge policy in SlabSupport.
         float dy;
         if (SlabbedDiagnosticsBridge.shouldCaptureModelBake()
                 && SlabbedDiagnosticsBridge.isModelBakeArmed(pos.asLong())) {
@@ -83,6 +64,23 @@ public final class OffsetBlockStateModel implements BlockStateModel {
         } else {
             dy = slabbed$modelDy(view, pos, state);
         }
+        // A Y-axis chain hanging under a slab ceiling emits extended geometry so the column connects
+        // continuously to the slab (no gap) — the chainable connect rule, distinct from lantern follow.
+        // Guarded: its support probe reads pos.above(), which can step outside the render-region border
+        // for a block at the section's top edge (26.x throws on OOB) — fall through to normal emission.
+        try {
+            if (ChainCeilingGeometry.emitIfPresent(fabricWrapped, emitter, view, pos, state, dy, random, cullTest)) {
+                return;
+            }
+        } catch (IndexOutOfBoundsException outsideRenderRegion) {
+            // fall through to the standard offset emission below (also render-region guarded)
+        }
+        // MODEL_STALE sentinel capture was resolved above for this SUBJECT emission only (a neighbor
+        // probe from another section's bake pass recomputes fresh dy and would mask this pos's own
+        // mesh as stale), and never the
+        // render-region OOB fallback (that 0.0 is a border artifact, not a dy decision — the section
+        // re-bakes with fuller bounds a frame later). Gate order is load-bearing (perf contract): one
+        // volatile read, then the armed-set binary search, before any other work.
         // DODO / step-face cull: a FLAT block (dy=0) adjacent to a lowered one ALSO owns a step face
         // whose cullFace must be cleared — otherwise the strip the neighbour's -0.5 offset exposes
         // culls into a see-through "ghost window". 26.1.2 previously only wrapped dy!=0 blocks, so the

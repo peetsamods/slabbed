@@ -2,11 +2,19 @@ package com.slabbed.test;
 
 import com.slabbed.anchor.SlabAnchorAttachment;
 import com.slabbed.util.SlabSupport;
+import it.unimi.dsi.fastutil.longs.Long2DoubleOpenHashMap;
 import net.fabricmc.fabric.api.gametest.v1.GameTest;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.InteractionHand;
+import net.minecraft.world.InteractionResult;
+import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.context.UseOnContext;
+import net.minecraft.world.level.EmptyBlockGetter;
+import net.minecraft.world.level.GameType;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.CrossCollisionBlock;
@@ -16,6 +24,7 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 import net.minecraft.world.level.block.state.properties.SlabType;
 import net.minecraft.world.level.block.state.properties.WallSide;
+import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.Vec3;
@@ -83,6 +92,27 @@ public final class Slabbed2612LoweringContractTest {
         BlockPos abs = helper.absolutePos(rel);
         level.setBlock(abs, state, Block.UPDATE_ALL);
         state.getBlock().setPlacedBy(level, abs, level.getBlockState(abs), null, ItemStack.EMPTY);
+    }
+
+    /** Real BlockItem useOn placement, matching the production capture route used by the law tests. */
+    private static void placeBlockItem(
+            GameTestHelper helper,
+            ItemStack stack,
+            BlockPos clicked,
+            Direction face
+    ) {
+        Player player = helper.makeMockPlayer(GameType.SURVIVAL);
+        player.setItemInHand(InteractionHand.MAIN_HAND, stack);
+        Vec3 hit = Vec3.atCenterOf(clicked)
+                .add(face.getStepX() * 0.5d, face.getStepY() * 0.5d, face.getStepZ() * 0.5d);
+        InteractionResult result = stack.useOn(new UseOnContext(
+                player,
+                InteractionHand.MAIN_HAND,
+                new BlockHitResult(hit, face, clicked, false)));
+        if (result == null || !result.consumesAction()) {
+            throw helper.assertionException(clicked,
+                    "SETUP: production BlockItem useOn placement failed; result=" + result);
+        }
     }
 
     /**
@@ -604,6 +634,270 @@ public final class Slabbed2612LoweringContractTest {
         return Blocks.IRON_CHAIN.defaultBlockState().setValue(BlockStateProperties.AXIS, net.minecraft.core.Direction.Axis.Y);
     }
 
+    private static void assertShapeMatchesShiftedNative(
+            GameTestHelper helper,
+            BlockPos rel,
+            String label,
+            VoxelShape nativeShape,
+            VoxelShape actualShape,
+            double dy
+    ) {
+        if (nativeShape.isEmpty()) {
+            if (!actualShape.isEmpty()) {
+                throw helper.assertionException(rel,
+                        label + " must remain empty like the native chain shape, got " + actualShape.bounds());
+            }
+            return;
+        }
+        if (actualShape.isEmpty()) {
+            throw helper.assertionException(rel, label + " must retain the shifted native chain shape");
+        }
+        AABB expected = nativeShape.bounds().move(0.0d, dy, 0.0d);
+        AABB actual = actualShape.bounds();
+        if (Math.abs(actual.minX - expected.minX) > EPS
+                || Math.abs(actual.minY - expected.minY) > EPS
+                || Math.abs(actual.minZ - expected.minZ) > EPS
+                || Math.abs(actual.maxX - expected.maxX) > EPS
+                || Math.abs(actual.maxY - expected.maxY) > EPS
+                || Math.abs(actual.maxZ - expected.maxZ) > EPS) {
+            throw helper.assertionException(rel,
+                    label + " must be only the native chain bounds shifted by dy=" + dy
+                            + "; expected " + expected + " got " + actual);
+        }
+    }
+
+    private static BlockPos buildDeepLoweredTopChainScene(GameTestHelper helper, ServerLevel level) {
+        BlockPos topSupport = helper.absolutePos(new BlockPos(3, 4, 2));
+        BlockState topState = Blocks.STONE_SLAB.defaultBlockState().setValue(SlabBlock.TYPE, SlabType.TOP);
+        // Synthetic support only: TOP slabs are not ANCHOR_TYPE candidates. The frozen-height
+        // authority is the exact PLACEMENT_DY_TYPE entry, which getYOffset reads before geometry.
+        level.setBlock(topSupport, topState, Block.UPDATE_ALL);
+        forceSyntheticSupportStoredDy(level, topSupport, -2.0d);
+
+        BlockPos chain = topSupport.below();
+        boolean frozenBefore = SlabAnchorAttachment.FROZEN_DY_ENABLED;
+        SlabAnchorAttachment.FROZEN_DY_ENABLED = true;
+        try {
+            // Real production placement: useOn runs setPlacedBy and then the C3 placement-dy
+            // publication. A direct setPlacedBy call alone does not reach that current writer.
+            placeBlockItem(helper, new ItemStack(Blocks.IRON_CHAIN.asItem()), topSupport, Direction.DOWN);
+        } finally {
+            SlabAnchorAttachment.FROZEN_DY_ENABLED = frozenBefore;
+        }
+        if (!level.getBlockState(chain).is(Blocks.IRON_CHAIN)) {
+            throw helper.assertionException(helper.relativePos(chain),
+                    "SETUP: production useOn must place an iron chain below the TOP support");
+        }
+        return chain;
+    }
+
+    /**
+     * Proven synthetic-support pattern from LandingRuleLawTest: write an exact placement dy into the
+     * same attachment map used by production capture, then read it only with frozen-dy enabled.
+     * This helper must never author the chain under test.
+     */
+    private static void forceSyntheticSupportStoredDy(ServerLevel level, BlockPos pos, double dy) {
+        LevelChunk chunk = level.getChunk(pos.getX() >> 4, pos.getZ() >> 4);
+        Long2DoubleOpenHashMap existing = chunk.getAttached(SlabAnchorAttachment.PLACEMENT_DY_TYPE);
+        Long2DoubleOpenHashMap map = existing == null
+                ? new Long2DoubleOpenHashMap()
+                : new Long2DoubleOpenHashMap(existing);
+        map.defaultReturnValue(Double.NaN);
+        map.put(pos.asLong(), dy);
+        chunk.setAttached(SlabAnchorAttachment.PLACEMENT_DY_TYPE, map);
+    }
+
+    /**
+     * Real-useOn regression fixture for the flush TOP chain bridge: a TOP support whose frozen
+     * placement dy is exactly zero must publish that same exact value for its newly placed chain.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void flushTopChainUseOnStoresExactFrozenZeroDy(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        BlockPos support = helper.absolutePos(new BlockPos(2, 4, 2));
+        BlockPos chain = support.below();
+        long zeroBits = Double.doubleToRawLongBits(0.0d);
+
+        level.setBlock(support,
+                Blocks.STONE_SLAB.defaultBlockState().setValue(SlabBlock.TYPE, SlabType.TOP),
+                Block.UPDATE_ALL);
+        forceSyntheticSupportStoredDy(level, support, 0.0d);
+        if (!level.getBlockState(chain).isAir()) {
+            throw helper.assertionException(helper.relativePos(chain),
+                    "SETUP: flush TOP chain cell must be air before production useOn");
+        }
+        if (!Double.isNaN(SlabAnchorAttachment.storedPlacementDy(level, chain))) {
+            throw helper.assertionException(helper.relativePos(chain),
+                    "SETUP: flush TOP chain cell must have no stored placement dy before production useOn");
+        }
+
+        boolean frozenBefore = SlabAnchorAttachment.FROZEN_DY_ENABLED;
+        SlabAnchorAttachment.FROZEN_DY_ENABLED = true;
+        try {
+            long storedSupportBits = Double.doubleToRawLongBits(
+                    SlabAnchorAttachment.storedPlacementDy(level, support));
+            if (storedSupportBits != zeroBits) {
+                throw helper.assertionException(helper.relativePos(support),
+                        "SETUP: flush TOP support must store raw dy bits 0000000000000000, got "
+                                + String.format("%016x", storedSupportBits));
+            }
+            long readSupportBits = Double.doubleToRawLongBits(
+                    SlabSupport.getYOffset(level, support, level.getBlockState(support)));
+            if (readSupportBits != zeroBits) {
+                throw helper.assertionException(helper.relativePos(support),
+                        "SETUP: flush TOP support must read raw dy bits 0000000000000000, got "
+                                + String.format("%016x", readSupportBits));
+            }
+
+            ItemStack stack = new ItemStack(Blocks.IRON_CHAIN.asItem());
+            Player player = helper.makeMockPlayer(GameType.SURVIVAL);
+            player.setItemInHand(InteractionHand.MAIN_HAND, stack);
+            Vec3 undersideHit = Vec3.atCenterOf(support); // TOP slab visible underside: block-local y=0.5.
+            long publicationProbe = SlabAnchorAttachment.beginC3PublicationProbeForTests(chain);
+            try {
+                InteractionResult result = stack.useOn(new UseOnContext(
+                        player,
+                        InteractionHand.MAIN_HAND,
+                        new BlockHitResult(undersideHit, Direction.DOWN, support, false)));
+                if (result == null || !result.consumesAction()) {
+                    throw helper.assertionException(helper.relativePos(support),
+                            "SETUP: production BlockItem useOn placement failed; result=" + result);
+                }
+                int publicationCount = SlabAnchorAttachment.c3PublicationCountForTests(publicationProbe);
+                if (publicationCount != 1) {
+                    throw helper.assertionException(helper.relativePos(chain),
+                            "SETUP: flush TOP chain useOn must produce exactly one authoritative C3 publication; count="
+                                    + publicationCount);
+                }
+                if (!level.getBlockState(chain).is(Blocks.IRON_CHAIN)) {
+                    throw helper.assertionException(helper.relativePos(chain),
+                            "SETUP: production BlockItem useOn must place an iron chain below the flush TOP support");
+                }
+                long storedChainBits = Double.doubleToRawLongBits(
+                        SlabAnchorAttachment.storedPlacementDy(level, chain));
+                if (storedChainBits != zeroBits) {
+                    throw helper.assertionException(helper.relativePos(chain),
+                            "flush TOP chain C3 publication must store raw dy bits 0000000000000000, got "
+                                    + String.format("%016x", storedChainBits));
+                }
+            } finally {
+                SlabAnchorAttachment.stopC3PublicationProbeForTests(publicationProbe);
+            }
+
+            long storedChainBits = Double.doubleToRawLongBits(SlabAnchorAttachment.storedPlacementDy(level, chain));
+            long liveChainBits = Double.doubleToRawLongBits(
+                    SlabSupport.getYOffset(level, chain, level.getBlockState(chain)));
+            if (storedChainBits != zeroBits || liveChainBits != zeroBits) {
+                throw helper.assertionException(helper.relativePos(chain),
+                        "flush TOP chain useOn must retain stored/live raw dy bits 0000000000000000, got stored="
+                                + String.format("%016x", storedChainBits) + " live="
+                                + String.format("%016x", liveChainBits));
+            }
+
+            BlockPos lateralNeighbor = chain.east();
+            helper.setBlock(helper.relativePos(lateralNeighbor), Blocks.STONE.defaultBlockState());
+            assertFlushChainBits(helper, level, chain, zeroBits, "after lateral neighbor add");
+            helper.setBlock(helper.relativePos(lateralNeighbor), Blocks.AIR.defaultBlockState());
+            assertFlushChainBits(helper, level, chain, zeroBits, "after lateral neighbor removal");
+        } finally {
+            SlabAnchorAttachment.FROZEN_DY_ENABLED = frozenBefore;
+        }
+        helper.succeed();
+    }
+
+    private static void assertFlushChainBits(
+            GameTestHelper helper, ServerLevel level, BlockPos chain, long expectedBits, String phase) {
+        if (!level.getBlockState(chain).is(Blocks.IRON_CHAIN)) {
+            throw helper.assertionException(helper.relativePos(chain),
+                    "flush TOP chain must remain an iron chain " + phase);
+        }
+        long storedBits = Double.doubleToRawLongBits(SlabAnchorAttachment.storedPlacementDy(level, chain));
+        long liveBits = Double.doubleToRawLongBits(SlabSupport.getYOffset(level, chain, level.getBlockState(chain)));
+        if (storedBits != expectedBits || liveBits != expectedBits) {
+            throw helper.assertionException(helper.relativePos(chain),
+                    "flush TOP chain must preserve raw dy bits 0000000000000000 " + phase + "; stored="
+                            + String.format("%016x", storedBits) + " live=" + String.format("%016x", liveBits));
+        }
+    }
+
+    /**
+     * A chain authored against a synthetic exact frozen TOP-support dy must take the ordinary shifted
+     * native route. This proves both shape consumers have no detached 24px bridge component and that
+     * the visible lowered chain body remains directly ray-hittable.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void loweredTopChainUsesOnlyShiftedNativeOutlineAndInteractionShape(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        BlockPos chainAbs = buildDeepLoweredTopChainScene(helper, level);
+        BlockPos chainRel = helper.relativePos(chainAbs);
+        BlockPos topSupport = chainAbs.above();
+        BlockState chainState = level.getBlockState(chainAbs);
+
+        if (Double.doubleToRawLongBits(SlabAnchorAttachment.storedPlacementDy(level, topSupport))
+                != Double.doubleToRawLongBits(-2.0d)) {
+            throw helper.assertionException(chainRel.above(),
+                    "SETUP: synthetic TOP support must have exact stored dy=-2.0");
+        }
+        // A chain is not an ordinary full-block ANCHOR_TYPE candidate. Its frozen-height authority
+        // is the C3 placement-dy publication, so requiring the legacy marker would be a false premise.
+        if (Double.doubleToRawLongBits(SlabAnchorAttachment.storedPlacementDy(level, chainAbs))
+                != Double.doubleToRawLongBits(-1.5d)) {
+            throw helper.assertionException(chainRel,
+                    "SETUP: production-authored chain must have exact stored dy=-1.5");
+        }
+
+        boolean frozenBefore = SlabAnchorAttachment.FROZEN_DY_ENABLED;
+        SlabAnchorAttachment.FROZEN_DY_ENABLED = true;
+        try {
+            double supportDy = SlabSupport.getYOffset(level, topSupport, level.getBlockState(topSupport));
+            if (Math.abs(supportDy + 2.0d) > EPS) {
+                throw helper.assertionException(chainRel.above(),
+                        "SETUP: deeply lowered TOP support must read dy=-2.0, got " + supportDy);
+            }
+            double chainDy = SlabSupport.getYOffset(level, chainAbs, chainState);
+            if (Math.abs(chainDy + 1.5d) > EPS) {
+                throw helper.assertionException(chainRel,
+                        "SETUP: chain under the dy=-2.0 TOP support must read frozen/render dy=-1.5, got "
+                                + chainDy);
+            }
+
+            BlockState nativeChain = yChain();
+            VoxelShape nativeOutline = nativeChain.getShape(
+                    EmptyBlockGetter.INSTANCE, BlockPos.ZERO, CollisionContext.empty());
+            VoxelShape nativeInteraction = nativeChain.getInteractionShape(
+                    EmptyBlockGetter.INSTANCE, BlockPos.ZERO);
+            VoxelShape outline = chainState.getShape(level, chainAbs, CollisionContext.empty());
+            VoxelShape interaction = chainState.getInteractionShape(level, chainAbs);
+
+            assertShapeMatchesShiftedNative(
+                    helper, chainRel, "lowered TOP chain outline", nativeOutline, outline, chainDy);
+            assertShapeMatchesShiftedNative(
+                    helper, chainRel, "lowered TOP chain interaction shape", nativeInteraction, interaction, chainDy);
+
+            AABB visibleBounds = outline.bounds();
+            double visibleMidY = chainAbs.getY() + (visibleBounds.minY + visibleBounds.maxY) * 0.5d;
+            Vec3 visibleFrom = new Vec3(chainAbs.getX() + 0.5d, visibleMidY, chainAbs.getZ() - 0.5d);
+            Vec3 visibleTo = new Vec3(chainAbs.getX() + 0.5d, visibleMidY, chainAbs.getZ() + 1.5d);
+            BlockHitResult visibleHit = outline.clip(visibleFrom, visibleTo, chainAbs);
+            if (visibleHit == null || !visibleHit.getBlockPos().equals(chainAbs)) {
+                throw helper.assertionException(chainRel,
+                        "the real lowered chain body must remain directly hittable through its shifted outline");
+            }
+
+            double bridgeOnlyY = chainAbs.getY() + 0.75d;
+            Vec3 bridgeFrom = new Vec3(chainAbs.getX() + 0.5d, bridgeOnlyY, chainAbs.getZ() - 0.5d);
+            Vec3 bridgeTo = new Vec3(chainAbs.getX() + 0.5d, bridgeOnlyY, chainAbs.getZ() + 1.5d);
+            if (outline.clip(bridgeFrom, bridgeTo, chainAbs) != null
+                    || (!interaction.isEmpty() && interaction.clip(bridgeFrom, bridgeTo, chainAbs) != null)) {
+                throw helper.assertionException(chainRel,
+                        "lowered TOP chain shapes must not retain a detached bridge above the visible native body");
+            }
+        } finally {
+            SlabAnchorAttachment.FROZEN_DY_ENABLED = frozenBefore;
+        }
+        helper.succeed();
+    }
+
     /**
      * Chain-vs-lantern distinction probe: a Y-axis CHAIN under a LOWERED support must NOT follow it
      * down the way a hanging lantern does — chains are "chainables" that keep their own connect
@@ -647,9 +941,8 @@ public final class Slabbed2612LoweringContractTest {
     }
 
     /**
-     * P26-8 targeting guard: the ceiling-bridged top chain model renders at the grid cell while the
-     * normal +0.5 ceiling-attach outline shifts upward. The selection proxy must still cover the
-     * visible lower end of the extended chain model.
+     * P26-8 targeting guard: the ceiling-bridged top chain model extends above the native 16px chain.
+     * The selection proxy must cover that bridge-only upper segment, not merely the native body.
      */
     @GameTest(structure = "fabric-gametest-api-v1:empty")
     public void ceilingBridgedChainSelectionExtendsToVisibleBridge(GameTestHelper helper) {
@@ -663,13 +956,14 @@ public final class Slabbed2612LoweringContractTest {
         BlockPos abs = helper.absolutePos(chain);
         BlockState actual = level.getBlockState(abs);
         VoxelShape outline = actual.getShape(level, abs, CollisionContext.empty());
-        Vec3 from = new Vec3(abs.getX() + 0.5d, abs.getY() + 0.25d, abs.getZ() - 0.5d);
-        Vec3 to = new Vec3(abs.getX() + 0.5d, abs.getY() + 0.25d, abs.getZ() + 1.5d);
+        Vec3 from = new Vec3(abs.getX() + 0.5d, abs.getY() + 1.25d, abs.getZ() - 0.5d);
+        Vec3 to = new Vec3(abs.getX() + 0.5d, abs.getY() + 1.25d, abs.getZ() + 1.5d);
 
         BlockHitResult outlineHit = outline.clip(from, to, abs);
         if (outlineHit == null || !outlineHit.getBlockPos().equals(abs)) {
             throw helper.assertionException(chain,
-                    "P26-8: ceiling-bridged iron_chain is visible at local y=0.25 but the outline/raycast proxy misses");
+                    "P26-8: the flush TOP bridge must extend the outline above the native chain "
+                            + "through local y=1.25");
         }
         helper.succeed();
     }
