@@ -39,10 +39,26 @@ public final class WaterlogReadSymmetryTest {
     private static final double EPS = 1.0e-6;
 
     private static void place(GameTestHelper helper, ItemStack stack, BlockPos clicked, Direction face) {
+        place(helper, stack, clicked, face, false);
+    }
+
+    /**
+     * @param aimAtLoweredSourceFace aim the click Y at the source's TRANSLATED visible face instead of
+     *         the vanilla grid-face center. The offset-aware raycast can only return a hit on a lowered
+     *         source's translated body, so against a negative-dy source the vanilla-center aim is a
+     *         coordinate no player can produce — and the side-hit SlabType classifier now reads it
+     *         against the translated midpoint. Only the F5c side-carrier scenes opt in.
+     */
+    private static void place(GameTestHelper helper, ItemStack stack, BlockPos clicked, Direction face,
+                              boolean aimAtLoweredSourceFace) {
         Player player = helper.makeMockPlayer(GameType.SURVIVAL);
         player.setItemInHand(InteractionHand.MAIN_HAND, stack);
         Vec3 hit = Vec3.atCenterOf(clicked)
                 .add(face.getStepX() * 0.5, face.getStepY() * 0.5, face.getStepZ() * 0.5);
+        if (aimAtLoweredSourceFace) {
+            double sourceDy = dy(helper.getLevel(), clicked);
+            hit = new Vec3(hit.x, clicked.getY() + sourceDy + 0.25, hit.z);
+        }
         stack.useOn(new UseOnContext(player, InteractionHand.MAIN_HAND,
                 new BlockHitResult(hit, face, clicked, false)));
     }
@@ -681,7 +697,7 @@ public final class WaterlogReadSymmetryTest {
         ServerLevel w = helper.getLevel();
         BlockPos source = buildMarkedLowerSlab(helper, w);
         BlockPos cell = source.west();
-        place(helper, new ItemStack(Items.STONE_SLAB), source, Direction.WEST);
+        place(helper, new ItemStack(Items.STONE_SLAB), source, Direction.WEST, true);
         BlockState dryPlaced = w.getBlockState(cell);
         if (!(dryPlaced.getBlock() instanceof SlabBlock)) {
             throw helper.assertionException("DRY BASELINE premise: the dry side placement must succeed, got "
@@ -696,7 +712,7 @@ public final class WaterlogReadSymmetryTest {
             throw helper.assertionException("scene premise: the carrier must die with the dry baseline slab");
         }
         w.setBlock(cell, Blocks.WATER.defaultBlockState(), 2);
-        place(helper, new ItemStack(Items.STONE_SLAB), source, Direction.WEST);
+        place(helper, new ItemStack(Items.STONE_SLAB), source, Direction.WEST, true);
         BlockState placed = w.getBlockState(cell);
         if (!(placed.getBlock() instanceof SlabBlock)
                 || !placed.getValue(BlockStateProperties.WATERLOGGED)) {
@@ -720,7 +736,7 @@ public final class WaterlogReadSymmetryTest {
         ServerLevel w = helper.getLevel();
         BlockPos source = buildMarkedLowerSlab(helper, w);
         BlockPos cell = source.west();
-        place(helper, new ItemStack(Items.STONE_SLAB), source, Direction.WEST);
+        place(helper, new ItemStack(Items.STONE_SLAB), source, Direction.WEST, true);
         BlockState dryPlaced = w.getBlockState(cell);
         if (!(dryPlaced.getBlock() instanceof SlabBlock)
                 || !SlabAnchorAttachment.isPersistentLoweredSlabCarrier(w, cell, dryPlaced)) {
@@ -734,7 +750,7 @@ public final class WaterlogReadSymmetryTest {
         setWaterlogged(w, source, true);
         assertDy(helper, w, source, -1.0,
                 "scene premise: the waterlogged lane source keeps -1.0 (F5 core — height-neutral flip)");
-        place(helper, new ItemStack(Items.STONE_SLAB), source, Direction.WEST);
+        place(helper, new ItemStack(Items.STONE_SLAB), source, Direction.WEST, true);
         BlockState placed = w.getBlockState(cell);
         if (!(placed.getBlock() instanceof SlabBlock)) {
             throw helper.assertionException("scene premise: the dry-cell placement must succeed, got " + placed);
@@ -762,7 +778,7 @@ public final class WaterlogReadSymmetryTest {
         assertDy(helper, w, source, -1.0,
                 "scene premise: the waterlogged lane source keeps -1.0 (F5 core — height-neutral flip)");
         w.setBlock(cell, Blocks.WATER.defaultBlockState(), 2);
-        place(helper, new ItemStack(Items.STONE_SLAB), source, Direction.WEST);
+        place(helper, new ItemStack(Items.STONE_SLAB), source, Direction.WEST, true);
         BlockState placed = w.getBlockState(cell);
         if (!(placed.getBlock() instanceof SlabBlock)
                 || !placed.getValue(BlockStateProperties.WATERLOGGED)) {
