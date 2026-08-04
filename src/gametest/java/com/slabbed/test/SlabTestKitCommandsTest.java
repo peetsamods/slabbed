@@ -408,7 +408,9 @@ public final class SlabTestKitCommandsTest {
             if (Math.abs(unstored + 0.5) > EPS) {
                 throw h.assertionException("premise: the lowered full block must read -0.5 un-stored, got " + unstored);
             }
-            SlabAnchorAttachment.capturePlacementDy(w, fb, w.getBlockState(fb));
+            // Author the fact explicitly: under frozen-ON, capturePlacementDy's getYOffset read is terminal
+            // on the store, so a fact-less cell would capture the fallback 0.0 instead of this live -0.5.
+            SlabAnchorAttachment.writePlacementDy(w, fb, unstored);
 
             // Swap the carrier to a full block: un-stored now reads 0.0, but the store still says -0.5.
             // Frozen ON => the drawn (render) height IS the store => no hard desync; would-move sees the drift.
