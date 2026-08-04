@@ -97,8 +97,9 @@ import java.nio.file.Path;
  * overwrite direct clear-owned cells), refuse to build below the world's minimum build height,
  * pre-clean every exact clear-owned cell's Slabbed attachments (flag-2 {@code setBlock} does NOT fire
  * the removal hook, so a rig authored over stale markers would be "haunted" — its sign would lie), and read back
- * {@link SlabSupport#getYOffset} after authoring so a rig that does not measure what its sign says
- * warns in red instead of reporting success.
+ * {@link SlabSupport#getUnstoredYOffset} after authoring (scenery is written directly and stores no
+ * placement fact, so the placement-time reading is the only honest oracle for it) so a rig that does not
+ * measure what its sign says warns in red instead of reporting success.
  */
 public final class SlabRigCommand {
 
@@ -2733,18 +2734,26 @@ public final class SlabRigCommand {
 
     // ── self-verification (F4) ─────────────────────────────────────────────────
 
+    /**
+     * SCENERY ORACLE ONLY. These cells are authored by direct world writes and store no placement fact,
+     * so {@link SlabSupport#getYOffset} (which resolves a missing fact to a stable {@code 0.0}) made a
+     * correctly-built rig warn red about itself; the placement-time reading is their only honest oracle.
+     * Cells authored through the real placement path ({@link #placeVia}) carry a stored fact and must
+     * NOT use this helper — see {@link #reportTowerReadback}, {@link #observeCaseStructure}.
+     */
     private static void addIfMismatch(List<String> mismatches, ServerLevel world, BlockPos pos,
                                       double expected, String label) {
-        double got = SlabSupport.getYOffset(world, pos, world.getBlockState(pos));
+        double got = SlabSupport.getUnstoredYOffset(world, pos, world.getBlockState(pos));
         if (Math.abs(got - expected) > EPS) {
-            mismatches.add(label + " @" + pos.toShortString() + ": expected " + expected + " but read " + got);
+            mismatches.add(label + " @" + pos.toShortString() + ": expected " + expected
+                    + " but its placement reading is " + got);
         }
     }
 
     private static Component warn(String preset, BlockPos base, Direction facing, List<String> mismatches) {
         return Component.literal(
                 "[slabrig] " + preset + " built at " + base.toShortString() + " facing " + facing.getName()
-                        + " but it does NOT read what its sign says: " + String.join("; ", mismatches))
+                        + " but it does NOT measure what its sign says: " + String.join("; ", mismatches))
                 .withStyle(ChatFormatting.RED);
     }
 
