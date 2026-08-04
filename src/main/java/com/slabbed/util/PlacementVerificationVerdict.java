@@ -309,7 +309,8 @@ public final class PlacementVerificationVerdict {
                         : placementSucceeded ? ComponentStatus.PASS : ComponentStatus.MISSING);
 
         components.put(Component.ANCHOR,
-                dyComponent(row, Component.ANCHOR, storedDy, intentDy, failureClasses));
+                dyComponent(row, Component.ANCHOR, storedDy, anchorOracle(row, intentDy),
+                        failureClasses));
         components.put(Component.MODEL,
                 dyComponent(row, Component.MODEL, modelDy, intentDy, failureClasses));
         components.put(Component.COLLISION,
@@ -407,6 +408,24 @@ public final class PlacementVerificationVerdict {
             return ComponentStatus.UNKNOWN;
         }
         return unavailableStatus(explicit, collisionDy);
+    }
+
+    /**
+     * Oracle for the anchor lane. A declared intent always wins, exactly as before. Only when no
+     * usable intent was captured does the lane fall back to the row's own observed {@code afterDy},
+     * which asserts LAW.md clause 2 — the frozen placement fact must be what a later read returns
+     * verbatim. That fallback is a real, independent comparison of two separately observed values,
+     * not a relaxation: an absent {@code afterDy} still leaves the lane UNKNOWN, and a divergence
+     * still fails. It exists because the live capture route records no placement-time intent it can
+     * be trusted on, which previously left this lane permanently UNKNOWN and unable to catch the one
+     * violation class it is meant to catch.
+     */
+    private static String anchorOracle(Map<String, String> row, String intentDy) {
+        if (isFinite(intentDy)) {
+            return intentDy;
+        }
+        String afterDy = firstEvidence(row, "afterDy");
+        return isFinite(afterDy) ? afterDy : intentDy;
     }
 
     private static ComponentStatus dyComponent(

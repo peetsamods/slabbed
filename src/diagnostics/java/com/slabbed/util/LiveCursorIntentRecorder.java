@@ -139,20 +139,35 @@ public final class LiveCursorIntentRecorder {
     private static long lastCursorRowId;
     private static LinkedHashMap<String, String> lastCursorRow;
 
+    /**
+     * Identifies the OBSERVATION SUBJECT of an action row, never the transport that carried it.
+     *
+     * <p>The packet sequence used to be the whole key whenever it was present, which merged rows that
+     * describe different cells. One vanilla use packet produces up to three rows: the client packet-
+     * boundary observation of the CLICKED OWNER ({@code placementPos=none}), the client placement
+     * observation of the PLACED cell, and the server placement observation of the PLACED cell. Only
+     * the last two are the same subject. Worse, the client placement row is recorded after the
+     * prediction scope has closed and therefore carries no {@code packetSequence} at all, so the
+     * sequence key bound the server placement to the boundary row and orphaned every real client
+     * placement (schema-6 live run: {@code mergedClientServerAttemptRows=102} boundary merges and
+     * {@code clientOnlyLogicalAttemptRows=67}, exactly the count of client placement rows). Keying on
+     * the subject makes those 67 pair correctly and makes a boundary/placement merge impossible.
+     */
     private record PlacementAttemptKey(
-            String packetSequence,
             String actionType,
             String heldItem,
             String clickedOwnerPos,
             String clickedFace,
             String placementPos,
-            String rigCaseId,
-            String playerId,
-            String dimensionId) {
+            String rigCaseId) {
     }
 
     private record PendingClientAttempt(
             String logicalAttemptId,
+            String packetSequence,
+            String playerUuid,
+            String playerName,
+            String dimensionId,
             long recordedNanos,
             LinkedHashMap<String, String> row) {
     }
@@ -567,7 +582,8 @@ public final class LiveCursorIntentRecorder {
                 phase = "CLIENT_PREDICTION";
                 playerProof = "PRESENT";
             } else {
-                matchedClient = removeMatchingClientAttempt(attemptKey, nowNanos);
+                matchedClient = removeMatchingClientAttempt(
+                        row, attemptKey, correlationValue(row, "packetSequence"), nowNanos);
                 logicalAttemptId = matchedClient == null
                         ? nextLogicalAttemptId()
                         : matchedClient.logicalAttemptId();
@@ -613,7 +629,15 @@ public final class LiveCursorIntentRecorder {
             if (playerAuthored && "client".equals(side)) {
                 addPendingClientAttempt(
                         attemptKey,
-                        new PendingClientAttempt(logicalAttemptId, nowNanos, copy(row)));
+                        new PendingClientAttempt(
+                                logicalAttemptId,
+                                correlationValue(row, "packetSequence"),
+                                firstCorrelationValue(row, "playerUuid", "playerId"),
+                                firstCorrelationValue(row, "player", "playerName"),
+                                firstCorrelationValue(
+                                        row, "dimensionId", "dimension", "level", "world"),
+                                nowNanos,
+                                copy(row)));
             } else if (matchedClient != null) {
                 writeLogicalAttempt(
                         matchedClient.row(),
@@ -720,22 +744,39 @@ public final class LiveCursorIntentRecorder {
     }
 
     private static PlacementAttemptKey placementAttemptKey(Map<String, String> row) {
-        String packetSequence = correlationValue(row, "packetSequence");
-        boolean sequenceAuthority = !"none".equals(packetSequence)
-                && !"none".equals(firstCorrelationValue(
-                        row, "playerUuid", "playerId", "player", "playerName"))
-                && !"none".equals(firstCorrelationValue(
-                        row, "dimensionId", "dimension", "level", "world"));
         return new PlacementAttemptKey(
-                sequenceAuthority ? packetSequence : "none",
-                sequenceAuthority ? "sequence_authority" : correlationValue(row, "actionType"),
-                sequenceAuthority ? "sequence_authority" : correlationValue(row, "heldItem"),
-                sequenceAuthority ? "sequence_authority" : correlationValue(row, "clickedOwnerPos"),
-                sequenceAuthority ? "sequence_authority" : correlationValue(row, "clickedFace"),
-                sequenceAuthority ? "sequence_authority" : correlationValue(row, "placementPos"),
-                sequenceAuthority ? "sequence_authority" : correlationValue(row, "rigCaseId"),
-                firstCorrelationValue(row, "playerUuid", "playerId", "player", "playerName"),
-                firstCorrelationValue(row, "dimensionId", "dimension", "level", "world"));
+                correlationValue(row, "actionType"),
+                correlationValue(row, "heldItem"),
+                correlationValue(row, "clickedOwnerPos"),
+                correlationValue(row, "clickedFace"),
+                correlationValue(row, "placementPos"),
+                correlationValue(row, "rigCaseId"));
+    }
+
+    /**
+     * Player/dimension identity is a compatibility CHECK, never part of the key, and each identity
+     * lane is compared only against its own kind. The two sides of one interaction resolve identity
+     * from different sources — a packet-scoped row carries the player UUID and dimension id, an
+     * unscoped one carries only the player name — so a single "first non-empty identity" value
+     * compared a UUID against a display name and split every real client/server pair apart. A lane
+     * conflicts only when both sides actually resolved that same lane.
+     */
+    private static boolean compatibleAttemptIdentity(
+            Map<String, String> row,
+            PendingClientAttempt candidate) {
+        return compatibleIdentityValue(
+                        firstCorrelationValue(row, "playerUuid", "playerId"),
+                        candidate.playerUuid())
+                && compatibleIdentityValue(
+                        firstCorrelationValue(row, "player", "playerName"),
+                        candidate.playerName())
+                && compatibleIdentityValue(
+                        firstCorrelationValue(row, "dimensionId", "dimension", "level", "world"),
+                        candidate.dimensionId());
+    }
+
+    private static boolean compatibleIdentityValue(String left, String right) {
+        return "none".equals(left) || "none".equals(right) || left.equals(right);
     }
 
     private static UsePacketScope currentUsePacketScope() {
@@ -773,43 +814,89 @@ public final class LiveCursorIntentRecorder {
         pendingClientAttemptCount++;
     }
 
+    /**
+     * Same subject only. Within a subject an exact packet-sequence match wins outright and ignores
+     * age — the sequence is an unambiguous correlation token. Failing that, the oldest observation
+     * still inside the pair window is taken, so a stale client row can never be merged into an
+     * unrelated later placement. Two rows that BOTH carry a sequence and disagree are definitively
+     * different interactions and are never paired by the age fallback; subject keying is what makes
+     * that pairing reachable at all, so the guard belongs here.
+     */
     private static PendingClientAttempt removeMatchingClientAttempt(
+            Map<String, String> row,
             PlacementAttemptKey key,
+            String packetSequence,
             long nowNanos) {
         ArrayDeque<PendingClientAttempt> attempts = PENDING_CLIENT_ATTEMPTS.get(key);
         if (attempts == null || attempts.isEmpty()) {
             return null;
         }
-        PendingClientAttempt attempt = attempts.peekFirst();
-        if ("none".equals(key.packetSequence())
-                && nowNanos - attempt.recordedNanos() >= PAIR_WINDOW_NANOS) {
+        PendingClientAttempt matched = null;
+        for (PendingClientAttempt candidate : attempts) {
+            if (!compatibleAttemptIdentity(row, candidate)) {
+                continue;
+            }
+            boolean bothSequenced = !"none".equals(packetSequence)
+                    && !"none".equals(candidate.packetSequence());
+            if (bothSequenced) {
+                if (packetSequence.equals(candidate.packetSequence())) {
+                    matched = candidate;
+                    break;
+                }
+                continue;
+            }
+            if (matched == null && nowNanos - candidate.recordedNanos() < PAIR_WINDOW_NANOS) {
+                matched = candidate;
+            }
+        }
+        if (matched == null) {
             return null;
         }
-        attempts.removeFirst();
+        for (Iterator<PendingClientAttempt> candidates = attempts.iterator();
+                candidates.hasNext(); ) {
+            if (candidates.next() == matched) {
+                candidates.remove();
+                break;
+            }
+        }
         pendingClientAttemptCount--;
         if (attempts.isEmpty()) {
             PENDING_CLIENT_ATTEMPTS.remove(key);
         }
-        return attempt;
+        return matched;
     }
 
+    /**
+     * The pair window bounds CONTENT-based guessing only. A pending attempt that carries a real
+     * packet sequence is an exact correlation token and must never be aged out: its server partner
+     * can legitimately arrive much later (a slow tick, a loaded server), and merging it then is still
+     * unambiguous. It is finalized at flush/shutdown, or by the capacity bound, but never by time.
+     *
+     * <p>This exemption used to live on {@code PlacementAttemptKey.packetSequence()}; when the key
+     * became subject-based the exemption had to move onto the entry, and losing it in transit is what
+     * broke the same-sequence-beyond-the-window contract. The scan is per-entry rather than head-only
+     * because a subject bucket may now hold a mix, and an exempt head must not pin aged sequence-less
+     * attempts behind it.
+     */
     private static void finalizeExpiredClientAttempts(long nowNanos) {
         Iterator<Map.Entry<PlacementAttemptKey, ArrayDeque<PendingClientAttempt>>> entries =
                 PENDING_CLIENT_ATTEMPTS.entrySet().iterator();
         while (entries.hasNext()) {
             Map.Entry<PlacementAttemptKey, ArrayDeque<PendingClientAttempt>> entry = entries.next();
             ArrayDeque<PendingClientAttempt> attempts = entry.getValue();
-            if (!"none".equals(entry.getKey().packetSequence())) {
-                continue;
-            }
-            while (!attempts.isEmpty()
-                    && nowNanos - attempts.peekFirst().recordedNanos() >= PAIR_WINDOW_NANOS) {
-                PendingClientAttempt expired = attempts.removeFirst();
+            for (Iterator<PendingClientAttempt> candidates = attempts.iterator();
+                    candidates.hasNext(); ) {
+                PendingClientAttempt candidate = candidates.next();
+                if (!"none".equals(candidate.packetSequence())
+                        || nowNanos - candidate.recordedNanos() < PAIR_WINDOW_NANOS) {
+                    continue;
+                }
+                candidates.remove();
                 pendingClientAttemptCount--;
                 writeLogicalAttempt(
-                        expired.row(),
+                        candidate.row(),
                         null,
-                        expired.logicalAttemptId(),
+                        candidate.logicalAttemptId(),
                         "CLIENT_ONLY",
                         "PRESENT");
             }
@@ -1197,12 +1284,18 @@ public final class LiveCursorIntentRecorder {
             // The expectation is categorical: several concrete lane authorities are lawful here.
             row.putIfAbsent("expectedAfterLaneKind", "lawful_lowered_lane");
             row.putIfAbsent("expectedResult", "lowered_side_lane_continuation");
-        } else if (row.getOrDefault("clickedOwnerLaneKind", "").contains("unnamed")
-                || row.getOrDefault("clickedOwnerLaneKind", "").contains("vanilla")) {
-            row.putIfAbsent("expectedAfterDy", "0.000000");
-            row.putIfAbsent("expectedAfterLaneKind", "none");
-            row.putIfAbsent("expectedResult", "vanilla_dy0");
         } else {
+            // There is deliberately NO "clicked owner is an unnamed/vanilla slab therefore the new
+            // block lands at dy 0" branch. That oracle encoded the pre-WYSIWYG assumption that a
+            // vanilla owner implies a vanilla grid landing, and it is false for the mod's entire
+            // reason to exist: a block placed onto a lowered/half owner seats on that owner's REAL
+            // top surface, so dy -0.5, -1.0, -2.5 ... are all correct outcomes there. In the schema-6
+            // live capture it produced 144 bogus expectations and every one of the 117 red action
+            // rows, including live-confirmed pointed-dripstone continuations. The recorder has no
+            // independent height model (recomputing one here would either be a second copy of the
+            // resolver or, as before, simply wrong), so an undeclared expectation stays honestly
+            // unknown; the frozen-anchor readback lane in PlacementVerificationVerdict is what
+            // certifies these rows instead.
             row.putIfAbsent("expectedAfterDy", "unknown");
             row.putIfAbsent("expectedAfterLaneKind", "unknown");
             row.putIfAbsent("expectedResult", "unknown");
@@ -1248,9 +1341,20 @@ public final class LiveCursorIntentRecorder {
                 PlacementVerificationVerdict.FinalVerdict.RED.marker());
         boolean playerAuthored = ActionOrigin.PLAYER_AUTHORED.wireName()
                 .equals(row.getOrDefault("actionOrigin", ActionOrigin.PLAYER_AUTHORED.wireName()));
-        boolean reducerGreen = PlacementVerificationVerdict.FinalVerdict.GREEN.name()
-                .equals(row.get("finalVerdict"));
-        if (markers.isEmpty() && loweredExpected && placementAction && playerAuthored && reducerGreen) {
+        // Green-by-observed-evidence, never green-by-absence. This marker certifies exactly the two
+        // lanes a live placement row actually observes: the player authored a placement that
+        // succeeded (PLACED) and the placed cell's FROZEN stored dy is what the live geometry read
+        // returns (ANCHOR — LAW.md clause 2). It deliberately does NOT stand in for
+        // finalVerdict=GREEN, which additionally requires the model/collision/raycast/outline/
+        // stability lanes; those are never captured on a placement row and are unobservable server
+        // side, so that counter stays the full-rig gate. Requiring both component PASSes (not merely
+        // the absence of a FAIL) is what keeps an evidence-free row out: with no afterStoredDy the
+        // anchor lane is MISSING, not PASS, and no marker is written.
+        boolean placedPass = PlacementVerificationVerdict.ComponentStatus.PASS.name()
+                .equals(row.get(PlacementVerificationVerdict.Component.PLACED.fieldName()));
+        boolean anchorPass = PlacementVerificationVerdict.ComponentStatus.PASS.name()
+                .equals(row.get(PlacementVerificationVerdict.Component.ANCHOR.fieldName()));
+        if (markers.isEmpty() && placementAction && playerAuthored && placedPass && anchorPass) {
             markers.append("LIVE_GREEN_PLACEMENT_AUTHORING");
         }
         return markers.isEmpty() ? "none" : markers.toString();
