@@ -9,10 +9,12 @@ import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.CrossCollisionBlock;
+import net.minecraft.world.level.block.RedStoneWireBlock;
 import net.minecraft.world.level.block.SlabBlock;
 import net.minecraft.world.level.block.WallBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.BlockStateProperties;
+import net.minecraft.world.level.block.state.properties.RedstoneSide;
 import net.minecraft.world.level.block.state.properties.SlabType;
 import net.minecraft.world.level.block.state.properties.WallSide;
 
@@ -32,6 +34,13 @@ import net.minecraft.world.level.block.state.properties.WallSide;
  * {@link #chainDoesNotPopWhenSupportRemoved} pins that policy here so a re-registered survival mixin
  * would turn this suite red. Checklist D6 reflects the same. (Chain <em>dy</em> — flush/raise — is a
  * separate concern, covered by {@code Slabbed2612LoweringContractTest}.)
+ *
+ * <p>GH #37 / #57 regression net: before this, nothing anywhere asserted wire <em>connection state</em>
+ * or any powered-circuit behavior. GH #37 forced a SIDE connection whenever
+ * {@link SlabSupport#isRedstoneSupportTopSurface} was true for the neighbour — true for ANY sturdy-top
+ * block. The 26.2 mixin dropped that override, but the predicate is still live and one refactor away
+ * from reuse, so the connection test pins vanilla's NONE off the wire's own state rather than off the
+ * mixin's absence. The lamp circuit is the GH #57 "is a powered circuit measurable at all" control.
  */
 public final class Slabbed2612ConnectorSurvivalTest {
 
@@ -272,5 +281,135 @@ public final class Slabbed2612ConnectorSurvivalTest {
                             + "df3a0dd4); updateShape returned air — a chain survival mixin has been re-introduced");
         }
         helper.succeed();
+    }
+
+    // ── GH #37/#57 regression net: wire CONNECTION state + a real powered circuit ──────────────────────
+
+    /**
+     * A fresh {@code redstone_wire} must report connection {@code NONE} toward a horizontally adjacent
+     * ordinary full block — vanilla's own decision, which Slabbed must not override. Read directly off
+     * the wire's {@code RedStoneWireBlock.EAST} block-state property (never the render-only connection
+     * type), driven via {@code updateShape} DIRECTLY for that one direction (the same discipline the
+     * connector helpers above use), so this does not depend on a neighbour-update tick landing.
+     *
+     * <p>Two cases: (1) the wire's own support is an ordinary block (stone) — the plain vanilla scenario;
+     * (2) the wire's own support is a bottom slab with an ordinary full block still adjacent — the
+     * Slabbed-relevant scenario. Both must stay NONE. This is the exact risk surface from GH #37: the old
+     * mixin forced SIDE whenever {@link SlabSupport#isRedstoneSupportTopSurface} was true for the
+     * neighbour, and that predicate is true for ANY block with a sturdy top face (ordinary full blocks
+     * included) — so a future reuse of that predicate anywhere in wire connection logic, on either the
+     * ordinary or the slab-supported wire, turns one of these two assertions red.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void redstoneWireDoesNotSideConnectToSturdyFullBlockNeighbor(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+
+        // Case 1: ordinary support under the wire, ordinary full block adjacent.
+        BlockPos supportOrdinary = new BlockPos(2, 1, 2);
+        BlockPos wireOrdinary = new BlockPos(2, 2, 2);
+        BlockPos neighborOrdinary = new BlockPos(3, 2, 2);
+        helper.setBlock(supportOrdinary, Blocks.STONE.defaultBlockState());
+        helper.setBlock(wireOrdinary, Blocks.REDSTONE_WIRE.defaultBlockState());
+        helper.setBlock(neighborOrdinary, Blocks.COBBLESTONE.defaultBlockState());
+        BlockPos wireOrdinaryAbs = helper.absolutePos(wireOrdinary);
+        BlockPos neighborOrdinaryAbs = helper.absolutePos(neighborOrdinary);
+        BlockState afterOrdinary = level.getBlockState(wireOrdinaryAbs).updateShape(
+                level, level, wireOrdinaryAbs, Direction.EAST, neighborOrdinaryAbs,
+                level.getBlockState(neighborOrdinaryAbs), level.getRandom());
+        if (afterOrdinary.getValue(RedStoneWireBlock.EAST) != RedstoneSide.NONE) {
+            throw helper.assertionException(wireOrdinary,
+                    "redstone_wire EAST must stay NONE next to an ordinary full block (Slabbed must not "
+                            + "override vanilla's connection decision), got " + afterOrdinary.getValue(RedStoneWireBlock.EAST));
+        }
+
+        // Case 2: Slabbed-relevant support (bottom slab) under the wire, ordinary full block still adjacent.
+        BlockPos supportSlab = new BlockPos(2, 1, 4);
+        BlockPos wireOnSlab = new BlockPos(2, 2, 4);
+        BlockPos neighborNearSlab = new BlockPos(3, 2, 4);
+        helper.setBlock(supportSlab, bottomSlab());
+        helper.setBlock(wireOnSlab, Blocks.REDSTONE_WIRE.defaultBlockState());
+        helper.setBlock(neighborNearSlab, Blocks.OAK_PLANKS.defaultBlockState());
+        BlockPos wireOnSlabAbs = helper.absolutePos(wireOnSlab);
+        BlockPos neighborNearSlabAbs = helper.absolutePos(neighborNearSlab);
+        BlockState afterSlab = level.getBlockState(wireOnSlabAbs).updateShape(
+                level, level, wireOnSlabAbs, Direction.EAST, neighborNearSlabAbs,
+                level.getBlockState(neighborNearSlabAbs), level.getRandom());
+        if (afterSlab.getValue(RedStoneWireBlock.EAST) != RedstoneSide.NONE) {
+            throw helper.assertionException(wireOnSlab,
+                    "redstone_wire on a bottom-slab top EAST must stay NONE next to an ordinary full block "
+                            + "(a widened isRedstoneSupportTopSurface must not leak into connection state), got "
+                            + afterSlab.getValue(RedStoneWireBlock.EAST));
+        }
+
+        helper.succeed();
+    }
+
+    /**
+     * GH #57 smoke control: a minimal lever → wire → wire → {@code redstone_lamp} relay on ordinary full
+     * blocks, proving a powered circuit is even measurable on 26.2. Lamp starts UNLIT, lights when the
+     * lever is pulled ON, and returns to UNLIT when pulled back OFF.
+     *
+     * <p>Layout: {@code stone A} carries a lever on its south WALL face (so the top of A stays free for
+     * wire); {@code wire1} sits on A; {@code wire2} sits on a second support {@code stone B}; the lamp
+     * sits directly beside B (not beside the wire — vanilla wire only extends a connecting arm, and
+     * therefore signal, to blocks it can render an arm toward; a plain full block is not one of those, so
+     * the lamp is powered via B's weak power once B sits under a live wire segment).
+     *
+     * <p>Determinism: {@code helper.pullLever} drives the real {@code LeverBlock.pull(state, level, pos,
+     * player)} path (the same method vanilla's own {@code useWithoutItem} calls), which synchronously
+     * cascades {@code updateNeighborsAt} through the wire chain to B in the same call — turning the lamp
+     * ON is synchronous. Turning the lamp OFF is NOT synchronous: vanilla's {@code
+     * RedstoneLampBlock.neighborChanged} schedules the unlight via {@code level.scheduleTick(pos, this,
+     * 4)} rather than clearing it immediately, so the state only flips on that later tick. The sequence
+     * below uses {@code helper.startSequence().thenWaitUntil(...)} (the same polling primitive backing
+     * {@code succeedWhen}) for both transitions, so each assertion is retried every tick until it holds or
+     * the test times out — it cannot flake on the scheduled-tick delay, and it does not depend on a fixed
+     * tick count.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void leverWireLampCircuitTracksPower(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+
+        BlockPos supportA = new BlockPos(2, 1, 2);
+        BlockPos leverPos = new BlockPos(2, 1, 3);
+        BlockPos wire1 = new BlockPos(2, 2, 2);
+        BlockPos supportB = new BlockPos(3, 1, 2);
+        BlockPos wire2 = new BlockPos(3, 2, 2);
+        BlockPos lampPos = new BlockPos(4, 1, 2);
+
+        helper.setBlock(supportA, Blocks.STONE.defaultBlockState());
+        helper.setBlock(supportB, Blocks.STONE.defaultBlockState());
+        helper.setBlock(leverPos, Blocks.LEVER.defaultBlockState()
+                .setValue(BlockStateProperties.HORIZONTAL_FACING, Direction.SOUTH)
+                .setValue(BlockStateProperties.POWERED, false));
+        helper.setBlock(wire1, Blocks.REDSTONE_WIRE.defaultBlockState());
+        helper.setBlock(wire2, Blocks.REDSTONE_WIRE.defaultBlockState());
+        helper.setBlock(lampPos, Blocks.REDSTONE_LAMP.defaultBlockState());
+
+        BlockPos lampAbs = helper.absolutePos(lampPos);
+
+        helper.startSequence()
+                .thenExecute(() -> {
+                    if (level.getBlockState(lampAbs).getValue(BlockStateProperties.LIT)) {
+                        throw helper.assertionException(lampPos,
+                                "redstone_lamp must start UNLIT before the lever is pulled");
+                    }
+                })
+                .thenExecute(() -> helper.pullLever(leverPos))
+                .thenWaitUntil(() -> {
+                    if (!level.getBlockState(lampAbs).getValue(BlockStateProperties.LIT)) {
+                        throw helper.assertionException(lampPos,
+                                "redstone_lamp must LIGHT once lever -> wire -> wire power reaches it");
+                    }
+                })
+                .thenExecute(() -> helper.pullLever(leverPos))
+                .thenWaitUntil(() -> {
+                    if (level.getBlockState(lampAbs).getValue(BlockStateProperties.LIT)) {
+                        throw helper.assertionException(lampPos,
+                                "redstone_lamp must return to UNLIT after the lever is pulled back off "
+                                        + "(vanilla's scheduled-tick unlight delay)");
+                    }
+                })
+                .thenSucceed();
     }
 }
