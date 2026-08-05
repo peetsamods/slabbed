@@ -196,8 +196,17 @@ public final class SlabAnchorAttachment {
 
     /** Presence and raw bits are one indivisible C3 authority fact. */
     public record PlacementDyFact(boolean present, long rawBits) {
+        /**
+         * PERF (render-path fix-round F1): {@code absent()} is the answer for every cell in ordinary
+         * terrain, and the chunk mesher asks it ~13x per non-air block per section compile. A fresh
+         * record per ask was pure garbage on the mesh worker threads. The value is a constant, the
+         * record is immutable, and its {@code equals} is value-based, so one shared instance is
+         * indistinguishable from a fresh one at every call site.
+         */
+        private static final PlacementDyFact ABSENT = new PlacementDyFact(false, 0L);
+
         public static PlacementDyFact absent() {
-            return new PlacementDyFact(false, 0L);
+            return ABSENT;
         }
 
         public static PlacementDyFact present(double value) {

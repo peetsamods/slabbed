@@ -6,6 +6,9 @@ import com.slabbed.network.PlacementDyCorrectionPayload;
 import com.slabbed.network.PlacementDyPredictionBridge;
 import com.slabbed.network.PlacementDyPredictionEnvelopePayload;
 import it.unimi.dsi.fastutil.longs.Long2DoubleOpenHashMap;
+import it.unimi.dsi.fastutil.longs.Long2IntOpenHashMap;
+import it.unimi.dsi.fastutil.longs.Long2LongOpenHashMap;
+import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientChunkEvents;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientLevelEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
@@ -25,6 +28,7 @@ import net.minecraft.world.level.block.state.properties.Property;
 import net.minecraft.world.level.chunk.LevelChunk;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -78,10 +82,56 @@ public final class PlacementDyPredictionJournal {
 
     private static final Map<Integer, PlacementDyPredictionBridge.PredictedBatch> STAGED = new HashMap<>();
     private static final Map<PlacementDyPredictionBridge.GroupSignature, Group> GROUPS = new LinkedHashMap<>();
-    private static final Map<Long, PlacementDyPredictionBridge.GroupSignature> OVERLAY_OWNER = new HashMap<>();
-    private static final Map<Long, Integer> HIGH_WATER = new HashMap<>();
+    // Primitive-keyed (no Long boxing) and never iterated, so the open-hash order is irrelevant.
+    private static final Long2ObjectOpenHashMap<PlacementDyPredictionBridge.GroupSignature> OVERLAY_OWNER =
+            new Long2ObjectOpenHashMap<>();
+    private static final Long2IntOpenHashMap HIGH_WATER = new Long2IntOpenHashMap();
     private static final Map<PlacementDyPredictionBridge.GroupSignature, PlacementDyCorrectionPayload>
             CORRECTIONS = new HashMap<>();
+
+    /**
+     * The published, immutable, lock-free view of the effective overlay for the chunk-mesh worker
+     * threads (render-path fix-round F1).
+     *
+     * <p>WHY THIS EXISTS. {@link #effectiveFact} is reached from
+     * {@code SlabSupport.getYOffset} → {@code SlabAnchorAttachment.storedPlacementDy} for every non-air
+     * block during section meshing — roughly a dozen times per block once the seam probe, the cull test
+     * and the per-quad cull predicate are counted. It used to be {@code static synchronized}, so every
+     * one of those reads took the class-wide monitor and boxed two {@code Long} map keys, on worker
+     * threads, in the hottest loop the client has.
+     *
+     * <p>WHY THE MONITOR COULD NOT SIMPLY BE DROPPED. {@link #GROUPS}, {@link #OVERLAY_OWNER} and
+     * {@link #HIGH_WATER} are plain hash maps genuinely mutated from the client main thread while those
+     * reads run. Racing a plain hash map is not "a slightly stale answer", it is undefined behaviour.
+     * And the overlay exists precisely so a just-placed block renders at its predicted height
+     * immediately: {@code commitAfterPrediction} schedules a targeted rerender right after
+     * {@link #installGroup}, so the install MUST be visible to the very next mesh-thread read of that
+     * cell or the placement flicker this class was built to prevent comes back.
+     *
+     * <p>HOW BOTH ARE KEPT. Every main-thread mutation still happens under the existing class monitor;
+     * at the end of each one, {@link #publishOverlayCellsLocked()} rebuilds this snapshot and stores it
+     * into the {@code volatile} field below. The snapshot's arrays are filled before that store and
+     * never touched afterwards, so the volatile write/read pair is a happens-before edge: a worker
+     * thread that reads a snapshot reference sees every array element written before it was published,
+     * and it can never observe a partially-built or concurrently-mutated structure. The read side is
+     * one volatile load, one reference compare against {@link #EMPTY_OVERLAY} (the common case: no
+     * prediction in flight), and — only when non-empty — a binary search over a primitive {@code long[]}
+     * of packed positions. Zero locks, zero boxing, zero allocation.
+     *
+     * <p>The {@code PlacementDyFact} for each cell is built once at publication, so even an overlay HIT
+     * on a mesh thread allocates nothing. This is the same volatile-gate + published-sorted-primitive-
+     * array shape the model-bake sentinel already uses for its armed-key set, for the same reason.
+     */
+    private record OverlayCells(
+            ClientLevel level,
+            long[] keys,
+            SlabAnchorAttachment.PlacementDyFact[] facts
+    ) {
+    }
+
+    private static final OverlayCells EMPTY_OVERLAY =
+            new OverlayCells(null, new long[0], new SlabAnchorAttachment.PlacementDyFact[0]);
+    private static volatile OverlayCells overlayCells = EMPTY_OVERLAY;
 
     private static ClientLevel currentLevel;
     private static long generation;
@@ -241,31 +291,80 @@ public final class PlacementDyPredictionJournal {
         reconcileReadyGroups();
     }
 
-    /** Overlay-first effective fact; stale, partial, retired, or superseded groups fall back to backing. */
-    public static synchronized SlabAnchorAttachment.PlacementDyFact effectiveFact(
+    /**
+     * Overlay-first effective fact; stale, partial, retired, or superseded groups fall back to backing.
+     *
+     * <p>Lock-free and allocation-free (render-path fix-round F1) — see {@link OverlayCells}. This is
+     * the same decision the previous {@code synchronized} body made, only pre-resolved: a cell is in the
+     * published snapshot exactly when its owner group is live on the current level and generation, the
+     * group still declares that cell, and the cell's high-water sequence is still the owner's. Any edit
+     * to any of those republishes the snapshot under the lock, and {@link #reset} — the only writer of
+     * {@code currentLevel}/{@code generation} — publishes {@link #EMPTY_OVERLAY}, so a non-empty
+     * snapshot always carries the current level and generation by construction.
+     */
+    public static SlabAnchorAttachment.PlacementDyFact effectiveFact(
             BlockGetter view,
             BlockPos pos
     ) {
         if (pos == null) {
             return SlabAnchorAttachment.PlacementDyFact.absent();
         }
-        ClientLevel level = Minecraft.getInstance().level;
-        if (level != null && level == currentLevel) {
-            long key = pos.asLong();
-            PlacementDyPredictionBridge.GroupSignature owner = OVERLAY_OWNER.get(key);
-            Group group = owner == null ? null : GROUPS.get(owner);
-            Integer highWater = HIGH_WATER.get(key);
-            PlacementDyPredictionBridge.PredictedCell cell = group == null ? null : group.cells.get(key);
-            if (group != null
-                    && group.level == level
-                    && group.generation == generation
-                    && cell != null
-                    && highWater != null
-                    && highWater == owner.sequence()) {
-                return new SlabAnchorAttachment.PlacementDyFact(true, cell.predictedRawBits());
+        OverlayCells overlay = overlayCells;
+        if (overlay != EMPTY_OVERLAY) {
+            ClientLevel level = Minecraft.getInstance().level;
+            if (level != null && level == overlay.level()) {
+                int index = Arrays.binarySearch(overlay.keys(), pos.asLong());
+                if (index >= 0) {
+                    return overlay.facts()[index];
+                }
             }
         }
         return backingFact(view, pos);
+    }
+
+    /**
+     * Rebuilds and publishes the mesh-thread snapshot. MUST be called while holding the class monitor,
+     * from every path that edits {@link #GROUPS}, {@link #OVERLAY_OWNER}, {@link #HIGH_WATER},
+     * {@code currentLevel} or {@code generation}. Main-thread only and rare (one placement batch, one
+     * correction, one chunk unload), so rebuilding from scratch is free; correctness comes from the
+     * predicate below being the literal transcription of the old per-read test.
+     */
+    private static void publishOverlayCellsLocked() {
+        if (currentLevel == null || GROUPS.isEmpty()) {
+            overlayCells = EMPTY_OVERLAY;
+            return;
+        }
+        Long2LongOpenHashMap effective = new Long2LongOpenHashMap();
+        for (Map.Entry<PlacementDyPredictionBridge.GroupSignature, Group> entry : GROUPS.entrySet()) {
+            PlacementDyPredictionBridge.GroupSignature signature = entry.getKey();
+            Group group = entry.getValue();
+            if (group.level != currentLevel || group.generation != generation) {
+                continue;
+            }
+            for (Map.Entry<Long, PlacementDyPredictionBridge.PredictedCell> cellEntry
+                    : group.cells.entrySet()) {
+                long key = cellEntry.getKey();
+                if (!signature.equals(OVERLAY_OWNER.get(key))
+                        || !HIGH_WATER.containsKey(key)
+                        || HIGH_WATER.get(key) != signature.sequence()) {
+                    continue;
+                }
+                effective.put(key, cellEntry.getValue().predictedRawBits());
+            }
+        }
+        if (effective.isEmpty()) {
+            overlayCells = EMPTY_OVERLAY;
+            return;
+        }
+        long[] keys = effective.keySet().toLongArray();
+        Arrays.sort(keys);
+        SlabAnchorAttachment.PlacementDyFact[] facts =
+                new SlabAnchorAttachment.PlacementDyFact[keys.length];
+        for (int i = 0; i < keys.length; i++) {
+            facts[i] = new SlabAnchorAttachment.PlacementDyFact(true, effective.get(keys[i]));
+        }
+        // The volatile store is the publication point: everything above happened-before it.
+        overlayCells = new OverlayCells(currentLevel, keys, facts);
     }
 
     /** Direct authoritative backing read. This method never consults overlay ownership. */
@@ -309,8 +408,8 @@ public final class PlacementDyPredictionJournal {
         }
         int sequence = batch.signature().sequence();
         for (PlacementDyPredictionBridge.PredictedCell cell : batch.cells()) {
-            Integer highWater = HIGH_WATER.get(cell.pos().asLong());
-            if (highWater != null && highWater > sequence) {
+            long key = cell.pos().asLong();
+            if (HIGH_WATER.containsKey(key) && HIGH_WATER.get(key) > sequence) {
                 throw new IllegalStateException("out-of-order C3 prediction sequence");
             }
         }
@@ -331,6 +430,9 @@ public final class PlacementDyPredictionJournal {
             OVERLAY_OWNER.put(key, group.signature);
             rerenders.add(cell.pos());
         }
+        // Publish BEFORE the caller schedules the targeted rerender: the mesh thread that services it
+        // must already see this install, or the just-placed block bakes at its pre-prediction height.
+        publishOverlayCellsLocked();
         return List.copyOf(rerenders);
     }
 
@@ -343,6 +445,7 @@ public final class PlacementDyPredictionJournal {
             OVERLAY_OWNER.remove(key, signature);
             HIGH_WATER.remove(key, signature.sequence());
         }
+        publishOverlayCellsLocked();
     }
 
     private static boolean matchesVanillaPacket(
@@ -379,10 +482,11 @@ public final class PlacementDyPredictionJournal {
         CORRECTIONS.remove(signature);
         ArrayList<BlockPos> rerenders = new ArrayList<>();
         for (Map.Entry<Long, PlacementDyPredictionBridge.PredictedCell> entry : group.cells.entrySet()) {
-            if (OVERLAY_OWNER.remove(entry.getKey(), signature)) {
+            if (OVERLAY_OWNER.remove(entry.getKey().longValue(), signature)) {
                 rerenders.add(entry.getValue().pos());
             }
         }
+        publishOverlayCellsLocked();
         rerenders.forEach(SlabAnchorClientSync::scheduleExactPlacementDyRerender);
     }
 
@@ -458,6 +562,15 @@ public final class PlacementDyPredictionJournal {
         for (long key : group.cells.keySet()) {
             OVERLAY_OWNER.remove(key, signature);
         }
+        // Ordering note (F1). The backing write above and this overlay retirement are no longer one
+        // atomic step from a lock-free mesh-thread reader's point of view: for the microseconds between
+        // them, a read of one of these cells still answers with the PREDICTED height. That is the
+        // deliberate ordering — the predicted height is exactly what is already on screen, so the
+        // window shows continuity rather than a flash of the pre-correction backing value; and every
+        // owned cell is force-rerendered on the next line, after the publication, so the authoritative
+        // height always wins. The alternative (publish first) would widen the same window onto the
+        // STALE backing value, which is strictly worse.
+        publishOverlayCellsLocked();
         ownedCells.forEach(SlabAnchorClientSync::scheduleExactPlacementDyRerender);
     }
 
@@ -524,6 +637,7 @@ public final class PlacementDyPredictionJournal {
                     }
                 }
             }
+            publishOverlayCellsLocked();
         }
         rerenders.forEach(SlabAnchorClientSync::scheduleExactPlacementDyRerender);
     }
@@ -557,5 +671,8 @@ public final class PlacementDyPredictionJournal {
         OVERLAY_OWNER.clear();
         HIGH_WATER.clear();
         CORRECTIONS.clear();
+        // The only writer of currentLevel/generation, so this is what keeps a published non-empty
+        // snapshot permanently in step with them.
+        publishOverlayCellsLocked();
     }
 }
