@@ -477,9 +477,10 @@ public final class SlabSupport {
     /**
      * Returns the Y offset for the block at {@code pos}.
      * <ul>
-     *   <li>{@code -0.5} for blocks sitting above a bottom slab (or chain).</li>
-     *   <li>{@code +0.5} for hanging blocks (HANGING=true) directly below a top slab.</li>
-     *   <li>{@code 0.0} otherwise (no offset).</li>
+     *   <li>{@code -0.5} for blocks sitting above a bottom slab (or chain), compounding to
+     *       {@code -1.0} for mixed/stacked lanes.</li>
+     *   <li>{@code 0.0} otherwise (no offset). The old {@code +0.5} ceiling reach-up is
+     *       DEPRECATED (2026-07-03 ruling) — ceiling-hung blocks sit flush.</li>
      * </ul>
      */
     public static double getYOffset(BlockView world, BlockPos pos, BlockState state) {

@@ -16,7 +16,7 @@ import net.minecraft.world.BlockView;
  * targeting.
  *
  * <p><b>Why this exists.</b> Slabbed renders some blocks at a visual Y offset
- * ({@link SlabSupport#getVisualYOffset} returns one of {@code -1.0, -0.5, 0.0, +0.5})
+ * ({@link SlabSupport#getVisualYOffset} returns one of {@code -1.0, -0.5, 0.0})
  * and offsets their outline/raycast {@link VoxelShape}s to match
  * ({@code SlabSupportStateMixin}). Vanilla {@code BlockView.raycast} uses a voxel DDA
  * that returns the <em>first cell</em> along the ray that yields a hit — not the
@@ -36,13 +36,18 @@ import net.minecraft.world.BlockView;
  * {@code C.down()} that carry a non-zero visual offset.
  *
  * <p><b>±1 window completeness.</b> Visual offsets lie in the closed set
- * {@code {-1.0,-0.5,0.0,+0.5}} and every block shape is at most one cell tall, so an
- * owner at {@code P} occupies at most {@code {P, P.down()}} (for {@code -1.0}) or
- * {@code {P, P.up()}} (for {@code +0.5}). Any ray that intersects the owner's shape must
- * enter one of those cells, and {@code P} is within ±1 of every such cell — so testing
- * {@code {C, C.up(), C.down()}} at each visited cell is provably sufficient. The grazing
- * gametests in {@code OffsetRaycastTargetingTest} pin both extremes so a future
- * out-of-range offset trips a red test rather than silently mistargeting.
+ * {@code {-1.0,-0.5,0.0}} — the historical {@code +0.5} ceiling reach-up is DEPRECATED
+ * (2026-07-03 live ruling; ceiling hangers now render FLUSH, see
+ * {@code SlabSupport.isLoweringTopLikeCeiling}) — and every block shape is at most one
+ * cell tall, so an owner at {@code P} occupies at most {@code {P, P.down()}} (for
+ * {@code -1.0}). Any ray that intersects the owner's shape must enter one of those
+ * cells, and {@code P} is within ±1 of every such cell — so testing
+ * {@code {C, C.up(), C.down()}} at each visited cell is provably sufficient (the
+ * {@code C.up()} probe is currently defensive headroom: it matters only if a positive
+ * offset ever returns, e.g. by reversing the reach-up ruling). The grazing gametests in
+ * {@code OffsetRaycastTargetingTest} pin the extremes — the deep {@code -1.0} owner and
+ * the now-flush ceiling hanger — so a future out-of-range offset trips a red test
+ * rather than silently mistargeting.
  *
  * <p><b>Parity with vanilla.</b> For non-offset blocks (shapes contained in their own
  * cell) the nearest hit equals vanilla's first-cell hit, because ray distance is
