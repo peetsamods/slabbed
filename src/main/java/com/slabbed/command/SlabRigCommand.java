@@ -320,6 +320,17 @@ public final class SlabRigCommand {
             for (BlockPos pos : anchors) {
                 SlabAnchorAttachment.addAnchor(world, pos, world.getBlockState(pos));
             }
+            // NEVER-POP AUTHORING (LIVE_LEDGER 2026-08-05 second pass, "popping in the back
+            // row"): a real click runs BlockOnPlacedAnchorMixin.onPlaced = addAnchor THEN
+            // freezeLoweredOnPlace. Rig subjects got only the addAnchor half (the loop above),
+            // so a FLAT-placed subject recorded neither an anchor (the qualifier lanes only
+            // accept lowered placements) nor the FROZEN_FLAT marker — it kept re-deriving live
+            // and popped on neighbour change. Complete the pair through the SAME entry point a
+            // click uses (no new lane): freezeLoweredOnPlace self-gates on structural/decorative
+            // semantics and no-ops for already-anchored or lowered cells.
+            for (BlockPos pos : subjects.keySet()) {
+                SlabAnchorAttachment.freezeLoweredOnPlace(world, pos, world.getBlockState(pos));
+            }
             for (Map.Entry<BlockPos, String[]> e : signs.entrySet()) {
                 writeSign(world, e.getKey(), e.getValue());
             }
@@ -470,8 +481,12 @@ public final class SlabRigCommand {
             set(x, 1, z + 1, bottomSlab(Blocks.STONE_SLAB));
             set(x, 2, z + 1, stone());
             // Seat column: the slab beside the source renders -0.5; what stands on it reads -1.0.
+            // y1 stays AIR under the seat slab (the donor's geometry): the seat is a legitimate
+            // cantilever whose -0.5 destination volume is free. The recipe used to invent a flush
+            // stone at y1 here — the seat slab then sank half a block INSIDE it, which is the mega
+            // board's z=14 interpenetration row (LIVE_LEDGER 2026-08-05 second pass), and the
+            // flush-seat guard now rightly refuses that shape entirely.
             set(x, 0, z, stone());
-            set(x, 1, z, stone());
             setAnchored(x, 2, z, bottomSlab(Blocks.STONE_SLAB));
             return 3;
         }
@@ -746,8 +761,9 @@ public final class SlabRigCommand {
                 plan.put(origin.add(x, 0, z + 1), stone());
                 plan.put(origin.add(x, 1, z + 1), bottomSlab(Blocks.STONE_SLAB));
                 plan.put(origin.add(x, 2, z + 1), stone());
+                // y1 stays AIR under the seat slab (the donor's geometry — see seatMinusOne):
+                // the invented flush stone here was the mega board's z=14 interpenetration row.
                 plan.put(origin.add(x, 0, z), stone());
-                plan.put(origin.add(x, 1, z), stone());
                 plan.putAnchored(origin.add(x, 2, z), bottomSlab(Blocks.STONE_SLAB));
                 return origin.add(x, 3, z);
             }
@@ -782,6 +798,14 @@ public final class SlabRigCommand {
             return null;   // two-cell HORIZONTAL subject: its head would land in the next column
         }
         BlockState state = block.getDefaultState();
+        if (state.contains(Properties.WATERLOGGED)) {
+            // KNOWN_INCOMPLETE 1i: conduit's DEFAULT state is waterlogged=true, so the rig was
+            // authoring a waterlogged block into a DRY cell with no fluid cascade (BUILD_FLAG is
+            // NOTIFY_LISTENERS) — Maintainer's "water won't envelop conduits" — and its non-empty
+            // FluidState makes every anchor qualifier reject it. The dry board authors DRY
+            // states; 1i's product-side question (anchoring waterlogged blocks) stays open.
+            state = state.with(Properties.WATERLOGGED, false);
+        }
         if (state.contains(Properties.BLOCK_FACE)) {
             // Buttons / levers default to a WALL mount; there is no wall on a seat, so stand them up.
             state = state.with(Properties.BLOCK_FACE, BlockFace.FLOOR);
@@ -907,7 +931,63 @@ public final class SlabRigCommand {
                         + ": sign says dy " + check.expected() + " but it measures " + got);
             }
         }
+        // SEAT-SANITY (LIVE_LEDGER 2026-08-05 second pass, "interpenetration row"): NO rig-
+        // authored cell may resolve a dy that puts its occupied volume inside its direct
+        // support's occupied volume. This is the rule that would have caught the recipe's
+        // invented flush stone under the z=14 seat slab before it ever reached a live board.
+        for (BlockPos pos : plan.cells.keySet()) {
+            String violation = seatSanityViolation(world, pos);
+            if (violation != null) {
+                mismatches.add(violation);
+            }
+        }
         return mismatches;
+    }
+
+    /**
+     * Seat-sanity for one rig cell: {@code null} when clean, else a human-readable violation. A
+     * cell's occupied bottom (its own Y plus resolved dy; a TOP slab's occupied volume starts
+     * half a block up) may never sit below its direct support's occupied top (the support's Y
+     * plus its resolved dy plus its occupied height — 1.0 for solid full blocks and TOP/DOUBLE
+     * slabs, 0.5 for a bottom slab). Supports with no meaningful standing volume (air, signs,
+     * other decor) impose no constraint.
+     */
+    private static String seatSanityViolation(ServerWorld world, BlockPos pos) {
+        BlockState state = world.getBlockState(pos);
+        if (state.isAir()) {
+            return null;
+        }
+        double dy = SlabSupport.getYOffset(world, pos, state);
+        if (dy >= -EPS) {
+            return null;   // a flush or raised cell cannot sink into the cell below
+        }
+        BlockPos supportPos = pos.down();
+        BlockState support = world.getBlockState(supportPos);
+        Double supportHeight = occupiedHeight(world, supportPos, support);
+        if (supportHeight == null) {
+            return null;
+        }
+        double supportTop = supportPos.getY() + supportHeight
+                + SlabSupport.getYOffset(world, supportPos, support);
+        double cellBottom = pos.getY() + dy + (SlabSupport.isTopSlab(state) ? 0.5 : 0.0);
+        if (cellBottom < supportTop - EPS) {
+            return "seat-sanity @" + pos.toShortString() + ": " + state.getBlock().getName().getString()
+                    + " resolves dy " + dy + " with occupied bottom " + cellBottom
+                    + " INSIDE its direct support (occupied top " + supportTop
+                    + ") — interpenetration";
+        }
+        return null;
+    }
+
+    /** Occupied height of a support above its own cell floor, or {@code null} for no standing volume. */
+    private static Double occupiedHeight(ServerWorld world, BlockPos pos, BlockState state) {
+        if (state.isAir()) {
+            return null;
+        }
+        if (state.getBlock() instanceof SlabBlock && state.contains(SlabBlock.TYPE)) {
+            return state.get(SlabBlock.TYPE) == SlabType.BOTTOM ? 0.5 : 1.0;
+        }
+        return state.isSolidBlock(world, pos) ? 1.0 : null;
     }
 
     // -------------------------------------------------------------------------
