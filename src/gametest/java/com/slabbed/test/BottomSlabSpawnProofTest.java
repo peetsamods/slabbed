@@ -96,7 +96,7 @@ public final class BottomSlabSpawnProofTest {
 
     @GameTest(structure = "fabric-gametest-api-v1:empty")
     public void terrainSlabBottomStaysMobProof(TestContext ctx) {
-        BlockPos bottom = new BlockPos(3, 2, 9);
+        BlockPos bottom = new BlockPos(3, 2, 3);
         setSupport(ctx, bottom, terrainSlab(SlabType.BOTTOM));
 
         ctx.assertTrue(
@@ -109,7 +109,7 @@ public final class BottomSlabSpawnProofTest {
 
     @GameTest(structure = "fabric-gametest-api-v1:empty")
     public void terrainSlabTopAndDoubleControlsRemainSpawnable(TestContext ctx) {
-        BlockPos top = new BlockPos(4, 2, 9);
+        BlockPos top = new BlockPos(4, 2, 3);
         BlockPos doubled = top.east();
         setSupport(ctx, top, terrainSlab(SlabType.TOP));
         setSupport(ctx, doubled, terrainSlab(SlabType.DOUBLE));
@@ -121,7 +121,7 @@ public final class BottomSlabSpawnProofTest {
 
     @GameTest(structure = "fabric-gametest-api-v1:empty")
     public void fullBlockAndAirControlsRemainUnchanged(TestContext ctx) {
-        BlockPos stone = new BlockPos(3, 2, 12);
+        BlockPos stone = new BlockPos(3, 2, 3);
         BlockPos air = stone.east();
         setSupport(ctx, stone, Blocks.STONE.getDefaultState());
         setSupport(ctx, air, Blocks.AIR.getDefaultState());
