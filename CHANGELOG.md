@@ -2,41 +2,74 @@
 
 See LAW.md — this changelog does not redefine the law.
 
-### Current development candidate — `0.5.0-beta.9+26.2`
+## [0.5.0-alpha.1+26.2] — MC 26.2 alpha
 
-- The normal build and release paths remain free of diagnostic and GameTest-only implementation.
-  TEST 35 adds a separate, explicitly test-only nested `slabbed_diagnostics` mod to one named diagnostic
-  jar; it does not change the ordinary artifact or constitute a release.
-- TEST 35 enabled a player-authored recorder/Sentinel review of deep cantilever attachments. It found an
-  **open iron-chain render-refresh RED**: stored/live chain height and targeting outline can be negative
-  while the baked model remains at `0.0`. No product fix is claimed in this version.
-- Recorder schema 6 adds logical placement attempts. Their aggregate RED count is diagnostic evidence,
-  not a gameplay count, until the clicked-owner versus placed-child merger issue is repaired.
+This is an **alpha** build. It contains the largest behavior overhaul Slabbed has shipped on any Minecraft version. Please read "Known limitations and alpha testing request" before playing on a world you care about.
 
-- **MODEL_STALE sentinel (debug/proof tooling).** While `/slabdev record` is on, Slabbed now watches every
-  placement's neighborhood and compares what the chunk mesher actually baked against live block geometry;
-  a model stuck at the wrong height for more than ~5 seconds produces a red row in the recorder log
-  (`session.jsonl`/`mismatches.tsv`, `LIVE_MODEL_STALE_*`) and a rate-limited chat ping. Verified by 16 new
-  gametests + a real-renderer self-check. Recorder off costs one volatile read per block emission with zero
-  allocation — machine-enforced by a new allocation gate. Triage guide: `docs/process/MODEL_STALE_RUNBOOK.md`.
-- **Jar identity stamp.** Jars now embed the exact git commit + build time (`Slabbed-Git-Sha`,
-  `Slabbed-Build-Time` in `MANIFEST.MF`); the recorder session manifest records them and `/slabdev record`
-  echoes `build=<sha> jar=<file>` in chat, so a session log is always attributable to an exact build.
-- Fixed: lowered candles, candle cakes, brewing stands, wall redstone torches, and decorated-pot
-  insert bursts spawned their particles at grid height — 0.5 above the lowered model (the four
-  remaining particle fixes from the 1.21.11 0.5.0 line, now ported).
-- Recorder: ensemble-coherence verdicts — mixed-height neighbors that clip into each other, leave
-  mid-stack gaps, or occupy cells invisibly (the dominant deep-compound complaint) are now auto-flagged
-  as LIVE_ENSEMBLE_* rows with pair positions, dys, and depth (design: docs/design/ENSEMBLE_COHERENCE_DESIGN.md).
-- Recorder: action rows now carry side/player and the placement cell's pre-place state+dy; block
-  BREAKS are recorded (broken cell + neighbors); client/server placement-height disagreements are
-  auto-flagged (`LIVE_PLACEMENT_SIDE_DY_SPLIT`); the summary proves the sentinel actually ran
-  (`sentinelArmedTotal`/`sentinelSamplePasses`).
-- Fixed: a bridged copper chain under a slab ceiling rendered with the plain iron texture (per-variant
-  bridge models; the chain's grid-height bridge geometry itself is intentional and unchanged).
-- *(Note: the 2026-07-02→06 porting-campaign fixes — L8–L12 ports, beta-notice port, hopper/chest
-  cantilever, the mesh-staleness re-mesh family — are not yet itemized here; backfill pending before the
-  next release cut.)*
+### New
+
+- **Your block stays where you put it.** A placed block's height is now decided at the moment you place it and locked in from then on. Nothing that happens nearby afterwards — breaking a neighbor, placing next to it, updates rippling through the area — will ever move a block you already placed. This is the headline change of this build, it is on by default, and it has been confirmed in live play, including specifically testing that removing a lowered block's own support does not pop a block placed on top of it. **This does change how existing worlds look — read the first item under Known limitations before you open one.**
+- **Build deeper.** Stepped-down slab arrangements are no longer stopped at one full block below grid level; towers can now keep lowering past the old limit. Confirmed in live play down to two and a half blocks below, including a crash-free deep-tower stress pass.
+- **World-join notice.** Joining a world now shows a short notice reminding you that you are on a pre-release build, and its dismiss option now reports honestly instead of claiming success when it could not apply.
+
+### Improved
+
+- **Blocks land where you aim.** The landing logic for slabs and full blocks was rebuilt so that the spot you aim at is the spot you get, and side placements deep below grid level are no longer rejected by the server. Confirmed in live play.
+- **Chains and dripstone under lowered ceilings.** Continuing a chain or dripstone run from a lowered slab behaves much better: new links line up with the existing run instead of drifting, a chain placed against a flush ceiling no longer ends up half a block too high, follow-on links well below the surface are accepted, side-aimed placements pick the correct half, and dripstone continues correctly both upward and downward — including when you click its side. Confirmed much improved in live play; a few scenarios, including chains placed against a flush ceiling and the deepest runs, are still being verified (see Known limitations).
+- **Clicking into visible space works.** When a block renders below floor level, clicking its top face now places into the open space you can actually see instead of refusing the click. Confirmed in live play.
+- **A wave of ported stability fixes.** The stability campaign from the 1.21.11 line is now in this build: torches, fences, walls, and bottom slabs sit correctly on lowered top-slab carriers; vertical slabs keep their anchoring and never pop; and Terrain Slabs blocks are never mistaken for Slabbed carriers, with the overhang traversal logic guarded accordingly. Confirmed together in a live session.
+- **Terrain Slabs compatibility.** Deferring to Terrain Slabs' own "on-top" blocks now covers everything Terrain Slabs treats that way, not just vegetation. Verified by automated tests.
+- **Placement-state hardening.** A broad defensive pass tightened how placement-time state is captured and preserved — height read-back, waterlogging symmetry, freeze handling for connecting blocks, marker hand-off, and more. To be clear about credit: the day-to-day stability you will feel comes chiefly from the locked-in placement height described under New; this pass hardens the same placement-time data that feature relies on.
+- **Leaner world sync.** The data that carries placed-height information in chunk sync is now compacted, so worlds with many placed slabs no longer bloat network traffic. Verified by automated tests.
+- **Cleaner release jar.** Development-only diagnostics are now separated out of the normal release jar.
+
+### Fixes
+
+- **A significant rendering slowdown is fixed.** Reading a block's locked-in height on the render path no longer takes a shared lock or allocates memory for every block in view, and rendering blocks near a lowered surface no longer routes through reflection. Confirmed smooth in live play across ordinary building, chunk loading, and a dense build; no formal benchmark comparison was run, so please still report performance issues per the request below.
+- **Standing signs of every wood now sit flush on a lowered slab.** Previously only oak did; every other wood's standing sign could float above the surface instead of resting on it.
+- **Overlap protection.** Placements that would interpenetrate a lowered block already occupying that space are now refused — including the case of placing through an open trapdoor — while legitimate edge-contact placements still work. Confirmed in live play.
+- **Hoppers and chests no longer snap.** Hoppers, chests, and similar flat block entities hold their placed height instead of snapping to grid. Confirmed in live play.
+- **Stale visuals refresh promptly.** The rendered shape of blocks near a height change now updates right away instead of showing an outdated shape — including with Sodium, where the correction could previously take up to about 30 seconds — and fences, walls, and iron bars connect visually without delay. (The blocks themselves never moved; this fixes the picture catching up to reality.) Verified in live sessions.
+- **Particles sit at the right height.** Lowered candles, candle cakes, brewing stands, wall redstone torches, and decorated-pot insert bursts now spawn their particles at the lowered model instead of half a block above it (the remaining particle fixes ported from the 1.21.11 line).
+- **Copper chain texture.** A bridged copper chain under a slab ceiling no longer renders with the plain iron chain texture. Confirmed in live play.
+
+### Known limitations and alpha testing request
+
+Three blanket caveats up front:
+
+- **If you open a world you built on an earlier version, its previously lowered blocks will look flat.** Height is now decided and locked in the moment you place a block, but only going forward — a block placed under an earlier version has no such record, and this build does not fall back to recomputing its height live the way older versions did. The block itself is not moved or damaged, and anything you place from now on will lower and lock in correctly; it is specifically already-placed lowered blocks that will render and behave as if they were never lowered. There is no automatic conversion for existing worlds, and this also applies to lowered-looking blocks from world generation, `/setblock`, or another mod. **Back up any world before opening it in this build**, and consider testing on a copy or a fresh world first.
+- **Broad mod compatibility is an unverified alpha risk.** Running this build inside large modpacks has not been broadly tested.
+- **No formal performance benchmark was run.** A significant render-path slowdown was found and fixed this build (see Fixes), and normal play has felt smooth since, but nothing here is a measured performance guarantee — please treat it as an open question and report anything that feels off.
+
+The following changes shipped in this build pass their automated tests but have **not yet been fully re-verified in live play**. They should be improvements — please treat them as "being verified," not "done," and report anything odd:
+
+- Client and server agreeing on placement height at the instant of placement (this targets the brief flicker some placements showed).
+- Ordinary objects such as flower pots landing at the aimed height.
+- Interacting with deeply lowered blocks — empty-hand use, use while holding an item, and powder-snow contact — no longer being rejected by the server.
+- Deep placements being validated against the actual slab shapes rather than a coarse approximation.
+- Potted-plant changes (for example, planting into an empty pot) keeping the pot's placed height.
+- Lever, powered redstone wire, and use-created fire particles seating at the lowered height.
+- Chains placed against a flush ceiling landing at the corrected height, and the deepest chain and dripstone continuation cases (runs continuing well past one block down).
+- Bottom-slab spawn-proofing: lowered bottom slabs should once again prevent mob spawning.
+
+Known open issues:
+
+- In some deep arrangements, a hanging chain can still render at the wrong height even though its targeting outline and collision are correct.
+- A connected dripstone's second segment at depth may still misbehave; this is parked for a follow-up build.
+- In certain deep arrangements, a few block families — doors, carpets, banners, and beds — may still land at grid height rather than the lowered height (powder snow intentionally never lowers). Per-family placement height is ongoing work.
+- Redstone dust carries a signal up a lowered step but not back down it. This looks like an existing vanilla quirk made more visible by the mod's lowered blocks rather than something the mod itself is doing, but it has not been fully root-caused — and a fix applied before it is properly diagnosed risks breaking dust connections that currently work correctly, so it is deferred rather than rushed.
+
+**How you can help — alpha testing request.** If you hit a problem, the most useful report includes:
+
+- **Reproducible steps** — what you placed, where, and in what order, so we can recreate it.
+- **Your full mod list** (and loader version).
+- **Your `latest.log`, or the crash report** where one was produced.
+- **A screenshot or video** of the problem.
+- **For performance reports:** a comparison of the same scene with Slabbed enabled versus disabled — a report that says "lag with the mod on AND off" versus "lag only with the mod on" is worth ten times a bare "it lags."
+
+If we need extra detail on a specific report, we may send you a separate diagnostics build to reproduce it with — the normal release jar you have now carries none of that tooling.
+
+Thank you for testing an alpha — every report above makes the next build better.
 
 ## [0.4.2-beta.2+26.2] - MC 26.2 debug HUD release correction
 
