@@ -7,6 +7,7 @@ import com.slabbed.anchor.SlabAnchorAttachment;
 import com.slabbed.compat.CompatHooks;
 import com.slabbed.network.PlacementDyCorrectionServer;
 import com.slabbed.network.PlacementDyPredictionBridge;
+import com.slabbed.placement.ConnectorPlacementSettle;
 import com.slabbed.placement.LandingHitValidationPolicy;
 import com.slabbed.placement.LandingResolver;
 import com.slabbed.util.SlabbedDiagnosticsBridge;
@@ -537,6 +538,13 @@ public abstract class BlockItemPlacementIntentMixin {
         Level world = frame.actualContext.getLevel();
         if (!world.isClientSide()) {
             SlabAnchorAttachment.writePlacementDyBatch(world, frame.pending.rawBitsByPos());
+            // The published fact is only now visible to reads. Connector arms (fence/wall/pane) were
+            // already decided earlier in this same place() call — at getStateForPlacement and at the
+            // setBlock-driven neighbour updateShape — while this cell still had no fact and read the
+            // stable-flat stand-in. Re-run vanilla's own arm derivation for the published cells and
+            // their horizontal neighbours so both ends decide from the published height. Heights are
+            // untouched; see ConnectorPlacementSettle for the LAW.md reasoning.
+            ConnectorPlacementSettle.settlePublishedPlacements(world, frame.pending.rawBitsByPos().keySet());
             return false;
         }
         int sequence = PlacementDyPredictionBridge.currentSequence();

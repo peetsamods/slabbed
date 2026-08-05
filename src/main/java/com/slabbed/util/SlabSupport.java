@@ -2434,16 +2434,40 @@ public final class SlabSupport {
     }
 
     /**
+     * The connector family the stepped-connection rule governs: fences, walls, and the shared
+     * iron-bars/glass-pane block. Extracted so the family test, the stepped predicate below, and the
+     * placement-time settle pass ({@code com.slabbed.placement.ConnectorPlacementSettle}) all name the
+     * SAME set — the shared-predicate rule: one definition, never a copy per call site.
+     */
+    public static boolean isSteppedConnectionFamily(BlockState state) {
+        if (state == null) {
+            return false;
+        }
+        Block block = state.getBlock();
+        return block instanceof FenceBlock || block instanceof WallBlock || block instanceof IronBarsBlock;
+    }
+
+    /**
      * True when {@code state} (a fence/wall/pane) and a same-family horizontal neighbour sit at
      * DIFFERENT visual heights (one lowered onto a slab, the other at grid height) — a slab-height
      * step. The connection mixins ({@code WallSlabConnectionMixin}, {@code FencePaneSlabConnectionMixin})
      * suppress the connector arm across such a step so the pair render as clean single posts; a flat run
      * at one height still connects. Port of 1.21.1/1.21.11 (PaneBlock→IronBarsBlock in Mojang names).
+     *
+     * <p><b>Read timing (2026-08-04):</b> this predicate reads the FROZEN height verbatim through
+     * {@link #connectingBlockVisualDy}, so during a player placement the cell being placed still has
+     * no published fact and reads the stable-flat 0.0. That is deliberate — the read must keep
+     * agreeing with what the model draws for a fact-less cell. The timing is corrected on the WRITE
+     * side instead: once C3 publishes the placement fact,
+     * {@code com.slabbed.placement.ConnectorPlacementSettle} re-runs vanilla's own shape derivation
+     * over the placed cell and its horizontal neighbours, so both ends of every affected pair decide
+     * from the published height. Never patch this read to consult an unstored height: a fact-less
+     * cell (legacy world, worldgen, {@code /setblock}) draws at 0.0, and a connector that believed
+     * otherwise would cut arms between posts the player can see are level.
      */
     public static boolean isSteppedConnectingNeighbor(BlockGetter world, BlockPos pos, BlockState state,
                                                       BlockPos neighborPos, BlockState neighborState) {
-        Block neighbor = neighborState.getBlock();
-        if (!(neighbor instanceof FenceBlock || neighbor instanceof WallBlock || neighbor instanceof IronBarsBlock)) {
+        if (!isSteppedConnectionFamily(neighborState)) {
             return false;
         }
         double selfDy = connectingBlockVisualDy(world, pos, state);
