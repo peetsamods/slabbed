@@ -24,6 +24,7 @@ public class Slabbed implements ModInitializer {
     private static void initDevFeatures() {
         registerDevHook("com.slabbed.dev.SlabbedDevCommands", "register");
         registerDevHook("com.slabbed.dev.SlabbedLab", "register");
+        registerDevHook("com.slabbed.command.SlabRigCommand", "register");
     }
 
     private static void registerDevHook(String className, String methodName) {

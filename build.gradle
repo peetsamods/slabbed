@@ -101,7 +101,16 @@ jar {
     // reference it (SlabbedDevCommands, SlabdyClientCommands) go through
     // SlabbedAuditBridge's reflection layer, not a hard import, so they load fine with
     // this package absent.
+    //
+    // com/slabbed/command/** IS excluded for the same reason — it is the /slabrig dev scene rig
+    // (a live-test structure builder, not player-facing tooling). The 26.2 line shipped /slabrig
+    // in its RELEASE JAR and that was logged as a defect; this exclusion is the gate that stops it
+    // happening on this line. com/slabbed/util/SlabTestKit.class goes with it (the rig's item list
+    // — dev-only data, referenced by nothing that ships). Slabbed#initDevFeatures reaches the rig
+    // reflectively, so both classes are safe to be absent.
     exclude("com/slabbed/dev/audit/**")
+    exclude("com/slabbed/command/**")
+    exclude("com/slabbed/util/SlabTestKit.class")
     exclude("com/slabbed/dev/SlabbedLab.class")
     exclude("com/slabbed/dev/SlabbedLabFixtures*.class")
     exclude("com/slabbed/debug/**")

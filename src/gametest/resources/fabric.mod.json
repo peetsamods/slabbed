@@ -50,6 +50,7 @@
       "com.slabbed.test.RendererRegionBoundsGuardTest",
       "com.slabbed.test.BottomSlabSpawnProofTest",
       "com.slabbed.test.ServerHitToleranceShiftTest",
+      "com.slabbed.test.SlabRigCatalogSmokeTest",
       "com.slabbed.client.BetaNoticeDismissedWorldsTest",
       "com.slabbed.client.BetaNoticeSessionGateTest"
     ],
