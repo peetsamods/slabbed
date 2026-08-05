@@ -4,7 +4,14 @@
   "version": "1.0.0",
   "name": "Slabbed GameTest",
   "environment": "*",
+  "provides": [
+    "terrain_slabs",
+    "terrainslabs"
+  ],
   "entrypoints": {
+    "main": [
+      "com.slabbed.test.TerrainSlabsTestShim"
+    ],
     "client": [
       "com.slabbed.test.Mc1211GoblinRouteClientEntrypoint"
     ],
