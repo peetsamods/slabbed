@@ -723,6 +723,24 @@ public final class SlabSupport {
         if (!slabState.contains(SlabBlock.TYPE)) {
             return false;
         }
+        // FLUSH-SEAT GUARD (LIVE_LEDGER 2026-08-05 second pass, "interpenetration row"): side-
+        // adjacency lowering is legal only when the destination volume is free. A BOTTOM/DOUBLE
+        // slab at -0.5 occupies the upper half of the cell below it, so when its DIRECT support is
+        // a flush full-height seat it may not qualify — it would render half inside the very block
+        // it was clicked onto (the mega board's z=14 anchored stone_slab inside flush stone).
+        // Folded INTO the predicate, not one call site, so the placement lane
+        // (getYOffsetInner's slab-adjacency branch), the anchor qualifier
+        // (isLoweredSideSlabVisual -> qualifiesForLoweredSideSlabAnchor) and every recursion-safe
+        // mirror refuse TOGETHER instead of drifting apart. A TOP slab is exempt: at -0.5 it fills
+        // the LOWER half of its own cell and rests ON the flush seat (the BS-FB-1S alignment) —
+        // its destination volume is free.
+        if (followerSinksIntoFlushSeat(slabState)) {
+            BlockPos seatPos = slabPos.down();
+            BlockState seatState = getBlockStateOrNull(world, seatPos);
+            if (seatState != null && isFlushSeat(world, seatPos, seatState)) {
+                return false;
+            }
+        }
         ArrayDeque<BlockPos> queue = new ArrayDeque<>();
         Set<Long> visited = new HashSet<>();
         queue.add(slabPos);
@@ -1377,8 +1395,26 @@ public final class SlabSupport {
             return -0.5;
         }
         double seat = supportSeatDy(world, pos.down(), depth + 1);
-        if (Double.isFinite(seat) && seat < -0.5 - 1.0e-6) {
-            return Math.max(seat, MIN_RESOLVED_DY);
+        if (Double.isFinite(seat)) {
+            if (seat < -0.5 - 1.0e-6) {
+                return Math.max(seat, MIN_RESOLVED_DY);
+            }
+            // FLUSH-SEAT GUARD (LIVE_LEDGER 2026-08-05 second pass, "interpenetration row"): a
+            // seat of exactly 0.0 means the support's top face is AT the grid line (flush solid
+            // non-slab block, or a flush TOP/DOUBLE slab). The historical "anchored ⇒ at least
+            // -0.5" floor would sink the follower half a block INSIDE that support (the mega
+            // board's z=14 anchored stone_slab z-fighting its flush stone), so a follower whose
+            // lowered volume would enter the seat reads 0.0 — it rises OUT of its support, the
+            // WYSIWYG-correct direction. A TOP-slab follower keeps the floor: at -0.5 it fills
+            // the LOWER half of its own cell and rests ON the flush seat (BS-FB-1S). NaN seats
+            // (air / non-solid below — the legitimate cantilever alignment, or a persisted
+            // anchor whose support was broken away) never reach here and keep the -0.5 floor.
+            if (seat > -1.0e-6) {
+                BlockState follower = getBlockStateOrNull(world, pos);
+                if (follower != null && followerSinksIntoFlushSeat(follower)) {
+                    return 0.0;
+                }
+            }
         }
         return -0.5;
     }
@@ -1398,8 +1434,14 @@ public final class SlabSupport {
      *       {@code stripped_jungle_log} support contributed nothing at all.</li>
      * </ul>
      *
-     * <p>Returns {@link Double#NaN} for a support that is neither (air, a TOP/DOUBLE slab, a
-     * non-solid object), leaving the caller on its pre-existing {@code -0.5} floor.
+     * <p>FLUSH seat ({@code 0.0}): the support is present and its top face is AT the grid line —
+     * a flush solid non-slab full block, or a flush TOP/DOUBLE slab (top face at the cell top).
+     * Reported distinctly from "no qualifying seat" so {@link #loweredFollowerDy} can refuse the
+     * {@code -0.5} floor there instead of sinking the follower half a block inside its own
+     * support (the LIVE_LEDGER "interpenetration row").
+     *
+     * <p>Returns {@link Double#NaN} for a support that is none of these (air, a non-solid object,
+     * a cantilever-lowered block), leaving the caller on its pre-existing {@code -0.5} floor.
      */
     private static double supportSeatDy(BlockView world, BlockPos supportPos, int depth) {
         BlockState support = getBlockStateOrNull(world, supportPos);
@@ -1410,7 +1452,66 @@ public final class SlabSupport {
         if (!Double.isNaN(bottomSlabDy)) {
             return bottomSlabDy - 0.5;
         }
-        return loweredFullBlockUndersideSupportDy(world, supportPos, support, depth);
+        double fullBlockDy = loweredFullBlockUndersideSupportDy(world, supportPos, support, depth);
+        if (!Double.isNaN(fullBlockDy)) {
+            return fullBlockDy;
+        }
+        if (isFlushSeat(world, supportPos, support)) {
+            return 0.0;
+        }
+        return Double.NaN;
+    }
+
+    /**
+     * FLUSH-SEAT classifier: true iff the block at {@code seatPos} is a full-height seat whose top
+     * face renders AT the grid line — a solid non-slab full block that is not lowered by any lane,
+     * or a TOP/DOUBLE slab that is not lowered (its top face is at the cell top, so a {@code -0.5}
+     * follower would interpenetrate its upper half exactly like full stone). A BOTTOM slab is
+     * never a flush seat (half-height — the mixed-slab compound owns that case), and a Terrain
+     * Slabs skip-offset surface is never classified here (it owns its own geometry). Conservative
+     * by construction: any lowering source (anchor, column, direct-custom, and — for a solid block
+     * with AIR below — the cantilever/gap-fill lanes) declassifies the seat, keeping every
+     * previously-correct {@code -0.5} case byte-identical. Recursion-safe: only descends.
+     */
+    private static boolean isFlushSeat(BlockView world, BlockPos seatPos, BlockState seat) {
+        if (world == null || seatPos == null || seat == null || seat.isAir()
+                || !seat.getFluidState().isEmpty()
+                || CompatHooks.shouldSkipOffset(seat)) {
+            return false;
+        }
+        if (seat.getBlock() instanceof SlabBlock) {
+            if (!seat.contains(SlabBlock.TYPE) || isBottomSlab(seat)) {
+                return false;
+            }
+            // TOP/DOUBLE: flush iff nothing lowers it (vertical sources incl. its own anchor,
+            // or side adjacency — whose own flush-seat guard recurses strictly downward).
+            return !isVerticallyLoweredSlabSource(world, seatPos, seat)
+                    && !isAdjacentSideSlabLowered(world, seatPos, seat);
+        }
+        if (!seat.isSolidBlock(world, seatPos)) {
+            return false;
+        }
+        double ownDy = loweredFullBlockUndersideSupportDy(world, seatPos, seat);
+        if (Double.isFinite(ownDy) && ownDy < -1.0e-6) {
+            return false;   // the seat itself renders lowered
+        }
+        // The remaining lowering lanes for a solid block (cantilever adjacency, gap-fill from an
+        // anchored block above) require AIR below it; a solid seat standing on a non-air block can
+        // only render flush (0.0 — genuinely flush or frozen-flat). An air-below solid seat stays
+        // unclassified (NaN upstream), preserving the historical floor for cantilever supports.
+        BlockState belowSeat = getBlockStateOrNull(world, seatPos.down());
+        return belowSeat != null && !belowSeat.isAir();
+    }
+
+    /**
+     * Follower-volume half of the flush-seat guard: does this follower's {@code -0.5} volume
+     * ENTER the cell below it? True for every non-slab follower and for BOTTOM/DOUBLE slabs
+     * (their lowered volume occupies the upper half of the cell below). False ONLY for a TOP
+     * slab: at {@code -0.5} it fills the LOWER half of its own cell ({@code [y, y+0.5]}) and
+     * rests ON a flush seat instead of entering it — the BS-FB-1S alignment.
+     */
+    private static boolean followerSinksIntoFlushSeat(BlockState follower) {
+        return !isTopSlab(follower);
     }
 
     /**

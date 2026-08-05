@@ -48,6 +48,7 @@
       "com.slabbed.test.SlabHeightStepCullTest",
       "com.slabbed.test.SlabOnSlabVerticalAnchorTest",
       "com.slabbed.test.AnchoredFollowerSupportDyTest",
+      "com.slabbed.test.FlushSeatGuardTest",
       "com.slabbed.test.RendererRegionBoundsGuardTest",
       "com.slabbed.test.BottomSlabSpawnProofTest",
       "com.slabbed.test.ServerHitToleranceShiftTest",

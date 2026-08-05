@@ -83,8 +83,10 @@ public final class AnchoredFollowerSupportDyTest {
         place(w, source, Blocks.STONE.getDefaultState());
         place(w, source.up(), bottomSlab(Blocks.STONE_SLAB));
         place(w, source.up(2), Blocks.STONE.getDefaultState());
+        // Seat column: ground stone, AIR, then the seat slab — donor-correct cantilever shape
+        // (the previous stone-under-seat was the interpenetration state outlawed by the
+        // flush-seat guard, 2026-08-05).
         place(w, base, Blocks.STONE.getDefaultState());
-        place(w, base.up(), Blocks.STONE.getDefaultState());
         BlockPos seat = base.up(2);
         place(w, seat, bottomSlab(Blocks.STONE_SLAB));
         BlockPos subject = seat.up();
@@ -195,9 +197,11 @@ public final class AnchoredFollowerSupportDyTest {
         ctx.assertTrue(Math.abs(sourceTopDy + 0.5) <= EPS,
                 "fixture: source top block must render -0.5, got " + sourceTopDy);
 
-        // Seat column: stone / stone / bottom slab beside the lowered source — the seat reads -0.5.
+        // Seat column: ground stone, AIR, then the bottom slab beside the lowered source — the
+        // seat is a legitimate cantilever (destination volume free) and reads -0.5. The previous
+        // stone-under-seat shape was the interpenetration state outlawed by the flush-seat guard
+        // (2026-08-05); air-under-seat is the donor-correct recipe.
         place(w, base, Blocks.STONE.getDefaultState());
-        place(w, base.up(), Blocks.STONE.getDefaultState());
         BlockPos seat = base.up(2);
         place(w, seat, bottomSlab(Blocks.STONE_SLAB));
         SlabAnchorAttachment.addAnchor(w, seat, w.getBlockState(seat));
