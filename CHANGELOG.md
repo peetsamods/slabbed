@@ -4,7 +4,19 @@ See LAW.md — this changelog does not redefine the law.
 
 ## [0.5.0-alpha.1+26.2] — MC 26.2 alpha
 
-This is an **alpha** build. It contains the largest behavior overhaul Slabbed has shipped on any Minecraft version. Please read "Known limitations and alpha testing request" before playing on a world you care about.
+**A heads-up before you update**
+
+This alpha finally locks in a block's height the moment you place it — no more slow pop-in, no more things drifting or flickering after you've already built them. It's the biggest fix I've made since I started this mod back in February, and it's the reason this build is worth trying.
+
+The tradeoff: that locked-in height only starts existing for blocks placed *under this version*. If you open a world you built on an earlier version, anything you'd already lowered won't carry that forward — it'll look like it was placed at normal height instead. Nothing is deleted or broken, it's a visual/behavior reset for blocks placed before this update, not data loss.
+
+**Please back up any world you care about before opening it in this build.** If you want your existing world to stay exactly as it is for now, just hold off and keep playing on your current version — try this one on a copy, or a fresh world, first.
+
+I'm looking into fixing this for existing worlds automatically in a follow-up build. In the meantime, if you're comfortable editing your launcher's JVM arguments, adding `-Dslabbed.frozenDy=false` restores the old behavior.
+
+This is an alpha because I want real feedback before I call anything stable — if something looks wrong, tell me. Thanks for testing.
+
+Full details for everything below are in "Known limitations and alpha testing request."
 
 ### New
 
