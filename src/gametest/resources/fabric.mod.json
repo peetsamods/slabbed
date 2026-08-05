@@ -37,6 +37,7 @@
       "com.slabbed.test.UpFaceEdgeCombineGuardTest",
       "com.slabbed.test.RedstoneGateOnTerrainSlabsPlacementTest",
       "com.slabbed.test.RedstoneWireConnectionTest",
+      "com.slabbed.test.RedstonePistonCircuitStabilityTest",
       "com.slabbed.test.DecorativeObjectSupportAnchorTest",
       "com.slabbed.test.RecorderManifestRedactionTest",
       "com.slabbed.test.SlabdyOutlineDoubleOffsetTest",
