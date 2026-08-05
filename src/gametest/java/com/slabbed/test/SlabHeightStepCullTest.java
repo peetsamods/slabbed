@@ -63,7 +63,7 @@ public final class SlabHeightStepCullTest {
     @GameTest(structure = "fabric-gametest-api-v1:empty")
     public void twoFlushCubesNeverRedraw(TestContext ctx) {
         ServerWorld w = ctx.getWorld();
-        BlockPos a = ctx.getAbsolutePos(BlockPos.ORIGIN).add(3, 3, 8);
+        BlockPos a = ctx.getAbsolutePos(BlockPos.ORIGIN).add(3, 3, 2);
         BlockPos b = a.east();
         w.setBlockState(a, Blocks.DIRT.getDefaultState(), Block.NOTIFY_LISTENERS);
         w.setBlockState(b, Blocks.DIRT.getDefaultState(), Block.NOTIFY_LISTENERS);
@@ -79,7 +79,7 @@ public final class SlabHeightStepCullTest {
     @GameTest(structure = "fabric-gametest-api-v1:empty")
     public void twoEquallyAnchoredCubesNeverRedraw(TestContext ctx) {
         ServerWorld w = ctx.getWorld();
-        BlockPos slabPos = ctx.getAbsolutePos(BlockPos.ORIGIN).add(3, 3, 12);
+        BlockPos slabPos = ctx.getAbsolutePos(BlockPos.ORIGIN).add(3, 3, 4);
         BlockPos a = slabPos.up();
         BlockPos slabPosB = slabPos.east();
         BlockPos b = slabPosB.up();
@@ -110,7 +110,7 @@ public final class SlabHeightStepCullTest {
     @GameTest(structure = "fabric-gametest-api-v1:empty")
     public void topSlabBesideLoweredFullBlockRedrawsSteppedFace(TestContext ctx) {
         ServerWorld w = ctx.getWorld();
-        BlockPos slabPos = ctx.getAbsolutePos(BlockPos.ORIGIN).add(3, 3, 16);
+        BlockPos slabPos = ctx.getAbsolutePos(BlockPos.ORIGIN).add(3, 3, 5);
         BlockPos loweredFullBlockPos = slabPos.up();
         BlockPos topSlabPos = loweredFullBlockPos.east();
 
@@ -145,7 +145,7 @@ public final class SlabHeightStepCullTest {
     @GameTest(structure = "fabric-gametest-api-v1:empty")
     public void bottomSlabBesideLoweredFullBlockRedrawsSteppedFace(TestContext ctx) {
         ServerWorld w = ctx.getWorld();
-        BlockPos slabPos = ctx.getAbsolutePos(BlockPos.ORIGIN).add(3, 3, 20);
+        BlockPos slabPos = ctx.getAbsolutePos(BlockPos.ORIGIN).add(3, 3, 6);
         BlockPos loweredFullBlockPos = slabPos.up();
         BlockPos bottomSlabPos = loweredFullBlockPos.east();
 
@@ -169,7 +169,7 @@ public final class SlabHeightStepCullTest {
     @GameTest(structure = "fabric-gametest-api-v1:empty")
     public void twoFlushTopSlabsNeverRedraw(TestContext ctx) {
         ServerWorld w = ctx.getWorld();
-        BlockPos a = ctx.getAbsolutePos(BlockPos.ORIGIN).add(3, 3, 24);
+        BlockPos a = ctx.getAbsolutePos(BlockPos.ORIGIN).add(3, 3, 7);
         BlockPos b = a.east();
         w.setBlockState(a, Blocks.OAK_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.TOP), Block.NOTIFY_LISTENERS);
         w.setBlockState(b, Blocks.OAK_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.TOP), Block.NOTIFY_LISTENERS);
@@ -183,7 +183,7 @@ public final class SlabHeightStepCullTest {
     @GameTest(structure = "fabric-gametest-api-v1:empty")
     public void twoEquallyLoweredSlabsNeverRedraw(TestContext ctx) {
         ServerWorld w = ctx.getWorld();
-        BlockPos slabPos = ctx.getAbsolutePos(BlockPos.ORIGIN).add(3, 3, 28);
+        BlockPos slabPos = ctx.getAbsolutePos(BlockPos.ORIGIN).add(3, 3, 1);
         BlockPos dirtPos = slabPos.up();
         BlockPos slabAPos = dirtPos.east();
         BlockPos slabBPos = slabAPos.east();

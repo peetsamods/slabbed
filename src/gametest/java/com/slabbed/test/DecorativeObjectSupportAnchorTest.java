@@ -70,7 +70,7 @@ public final class DecorativeObjectSupportAnchorTest {
     @GameTest(structure = "fabric-gametest-api-v1:empty")
     public void trapdoorRestingOnLoweredFenceDoesNotPopWhenFenceBreaks(TestContext ctx) {
         ServerWorld w = ctx.getWorld();
-        BlockPos vanillaBottomSlabPos = ctx.getAbsolutePos(BlockPos.ORIGIN).add(3, 3, 8);
+        BlockPos vanillaBottomSlabPos = ctx.getAbsolutePos(BlockPos.ORIGIN).add(3, 3, 4);
         BlockPos dirtPos = vanillaBottomSlabPos.up();
         BlockPos fencePos = dirtPos.east();
         BlockPos trapdoorPos = fencePos.up();
@@ -109,7 +109,7 @@ public final class DecorativeObjectSupportAnchorTest {
     @GameTest(structure = "fabric-gametest-api-v1:empty")
     public void flatCandleNeverAnchors(TestContext ctx) {
         ServerWorld w = ctx.getWorld();
-        BlockPos pos = ctx.getAbsolutePos(BlockPos.ORIGIN).add(3, 3, 12);
+        BlockPos pos = ctx.getAbsolutePos(BlockPos.ORIGIN).add(3, 3, 5);
         w.setBlockState(pos, Blocks.CANDLE.getDefaultState(), Block.NOTIFY_LISTENERS);
         SlabAnchorAttachment.addAnchor(w, pos, w.getBlockState(pos));
         ctx.assertTrue(!SlabAnchorAttachment.isAnchored(w, pos),
@@ -124,7 +124,7 @@ public final class DecorativeObjectSupportAnchorTest {
     @GameTest(structure = "fabric-gametest-api-v1:empty")
     public void hangingLanternNeverAnchorsViaDecorativeLane(TestContext ctx) {
         ServerWorld w = ctx.getWorld();
-        BlockPos vanillaBottomSlabPos = ctx.getAbsolutePos(BlockPos.ORIGIN).add(3, 3, 16);
+        BlockPos vanillaBottomSlabPos = ctx.getAbsolutePos(BlockPos.ORIGIN).add(3, 3, 6);
         BlockPos dirtAnchorPos = vanillaBottomSlabPos.up();
         BlockPos supportPos = dirtAnchorPos.east();   // stone beside anchored dirt, air below it (cantilevered)
         BlockPos lanternPos = supportPos.down();      // lantern hangs from supportPos's underside

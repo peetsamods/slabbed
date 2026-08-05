@@ -76,7 +76,7 @@ public final class RedstoneGateOnTerrainSlabsPlacementTest {
     @GameTest(structure = "fabric-gametest-api-v1:empty")
     public void terrainSlabsTopSlabDoesNotClaimBottomSolidity(TestContext ctx) {
         ServerWorld w = ctx.getWorld();
-        BlockPos pos = ctx.getAbsolutePos(BlockPos.ORIGIN).add(3, 3, 8);
+        BlockPos pos = ctx.getAbsolutePos(BlockPos.ORIGIN).add(3, 3, 4);
         w.setBlockState(pos, TerrainSlabsTestShim.TEST_TS_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.TOP),
                 Block.NOTIFY_LISTENERS);
         ctx.assertTrue(!SlabSupport.isBottomSlab(w.getBlockState(pos)),

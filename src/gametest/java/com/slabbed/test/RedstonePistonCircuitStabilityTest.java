@@ -117,7 +117,7 @@ public final class RedstonePistonCircuitStabilityTest {
     @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = 40)
     public void dustLineBesideGroundLevelSlabFeedsPistonWithoutPhantomConnectionsOrOscillation(TestContext ctx) {
         ServerWorld world = ctx.getWorld();
-        BlockPos floorStart = ctx.getAbsolutePos(new BlockPos(2, 2, 8));
+        BlockPos floorStart = ctx.getAbsolutePos(new BlockPos(2, 2, 5));
 
         BlockPos[] wire = buildFloorAndDustLine(world, floorStart, 4);
 

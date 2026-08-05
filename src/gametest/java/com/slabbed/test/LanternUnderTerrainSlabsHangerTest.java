@@ -74,7 +74,7 @@ public final class LanternUnderTerrainSlabsHangerTest {
     @GameTest(structure = "fabric-gametest-api-v1:empty")
     public void lanternUnderLoweredVanillaBottomSlabStillFollows(TestContext ctx) {
         ServerWorld w = ctx.getWorld();
-        BlockPos vanillaBottomSlabPos = ctx.getAbsolutePos(BlockPos.ORIGIN).add(3, 3, 8);
+        BlockPos vanillaBottomSlabPos = ctx.getAbsolutePos(BlockPos.ORIGIN).add(3, 3, 4);
         BlockPos dirtPos = vanillaBottomSlabPos.up();
         BlockPos supportSlabPos = dirtPos.east();   // VANILLA bottom slab, cantilevered, anchored via adjacency
         BlockPos lanternPos = supportSlabPos.down();

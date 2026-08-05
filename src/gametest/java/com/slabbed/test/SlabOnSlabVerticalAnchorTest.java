@@ -91,7 +91,7 @@ public final class SlabOnSlabVerticalAnchorTest {
     @GameTest(structure = "fabric-gametest-api-v1:empty")
     public void flatSlabOnFlatSlabNeverAnchors(TestContext ctx) {
         ServerWorld w = ctx.getWorld();
-        BlockPos lower = ctx.getAbsolutePos(BlockPos.ORIGIN).add(3, 3, 8);
+        BlockPos lower = ctx.getAbsolutePos(BlockPos.ORIGIN).add(3, 3, 4);
         BlockPos upper = lower.up();
         w.setBlockState(lower, Blocks.BIRCH_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.TOP),
                 Block.NOTIFY_LISTENERS);
@@ -112,7 +112,7 @@ public final class SlabOnSlabVerticalAnchorTest {
     @GameTest(structure = "fabric-gametest-api-v1:empty")
     public void slabOnBottomTypeSupportNeverAnchorsVertically(TestContext ctx) {
         ServerWorld w = ctx.getWorld();
-        BlockPos support = ctx.getAbsolutePos(BlockPos.ORIGIN).add(3, 3, 12);
+        BlockPos support = ctx.getAbsolutePos(BlockPos.ORIGIN).add(3, 3, 5);
         BlockPos upper = support.up();
         w.setBlockState(support, Blocks.BIRCH_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.BOTTOM),
                 Block.NOTIFY_LISTENERS);
@@ -134,7 +134,7 @@ public final class SlabOnSlabVerticalAnchorTest {
     @GameTest(structure = "fabric-gametest-api-v1:empty")
     public void terrainSlabsOwnedSlabRestingOnAnchoredDoubleSupportAnchorsAndRenders(TestContext ctx) {
         ServerWorld w = ctx.getWorld();
-        BlockPos vanillaBottomSlabPos = ctx.getAbsolutePos(BlockPos.ORIGIN).add(3, 3, 16);
+        BlockPos vanillaBottomSlabPos = ctx.getAbsolutePos(BlockPos.ORIGIN).add(3, 3, 6);
         BlockPos dirtPos = vanillaBottomSlabPos.up();
         BlockPos supportPos = dirtPos.east();   // TS DOUBLE slab, lowered+anchored via horizontal adjacency to dirt
         BlockPos upperPos = supportPos.up();
