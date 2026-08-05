@@ -958,7 +958,10 @@ public final class SlabSupport {
         // inherits the same -0.5 dy so the stack stays visually continuous (no gap).
         if (state.getBlock() instanceof SlabBlock) {
             if (SlabAnchorAttachment.isAnchored(world, pos)) {
-                return -0.5;
+                // The anchor is a boolean membership set, not a stored height — resolve the dy
+                // from the support's ACTUAL rendered top face (live-reported 0.5 floating gap for
+                // a slab placed on a support already at -1.0). Floors at the historical -0.5.
+                return loweredFollowerDy(world, pos, 0);
             }
             // FREEZE-ON-PLACE: a slab locked FLAT at placement stays at 0 — a lowered carrier
             // placed beside/under it later can no longer make it inherit a lowered position
@@ -971,7 +974,10 @@ public final class SlabSupport {
             BlockState below = world.getBlockState(belowPos);
             if (hasLoweredNonSlabTopSupport(world, belowPos, below)
                     || hasLoweredTopLikeSlabSupport(world, belowPos, below)) {
-                return -0.5;
+                // GEOMETRIC MIRROR of the anchored slab branch above — same flat-constant defect,
+                // folded into the same resolver so the two lanes can never disagree again (the
+                // rig's follower_on_minus_one read birch_slab=-0.5 here with no anchor at all).
+                return loweredFollowerDy(world, pos, 0);
             }
             // Adjacent-side-slab alignment: a bottom or double slab placed at the side of a
             // lowered full block must visually inherit the lowered -0.5 dy so model/outline/
@@ -990,20 +996,19 @@ public final class SlabSupport {
         // Only honour anchors for non-slab blocks; slabs were handled above.
         if (!(state.getBlock() instanceof SlabBlock)
                 && com.slabbed.anchor.SlabAnchorAttachment.isAnchored(world, pos)) {
-            // Mixed-slab compound (mirrors the directCustom path below): a block anchored
-            // directly on a vanilla BOTTOM slab that is itself lowered must follow the slab's
-            // own drop on top of the anchor's -0.5, or it pops UP half a block the instant its
-            // placement anchor syncs — the live directCustom path gives the correct -1.0 on the
-            // first client frame, then this flat -0.5 anchor pinned it back up (the reported
-            // crafting-table-on-mixed-slab pop). loweredBottomSlabSupportDy is recursion-safe
-            // and returns 0.0/NaN for a non-lowered or non-bottom-slab support, so every other
-            // anchor case (block on a plain slab, persisted anchor after its slab was broken,
-            // column/adjacent/below-anchored) is unchanged at -0.5.
-            double anchorDy = -0.5;
-            double supportLoweredDy = loweredBottomSlabSupportDy(world, pos.down());
-            if (Double.isFinite(supportLoweredDy) && supportLoweredDy < -1.0e-6) {
-                anchorDy += supportLoweredDy;
-            }
+            // The anchor records THAT this block was placed on a lowered surface, never HOW FAR
+            // down it went, so the dy must come from the support's ACTUAL rendered top face:
+            //  - vanilla BOTTOM slab support -> the mixed-slab compound (-0.5 anchor + the slab's
+            //    own drop), or a block anchored on a lowered mixed slab pops UP half a block the
+            //    instant its placement anchor syncs (the crafting-table-on-mixed-slab pop);
+            //  - solid NON-SLAB support -> inherit that support's dy outright. This half was
+            //    missing: the old correction went only through loweredBottomSlabSupportDy, which
+            //    reports NaN for anything that is not a bottom slab, so a follower on a -1.0
+            //    stripped_jungle_log stayed at -0.5 with a 0.5 floating gap (live 2026-08-05).
+            // loweredFollowerDy is recursion-safe and floors at -0.5, so every other anchor case
+            // (block on a plain slab, persisted anchor after its slab was broken, column /
+            // adjacent / below-anchored) is unchanged.
+            double anchorDy = loweredFollowerDy(world, pos, 0);
             if (com.slabbed.anchor.SlabAnchorAttachment.TRACE) {
                 String side = (world instanceof net.minecraft.world.World w && w.isClient()) ? "CLIENT" : "SERVER";
                 Slabbed.LOGGER.info("[ANCHOR] dy applied side={} pos={} state={} dy={}",
@@ -1311,19 +1316,101 @@ public final class SlabSupport {
         if (cachedDy != null) {
             return cachedDy;
         }
+        // FOURTH mirror of the flat-constant defect — the exact shape of the getYOffsetInner slab
+        // branch (anchored / lowered-support-below), so it folds into the same resolver. Only the
+        // adjacency case below stays a flat -0.5: that is a SIDE relationship, and the resolver
+        // reads the support BELOW.
         if (SlabAnchorAttachment.isAnchored(world, pos)) {
-            return -0.5;
+            return loweredFollowerDy(world, pos, 0);
         }
         BlockPos belowPos = pos.down();
         BlockState below = world.getBlockState(belowPos);
         if (hasLoweredNonSlabTopSupport(world, belowPos, below)
                 || hasLoweredTopLikeSlabSupport(world, belowPos, below)) {
-            return -0.5;
+            return loweredFollowerDy(world, pos, 0);
         }
         if (isAdjacentSideSlabLowered(world, pos, state)) {
             return -0.5;
         }
         return 0.0;
+    }
+
+    /**
+     * Deepest dy this line will ever resolve. {@code DY_SPEC.md:115} CS-CAP: the whole offset set
+     * is {@code {-1.0, -0.5, 0.0}} and {@code -1.0} is the deepest cell the offset-aware pick
+     * raycast window ({@code {C, C.up, C.down}}) can target, so a deeper tower settles at
+     * {@code -1.0} rather than rendering somewhere the player cannot click.
+     */
+    private static final double MIN_RESOLVED_DY = -1.0;
+
+    /**
+     * Bound on the support-of-a-support resolver walk ({@link #loweredFollowerDy} →
+     * {@link #supportSeatDy} → the recursion-safe support mirrors → possibly another anchored
+     * support). The clamp at {@link #MIN_RESOLVED_DY} means two levels already saturate; the
+     * bound is the hard stop that keeps a pathological column from walking forever.
+     */
+    private static final int MAX_SUPPORT_RESOLVE_DEPTH = 4;
+
+    /**
+     * THE SUPPORT-DY RESOLVER — the single source of truth for "how far down does a block sit
+     * because of the support directly BELOW it".
+     *
+     * <p>Live-reported 2026-08-05 ({@code docs/process/LIVE_LEDGER.md} symptom 1): a block placed
+     * on a support already lowered to {@code -1.0} rendered at {@code -0.5}, leaving a 0.5
+     * floating gap, across four families (birch_slab, birch_fence, lantern, oak_sign). Root cause:
+     * the persistent anchor is a boolean membership set, not a stored height, so every lane that
+     * consumed it answered from the KIND of support below rather than that support's ACTUAL dy —
+     * a flat {@code -0.5} constant. The GEOMETRIC lane already resolved the same relationship
+     * correctly ({@code OffsetRaycastTargetingTest#lanternOnCompoundMinusOneSupportInheritsMinusOne}
+     * has always asserted {@code -1.0}); this makes the anchor lanes and their mirrors AGREE with
+     * it rather than inventing new behaviour.
+     *
+     * <p>Floors at {@code -0.5}: when the support resolves to nothing deeper (a flat bottom slab,
+     * a persisted anchor whose support was broken away, air, a TOP/DOUBLE slab), every caller
+     * keeps the exact value it returned before this resolver existed. Clamped at
+     * {@link #MIN_RESOLVED_DY}.
+     *
+     * <p>Never calls {@link #getYOffset} — safe inside the {@code IN_GET_Y_OFFSET} guard.
+     */
+    private static double loweredFollowerDy(BlockView world, BlockPos pos, int depth) {
+        if (world == null || pos == null || depth >= MAX_SUPPORT_RESOLVE_DEPTH) {
+            return -0.5;
+        }
+        double seat = supportSeatDy(world, pos.down(), depth + 1);
+        if (Double.isFinite(seat) && seat < -0.5 - 1.0e-6) {
+            return Math.max(seat, MIN_RESOLVED_DY);
+        }
+        return -0.5;
+    }
+
+    /**
+     * The dy a block resting at {@code supportPos.up()} must take to sit flush on the ACTUAL
+     * rendered top face of the support at {@code supportPos}.
+     *
+     * <ul>
+     *   <li>HALF-HEIGHT seat (vanilla bottom slab): the top face is half a block below the grid,
+     *       so the follower takes the slab's own dy PLUS {@code -0.5}. This is exactly the
+     *       pre-existing "mixed slab" compound.</li>
+     *   <li>FULL-HEIGHT seat (solid non-slab full block): the follower's grid bottom already
+     *       coincides with the support's grid top, so it inherits the support's dy unchanged.
+     *       This is the lane that was missing — {@code loweredBottomSlabSupportDy} reports
+     *       {@link Double#NaN} for anything that is not a bottom slab, so the live
+     *       {@code stripped_jungle_log} support contributed nothing at all.</li>
+     * </ul>
+     *
+     * <p>Returns {@link Double#NaN} for a support that is neither (air, a TOP/DOUBLE slab, a
+     * non-solid object), leaving the caller on its pre-existing {@code -0.5} floor.
+     */
+    private static double supportSeatDy(BlockView world, BlockPos supportPos, int depth) {
+        BlockState support = getBlockStateOrNull(world, supportPos);
+        if (support == null || support.isAir()) {
+            return Double.NaN;
+        }
+        double bottomSlabDy = loweredBottomSlabSupportDy(world, supportPos, depth);
+        if (!Double.isNaN(bottomSlabDy)) {
+            return bottomSlabDy - 0.5;
+        }
+        return loweredFullBlockUndersideSupportDy(world, supportPos, support, depth);
     }
 
     /**
@@ -1334,6 +1421,11 @@ public final class SlabSupport {
      * or {@link Double#NaN} (not a qualifying full block).
      */
     private static double loweredFullBlockUndersideSupportDy(BlockView world, BlockPos pos, BlockState state) {
+        return loweredFullBlockUndersideSupportDy(world, pos, state, 0);
+    }
+
+    private static double loweredFullBlockUndersideSupportDy(BlockView world, BlockPos pos, BlockState state,
+                                                             int depth) {
         if (world == null || pos == null || state == null
                 || state.isAir()
                 || state.getBlock() instanceof SlabBlock
@@ -1342,7 +1434,9 @@ public final class SlabSupport {
             return Double.NaN;
         }
         if (SlabAnchorAttachment.isAnchored(world, pos)) {
-            return -0.5;
+            // An anchor records THAT this block was placed on a lowered surface, not HOW FAR down
+            // it went. Resolve its actual dy from its own support (floors at the historical -0.5).
+            return loweredFollowerDy(world, pos, depth);
         }
         double directCustomDy = directCustomSlabSupportDy(world, pos, state);
         if (!Double.isNaN(directCustomDy)) {
@@ -1353,7 +1447,7 @@ public final class SlabSupport {
             if (isBottomSlab(belowSlab) && isAdjacentSideSlabLowered(world, pos.down(), belowSlab)) {
                 return -1.0;
             }
-            double columnDy = slabColumnYOffset(world, pos);
+            double columnDy = slabColumnYOffset(world, pos, depth);
             if (columnDy != 0.0) {
                 return columnDy;
             }
@@ -1601,6 +1695,10 @@ public final class SlabSupport {
      * so callers (which gate on {@code < -1e-6}) leave the flush case untouched.
      */
     private static double loweredBottomSlabSupportDy(BlockView world, BlockPos supportPos) {
+        return loweredBottomSlabSupportDy(world, supportPos, 0);
+    }
+
+    private static double loweredBottomSlabSupportDy(BlockView world, BlockPos supportPos, int depth) {
         BlockState s = getBlockStateOrNull(world, supportPos);
         if (s == null
                 || !(s.getBlock() instanceof SlabBlock)
@@ -1610,7 +1708,9 @@ public final class SlabSupport {
             return Double.NaN;
         }
         if (SlabAnchorAttachment.isAnchored(world, supportPos)) {
-            return -0.5;
+            // Same anchor-is-not-a-height correction as loweredFullBlockUndersideSupportDy: an
+            // anchored bottom slab may itself sit deeper than -0.5. Floors at -0.5.
+            return loweredFollowerDy(world, supportPos, depth);
         }
         double directCustomDy = directCustomSlabSupportDy(world, supportPos, s);
         if (Double.isFinite(directCustomDy) && directCustomDy < -1.0e-6) {
@@ -1716,6 +1816,10 @@ public final class SlabSupport {
     }
 
     private static double slabColumnYOffset(BlockView world, BlockPos pos) {
+        return slabColumnYOffset(world, pos, 0);
+    }
+
+    private static double slabColumnYOffset(BlockView world, BlockPos pos, int depth) {
         BlockPos cursor = pos.down();
         for (int i = 0; i < MAX_CHAIN_DEPTH; i++) {
             BlockState cur = getBlockStateOrNull(world, cursor);
@@ -1727,8 +1831,14 @@ public final class SlabSupport {
                     || isAdjacentSideSlabLowered(world, cursor, cur))) {
                 return isBottomSlab(cur) ? -1.0 : -0.5;
             }
-            if (isBottomSlab(cur) || SlabAnchorAttachment.isAnchored(world, cursor)) {
+            if (isBottomSlab(cur)) {
                 return -0.5;
+            }
+            if (SlabAnchorAttachment.isAnchored(world, cursor)) {
+                // Third mirror of the flat-constant defect: the anchored block in this column may
+                // itself render deeper than -0.5, and whatever stacks on it inherits its ACTUAL
+                // top face. Same resolver as the two anchor lanes; floors at -0.5.
+                return loweredFollowerDy(world, cursor, depth);
             }
             if (cur.isAir() || cur.getBlock() instanceof SlabBlock || isThinTopLayer(cur)) {
                 return 0.0;

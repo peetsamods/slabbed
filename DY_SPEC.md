@@ -108,11 +108,25 @@ dripstone still smooshed while the always-hung test stayed green.
 | `SC-TRANSFORM` | anchored block | in-place transform (grass→dirt) at same pos | **dy preserved** | L2 | `StateChangeAnchorTest` |
 | `SC-BREAK` | anchored block | genuine break/replace | **anchor cleared** | L2 | `StateChangeAnchorTest` |
 
+### Anchored followers (the anchor lane's dy MAGNITUDE)
+
+The persistent anchor is a boolean membership set, **not a stored height**. A follower that carries
+one therefore resolves its dy from the support below it at read time, and it must resolve from that
+support's *actual* dy — never from the *kind* of support. Live-reported 2026-08-05 (0.5 floating gap
+across `birch_slab` / `birch_fence` / `lantern` / `oak_sign`); see `docs/process/LIVE_LEDGER.md`.
+
+| SPEC-ID | subject | local config | dy | law | test |
+|---|---|---|---|---|---|
+| `AF-HALF-SEAT` | anchored follower | on a vanilla bottom slab that is itself flush | **−0.5** | half-height seat | `AnchoredFollowerSupportDyTest` |
+| `AF-FULL-SEAT` | anchored follower (slab / fence / lantern / sign) | on a solid non-slab support already at −1.0 | **−1.0** (inherits the support's dy) | full-height seat | `AnchoredFollowerSupportDyTest` |
+| `AF-GEOMETRIC` | un-anchored follower | same scene, no anchor anywhere | **−1.0** (identical to `AF-FULL-SEAT`) | anchor lane == geometric lane | `AnchoredFollowerSupportDyTest`, `OffsetRaycastTargetingTest` |
+| `AF-CLAMP` | anchored follower | on a bottom slab that is itself already at −1.0 (raw seat −1.5) | **−1.0** | `CS-CAP` | `AnchoredFollowerSupportDyTest` |
+
 ### Combined-slab stacks
 
 | SPEC-ID | subject | local config | dy | law | test |
 |---|---|---|---|---|---|
-| `CS-CAP` | deep 3+ combined-slab tower | stacked lowered | **capped at −1.0** | load-bearing w/ ±1 pick window | `CombinedSlabChainingMatrixTest` |
+| `CS-CAP` | deep 3+ combined-slab tower | stacked lowered | **capped at −1.0** | load-bearing w/ ±1 pick window | `CombinedSlabChainingMatrixTest`, `AnchoredFollowerSupportDyTest` (`AF-CLAMP`) |
 
 **Footnotes — honest test caveats (surfaced by adversarial review):**
 
@@ -128,8 +142,10 @@ dripstone still smooshed while the always-hung test stayed green.
   `setBlockState`, which creates **no placement anchor**. So `FB-BOTTOM` / `CB-BOTTOM` / `BE-BOTTOM`
   exercise the *geometric* slab-in-column read, not the `SlabAnchorAttachment` lane that real
   placement uses and that the never-pop fixes changed. The anchor lane is proven by the `*-NEVERPOP`
-  rows (`FenceNeverPopTest` / `BlockEntityNeverPopTest`), which place-then-break. A never-pop/anchor
-  regression would NOT be caught by the `*-BOTTOM` rows alone.
+  rows (`FenceNeverPopTest` / `BlockEntityNeverPopTest`), which place-then-break, and — since
+  2026-08-05 — by the `AF-*` rows, which are the only ones that pin the anchor lane's dy
+  **magnitude** (the `*-NEVERPOP` rows pin that it does not CHANGE, not that it is right). A
+  never-pop/anchor regression would NOT be caught by the `*-BOTTOM` rows alone.
 
 ---
 

@@ -47,6 +47,7 @@
       "com.slabbed.test.TerrainSlabsChainAnchorTest",
       "com.slabbed.test.SlabHeightStepCullTest",
       "com.slabbed.test.SlabOnSlabVerticalAnchorTest",
+      "com.slabbed.test.AnchoredFollowerSupportDyTest",
       "com.slabbed.test.RendererRegionBoundsGuardTest",
       "com.slabbed.test.BottomSlabSpawnProofTest",
       "com.slabbed.test.ServerHitToleranceShiftTest",
