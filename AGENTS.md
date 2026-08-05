@@ -85,7 +85,7 @@ agent definitions are in `.claude/agents/`.
 | Tier | Agent | Model | Role | Writes code? |
 |------|-------|-------|------|--------------|
 | Plan / evaluate | **architect** | Fable (`claude-fable-5`) | Restate goal, explore read-only, decompose into handoff packages, gate the Definition of Ready, route by tier, do the final eval. | No (Write only to emit packages) |
-| Implement | **developer** | Opus (`claude-opus-4-8`) | The heavy lifting: real logic, cross-module changes, the build/fix/retry loop. | Yes |
+| Implement | **developer** | Opus (`claude-opus-5`) | The heavy lifting: real logic, cross-module changes, the build/fix/retry loop. | Yes |
 | Assist | **test-writer** | Sonnet (`claude-sonnet-5`) | Boilerplate tests, mocks, fixtures, smoke checks, well-specified repetitive work. | Yes (tests/fixtures) |
 | Review | **reviewer** | Fable (`claude-fable-5`) | Read the diff + worker reports **against LAW.md, RULES.md, the plan docs, and the acceptance criteria**, then return a structured verdict and **decide if the commit is ready**. | No (read-only) |
 | Adversarial sweep | **sweeper** (panel) | tiered by task | Independent hostile review — try to break the change. Panel intelligence matches the task (see below). | No (read-only) |
