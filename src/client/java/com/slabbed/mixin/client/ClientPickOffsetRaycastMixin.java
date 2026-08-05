@@ -32,6 +32,10 @@ import org.spongepowered.asm.mixin.injection.Redirect;
 @Mixin(ClientPlayerEntity.class)
 public abstract class ClientPickOffsetRaycastMixin {
 
+    /** Kill switch: {@code -Dslabbed.offsetRaycast=false} restores the vanilla block raycast. */
+    private static final boolean SLABBED_OFFSET_RAYCAST_ENABLED =
+            Boolean.parseBoolean(System.getProperty("slabbed.offsetRaycast", "true"));
+
     @Redirect(
             method = "method_76763",
             at = @At(
@@ -40,6 +44,9 @@ public abstract class ClientPickOffsetRaycastMixin {
             )
     )
     private static HitResult slabbed$offsetAwarePick(Entity entity, double maxDistance, float tickProgress, boolean includeFluids) {
+        if (!SLABBED_OFFSET_RAYCAST_ENABLED) {
+            return entity.raycast(maxDistance, tickProgress, includeFluids);
+        }
         Vec3d eye = entity.getCameraPosVec(tickProgress);
         Vec3d look = entity.getRotationVec(tickProgress);
         Vec3d end = eye.add(look.x * maxDistance, look.y * maxDistance, look.z * maxDistance);
