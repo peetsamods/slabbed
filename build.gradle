@@ -7,7 +7,13 @@ loom {
     splitEnvironmentSourceSets()
     runs {
         client {
-            vmArgs "-Dmixin.debug=true", "-Dmixin.verbose=true", "-Dmixin.dumpTargetOnFailure=true", "-Dslabbed.debug.sbsb=true", "-Dslabbed.targetDyOverlay=true"
+            // Dev-run only. These arm Slabbed's debug surface for the whole parity campaign so a
+            // live tester never has to remember a slash command: the /slabdy passive overlay AND
+            // the live-cursor recorder both start already-on. Shipped defaults are untouched —
+            // both read System.getProperty(..., "false"), and the recorder's whole package
+            // (com/slabbed/dev/audit/**) is excluded from the release jar, so players are
+            // unaffected. Drop -Dslabbed.liveCursorIntentRecorder when the campaign ends.
+            vmArgs "-Dmixin.debug=true", "-Dmixin.verbose=true", "-Dmixin.dumpTargetOnFailure=true", "-Dslabbed.debug.sbsb=true", "-Dslabbed.targetDyOverlay=true", "-Dslabbed.liveCursorIntentRecorder=true"
         }
     }
 }
