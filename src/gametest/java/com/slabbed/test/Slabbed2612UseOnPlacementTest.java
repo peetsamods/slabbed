@@ -492,6 +492,72 @@ public final class Slabbed2612UseOnPlacementTest {
         helper.succeed();
     }
 
+    /**
+     * REGRESSION (Maintainer live report, 2026-08-04) — {@code RELEASE_SANITY_CHECKLIST.md} §G row G2a:
+     * two {@code oak_fence} on two side-by-side bottom slabs at the SAME height MUST connect. In game
+     * they did not: both arms were cut.
+     *
+     * <p>Why the sibling above ({@link #useOnFenceClickingLoweredFenceOverAirFollowsToMinusHalf})
+     * could not catch it: the gametest JVM pins {@code slabbed.frozenDy=false} (build.gradle, the
+     * frozen-OFF compatibility floor), and the whole bug only exists when the SHIPPED default
+     * {@code FROZEN_DY_ENABLED=true} is in force. Under frozen-ON a connector's height read is the
+     * stored placement fact, and a real player placement publishes that fact only AFTER vanilla's
+     * {@code place()} returns — i.e. after the new fence's own {@code getStateForPlacement} and after
+     * the existing neighbour's {@code setBlock}-driven {@code updateShape}. At both of those decision
+     * points the new fence had no fact and read stable-flat {@code 0.0} while its neighbour read its
+     * true {@code -0.5}, so the stepped-connection rule fired on BOTH ends and the cut arms were baked
+     * into the persisted blockstate. This test therefore forces frozen-ON locally, exactly as
+     * {@code UpwardContinuationValidationTest} / {@code NeighborUpdateInvarianceTest} do, and drives
+     * BOTH fences through the real {@code useOn} path so both actually earn a published fact.
+     *
+     * <p>The fix is a timing correction only — {@code ConnectorPlacementSettle} re-runs vanilla's own
+     * arm derivation once the fact exists. The complementary break rule (§G row G1 / S6: fences must
+     * NOT connect across a slab-height step) is unaffected, because after the settle the two cells
+     * still read genuinely different frozen heights; that direction is covered by
+     * {@code Slabbed2612ConnectorSurvivalTest}'s stepped fence/pane/wall rows.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void useOnTwoFencesOnAdjacentBottomSlabsConnectUnderFrozenDy(GameTestHelper helper) {
+        boolean previousFrozen = SlabAnchorAttachment.FROZEN_DY_ENABLED;
+        SlabAnchorAttachment.FROZEN_DY_ENABLED = true;
+        try {
+            ServerLevel level = helper.getLevel();
+            helper.setBlock(new BlockPos(2, 1, 2), Blocks.STONE.defaultBlockState());
+            helper.setBlock(new BlockPos(3, 1, 2), Blocks.STONE.defaultBlockState());
+            helper.setBlock(new BlockPos(2, 2, 2), bottomSlab());
+            helper.setBlock(new BlockPos(3, 2, 2), bottomSlab());
+            BlockPos westSlab = helper.absolutePos(new BlockPos(2, 2, 2));
+            BlockPos eastSlab = helper.absolutePos(new BlockPos(3, 2, 2));
+            Player player = mockPlayerNear(helper, helper.absolutePos(new BlockPos(2, 5, 2)));
+
+            BlockPos westFence = placeBlockVia(player, westSlab, Direction.UP, upHit(westSlab), Blocks.OAK_FENCE);
+            log("g2a_west_fence_on_bottom_slab", level, westFence);
+            assertBlockDy(helper, level, westFence, new BlockPos(2, 3, 2), Blocks.OAK_FENCE, -0.5,
+                    "G2a premise: the first fence placed on a bottom slab freezes at -0.5");
+
+            BlockPos eastFence = placeBlockVia(player, eastSlab, Direction.UP, upHit(eastSlab), Blocks.OAK_FENCE);
+            log("g2a_east_fence_on_bottom_slab", level, eastFence);
+            assertBlockDy(helper, level, eastFence, new BlockPos(3, 3, 2), Blocks.OAK_FENCE, -0.5,
+                    "G2a premise: the second fence placed on the adjacent bottom slab also freezes at -0.5");
+
+            BlockState eastState = level.getBlockState(eastFence);
+            BlockState westState = level.getBlockState(westFence);
+            if (!eastState.getValue(CrossCollisionBlock.WEST)) {
+                throw helper.assertionException(new BlockPos(3, 3, 2),
+                        "G2a: the newly placed fence must connect WEST to the same-height fence beside it — "
+                        + "its arm was decided before its own placement height was published");
+            }
+            if (!westState.getValue(CrossCollisionBlock.EAST)) {
+                throw helper.assertionException(new BlockPos(2, 3, 2),
+                        "G2a: the already-placed fence must connect EAST to the new same-height fence — "
+                        + "its updateShape ran mid-placement, while the new cell still had no published height");
+            }
+        } finally {
+            SlabAnchorAttachment.FROZEN_DY_ENABLED = previousFrozen;
+        }
+        helper.succeed();
+    }
+
     // ── A1: freeze-on-place via the REAL useOn path — slab on its OWN flush ground beside a lowered
     //         block must stay flat (0.0) AND record FROZEN_FLAT (NEVER-POP). ──────────────────────────
 
