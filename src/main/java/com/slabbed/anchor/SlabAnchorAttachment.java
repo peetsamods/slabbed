@@ -290,8 +290,12 @@ public final class SlabAnchorAttachment {
      * Master switch for the FROZEN-DY value store (LAW.md restoration): when true, height reads route
      * through the stored placement height instead of the live read-lanes.
      *
-     * <p>Default ON, matching the 26.2 donor; {@code -Dslabbed.frozenDy=false} is the escape hatch and
-     * the mode the gametest suite currently pins (see {@code build.gradle}). Legacy worlds carry no
+     * <p>Default OFF on this line for now ({@code -Dslabbed.frozenDy=true} is the opt-in): the donor
+     * ships default-ON only alongside its client prediction journal and landing resolver. Running the
+     * store alone was live-RED on 2026-08-05 (see {@code docs/process/LIVE_LEDGER.md}) — without
+     * prediction every placement renders flat then pops when the attachment sync lands, and a world
+     * with no stored facts renders stable-flat everywhere. Flip the default back to ON only when
+     * Slices 2d (resolver) and 2i (prediction) are complete and live-passed. Legacy worlds carry no
      * stored value for blocks placed before the flip; those cells resolve to stable flat {@code 0.0}
      * with no recovery from live neighbour geometry — there is no retro-migration.
      *
@@ -299,7 +303,7 @@ public final class SlabAnchorAttachment {
      * the shipped mode while the rest of the suite stays on the legacy configuration.
      */
     public static boolean FROZEN_DY_ENABLED =
-            Boolean.parseBoolean(System.getProperty("slabbed.frozenDy", "true"));
+            Boolean.parseBoolean(System.getProperty("slabbed.frozenDy", "false"));
 
     /**
      * Writes a server-authoritative C3 batch with at most one attachment publication per chunk.

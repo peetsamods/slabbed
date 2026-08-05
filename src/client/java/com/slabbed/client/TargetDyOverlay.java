@@ -1,6 +1,7 @@
 package com.slabbed.client;
 
 import com.slabbed.anchor.SlabAnchorAttachment;
+import com.slabbed.util.SlabSupport;
 import net.fabricmc.fabric.api.client.rendering.v1.HudRenderCallback;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.SlabBlock;
@@ -79,11 +80,25 @@ public final class TargetDyOverlay {
         String line3 = "  src=" + why;
         String line4 = "  below=" + belowName + " type=" + belowSlab + " belowDy=" + format(belowDy);
 
+        // FROZEN-DY divergence columns: the store's answer vs the live lanes' answer for the
+        // targeted cell. Divergence (or a missing fact where LIVE is lowered) is the one-glance
+        // signature of every frozen-era symptom (flat render, placement pop, ghost outline).
+        double stored = SlabAnchorAttachment.storedPlacementDy(client.world, pos);
+        double live = SlabSupport.getUnstoredYOffset(client.world, pos, state);
+        boolean diverged = Double.isFinite(stored)
+                ? Math.abs(stored - live) > EPS
+                : (live < -EPS || live > EPS);
+        String line5 = "  frozen=" + (SlabAnchorAttachment.FROZEN_DY_ENABLED ? "ON" : "off")
+                + " stored=" + (Double.isFinite(stored) ? format(stored) : "none")
+                + " live=" + format(live)
+                + (diverged ? " *** DIVERGED" : "");
+
         int color = dy == 0.0d ? 0xffd7d7d7 : (dy < 0.0d ? 0xffffd166 : 0xffff8866);
         drawLine(context, client, line1, 8, 8, color);
         drawLine(context, client, line2, 8, 20, color);
         drawLine(context, client, line3, 8, 32, color);
         drawLine(context, client, line4, 8, 44, color);
+        drawLine(context, client, line5, 8, 56, diverged ? 0xffff5566 : color);
     }
 
     private static void drawLine(
