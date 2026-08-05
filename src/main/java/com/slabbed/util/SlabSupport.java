@@ -40,6 +40,7 @@ import net.minecraft.world.level.block.SnowLayerBlock;
 import net.minecraft.world.level.block.SpeleothemBlock;
 import net.minecraft.world.level.block.SporeBlossomBlock;
 import net.minecraft.world.level.block.StairBlock;
+import net.minecraft.world.level.block.StandingSignBlock;
 import net.minecraft.world.level.block.TorchBlock;
 import net.minecraft.world.level.block.TrapDoorBlock;
 import net.minecraft.world.level.block.WallBannerBlock;
@@ -261,13 +262,24 @@ public final class SlabSupport {
         };
     }
 
-    /** World-view overload so render and shape routes apply the same frozen-dy policy. */
+    /**
+     * World-view overload so render and shape routes apply the same frozen-dy policy.
+     *
+     * <p>PERF (render-path fix-round F4): the cheap subject-type test runs FIRST. This is called once
+     * per non-air block per chunk-section compile (via {@code ChainCeilingGeometry.emitIfPresent}) and
+     * from three shape routes; evaluating {@code world.getBlockState(pos.above())} as an argument made
+     * every block in the world pay a blockstate read (plus a {@code pos.above()} allocation, plus — at
+     * a render-region border — a thrown and caught out-of-bounds exception) before the check that
+     * rejects all but vertical chains. Same result, same TOP/DOUBLE/BOTTOM switch: the three-argument
+     * overload's first condition is exactly this test, so hoisting it cannot change any answer.
+     */
     public static boolean usesCeilingBridgeGeometry(
             BlockGetter world, BlockPos pos, BlockState chainState, double frozenDy
     ) {
-        return world != null
-                && pos != null
-                && usesCeilingBridgeGeometry(chainState, world.getBlockState(pos.above()), frozenDy);
+        if (world == null || pos == null || !isBeta35VerticalChainVisibleOwnerObject(chainState)) {
+            return false;
+        }
+        return usesCeilingBridgeGeometry(chainState, world.getBlockState(pos.above()), frozenDy);
     }
 
     public static VoxelShape ceilingBridgedVerticalChainSelectionShape(
@@ -529,8 +541,9 @@ public final class SlabSupport {
                 && state.hasProperty(BlockStateProperties.DOUBLE_BLOCK_HALF);
     }
 
-    private static boolean isBeta35StandingOakSignContactObject(BlockState state) {
-        return state != null && state.is(Blocks.OAK_SIGN);
+    /** Every wood's standing sign, not just oak: floor contact is a shape concern, not a material one. */
+    public static boolean isBeta35StandingSignContactObject(BlockState state) {
+        return state != null && state.getBlock() instanceof StandingSignBlock;
     }
 
     private static double beta35FenceWallVariantContactDy(BlockGetter world, BlockPos pos, BlockState state) {
@@ -726,8 +739,8 @@ public final class SlabSupport {
         return Double.NaN;
     }
 
-    private static double beta35StandingOakSignContactDy(BlockGetter world, BlockPos pos, BlockState state) {
-        if (world == null || pos == null || !isBeta35StandingOakSignContactObject(state)) {
+    private static double beta35StandingSignContactDy(BlockGetter world, BlockPos pos, BlockState state) {
+        if (world == null || pos == null || !isBeta35StandingSignContactObject(state)) {
             return Double.NaN;
         }
         BlockPos supportPos = pos.below();
@@ -2778,9 +2791,9 @@ public final class SlabSupport {
             if (Double.isFinite(anchoredRegularDoorContactDy)) {
                 return anchoredRegularDoorContactDy;
             }
-            double anchoredStandingOakSignContactDy = beta35StandingOakSignContactDy(world, pos, state);
-            if (Double.isFinite(anchoredStandingOakSignContactDy)) {
-                return anchoredStandingOakSignContactDy;
+            double anchoredStandingSignContactDy = beta35StandingSignContactDy(world, pos, state);
+            if (Double.isFinite(anchoredStandingSignContactDy)) {
+                return anchoredStandingSignContactDy;
             }
             double anchoredSpecialFullblockContactDy = beta35SpecialFullblockContactDy(world, pos, state);
             if (Double.isFinite(anchoredSpecialFullblockContactDy)) {
@@ -2906,9 +2919,9 @@ public final class SlabSupport {
             return regularDoorContactDy;
         }
 
-        double standingOakSignContactDy = beta35StandingOakSignContactDy(world, pos, state);
-        if (Double.isFinite(standingOakSignContactDy)) {
-            return standingOakSignContactDy;
+        double standingSignContactDy = beta35StandingSignContactDy(world, pos, state);
+        if (Double.isFinite(standingSignContactDy)) {
+            return standingSignContactDy;
         }
 
         double specialFullblockContactDy = beta35SpecialFullblockContactDy(world, pos, state);
