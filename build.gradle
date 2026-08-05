@@ -33,6 +33,7 @@ sourceSets {
                     "com/slabbed/test/TerrainSlabsTestShim.java",
                     "com/slabbed/test/RedstoneWireConnectionTest.java",
                     "com/slabbed/test/BottomSlabSpawnProofTest.java",
+                    "com/slabbed/test/NeighborUpdateInvarianceTest.java",
                     "com/slabbed/anchor/FrozenFlatAttachmentCapacityTest.java"
             ])
         }
