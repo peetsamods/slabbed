@@ -21,6 +21,7 @@ import net.minecraft.block.WallTorchBlock;
 import net.minecraft.block.enums.BlockHalf;
 import net.minecraft.block.enums.DoubleBlockHalf;
 import net.minecraft.block.enums.SlabType;
+import net.minecraft.entity.EntityType;
 import net.minecraft.registry.Registries;
 import net.minecraft.state.property.Properties;
 import net.minecraft.util.Identifier;
@@ -281,6 +282,25 @@ public abstract class SlabSupportStateMixin {
             // Player-placed TS BOTTOM_LIKE top face: solid full-square UP support.
             // View-independent (TYPE/properties only); reports support, lowers nothing. UP only.
             cir.setReturnValue(true);
+        }
+    }
+
+    /**
+     * GH #39 parity (mirrors 1.21.11 commit b2c784f9): the placement-support widening above
+     * (isSideSolid / isSideSolidFullSquare UP → true for bottom(-like) slabs) accidentally
+     * satisfies vanilla's ON_GROUND spawn predicate, turning bottom slabs into mob-spawn
+     * floors. Spawn eligibility is a separate policy: strictly subtractive RETURN filter —
+     * only flips an already-true verdict, so custom block spawn predicates, luminance checks,
+     * and every already-false result are preserved. State-only predicate (no getYOffset —
+     * spawn-prep can block on chunk/anchor state, see the note on the outline path).
+     */
+    @Inject(method = "allowsSpawning", at = @At("RETURN"), cancellable = true)
+    private void slabbed$bottomSlabSpawnProofing(
+            BlockView world, BlockPos pos, EntityType<?> entityType,
+            CallbackInfoReturnable<Boolean> cir) {
+        BlockState self = (BlockState) (Object) this;
+        if (cir.getReturnValue() && SlabSupport.isSpawnProofBottomLikeSurface(self)) {
+            cir.setReturnValue(false);
         }
     }
 

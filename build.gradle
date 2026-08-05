@@ -31,7 +31,8 @@ sourceSets {
                     "com/slabbed/test/Mc1211GoblinRouteClientEntrypoint.java",
                     "com/slabbed/test/OffsetRaycastTargetingTest.java",
                     "com/slabbed/test/TerrainSlabsTestShim.java",
-                    "com/slabbed/test/RedstoneWireConnectionTest.java"
+                    "com/slabbed/test/RedstoneWireConnectionTest.java",
+                    "com/slabbed/test/BottomSlabSpawnProofTest.java"
             ])
         }
     }
