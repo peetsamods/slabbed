@@ -6,30 +6,38 @@ import net.fabricmc.fabric.api.gametest.v1.GameTest;
 import net.minecraft.block.Block;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.Blocks;
+import net.minecraft.block.DoorBlock;
+import net.minecraft.item.Item;
+import net.minecraft.registry.Registries;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.test.TestContext;
 import net.minecraft.util.Identifier;
 import net.minecraft.util.math.BlockPos;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
 /**
- * Smoke coverage for the Stage 1 {@code /slabrig} scene rig (donor intent:
- * {@code SlabRigCommandSmokeTest} + {@code SlabRigCaseCatalogTest}, scaled to Stage 1).
+ * Smoke coverage for the {@code /slabrig} scene rig (donor intent: {@code SlabRigCommandSmokeTest} +
+ * {@code SlabRigCaseCatalogTest}), Stage 1 catalog and Stage 2 {@code mega} / {@code rows}.
  *
- * <p>Pins the three properties the live workflow depends on:
+ * <p>Pins the properties the live workflow depends on:
  * <ol>
  *   <li>every catalogued case BUILDS (all planned cells written) and CLEARS (all of them removed),
  *       with every cell inside the 8x8x8 plot — the rig is useless if a case half-lands;
  *   <li>the rig refuses to overwrite anything it did not place, in both directions: it will not
  *       build into an occupied footprint, and {@code clear} leaves player-edited cells alone;
  *   <li>the four LIVE_LEDGER symptom cases are present by name — those are the scenes Maintainer
- *       re-tests after the -1.0 boundary fix, so losing one silently would be a real regression.
+ *       re-tests after the -1.0 boundary fix, so losing one silently would be a real regression;
+ *   <li>{@code mega} / {@code rows} build, clear, and — the Stage 2 proof — SELF-VERIFY: every
+ *       support variant's reference marker measures the dy that variant's sign claims;
+ *   <li>the kit census per support variant, so "the rig places almost nothing" can never silently
+ *       come back.
  * </ol>
  *
- * <p>All scenario cells stay within structure-relative 0..7: cases are built at the plot origin and
- * the widest case footprint is x 0..6 / y 0..7 / z 0.
+ * <p>All scenario cells stay within structure-relative 0..7. {@code mega} is exercised with two kit
+ * columns, which is what the plot fits; the 40-column board is a live-world affordance.
  */
 public final class SlabRigCatalogSmokeTest {
 
@@ -183,6 +191,198 @@ public final class SlabRigCatalogSmokeTest {
         SlabRigCommand.clear(world, plan);
         ctx.complete();
     }
+
+    // -------------------------------------------------------------------------
+    // Stage 2 — /slabrig mega and /slabrig rows
+    // -------------------------------------------------------------------------
+
+    /**
+     * {@code mega} builds and clears like every other rig. Two kit columns is what fits inside the
+     * 8x8x8 plot (sign column 0, reference column 2, kit columns 4 and 6, plus row 3's overhang arm
+     * at x 7); the full 40-column board is a live-world affordance, not a plot-sized one.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void megaBuildsAndClears(TestContext ctx) {
+        ServerWorld world = ctx.getWorld();
+        BlockPos origin = ctx.getAbsolutePos(BlockPos.ORIGIN);
+
+        SlabRigCommand.BuiltRig built = SlabRigCommand.buildMega(world, origin, 2);
+        ctx.assertTrue(built != null, "mega must build at a clear origin");
+
+        for (Map.Entry<BlockPos, BlockState> cell : built.plan().cells().entrySet()) {
+            BlockPos rel = cell.getKey().subtract(origin);
+            ctx.assertTrue(inPlot(rel),
+                    "mega plans a cell outside the 8x8x8 plot: relative " + rel.toShortString());
+            ctx.assertTrue(world.getBlockState(cell.getKey()).equals(cell.getValue()),
+                    "mega did not land at " + rel.toShortString() + ": expected " + cell.getValue()
+                            + ", found " + world.getBlockState(cell.getKey()));
+        }
+
+        // One tally row per support variant, and every variant actually carried the kit columns.
+        ctx.assertTrue(built.report().rows().size() == 4,
+                "mega must report one tally row per support variant, got "
+                        + built.report().rows().size());
+
+        int cells = built.plan().size();
+        ctx.assertTrue(SlabRigCommand.buildMega(world, origin, 2) == null,
+                "mega must refuse to build into its own occupied footprint");
+
+        SlabRigCommand.ClearReport report = SlabRigCommand.clear(world, built.plan());
+        ctx.assertTrue(report.removed() == cells && report.keptForeign() == 0,
+                "mega clear removed " + report.removed() + "/" + cells
+                        + " cells (kept " + report.keptForeign() + ")");
+        for (BlockPos pos : built.plan().cells().keySet()) {
+            ctx.assertTrue(world.getBlockState(pos).isAir(),
+                    "mega left " + pos.subtract(origin).toShortString() + " behind after clear: "
+                            + world.getBlockState(pos));
+        }
+        ctx.complete();
+    }
+
+    /**
+     * THE Stage 2 proof: the rig's own self-verification. Each of the four support variants carries
+     * a {@code stripped_jungle_log} reference marker, and the marker must MEASURE the dy the row's
+     * sign claims ({@code 0.0 / -0.5 / -1.0 / -0.5}).
+     *
+     * <p>A mismatch here is a real regression in the support-dy resolver, NOT a fixture to relax —
+     * the -1.0 row in particular is the LIVE_LEDGER boundary that {@code 6a7cd43a} closed.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void megaRowsMeasureTheirDeclaredDy(TestContext ctx) {
+        ServerWorld world = ctx.getWorld();
+        BlockPos origin = ctx.getAbsolutePos(BlockPos.ORIGIN);
+
+        SlabRigCommand.BuiltRig built = SlabRigCommand.buildMega(world, origin, 0);
+        ctx.assertTrue(built != null, "mega must build at a clear origin");
+
+        List<SlabRigCommand.DyCheck> checks = built.plan().checks();
+        ctx.assertTrue(checks.size() == 4,
+                "mega must self-verify one reference marker per support variant, got " + checks.size());
+
+        List<String> mismatches = SlabRigCommand.verify(world, built.plan());
+        ctx.assertTrue(mismatches.isEmpty(),
+                "mega does not measure what its signs say: " + String.join("; ", mismatches));
+
+        SlabRigCommand.clear(world, built.plan());
+        ctx.complete();
+    }
+
+    /** {@code rows} builds its two bare seat rows, self-verifies both, and clears. */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void rowsBuildsAndMeasuresBothSeats(TestContext ctx) {
+        ServerWorld world = ctx.getWorld();
+        BlockPos origin = ctx.getAbsolutePos(BlockPos.ORIGIN);
+
+        SlabRigCommand.BuiltRig built = SlabRigCommand.buildRows(world, origin, 2);
+        ctx.assertTrue(built != null, "rows must build at a clear origin");
+
+        for (BlockPos pos : built.plan().cells().keySet()) {
+            BlockPos rel = pos.subtract(origin);
+            ctx.assertTrue(inPlot(rel),
+                    "rows plans a cell outside the 8x8x8 plot: relative " + rel.toShortString());
+        }
+        ctx.assertTrue(built.plan().checks().size() == 2,
+                "rows must self-verify one marker per row, got " + built.plan().checks().size());
+
+        List<String> mismatches = SlabRigCommand.verify(world, built.plan());
+        ctx.assertTrue(mismatches.isEmpty(),
+                "rows does not measure what its signs say: " + String.join("; ", mismatches));
+
+        int cells = built.plan().size();
+        SlabRigCommand.ClearReport report = SlabRigCommand.clear(world, built.plan());
+        ctx.assertTrue(report.removed() == cells && report.keptForeign() == 0,
+                "rows clear removed " + report.removed() + "/" + cells);
+        ctx.complete();
+    }
+
+    /**
+     * Census of the whole test kit against all four support variants: exactly which objects the rig
+     * can seat on each variant, and which it refuses. Maintainer's original complaint was that the rig
+     * placed almost nothing, so this pins the coverage instead of leaving it to a live eyeball.
+     *
+     * <p>Runs against {@code mega}'s own reference column, one item at a time, so the whole 40-item
+     * kit is censused inside a single plot-sized footprint.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void megaKitCensusPerSupportVariant(TestContext ctx) {
+        ServerWorld world = ctx.getWorld();
+        BlockPos origin = ctx.getAbsolutePos(BlockPos.ORIGIN);
+
+        SlabRigCommand.BuiltRig built = SlabRigCommand.buildMega(world, origin, 0);
+        ctx.assertTrue(built != null, "mega must build at a clear origin");
+
+        List<Item> kit = SlabTestKit.placeableItems();
+        StringBuilder census = new StringBuilder();
+        for (SlabRigCommand.DyCheck check : built.plan().checks()) {
+            BlockPos subject = check.pos();
+            BlockState marker = world.getBlockState(subject);
+            boolean aboveWasAir = world.getBlockState(subject.up()).isAir();
+            List<String> refused = new ArrayList<>();
+            int placed = 0;
+
+            world.setBlockState(subject, Blocks.AIR.getDefaultState(), Block.NOTIFY_LISTENERS);
+            for (Item item : kit) {
+                String id = Registries.ITEM.getId(item).getPath();
+                BlockState state = SlabRigCommand.kitSubjectState(item);
+                if (state == null) {
+                    refused.add(id + "(not-a-single-cell-block)");
+                    continue;
+                }
+                boolean twoTall = state.getBlock() instanceof DoorBlock;
+                if (twoTall && !aboveWasAir) {
+                    refused.add(id + "(no-headroom)");
+                    continue;
+                }
+                if (!state.canPlaceAt(world, subject)) {
+                    refused.add(id + "(canPlaceAt)");
+                    continue;
+                }
+                placed++;
+                world.setBlockState(subject, state, Block.NOTIFY_LISTENERS);
+                world.setBlockState(subject, Blocks.AIR.getDefaultState(), Block.NOTIFY_LISTENERS);
+            }
+            world.setBlockState(subject, marker, Block.NOTIFY_LISTENERS);
+
+            census.append('[').append(check.label()).append(" dy ").append(check.expected())
+                    .append("] placed ").append(placed).append('/').append(kit.size());
+            if (!refused.isEmpty()) {
+                census.append(" refused ").append(refused);
+            }
+            census.append(' ');
+
+            // Every variant must seat the great majority of the kit — the whole point of Stage 2.
+            ctx.assertTrue(placed >= kit.size() - 5,
+                    "support variant '" + check.label() + "' seats only " + placed + "/" + kit.size()
+                            + " kit objects; refused " + refused);
+        }
+
+        // Pinned census: a change here is a real change in what the rig can build. See HANDOFF.md.
+        ctx.assertTrue(census.toString().equals(EXPECTED_KIT_CENSUS),
+                "kit census changed.\n  actual:   " + census + "\n  expected: " + EXPECTED_KIT_CENSUS);
+
+        SlabRigCommand.clear(world, built.plan());
+        ctx.complete();
+    }
+
+    /**
+     * The census {@link #megaKitCensusPerSupportVariant} pins (measured 2026-08-05). Regenerate
+     * DELIBERATELY when the kit or a seat recipe changes — never just to make this go green.
+     *
+     * <p>Reading it: {@code red_bed} is a two-cell HORIZONTAL subject whose head would land in the
+     * next column, so the rig refuses it everywhere; {@code ladder} needs a wall to hang on and no
+     * seat has one; {@code oak_hanging_sign} needs a ceiling, so it is refused on rows 0-2 and is
+     * the one object that ONLY row 3 can seat; the two doors are two cells tall, so row 3's ceiling
+     * costs them their headroom. Everything else in the kit seats on every variant.
+     */
+    private static final String EXPECTED_KIT_CENSUS =
+            "[row 0 flush dy 0.0] placed 37/40 refused [red_bed(not-a-single-cell-block), "
+                    + "oak_hanging_sign(canPlaceAt), ladder(canPlaceAt)] "
+            + "[row 1 lowered slab dy -0.5] placed 37/40 refused [red_bed(not-a-single-cell-block), "
+                    + "oak_hanging_sign(canPlaceAt), ladder(canPlaceAt)] "
+            + "[row 2 compound column dy -1.0] placed 37/40 refused [red_bed(not-a-single-cell-block), "
+                    + "oak_hanging_sign(canPlaceAt), ladder(canPlaceAt)] "
+            + "[row 3 overhang_and_ceiling dy -0.5] placed 36/40 refused [oak_door(no-headroom), "
+                    + "red_bed(not-a-single-cell-block), ladder(canPlaceAt), birch_door(no-headroom)] ";
 
     private static boolean inPlot(BlockPos rel) {
         return rel.getX() >= 0 && rel.getX() <= 7

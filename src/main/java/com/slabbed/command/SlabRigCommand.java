@@ -1,20 +1,30 @@
 package com.slabbed.command;
 
 import com.mojang.brigadier.CommandDispatcher;
+import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.context.CommandContext;
 import com.slabbed.anchor.SlabAnchorAttachment;
+import com.slabbed.util.SlabSupport;
 import com.slabbed.util.SlabTestKit;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
+import net.minecraft.block.BedBlock;
 import net.minecraft.block.Block;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.Blocks;
+import net.minecraft.block.DoorBlock;
 import net.minecraft.block.SlabBlock;
+import net.minecraft.block.entity.BlockEntity;
+import net.minecraft.block.entity.SignBlockEntity;
+import net.minecraft.block.enums.BlockFace;
 import net.minecraft.block.enums.BlockHalf;
+import net.minecraft.block.enums.DoubleBlockHalf;
 import net.minecraft.block.enums.SlabType;
 import net.minecraft.command.CommandSource;
 import net.minecraft.command.permission.Permission;
 import net.minecraft.command.permission.PermissionLevel;
+import net.minecraft.item.Item;
+import net.minecraft.registry.Registries;
 import net.minecraft.registry.RegistryKey;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.command.ServerCommandSource;
@@ -28,8 +38,10 @@ import net.minecraft.world.World;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
@@ -45,15 +57,32 @@ import static net.minecraft.server.command.CommandManager.literal;
  *   /slabrig list           — list the case names
  *   /slabrig build &lt;case&gt;   — build one case in front of the player
  *   /slabrig all            — build the whole catalog in a spaced grid
+ *   /slabrig mega [n] [force]  — THE everything-rig: n kit columns x 4 support variants
+ *   /slabrig rows [n] [force]  — n bare -0.5 seats + n bare -1.0 seats, for hand-placing
  *   /slabrig clear          — remove what THIS rig built (never player builds)
  * </pre>
  *
- * <p><b>Stage 1 port of the 26.2 donor's {@code SlabRigCommand}.</b> Deliberately omitted (deferred,
- * not lost): the hanging-direct executor, the status/verified/unresolved/incomplete tracking, the
- * paging / selector_page / route_index / resume machinery, and the console/server-topology
- * reporting. The donor rigs that depend on that machinery ({@code rows}, {@code mega}, {@code
- * stacks}, {@code cases}, {@code catalog}, {@code hangs}, {@code platform}) are not ported here;
- * their geometry survives as named cases where it translated cleanly.
+ * <p><b>Stage 1 + Stage 2 port of the 26.2 donor's {@code SlabRigCommand}.</b> Deliberately omitted
+ * (deferred, not lost): the hanging-direct executor, the status/verified/unresolved/incomplete
+ * tracking, the paging / selector_page / route_index / resume machinery, the {@code catalog}
+ * manifest writer, {@code stacks}, {@code cases}, {@code platform}, and the console/server-topology
+ * reporting. Stage 2 adds {@code mega} and {@code rows} — the two donor rigs that actually CONSUME
+ * {@link SlabTestKit}'s object palette, which is why Stage 1's board looked "meager".
+ *
+ * <p><b>Stage 2 deviations from the donor</b> (this line has no equivalent, see HANDOFF.md):
+ * <ul>
+ *   <li>The donor auto-places kit items through a proxy player's real {@code useOn}. This line has
+ *       no proxy-player / diagnostics-bridge machinery, so subjects are AUTHORED as block states
+ *       and then run through {@link SlabAnchorAttachment#addAnchor} — the same call a real click
+ *       makes in {@code onPlaced}, which self-gates on its qualifier lanes. Items the world refuses
+ *       at the seat ({@link BlockState#canPlaceAt}) are dropped and named in chat.</li>
+ *   <li>The donor's {@code MEGA_ROW_DY} is the dy of the SEAT cell, because its compound recipe uses
+ *       {@code addCompoundVisibleSideLowerSlab} (absent here). This line's seat vocabulary is
+ *       SUBJECT-dy based ({@link CaseBuilder#seatFlush} / {@link CaseBuilder#seatHalf} /
+ *       {@link CaseBuilder#seatMinusOne}), and it lands on the donor's array VALUES exactly:
+ *       {@code {0.0, -0.5, -1.0, -0.5}}. So here the array is the expected dy of each row's
+ *       SUBJECT.</li>
+ * </ul>
  *
  * <p><b>Case catalog.</b> Four cases reproduce the live-confirmed symptoms recorded in
  * {@code docs/process/LIVE_LEDGER.md} (2026-08-05 pass) and are the reason this rig exists:
@@ -92,6 +121,54 @@ public final class SlabRigCommand {
     /** Tiles per row in the {@code all} grid. */
     private static final int TILES_PER_ROW = 3;
 
+    /** The mega rig's support variants, one row each (see {@link #planSeat}). */
+    private static final int MEGA_ROW_COUNT = 4;
+
+    /** Row 3 — the donor's {@code overhang_and_ceiling}: its subject cell is capped by a ceiling. */
+    private static final int MEGA_ROW_HANGING = 3;
+
+    /**
+     * Expected dy of each mega row's SUBJECT cell, in row order — the donor's values verbatim, read
+     * with this line's subject-dy seat vocabulary (see the class javadoc's deviation note). This is
+     * what the rig self-verifies against after building: a rig that does not measure what its own
+     * signs claim warns in red instead of reporting success.
+     */
+    private static final double[] MEGA_ROW_DY = {0.0, -0.5, -1.0, -0.5};
+
+    /** Display names for the four mega rows, in row order. */
+    private static final String[] MEGA_ROW_NAME = {
+            "flush", "lowered slab", "compound column", "overhang_and_ceiling"};
+
+    /** Horizontal pitch between rig columns — one free cell between columns. */
+    private static final int COLUMN_SPACING = 2;
+
+    /** Depth pitch between mega variant rows; row 2's compound recipe needs two cells of depth. */
+    private static final int ROW_SPACING = 2;
+
+    /** Column 0 is the labelled sign pedestal; column 1 is the self-verified reference column. */
+    private static final int FIRST_KIT_COLUMN = 2;
+
+    /** Default kit-column count for {@code /slabrig mega} (capped by the placeable-kit size). */
+    private static final int DEFAULT_MEGA_COLUMNS = 40;
+
+    /** Default column count for {@code /slabrig rows}. */
+    private static final int DEFAULT_ROWS = 16;
+
+    /** Grammar bound for the {@code [n]} argument of {@code mega} / {@code rows}. */
+    private static final int MAX_RIG_COLUMNS = 64;
+
+    /** Cap on the refused-id list echoed to chat (donor {@code MAX_REFUSED_LISTED}). */
+    private static final int MAX_REFUSED_LISTED = 15;
+
+    /** Tolerance for the self-verification dy comparison. */
+    private static final double EPS = 1.0e-6;
+
+    /**
+     * Sign rotation 8 = front face pointing north (-Z). The rig grows +Z away from the operator
+     * ({@link #rigOrigin}), so 8 is what a sign placed by a player standing at the origin would get.
+     */
+    private static final int SIGN_FACES_OPERATOR = 8;
+
     /** In-memory, server-session-bound record of the last rig each operator built. */
     private static final Map<RigKey, RigPlan> LAST_RIG = new ConcurrentHashMap<>();
 
@@ -107,9 +184,59 @@ public final class SlabRigCommand {
         private final LinkedHashMap<BlockPos, BlockState> cells = new LinkedHashMap<>();
         private final List<BlockPos> anchors = new ArrayList<>();
         private final List<String> caseNames = new ArrayList<>();
+        /** Sign pedestals: three lines of text applied to the block entity after the cell is written. */
+        private final LinkedHashMap<BlockPos, String[]> signs = new LinkedHashMap<>();
+        /** Post-commit dy expectations — the self-verification the donor's {@code warn(...)} reports. */
+        private final List<DyCheck> checks = new ArrayList<>();
+        /** Cells that are dropped at commit when the world refuses the state there. */
+        private final Set<BlockPos> conditional = new LinkedHashSet<>();
+        /** The reportable subset of {@link #conditional}: kit objects, by id and row. */
+        private final LinkedHashMap<BlockPos, Subject> subjects = new LinkedHashMap<>();
+        /** Refusals already known at plan time (an item that is not authorable at all). */
+        private final List<Subject> planTimeRefusals = new ArrayList<>();
+        /** Row labels in display order, so an empty row still shows up in the tally. */
+        private final List<String> rowOrder = new ArrayList<>();
 
         void put(BlockPos pos, BlockState state) {
             cells.put(pos.toImmutable(), state);
+        }
+
+        /** Plans a labelled standing sign at {@code pos} (the pedestal below it is the caller's job). */
+        void sign(BlockPos pos, String l0, String l1, String l2) {
+            put(pos, Blocks.OAK_SIGN.getDefaultState()
+                    .with(Properties.ROTATION, SIGN_FACES_OPERATOR));
+            signs.put(pos.toImmutable(), new String[] {l0, l1, l2});
+        }
+
+        /**
+         * Plans a kit object on a seat. The cell is CONDITIONAL — if the world refuses the state
+         * there ({@link BlockState#canPlaceAt}) it is dropped at commit and reported by id, so the
+         * rig never leaves a half-placed subject or silently swallows a category.
+         */
+        void putSubject(BlockPos pos, BlockState state, String id, String row) {
+            putAnchored(pos, state);
+            conditional.add(pos.toImmutable());
+            subjects.put(pos.toImmutable(), new Subject(id, row));
+        }
+
+        /** A companion cell of a subject (a door's upper half): dropped with it, never counted. */
+        void putCompanion(BlockPos pos, BlockState state) {
+            put(pos, state);
+            conditional.add(pos.toImmutable());
+        }
+
+        /** Records an item that cannot be authored at all — reported, never silently skipped. */
+        void refuseUpfront(String id, String row) {
+            planTimeRefusals.add(new Subject(id, row));
+        }
+
+        void check(BlockPos pos, double expected, String label) {
+            checks.add(new DyCheck(pos.toImmutable(), expected, label));
+        }
+
+        /** The post-commit dy expectations, in row order. Read by the smoke gametest. */
+        public List<DyCheck> checks() {
+            return List.copyOf(checks);
         }
 
         /**
@@ -145,20 +272,104 @@ public final class SlabRigCommand {
             return null;
         }
 
-        void commit(ServerWorld world) {
-            for (Map.Entry<BlockPos, BlockState> e : cells.entrySet()) {
-                world.setBlockState(e.getKey(), e.getValue(), BUILD_FLAG);
+        /**
+         * Writes the plan bottom-up, dropping any conditional cell the world refuses at its
+         * position, then anchors (the same {@link SlabAnchorAttachment#addAnchor} a real click
+         * makes — it self-gates on its qualifier lanes) and finally the sign text.
+         *
+         * <p>Dropped cells are removed from the plan, so {@code clear} and the gametest's
+         * "every planned cell landed" check both stay exact.
+         */
+        CommitReport commit(ServerWorld world) {
+            LinkedHashMap<String, int[]> tally = new LinkedHashMap<>();
+            for (String row : rowOrder) {
+                tally.put(row, new int[2]);
             }
+            LinkedHashSet<String> refusedIds = new LinkedHashSet<>();
+            for (Subject refused : planTimeRefusals) {
+                tally.computeIfAbsent(refused.row(), k -> new int[2])[1]++;
+                refusedIds.add(refused.id());
+            }
+
+            List<BlockPos> dropped = new ArrayList<>();
+            for (Map.Entry<BlockPos, BlockState> e : cells.entrySet()) {
+                BlockPos pos = e.getKey();
+                BlockState state = e.getValue();
+                Subject subject = subjects.get(pos);
+                if (conditional.contains(pos) && !state.canPlaceAt(world, pos)) {
+                    dropped.add(pos);
+                    if (subject != null) {
+                        tally.computeIfAbsent(subject.row(), k -> new int[2])[1]++;
+                        refusedIds.add(subject.id());
+                    }
+                    continue;
+                }
+                world.setBlockState(pos, state, BUILD_FLAG);
+                if (subject != null) {
+                    tally.computeIfAbsent(subject.row(), k -> new int[2])[0]++;
+                }
+            }
+            for (BlockPos pos : dropped) {
+                cells.remove(pos);
+                conditional.remove(pos);
+                subjects.remove(pos);
+            }
+            anchors.removeIf(pos -> !cells.containsKey(pos));
+            checks.removeIf(check -> !cells.containsKey(check.pos()));
+
             for (BlockPos pos : anchors) {
                 SlabAnchorAttachment.addAnchor(world, pos, world.getBlockState(pos));
             }
+            for (Map.Entry<BlockPos, String[]> e : signs.entrySet()) {
+                writeSign(world, e.getKey(), e.getValue());
+            }
+
+            List<RowTally> rows = new ArrayList<>();
+            for (Map.Entry<String, int[]> e : tally.entrySet()) {
+                rows.add(new RowTally(e.getKey(), e.getValue()[0], e.getValue()[1]));
+            }
+            return new CommitReport(cells.size(), rows, List.copyOf(refusedIds));
         }
 
         void absorb(RigPlan other) {
             cells.putAll(other.cells);
             anchors.addAll(other.anchors);
             caseNames.addAll(other.caseNames);
+            signs.putAll(other.signs);
+            checks.addAll(other.checks);
+            conditional.addAll(other.conditional);
+            subjects.putAll(other.subjects);
+            planTimeRefusals.addAll(other.planTimeRefusals);
+            rowOrder.addAll(other.rowOrder);
         }
+    }
+
+    /** A kit object authored on a seat, identified for the refusal report. */
+    private record Subject(String id, String row) {
+    }
+
+    /** A post-commit dy expectation: what {@code pos} must measure, and what to call it in chat. */
+    public record DyCheck(BlockPos pos, double expected, String label) {
+    }
+
+    /** Per-row placed/refused counts for one commit. */
+    public record RowTally(String row, int placed, int refused) {
+    }
+
+    /** What a commit actually wrote: surviving cell count, per-row tallies, refused kit ids. */
+    public record CommitReport(int cells, List<RowTally> rows, List<String> refusedIds) {
+    }
+
+    /** Applies three lines of sign text to the block entity a sign cell just created. */
+    private static void writeSign(ServerWorld world, BlockPos pos, String[] lines) {
+        BlockEntity be = world.getBlockEntity(pos);
+        if (!(be instanceof SignBlockEntity sign)) {
+            return;
+        }
+        sign.changeText(text -> text
+                .withMessage(0, Text.literal(lines[0]))
+                .withMessage(1, Text.literal(lines[1]))
+                .withMessage(2, Text.literal(lines[2])), true);
     }
 
     /** Outcome of a clear: how many rig cells were removed, and how many were left alone. */
@@ -468,6 +679,238 @@ public final class SlabRigCommand {
     }
 
     // -------------------------------------------------------------------------
+    // Stage 2 — the everything-rig (donor `mega`) and the bare seat board (donor `rows`)
+    // -------------------------------------------------------------------------
+
+    /** A committed Stage 2 rig: the plan (refusals already pruned) and what the commit wrote. */
+    public record BuiltRig(RigPlan plan, CommitReport report) {
+    }
+
+    /**
+     * Plans then commits {@code mega} at {@code origin}. Returns {@code null} if the footprint is
+     * obstructed (nothing is written). Visible for the smoke gametest.
+     */
+    public static BuiltRig buildMega(ServerWorld world, BlockPos origin, int columns) {
+        return build(world, planMega(origin, columns));
+    }
+
+    /**
+     * Plans then commits {@code rows} at {@code origin}. Returns {@code null} if the footprint is
+     * obstructed (nothing is written). Visible for the smoke gametest.
+     */
+    public static BuiltRig buildRows(ServerWorld world, BlockPos origin, int count) {
+        return build(world, planRows(origin, count));
+    }
+
+    private static BuiltRig build(ServerWorld world, RigPlan plan) {
+        if (plan.firstObstruction(world) != null) {
+            return null;
+        }
+        return new BuiltRig(plan, plan.commit(world));
+    }
+
+    /**
+     * Builds support variant {@code v}'s scenery at column {@code x} / row depth {@code z} and
+     * returns the SUBJECT cell — the position a kit object (or the reference marker) is authored at.
+     *
+     * <p>Variant geometry, all vanilla-only (Terrain Slabs crashes bootstrap on this line, so the
+     * rig must never depend on it):
+     * <ol start="0">
+     *   <li><b>flush</b> — ground stone + stone. Subject reads {@code 0.0}: the control lane.</li>
+     *   <li><b>lowered slab</b> — ground stone + a plain bottom slab. Subject reads {@code -0.5}.</li>
+     *   <li><b>compound column</b> — the donor's compound recipe: a SOURCE column at {@code z + 1}
+     *       (stone / bottom slab / stone) whose lowered full block drags the SEAT slab beside it to
+     *       {@code -0.5}, so what stands on the seat reads {@code -1.0}. Do NOT try to build this by
+     *       anchoring a slab onto a slab — {@code addAnchor} rejects slabs on the direct/column
+     *       lanes, so that column silently reads {@code -0.5} and the whole row becomes the wrong
+     *       scene. Occupies {@code z} and {@code z + 1}.</li>
+     *   <li><b>overhang_and_ceiling</b> — a lowered {@code -0.5} seat with a CEILING one cell above
+     *       the subject, so ceiling-attached objects (hanging signs, hung lanterns) actually pass
+     *       {@code canPlaceAt} here and nowhere else; plus a ceiling arm and ground at {@code x + 1}
+     *       leaving an open column there for manual overhang clicks.</li>
+     * </ol>
+     */
+    private static BlockPos planSeat(RigPlan plan, BlockPos origin, int x, int z, int v) {
+        switch (v) {
+            case 0 -> {
+                plan.put(origin.add(x, 0, z), stone());
+                plan.put(origin.add(x, 1, z), stone());
+                return origin.add(x, 2, z);
+            }
+            case 1 -> {
+                plan.put(origin.add(x, 0, z), stone());
+                plan.put(origin.add(x, 1, z), bottomSlab(Blocks.STONE_SLAB));
+                return origin.add(x, 2, z);
+            }
+            case 2 -> {
+                plan.put(origin.add(x, 0, z + 1), stone());
+                plan.put(origin.add(x, 1, z + 1), bottomSlab(Blocks.STONE_SLAB));
+                plan.put(origin.add(x, 2, z + 1), stone());
+                plan.put(origin.add(x, 0, z), stone());
+                plan.put(origin.add(x, 1, z), stone());
+                plan.putAnchored(origin.add(x, 2, z), bottomSlab(Blocks.STONE_SLAB));
+                return origin.add(x, 3, z);
+            }
+            case MEGA_ROW_HANGING -> {
+                plan.put(origin.add(x, 0, z), stone());
+                plan.put(origin.add(x, 1, z), bottomSlab(Blocks.STONE_SLAB));
+                plan.put(origin.add(x, 2, z), stone());
+                // Ceiling BEFORE the subject: canPlaceAt for a ceiling-hung object is evaluated in
+                // plan order at commit, so the ceiling has to already be there.
+                plan.put(origin.add(x, 4, z), stone());
+                plan.put(origin.add(x + 1, 0, z), stone());
+                plan.put(origin.add(x + 1, 4, z), stone());
+                return origin.add(x, 3, z);
+            }
+            default -> throw new IllegalArgumentException("no such rig support variant: " + v);
+        }
+    }
+
+    /**
+     * The state a kit {@link Item} is authored as, or {@code null} when the entry cannot be authored
+     * as single-column scenery at all (the refusal is reported by id, never silently skipped).
+     *
+     * <p>Public because {@code SlabRigCatalogSmokeTest} censuses the kit against it. DEV-ONLY, like
+     * the rest of this class.
+     */
+    public static BlockState kitSubjectState(Item item) {
+        Block block = Block.getBlockFromItem(item);
+        if (block == Blocks.AIR) {
+            return null;   // not a block item at all (e.g. powder_snow_bucket)
+        }
+        if (block instanceof BedBlock) {
+            return null;   // two-cell HORIZONTAL subject: its head would land in the next column
+        }
+        BlockState state = block.getDefaultState();
+        if (state.contains(Properties.BLOCK_FACE)) {
+            // Buttons / levers default to a WALL mount; there is no wall on a seat, so stand them up.
+            state = state.with(Properties.BLOCK_FACE, BlockFace.FLOOR);
+        }
+        if (state.contains(Properties.HORIZONTAL_FACING)) {
+            state = state.with(Properties.HORIZONTAL_FACING, Direction.NORTH);
+        }
+        if (state.contains(Properties.ROTATION)) {
+            state = state.with(Properties.ROTATION, SIGN_FACES_OPERATOR);
+        }
+        return state;
+    }
+
+    /** Authors {@code state} (plus a door's upper half) as the subject on {@code subject}. */
+    private static void planSubject(RigPlan plan, BlockPos subject, BlockState state, String id, String row) {
+        if (state.getBlock() instanceof DoorBlock) {
+            BlockPos upper = subject.up();
+            if (plan.cells.containsKey(upper)) {
+                // Row 3's ceiling already owns that cell — a genuine per-variant refusal.
+                plan.refuseUpfront(id, row);
+                return;
+            }
+            plan.putSubject(subject, state.with(Properties.DOUBLE_BLOCK_HALF, DoubleBlockHalf.LOWER),
+                    id, row);
+            plan.putCompanion(upper, state.with(Properties.DOUBLE_BLOCK_HALF, DoubleBlockHalf.UPPER));
+            return;
+        }
+        plan.putSubject(subject, state, id, row);
+    }
+
+    /**
+     * THE mega rig: {@code columns} kit columns crossed with the four support variants, one row each.
+     * Each row is laid out along {@code +X}: column 0 is a labelled sign pedestal, column 1 is the
+     * REFERENCE column (a {@code stripped_jungle_log} marker whose dy the rig self-verifies against
+     * {@link #MEGA_ROW_DY}), and every column after that carries the next entry of
+     * {@link SlabTestKit#placeableItems()}. Rows march along {@code +Z}.
+     *
+     * <p>World-free, like every other planner here: the plan is authored first and committed only
+     * once its footprint is known clear, so the rig can never overwrite a player build.
+     */
+    public static RigPlan planMega(BlockPos origin, int columns) {
+        RigPlan plan = new RigPlan();
+        plan.caseNames.add("mega");
+        List<Item> kit = SlabTestKit.placeableItems();
+        int n = Math.max(0, Math.min(columns, kit.size()));
+
+        for (int v = 0; v < MEGA_ROW_COUNT; v++) {
+            int z = v * ROW_SPACING;
+            String row = "row " + v + " " + MEGA_ROW_NAME[v];
+            plan.rowOrder.add(row);
+
+            plan.put(origin.add(0, 0, z), stone());
+            plan.sign(origin.add(0, 1, z), "Row " + v, MEGA_ROW_NAME[v], "dy " + MEGA_ROW_DY[v]);
+
+            BlockPos reference = planSeat(plan, origin, COLUMN_SPACING, z, v);
+            plan.putAnchored(reference, Blocks.STRIPPED_JUNGLE_LOG.getDefaultState());
+            plan.check(reference, MEGA_ROW_DY[v], row);
+
+            for (int i = 0; i < n; i++) {
+                Item item = kit.get(i);
+                String id = Registries.ITEM.getId(item).getPath();
+                BlockPos subject = planSeat(plan, origin, (i + FIRST_KIT_COLUMN) * COLUMN_SPACING, z, v);
+                BlockState state = kitSubjectState(item);
+                if (state == null) {
+                    plan.refuseUpfront(id, row);
+                    continue;
+                }
+                planSubject(plan, subject, state, id, row);
+            }
+        }
+        return plan;
+    }
+
+    /**
+     * The donor's simpler per-row rig: {@code count} BARE {@code -0.5} seats (row A) and
+     * {@code count} BARE {@code -1.0} seats (row B), each row labelled by a sign and fronted by one
+     * self-verified reference marker. Nothing is placed on the seats — this is the board Maintainer
+     * hand-places onto, which is exactly what {@code mega} is not.
+     */
+    public static RigPlan planRows(BlockPos origin, int count) {
+        RigPlan plan = new RigPlan();
+        plan.caseNames.add("rows");
+        int n = Math.max(1, Math.min(count, MAX_RIG_COLUMNS));
+
+        int[] variants = {1, 2};
+        int z = 0;
+        for (int r = 0; r < variants.length; r++) {
+            int v = variants[r];
+            String label = "row " + (char) ('A' + r);
+            String row = label + " " + MEGA_ROW_NAME[v];
+            plan.rowOrder.add(row);
+
+            plan.put(origin.add(0, 0, z), stone());
+            plan.sign(origin.add(0, 1, z), "Row " + (char) ('A' + r),
+                    MEGA_ROW_NAME[v], "dy " + MEGA_ROW_DY[v]);
+
+            BlockPos reference = planSeat(plan, origin, COLUMN_SPACING, z, v);
+            plan.putAnchored(reference, Blocks.STRIPPED_JUNGLE_LOG.getDefaultState());
+            plan.check(reference, MEGA_ROW_DY[v], row);
+
+            for (int i = 0; i < n; i++) {
+                planSeat(plan, origin, (i + FIRST_KIT_COLUMN) * COLUMN_SPACING, z, v);
+            }
+            // Variant 2 owns two cells of depth; everything else owns one.
+            z += v == 2 ? ROW_SPACING + 1 : ROW_SPACING;
+        }
+        return plan;
+    }
+
+    /**
+     * Post-commit self-verification (donor {@code addIfMismatch} + {@code warn}): what the rig
+     * actually MEASURES at each reference marker vs what the row's sign claims. This is what turns a
+     * built scene into evidence instead of scenery — a mismatch is a real regression, never a reason
+     * to relax the expectation.
+     */
+    public static List<String> verify(ServerWorld world, RigPlan plan) {
+        List<String> mismatches = new ArrayList<>();
+        for (DyCheck check : plan.checks) {
+            BlockState state = world.getBlockState(check.pos());
+            double got = SlabSupport.getYOffset(world, check.pos(), state);
+            if (Math.abs(got - check.expected()) > EPS) {
+                mismatches.add(check.label() + " @" + check.pos().toShortString()
+                        + ": sign says dy " + check.expected() + " but it measures " + got);
+            }
+        }
+        return mismatches;
+    }
+
+    // -------------------------------------------------------------------------
     // Command registration — mirrors SlabbedDevCommands / SlabbedLab (op level GAMEMASTERS,
     // dev-environment-gated by Slabbed#initDevFeatures).
     // -------------------------------------------------------------------------
@@ -491,7 +934,30 @@ public final class SlabRigCommand {
                                         .suggests((ctx, builder) ->
                                                 CommandSource.suggestMatching(CATALOG.keySet(), builder))
                                         .executes(SlabRigCommand::buildOne)))
+                        .then(countedRig("mega", DEFAULT_MEGA_COLUMNS,
+                                (ctx, n, force) -> commit(ctx, planMega(rigOrigin(ctx.getSource()), n),
+                                        "mega", force)))
+                        .then(countedRig("rows", DEFAULT_ROWS,
+                                (ctx, n, force) -> commit(ctx, planRows(rigOrigin(ctx.getSource()), n),
+                                        "rows", force)))
         );
+    }
+
+    /** {@code (ctx, n, force)} — the shape both Stage 2 rigs are driven by. */
+    private interface CountedRig {
+        int run(CommandContext<ServerCommandSource> ctx, int count, boolean force);
+    }
+
+    /** Builds the donor's {@code <name> [n] [force]} sub-tree once, for both {@code mega} and {@code rows}. */
+    private static com.mojang.brigadier.builder.LiteralArgumentBuilder<ServerCommandSource> countedRig(
+            String name, int defaultCount, CountedRig rig) {
+        return literal(name)
+                .executes(ctx -> rig.run(ctx, defaultCount, false))
+                .then(literal("force").executes(ctx -> rig.run(ctx, defaultCount, true)))
+                .then(argument("n", IntegerArgumentType.integer(1, MAX_RIG_COLUMNS))
+                        .executes(ctx -> rig.run(ctx, IntegerArgumentType.getInteger(ctx, "n"), false))
+                        .then(literal("force").executes(ctx ->
+                                rig.run(ctx, IntegerArgumentType.getInteger(ctx, "n"), true))));
     }
 
     /** Rig origin: 1 below the operator's feet, 3 blocks out in +Z — the SlabbedLab idiom. */
@@ -506,6 +972,14 @@ public final class SlabRigCommand {
         for (RigCase rigCase : CATALOG.values()) {
             msg.append("  ").append(rigCase.name()).append(" — ").append(rigCase.summary()).append('\n');
         }
+        msg.append("  /slabrig mega [n] [force] — the everything-rig: n kit columns x ")
+                .append(MEGA_ROW_COUNT).append(" support variants (")
+                .append(String.join(" / ", MEGA_ROW_NAME)).append("), default n=")
+                .append(Math.min(DEFAULT_MEGA_COLUMNS, SlabTestKit.placeableItems().size()))
+                .append("; self-verifies each row against dy ")
+                .append(java.util.Arrays.toString(MEGA_ROW_DY)).append('\n');
+        msg.append("  /slabrig rows [n] [force] — n BARE -0.5 seats + n BARE -1.0 seats to hand-place "
+                + "onto, default n=").append(DEFAULT_ROWS).append('\n');
         String finalMsg = msg.toString().stripTrailing();
         ctx.getSource().sendFeedback(() -> Text.literal(finalMsg), false);
         return 1;
@@ -527,26 +1001,70 @@ public final class SlabRigCommand {
 
     /** Shared commit path: refuse before any world mutation if the footprint is not clear. */
     private static int commit(CommandContext<ServerCommandSource> ctx, RigPlan plan, String label) {
+        return commit(ctx, plan, label, false);
+    }
+
+    /**
+     * Shared commit path. Refuses before any world mutation if the footprint is not clear, unless
+     * {@code force} — the donor's escape hatch, which overwrites whatever is there. After the write
+     * it reports the per-row placed/refused tally and the refused kit ids, then SELF-VERIFIES every
+     * reference marker against its row's sign and warns in red on any mismatch.
+     */
+    private static int commit(CommandContext<ServerCommandSource> ctx, RigPlan plan, String label,
+                              boolean force) {
         ServerCommandSource source = ctx.getSource();
         ServerWorld world = source.getWorld();
 
         BlockPos obstruction = plan.firstObstruction(world);
-        if (obstruction != null) {
+        if (obstruction != null && !force) {
             source.sendError(Text.literal("[slabrig] " + label + " refused before any world change: "
                     + "footprint occupied at " + obstruction.toShortString()
-                    + ". Move, or /slabrig clear first."));
+                    + ". Move, /slabrig clear first, or /slabrig " + label + " force."));
             return 0;
         }
+        final BlockPos forced = obstruction;
 
-        plan.commit(world);
+        CommitReport report = plan.commit(world);
         LAST_RIG.put(rigKey(source), plan);
 
-        int cells = plan.size();
         List<String> names = plan.caseNames();
-        source.sendFeedback(() -> Text.literal("[slabrig] " + label + " built (dev-only): "
-                + cells + " cells, " + names.size() + " case(s) " + names
-                + ". /slabrig clear removes exactly these."), false);
+        StringBuilder msg = new StringBuilder("[slabrig] ").append(label)
+                .append(" built (dev-only): ").append(report.cells()).append(" cells, ")
+                .append(names.size()).append(" case(s) ").append(names)
+                .append(". /slabrig clear removes exactly these.");
+        if (forced != null) {
+            msg.append("\n  FORCED over an occupied footprint (first at ").append(forced.toShortString())
+                    .append(") — anything it overwrote is now rig-owned and /slabrig clear will take it.");
+        }
+        for (RowTally row : report.rows()) {
+            if (row.placed() == 0 && row.refused() == 0) {
+                continue;
+            }
+            msg.append("\n  ").append(row.row()).append(": placed ").append(row.placed())
+                    .append(", refused ").append(row.refused());
+        }
+        if (!report.refusedIds().isEmpty()) {
+            msg.append("\n  refused ids: ").append(summariseIds(report.refusedIds(), MAX_REFUSED_LISTED));
+        }
+        String summary = msg.toString();
+        source.sendFeedback(() -> Text.literal(summary), false);
+
+        List<String> mismatches = verify(world, plan);
+        if (!mismatches.isEmpty()) {
+            source.sendError(Text.literal("[slabrig] " + label
+                    + " is built but does NOT measure what its signs say: "
+                    + String.join("; ", mismatches)));
+            return 0;
+        }
         return 1;
+    }
+
+    /** A comma list of up to {@code cap} ids, with a {@code +K more} suffix beyond that. */
+    private static String summariseIds(List<String> ids, int cap) {
+        if (ids.size() <= cap) {
+            return String.join(", ", ids);
+        }
+        return String.join(", ", ids.subList(0, cap)) + ", +" + (ids.size() - cap) + " more";
     }
 
     private static int clearRig(CommandContext<ServerCommandSource> ctx) {
