@@ -32,11 +32,13 @@ Full details for everything below are in "Known limitations and alpha testing re
 - **A wave of ported stability fixes.** The stability campaign from the 1.21.11 line is now in this build: torches, fences, walls, and bottom slabs sit correctly on lowered top-slab carriers; vertical slabs keep their anchoring and never pop; and Terrain Slabs blocks are never mistaken for Slabbed carriers, with the overhang traversal logic guarded accordingly. Confirmed together in a live session.
 - **Terrain Slabs compatibility.** Deferring to Terrain Slabs' own "on-top" blocks now covers everything Terrain Slabs treats that way, not just vegetation. Verified by automated tests.
 - **Placement-state hardening.** A broad defensive pass tightened how placement-time state is captured and preserved — height read-back, waterlogging symmetry, freeze handling for connecting blocks, marker hand-off, and more. To be clear about credit: the day-to-day stability you will feel comes chiefly from the locked-in placement height described under New; this pass hardens the same placement-time data that feature relies on.
-- **Leaner world sync.** The data that carries placed-height information in chunk sync is now compacted, so worlds with many placed slabs no longer bloat network traffic. Verified by automated tests.
+- **Leaner world sync.** The data that carries placed-height information in chunk sync is now compacted. Verified by automated tests. (This is the same change that fixes the chunk-loading failure below.)
 - **Cleaner release jar.** Development-only diagnostics are now separated out of the normal release jar.
 
 ### Fixes
 
+- **Worlds no longer fail to load after dense slab building** *(reported as issue #38)*. A chunk holding enough placed slabs could exceed a size limit and refuse to load, taking that part of the world with it. The placed-height data is now stored compactly so it stays well under the limit. Verified by automated tests.
+- **Mobs no longer spawn on bottom slabs** *(reported as issue #39)*. Slab mob-proofing behaves like vanilla again. Verified by automated tests; a long overnight spawn check has not been run.
 - **A significant rendering slowdown is fixed.** Reading a block's locked-in height on the render path no longer takes a shared lock or allocates memory for every block in view, and rendering blocks near a lowered surface no longer routes through reflection. Confirmed smooth in live play across ordinary building, chunk loading, and a dense build; no formal benchmark comparison was run, so please still report performance issues per the request below.
 - **Standing signs of every wood now sit flush on a lowered slab.** Previously only oak did; every other wood's standing sign could float above the surface instead of resting on it.
 - **Overlap protection.** Placements that would interpenetrate a lowered block already occupying that space are now refused — including the case of placing through an open trapdoor — while legitimate edge-contact placements still work. Confirmed in live play.
@@ -62,7 +64,6 @@ The following changes shipped in this build pass their automated tests but have 
 - Potted-plant changes (for example, planting into an empty pot) keeping the pot's placed height.
 - Lever, powered redstone wire, and use-created fire particles seating at the lowered height.
 - Chains placed against a flush ceiling landing at the corrected height, and the deepest chain and dripstone continuation cases (runs continuing well past one block down).
-- Bottom-slab spawn-proofing: lowered bottom slabs should once again prevent mob spawning.
 
 Known open issues:
 
