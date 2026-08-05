@@ -32,7 +32,8 @@ sourceSets {
                     "com/slabbed/test/OffsetRaycastTargetingTest.java",
                     "com/slabbed/test/TerrainSlabsTestShim.java",
                     "com/slabbed/test/RedstoneWireConnectionTest.java",
-                    "com/slabbed/test/BottomSlabSpawnProofTest.java"
+                    "com/slabbed/test/BottomSlabSpawnProofTest.java",
+                    "com/slabbed/anchor/FrozenFlatAttachmentCapacityTest.java"
             ])
         }
     }

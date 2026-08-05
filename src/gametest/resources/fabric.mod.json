@@ -21,7 +21,8 @@
       "com.slabbed.test.ChainSurvivalReproTest",
       "com.slabbed.test.OffsetRaycastTargetingTest",
       "com.slabbed.test.RedstoneWireConnectionTest",
-      "com.slabbed.test.BottomSlabSpawnProofTest"
+      "com.slabbed.test.BottomSlabSpawnProofTest",
+      "com.slabbed.anchor.FrozenFlatAttachmentCapacityTest"
     ],
     "fabric-client-gametest": [
       "com.slabbed.test.SlabbedLabCompatibleLoweredSlabLanePredicateBoundaryClientGameTest",
