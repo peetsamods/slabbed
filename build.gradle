@@ -28,7 +28,8 @@ sourceSets {
                     "com/slabbed/test/ChainSurvivalReproTest.java",
                     "com/slabbed/test/SlabbedLabFixtureTest.java",
                     "com/slabbed/test/Mc1211GoblinRouteCanaryGameTest.java",
-                    "com/slabbed/test/Mc1211GoblinRouteClientEntrypoint.java"
+                    "com/slabbed/test/Mc1211GoblinRouteClientEntrypoint.java",
+                    "com/slabbed/test/OffsetRaycastTargetingTest.java"
             ])
         }
     }
