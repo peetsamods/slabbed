@@ -8,6 +8,7 @@ import com.slabbed.anchor.C3TestPhaseTrace;
 import com.slabbed.anchor.SlabAnchorAttachment;
 import com.slabbed.compat.CompatHooks;
 import com.slabbed.placement.ConnectorPlacementSettle;
+import com.slabbed.placement.LandingResolver;
 import com.slabbed.util.SlabSupport;
 import com.slabbed.util.RuntimeDiagnostics;
 import net.minecraft.block.BedBlock;
@@ -82,11 +83,14 @@ public abstract class BlockItemPlacementIntentMixin {
     // stack-consume point, and publishes after place returns — so the store gets one authoritative
     // batch per placement and nothing else on this line ever writes it.
     //
-    // RESOLVER-ABSENT form: the 26.2 donor keys the height off an immutable root aim captured at
-    // useOnBlock. That resolver is Slice 2d on this line, so every frame here is effectively aimless
-    // and the height always comes from the explicit placement-time reading
+    // The height comes from the LANDING RESOLVER, keyed off an immutable ROOT AIM taken at depth 0 of
+    // useOnBlock — before any remap rewrites the context and before vanilla transforms the target —
+    // so the number frozen is the one the player aimed at. A frame with no aim (a direct place() call:
+    // dispensers, shulker routes, tests) keeps the explicit placement-time reading
     // (SlabSupport#getUnstoredYOffset) at the cell vanilla filled.
 
+    private static final ThreadLocal<Integer> C3_USE_ON_DEPTH = ThreadLocal.withInitial(() -> 0);
+    private static final ThreadLocal<LandingResolver.PlacementAim> C3_ROOT_AIM = new ThreadLocal<>();
     private static final ThreadLocal<Deque<PlacementFrame>> C3_PLACE_FRAMES =
             ThreadLocal.withInitial(ArrayDeque::new);
 
@@ -103,6 +107,7 @@ public abstract class BlockItemPlacementIntentMixin {
     }
 
     private static final class PlacementFrame {
+        final LandingResolver.PlacementAim rootAim;
         final LinkedHashMap<BlockPos, CellSnapshot> snapshots = new LinkedHashMap<>();
         ItemPlacementContext actualContext;
         BlockState placementState;
@@ -111,6 +116,10 @@ public abstract class BlockItemPlacementIntentMixin {
         boolean pendingComputed;
         boolean markerAuthorsCompleted;
         boolean published;
+
+        PlacementFrame(LandingResolver.PlacementAim rootAim) {
+            this.rootAim = rootAim;
+        }
     }
 
     private static PlacementFrame slabbed$c3Frame() {
@@ -118,12 +127,41 @@ public abstract class BlockItemPlacementIntentMixin {
         return frames.isEmpty() ? null : frames.peek();
     }
 
+    /**
+     * Freezes the ROOT AIM for one player use, at depth 0 only. Nested {@code useOnBlock} calls (an
+     * item re-entering the path with a rewritten context) keep the outermost aim, which is the one the
+     * player actually made. Cleared when the outermost call unwinds, so nothing leaks into the next
+     * use or onto another thread.
+     */
+    @WrapMethod(method = "useOnBlock(Lnet/minecraft/item/ItemUsageContext;)Lnet/minecraft/util/ActionResult;")
+    private ActionResult slabbed$c3RootAimScope(
+            ItemUsageContext context,
+            Operation<ActionResult> original
+    ) {
+        int depth = C3_USE_ON_DEPTH.get();
+        if (depth == 0) {
+            C3_ROOT_AIM.set(LandingResolver.captureAim(context));
+        }
+        C3_USE_ON_DEPTH.set(depth + 1);
+        try {
+            return original.call(context);
+        } finally {
+            int remaining = C3_USE_ON_DEPTH.get() - 1;
+            if (remaining <= 0) {
+                C3_USE_ON_DEPTH.remove();
+                C3_ROOT_AIM.remove();
+            } else {
+                C3_USE_ON_DEPTH.set(remaining);
+            }
+        }
+    }
+
     @WrapMethod(method = "place(Lnet/minecraft/item/ItemPlacementContext;)Lnet/minecraft/util/ActionResult;")
     private ActionResult slabbed$c3PlaceScope(
             ItemPlacementContext context,
             Operation<ActionResult> original
     ) {
-        PlacementFrame frame = new PlacementFrame();
+        PlacementFrame frame = new PlacementFrame(C3_ROOT_AIM.get());
         Deque<PlacementFrame> frames = C3_PLACE_FRAMES.get();
         frames.push(frame);
         try {
@@ -294,7 +332,22 @@ public abstract class BlockItemPlacementIntentMixin {
                     ? priorBacking.rawBits()
                     : Double.doubleToRawLongBits(0.0d);
         } else {
-            double dy = SlabSupport.getUnstoredYOffset(world, primary, finalState);
+            // The landing decision: where the aim says this block goes. A frame with no root aim, or a
+            // family the resolver does not own, keeps the explicit placement-time lane reading.
+            LandingResolver.Family family = LandingResolver.classify(finalState);
+            LandingResolver.PlacementResolution resolution = frame.rootAim == null
+                    || family == LandingResolver.Family.UNSUPPORTED
+                    ? null
+                    : LandingResolver.resolve(frame.rootAim, primary, finalState, family);
+            if (family == LandingResolver.Family.PAIRED_FLOOR_SEAT && resolution == null) {
+                // A reciprocal pair whose aim the resolver declined is not a pair to guess at: publish
+                // NOTHING rather than seat two cells from a lane reading that never saw the aim.
+                frame.pending = new PendingCapture(Map.of());
+                return;
+            }
+            double dy = resolution == null
+                    ? SlabSupport.getUnstoredYOffset(world, primary, finalState)
+                    : resolution.landingDy();
             if (!Double.isFinite(dy)) {
                 frame.pending = new PendingCapture(Map.of());
                 return;

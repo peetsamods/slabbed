@@ -76,6 +76,15 @@ public final class PlacementCaptureBoundaryGameTest {
                         + " actual=" + world.getBlockState(actual)
                         + " actualDy=" + stored(world, actual)
                         + " staleDy=" + stored(world, clicked));
+        // Column-premise guard (LandingResolver): the UP-face click transformed SIDEWAYS, so the
+        // placed block rests on nothing of the owner's top plane. Applying the plane formula anyway
+        // stores +1.0 — a full cube rendered a block above its own cell. The owner here is flush, so
+        // the honest answer is 0.0. Value-pinned, not merely finite: the donor asserts only
+        // finiteness, which is how that arithmetic went unexamined there.
+        h.assertTrue(Double.doubleToRawLongBits(stored(world, actual))
+                        == Double.doubleToRawLongBits(0.0d),
+                "transformed Scaffolding must land in the owner's frame (0.0), not on a plane it "
+                        + "never touched; got " + stored(world, actual));
         pass(h, "transformed_scaffolding_target");
     }
 

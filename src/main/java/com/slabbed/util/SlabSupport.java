@@ -1174,16 +1174,6 @@ public final class SlabSupport {
             return 0.0;
         }
 
-        // Powder snow is a FULL CUBE, so unlike snow layers it matches the "full block on a slab"
-        // lowering branch and Slabbed was dropping it -0.5 onto a slab while neighbouring powder
-        // snow on full ground stayed flush — leaving a half-block step / DODO across snowy terrain.
-        // PowderSnowBlock is NOT a SnowBlock, so isThinTopLayer never excluded it. It is natural
-        // terrain fill (Terrain Slabs likewise does not lower it), so never offset it: keep all
-        // powder snow flush and consistent.
-        if (state.getBlock() instanceof PowderSnowBlock) {
-            return 0.0;
-        }
-
         // FROZEN-DY (LAW.md restoration, flag-gated -Dslabbed.frozenDy): answer with the finite height
         // this block was placed at, stored verbatim — the value the player aimed at, never re-derived
         // from the current neighbours. A missing / non-finite fact resolves flat and STAYS flat; the
@@ -1193,6 +1183,23 @@ public final class SlabSupport {
         if (SlabAnchorAttachment.FROZEN_DY_ENABLED) {
             double frozen = SlabAnchorAttachment.storedPlacementDy(world, pos);
             return Double.isFinite(frozen) ? frozen : 0.0d;
+        }
+
+        // Powder snow is a FULL CUBE, so unlike snow layers it matches the "full block on a slab"
+        // lowering branch and Slabbed was dropping it -0.5 onto a slab while neighbouring powder
+        // snow on full ground stayed flush — leaving a half-block step / DODO across snowy terrain.
+        // PowderSnowBlock is NOT a SnowBlock, so isThinTopLayer never excluded it, hence this hard
+        // zero.
+        //
+        // ORDERING (LAW.md): it sits BELOW the frozen branch so it governs the LIVE lanes ONLY. A
+        // block the player actually aimed and placed has a placement fact, and that aimed height must
+        // be readable — a hard zero above the store would make an aimed powder-snow placement
+        // unreadable, which is the law violation the store exists to end. Worldgen / natural powder
+        // snow is never placed through the capture seam, so it carries no fact, falls through here,
+        // and stays flush: the DODO / world-hole protection is intact. The same hard zero is
+        // repeated verbatim in getUnstoredYOffset, which is the placement-time lane reading.
+        if (state.getBlock() instanceof PowderSnowBlock) {
+            return 0.0;
         }
 
         // Recursion guard: isSolidBlock → getCollisionShape → getOutlineShape (mixin) → getYOffset
@@ -2615,7 +2622,7 @@ public final class SlabSupport {
      * its navigation full-cube checks. No real {@code world}/{@code pos} is consulted, so the result
      * is deterministic across client / render-region views and cannot trigger the world-hole DODO.
      */
-    private static boolean isOpaqueFullCubeViewIndependent(BlockState state) {
+    public static boolean isOpaqueFullCubeViewIndependent(BlockState state) {
         return state.isOpaque()
                 && state.isFullCube(net.minecraft.world.EmptyBlockView.INSTANCE, BlockPos.ORIGIN);
     }

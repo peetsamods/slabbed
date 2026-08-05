@@ -23,6 +23,7 @@
       "com.slabbed.test.RedstoneWireConnectionTest",
       "com.slabbed.test.BottomSlabSpawnProofTest",
       "com.slabbed.test.NeighborUpdateInvarianceTest",
+      "com.slabbed.test.LandingRuleLawTest",
       "com.slabbed.test.PlacementCaptureBoundaryGameTest",
       "com.slabbed.anchor.FrozenFlatAttachmentCapacityTest"
     ],

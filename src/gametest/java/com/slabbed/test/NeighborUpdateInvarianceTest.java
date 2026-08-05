@@ -78,6 +78,19 @@ public final class NeighborUpdateInvarianceTest {
         return SlabSupport.getYOffset(w, p, w.getBlockState(p));
     }
 
+    /**
+     * The height a real {@code useOnBlock} placement actually landed at, read from the placement fact
+     * itself rather than from {@link #dy}.
+     *
+     * <p>Rig builders run inside {@link FrozenDySceneFixture#authored}, which forces the store OFF so
+     * that {@code setBlockState} terrain and its marker authors behave; {@link #dy} therefore answers
+     * from the live lanes in there, which is not what a store-backed row is about. A premise that wants
+     * to name where the player's aim put a block must read the fact.
+     */
+    private static double landedDy(ServerWorld w, BlockPos p) {
+        return SlabAnchorAttachment.storedPlacementDy(w, p);
+    }
+
     /** Exact height identity (byte-identical intent), with -0.0 normalized to 0.0. */
     private static boolean sameHeight(double a, double b) {
         return Double.doubleToRawLongBits(a == 0.0 ? 0.0 : a)
@@ -177,9 +190,9 @@ public final class NeighborUpdateInvarianceTest {
             place(h, item, cursor, Direction.UP, 0.0d);
             cursor = cursor.up();
         }
-        double topDy = dy(w, cursor);
+        double topDy = landedDy(w, cursor);
         h.assertTrue(Math.abs(topDy + 1.0d) <= 1.0e-6d,
-                "premise: C5 owner should read -1.0, got " + topDy + " at " + cursor);
+                "premise: aimed owner should have LANDED at -1.0, got " + topDy + " at " + cursor);
         return cursor;
     }
 
@@ -198,9 +211,9 @@ public final class NeighborUpdateInvarianceTest {
             place(h, item, cursor, Direction.UP, 0.0);
             cursor = cursor.up();
         }
-        double topDy = dy(w, cursor);
+        double topDy = landedDy(w, cursor);
         h.assertTrue(Math.abs(topDy + 1.5) <= 1.0e-6,
-                "premise: deep tower top stone should read the uncapped -1.5, got " + topDy + " at " + cursor);
+                "premise: deep tower top stone should have LANDED at -1.5, got " + topDy + " at " + cursor);
         return cursor; // the -1.5 stone at y=6; the subject slab places ON it (lands at y=7)
     }
 
@@ -271,16 +284,17 @@ public final class NeighborUpdateInvarianceTest {
                 BlockPos owner = minusOneLoweredStoneRig(h, w);
                 place(h, Items.MOSS_CARPET, owner, Direction.UP, 0.0d);
                 BlockPos subject = owner.up();
-                h.assertTrue(Math.abs(dy(w, subject) + 1.0d) <= 1.0e-6d,
-                        "premise: aimed C5 carpet should read -1.0, got " + dy(w, subject));
+                h.assertTrue(Math.abs(landedDy(w, subject) + 1.0d) <= 1.0e-6d,
+                        "premise: aimed carpet should have LANDED at -1.0, got " + landedDy(w, subject));
                 return subject;
             }),
             new NamedSubject("aimed_powder_snow_on_minus_one_owner", (h, w) -> {
                 BlockPos owner = minusOneLoweredStoneRig(h, w);
                 place(h, Items.POWDER_SNOW_BUCKET, owner, Direction.UP, 0.0d);
                 BlockPos subject = owner.up();
-                h.assertTrue(Math.abs(dy(w, subject) + 1.0d) <= 1.0e-6d,
-                        "premise: aimed C5 powder snow should read -1.0, got " + dy(w, subject));
+                h.assertTrue(Math.abs(landedDy(w, subject) + 1.0d) <= 1.0e-6d,
+                        "premise: aimed powder snow should have LANDED at -1.0, got "
+                                + landedDy(w, subject));
                 return subject;
             })
     );
@@ -413,10 +427,15 @@ public final class NeighborUpdateInvarianceTest {
         runSubject(h, SUBJECTS.get(7));
     }
 
-    /** Donor runs this C4 law row under the frozen store; this line has no store yet (census). */
-    @GameTest(templateName = "fabric-gametest-api-v1:empty", required = false)
+    /**
+     * REQUIRED LAW GATE as of Slice 2d: a slab placed on the visible top of a stone resting at
+     * {@code -1.5} keeps that landing byte-identical across every neighbour mutation. The row asserts
+     * the donor's actual claim — the aimed landing is stored and survives — which needs the store on;
+     * under the suite's frozen-OFF floor it was only ever exercising the live lanes.
+     */
+    @GameTest(templateName = "fabric-gametest-api-v1:empty")
     public void slabOnDeepLoweredFullBlockSurvivesNeighborEdits(TestContext h) {
-        runSubject(h, SUBJECTS.get(8));
+        runSubjectWithFrozenStore(h, SUBJECTS.get(8));
     }
 
     /**
@@ -536,14 +555,24 @@ public final class NeighborUpdateInvarianceTest {
         return subject;
     }
 
-    @GameTest(templateName = "fabric-gametest-api-v1:empty", required = false)
+    /**
+     * REQUIRED LAW GATE as of Slice 2d: a carpet the player AIMED at the visible top of a -1.0 owner
+     * is stored there and stays there. The natural/worldgen route is untouched — it never enters the
+     * capture seam, so it carries no fact and keeps reading flush.
+     */
+    @GameTest(templateName = "fabric-gametest-api-v1:empty")
     public void aimedCarpetOnMinusOneOwnerSurvivesNeighborEdits(TestContext h) {
-        runSubject(h, SUBJECTS.get(9));
+        runSubjectWithFrozenStore(h, SUBJECTS.get(9));
     }
 
-    @GameTest(templateName = "fabric-gametest-api-v1:empty", required = false)
+    /**
+     * REQUIRED LAW GATE as of Slice 2d: the same claim for a bucket-placed powder snow. Its hard zero
+     * in the live lanes now sits BELOW the store read, so an aimed placement is readable while natural
+     * powder snow (no fact) still resolves flush and keeps the world-hole guard intact.
+     */
+    @GameTest(templateName = "fabric-gametest-api-v1:empty")
     public void aimedPowderSnowOnMinusOneOwnerSurvivesNeighborEdits(TestContext h) {
-        runSubject(h, SUBJECTS.get(10));
+        runSubjectWithFrozenStore(h, SUBJECTS.get(10));
     }
 
     /**
