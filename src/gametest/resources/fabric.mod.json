@@ -25,6 +25,7 @@
       "com.slabbed.test.NeighborUpdateInvarianceTest",
       "com.slabbed.test.LandingRuleLawTest",
       "com.slabbed.test.PlacementCaptureBoundaryGameTest",
+      "com.slabbed.test.PlacementDyOverlayTest",
       "com.slabbed.anchor.FrozenFlatAttachmentCapacityTest"
     ],
     "fabric-client-gametest": [

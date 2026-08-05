@@ -5,6 +5,7 @@ import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import com.slabbed.Slabbed;
 import com.slabbed.anchor.C3TestPhaseTrace;
+import com.slabbed.anchor.PlacementDyOverlay;
 import com.slabbed.anchor.SlabAnchorAttachment;
 import com.slabbed.compat.CompatHooks;
 import com.slabbed.placement.ConnectorPlacementSettle;
@@ -412,7 +413,7 @@ public abstract class BlockItemPlacementIntentMixin {
         }
         World world = frame.actualContext.getWorld();
         if (world.isClient()) {
-            // No client prediction on this line: the client receives the fact with the chunk sync.
+            slabbed$c3InstallPredictionOverlay(frame, world);
             return;
         }
         SlabAnchorAttachment.writePlacementDyBatch(world, frame.pending.rawBitsByPos());
@@ -423,6 +424,37 @@ public abstract class BlockItemPlacementIntentMixin {
         // horizontal neighbours so both ends decide from the published height. Heights are untouched;
         // see ConnectorPlacementSettle for the LAW.md reasoning.
         ConnectorPlacementSettle.settlePublishedPlacements(world, frame.pending.rawBitsByPos().keySet());
+    }
+
+    /**
+     * CLIENT PREDICTION OVERLAY install (Slice 2i). This mixin is in the COMMON config, so the client
+     * has just run the identical capture and the identical {@code LandingResolver} the server runs,
+     * over the identical aim — the value below is the same function of the same input, not an
+     * independent guess. Without it the client renders the fresh block flat until the server's
+     * attachment sync lands, and the visible jump is exactly the placement height.
+     *
+     * <p>THE CLIENT NEVER WRITES THE CHUNK'S PLACEMENT_DY ATTACHMENT. Fabric pushes an attachment to
+     * clients only when the SERVER's value changes, so a client-written value would be corrected only
+     * by coincidence and, whenever the server refuses the placement, by nothing at all — a permanent
+     * orphan fact in that cell. The overlay is separate storage that retires on its own, so refusal
+     * self-heals: overlay retires, the read falls through to the backing store, no fact, stable-flat
+     * {@code 0.0} — exactly what the server believes.
+     *
+     * <p>Scoped to vanilla's own predicted action: no sequence in scope means this placement is not a
+     * predicted player use (a dispenser route, a test, a direct {@code place} call), and it gets no
+     * overlay at all. No aim means no landing was resolved, so there is nothing to predict either.
+     */
+    private static void slabbed$c3InstallPredictionOverlay(PlacementFrame frame, World world) {
+        int sequence = PlacementDyOverlay.currentSequence();
+        if (sequence < 0 || frame.rootAim == null) {
+            return;
+        }
+        PlacementDyOverlay.installPredictedPlacement(
+                world,
+                frame.rootAim.ownerPos(),
+                frame.rootAim.clickedFace(),
+                sequence,
+                frame.pending.rawBitsByPos());
     }
 
     /**

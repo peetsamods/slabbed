@@ -6,6 +6,8 @@
     "BlockEntityOffsetMixin",
     "BlockModelDyTranslateMixin",
     "CarpetDyShapeMixin",
+    "ClientPlayerInteractionManagerPredictionSequenceMixin",
+    "ClientWorldPlacementDyAckMixin",
     "GameRendererPickOffsetRaycastMixin",
     "ItemFrameRenderOffsetMixin",
     "MinecartRenderOffsetMixin"

@@ -91,6 +91,18 @@ public final class SlabAnchorAttachment {
 
     public static ClientPlacementDyFactLookup clientPlacementDyLookup = null;
 
+    /**
+     * Overlay-aware client read (Slice 2i). Answers the CLIENT PREDICTION OVERLAY's value for a cell
+     * whose placement the client just predicted and whose authoritative fact has not been synced yet,
+     * and {@code null} for every other cell so the read falls through to the backing store.
+     * Installed by {@code PlacementDyPredictionClient}; null on a dedicated server.
+     *
+     * <p>Deliberately a SECOND field rather than a change to {@link #clientPlacementDyLookup}:
+     * {@link #rawPlacementDyFact} must stay non-overlaying so debug surfaces, and the overlay's own
+     * retirement condition, can still see the raw authoritative truth.
+     */
+    public static ClientPlacementDyFactLookup clientEffectivePlacementDyLookup = null;
+
     private static final Identifier ANCHOR_ID = Identifier.of(Slabbed.MOD_ID, "slab_anchors");
     private static final Identifier FROZEN_FLAT_ID = Identifier.of(Slabbed.MOD_ID, "frozen_flat");
     private static final Identifier LOWERED_SLAB_CARRIER_ID =
@@ -379,8 +391,28 @@ public final class SlabAnchorAttachment {
         return writes;
     }
 
-    /** The frozen placement height at {@code pos}, or {@link Double#NaN} if none was stored. */
+    /**
+     * The frozen placement height at {@code pos}, or {@link Double#NaN} if none is known.
+     *
+     * <p>On a CLIENT view the prediction overlay is authoritative ahead of the backing store: a cell
+     * whose placement this client just predicted has no synced fact yet, and answering absent for it
+     * is exactly the "renders flat, then snaps down" transient (Slice 2i). Every other cell, and
+     * every server view, reads the backing store unchanged.
+     */
     public static double storedPlacementDy(BlockView world, BlockPos pos) {
+        if (pos == null) {
+            return Double.NaN;
+        }
+        boolean clientView = !(world instanceof World w) || w.isClient();
+        if (clientView) {
+            ClientPlacementDyFactLookup overlay = clientEffectivePlacementDyLookup;
+            if (overlay != null) {
+                PlacementDyFact effective = overlay.lookup(pos);
+                if (effective != null) {
+                    return effective.valueOrNaN();
+                }
+            }
+        }
         return rawPlacementDyFact(world, pos).valueOrNaN();
     }
 

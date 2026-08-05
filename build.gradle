@@ -37,6 +37,7 @@ sourceSets {
                     "com/slabbed/test/LandingRuleLawTest.java",
                     "com/slabbed/test/FrozenDySceneFixture.java",
                     "com/slabbed/test/PlacementCaptureBoundaryGameTest.java",
+                    "com/slabbed/test/PlacementDyOverlayTest.java",
                     "com/slabbed/anchor/FrozenFlatAttachmentCapacityTest.java"
             ])
         }

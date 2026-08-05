@@ -83,14 +83,26 @@ public final class TargetDyOverlay {
         // FROZEN-DY divergence columns: the store's answer vs the live lanes' answer for the
         // targeted cell. Divergence (or a missing fact where LIVE is lowered) is the one-glance
         // signature of every frozen-era symptom (flat render, placement pop, ghost outline).
+        // stored = the EFFECTIVE height (what is on screen): the prediction overlay wins here during
+        // the placement window. raw = the committed server fact behind it. Showing only the effective
+        // value would hide the prediction window from the very diagnostic used to judge it, so when
+        // the two disagree this says PREDICTED outright.
         double stored = SlabAnchorAttachment.storedPlacementDy(client.world, pos);
+        SlabAnchorAttachment.PlacementDyFact backing =
+                SlabAnchorAttachment.rawPlacementDyFact(client.world, pos);
+        double raw = backing.valueOrNaN();
+        boolean predicted = Double.isFinite(stored)
+                && (!backing.present()
+                        || Double.doubleToRawLongBits(raw) != Double.doubleToRawLongBits(stored));
         double live = SlabSupport.getUnstoredYOffset(client.world, pos, state);
         boolean diverged = Double.isFinite(stored)
                 ? Math.abs(stored - live) > EPS
                 : (live < -EPS || live > EPS);
         String line5 = "  frozen=" + (SlabAnchorAttachment.FROZEN_DY_ENABLED ? "ON" : "off")
                 + " stored=" + (Double.isFinite(stored) ? format(stored) : "none")
+                + " raw=" + (backing.present() ? format(raw) : "none")
                 + " live=" + format(live)
+                + (predicted ? " PREDICTED" : "")
                 + (diverged ? " *** DIVERGED" : "");
 
         int color = dy == 0.0d ? 0xffd7d7d7 : (dy < 0.0d ? 0xffffd166 : 0xffff8866);

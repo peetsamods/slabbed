@@ -16,6 +16,7 @@ public final class SlabbedClient implements ClientModInitializer {
         RuntimeDiagnostics.logInspectSessionStart();
         SlabbedModelLoadingPlugin.init();
         SlabAnchorClientSync.init();
+        PlacementDyPredictionClient.init();
         RuntimeDiagnostics.initBsFbLiveTraceClient();
         initGapFillerOverlay();
         initTargetDyOverlay();
