@@ -87,19 +87,22 @@ public final class WaterlogReadSymmetryTest {
 
     /** Compound-visible STONE bottom slab (-1.0) beside a genuine compound stack (D3/F4 scene). */
     private static BlockPos buildMarkedLowerSlab(GameTestHelper helper, ServerLevel w) {
-        BlockPos base = helper.absolutePos(new BlockPos(3, 1, 2));
-        w.setBlock(base, Blocks.STONE.defaultBlockState(), 2);
-        bottomSlab(w, base.above(1));
-        w.setBlock(base.above(2), Blocks.STONE.defaultBlockState(), 2);
-        bottomSlab(w, base.above(3));
-        BlockPos fb = base.above(4);
-        w.setBlock(fb, Blocks.STONE.defaultBlockState(), 2);
-        SlabAnchorAttachment.addAnchor(w, fb, w.getBlockState(fb));
-        SlabAnchorAttachment.addCompoundFullBlockAnchor(w, fb, w.getBlockState(fb));
-        BlockPos support = fb.west();
-        bottomSlab(w, support);
-        SlabAnchorAttachment.addCompoundVisibleSideLowerSlab(w, support, w.getBlockState(support),
-                fb, w.getBlockState(fb));
+        BlockPos support = FrozenDySceneFixture.authored(helper, () -> {
+            BlockPos base = helper.absolutePos(new BlockPos(3, 1, 2));
+            w.setBlock(base, Blocks.STONE.defaultBlockState(), 2);
+            bottomSlab(w, base.above(1));
+            w.setBlock(base.above(2), Blocks.STONE.defaultBlockState(), 2);
+            bottomSlab(w, base.above(3));
+            BlockPos fb = base.above(4);
+            w.setBlock(fb, Blocks.STONE.defaultBlockState(), 2);
+            SlabAnchorAttachment.addAnchor(w, fb, w.getBlockState(fb));
+            SlabAnchorAttachment.addCompoundFullBlockAnchor(w, fb, w.getBlockState(fb));
+            BlockPos marked = fb.west();
+            bottomSlab(w, marked);
+            SlabAnchorAttachment.addCompoundVisibleSideLowerSlab(w, marked, w.getBlockState(marked),
+                    fb, w.getBlockState(fb));
+            return marked;
+        });
         double supportDy = dy(w, support);
         if (Math.abs(supportDy + 1.0) > EPS) {
             throw helper.assertionException("scene premise: marked slab must read -1.0, got " + supportDy);
@@ -164,19 +167,22 @@ public final class WaterlogReadSymmetryTest {
     @GameTest(structure = "fabric-gametest-api-v1:empty")
     public void waterloggingAMarkedUpperSlabMovesNothing(GameTestHelper helper) {
         ServerLevel w = helper.getLevel();
-        BlockPos base = helper.absolutePos(new BlockPos(3, 1, 2));
-        w.setBlock(base, Blocks.STONE.defaultBlockState(), 2);
-        bottomSlab(w, base.above(1));
-        w.setBlock(base.above(2), Blocks.STONE.defaultBlockState(), 2);
-        bottomSlab(w, base.above(3));
-        BlockPos fb = base.above(4);
-        w.setBlock(fb, Blocks.STONE.defaultBlockState(), 2);
-        SlabAnchorAttachment.addAnchor(w, fb, w.getBlockState(fb));
-        SlabAnchorAttachment.addCompoundFullBlockAnchor(w, fb, w.getBlockState(fb));
-        BlockPos slab = fb.west();
-        w.setBlock(slab, Blocks.STONE_SLAB.defaultBlockState().setValue(SlabBlock.TYPE, SlabType.TOP), 2);
-        SlabAnchorAttachment.addCompoundVisibleSideUpperSlab(w, slab, w.getBlockState(slab),
-                fb, w.getBlockState(fb));
+        BlockPos slab = FrozenDySceneFixture.authored(helper, () -> {
+            BlockPos base = helper.absolutePos(new BlockPos(3, 1, 2));
+            w.setBlock(base, Blocks.STONE.defaultBlockState(), 2);
+            bottomSlab(w, base.above(1));
+            w.setBlock(base.above(2), Blocks.STONE.defaultBlockState(), 2);
+            bottomSlab(w, base.above(3));
+            BlockPos fb = base.above(4);
+            w.setBlock(fb, Blocks.STONE.defaultBlockState(), 2);
+            SlabAnchorAttachment.addAnchor(w, fb, w.getBlockState(fb));
+            SlabAnchorAttachment.addCompoundFullBlockAnchor(w, fb, w.getBlockState(fb));
+            BlockPos marked = fb.west();
+            w.setBlock(marked, Blocks.STONE_SLAB.defaultBlockState().setValue(SlabBlock.TYPE, SlabType.TOP), 2);
+            SlabAnchorAttachment.addCompoundVisibleSideUpperSlab(w, marked, w.getBlockState(marked),
+                    fb, w.getBlockState(fb));
+            return marked;
+        });
         assertDy(helper, w, slab, -1.0, "premise: the marked side-UPPER top slab reads -1.0");
         setWaterlogged(w, slab, true);
         assertDy(helper, w, slab, -1.0,
@@ -207,6 +213,7 @@ public final class WaterlogReadSymmetryTest {
         w.setBlock(base.above(2), Blocks.STONE.defaultBlockState(), 2);
         BlockPos carrier = base.above(3);
         bottomSlab(w, carrier);
+        FrozenDySceneFixture.authorScene(helper);
         assertDy(helper, w, carrier, -0.5, "premise: the stacked slab reads -0.5");
         BlockPos torch = carrier.above();
         place(helper, new ItemStack(Items.TORCH), carrier, Direction.UP);
@@ -231,12 +238,14 @@ public final class WaterlogReadSymmetryTest {
     public void anchoredSlabWaterlogReferenceStaysLowered(GameTestHelper helper) {
         ServerLevel w = helper.getLevel();
         BlockPos base = helper.absolutePos(new BlockPos(2, 1, 2));
-        w.setBlock(base, Blocks.STONE.defaultBlockState(), 2);
-        bottomSlab(w, base.above(1));
-        w.setBlock(base.above(2), Blocks.STONE.defaultBlockState(), 2);
         BlockPos slab = base.above(3);
-        bottomSlab(w, slab);
-        SlabAnchorAttachment.freezeLoweredOnPlace(w, slab, w.getBlockState(slab));
+        FrozenDySceneFixture.authored(helper, () -> {
+            w.setBlock(base, Blocks.STONE.defaultBlockState(), 2);
+            bottomSlab(w, base.above(1));
+            w.setBlock(base.above(2), Blocks.STONE.defaultBlockState(), 2);
+            bottomSlab(w, slab);
+            SlabAnchorAttachment.freezeLoweredOnPlace(w, slab, w.getBlockState(slab));
+        });
         if (!SlabAnchorAttachment.isAnchored(w, slab)) {
             throw helper.assertionException("scene premise: freezeLoweredOnPlace must ANCHOR the lowered slab");
         }
@@ -261,19 +270,22 @@ public final class WaterlogReadSymmetryTest {
     @GameTest(structure = "fabric-gametest-api-v1:empty")
     public void waterloggingAnOwnerTopSlabMovesNothing(GameTestHelper helper) {
         ServerLevel w = helper.getLevel();
-        BlockPos base = helper.absolutePos(new BlockPos(3, 1, 2));
-        w.setBlock(base, Blocks.STONE.defaultBlockState(), 2);
-        bottomSlab(w, base.above(1));
-        w.setBlock(base.above(2), Blocks.STONE.defaultBlockState(), 2);
-        bottomSlab(w, base.above(3));
-        BlockPos fb = base.above(4);
-        w.setBlock(fb, Blocks.STONE.defaultBlockState(), 2);
-        SlabAnchorAttachment.addAnchor(w, fb, w.getBlockState(fb));
-        SlabAnchorAttachment.addCompoundFullBlockAnchor(w, fb, w.getBlockState(fb));
-        BlockPos slab = fb.above();
-        bottomSlab(w, slab);
-        SlabAnchorAttachment.addCompoundVisibleOwnerTopSlab(w, slab, w.getBlockState(slab),
-                fb, w.getBlockState(fb));
+        BlockPos slab = FrozenDySceneFixture.authored(helper, () -> {
+            BlockPos base = helper.absolutePos(new BlockPos(3, 1, 2));
+            w.setBlock(base, Blocks.STONE.defaultBlockState(), 2);
+            bottomSlab(w, base.above(1));
+            w.setBlock(base.above(2), Blocks.STONE.defaultBlockState(), 2);
+            bottomSlab(w, base.above(3));
+            BlockPos fb = base.above(4);
+            w.setBlock(fb, Blocks.STONE.defaultBlockState(), 2);
+            SlabAnchorAttachment.addAnchor(w, fb, w.getBlockState(fb));
+            SlabAnchorAttachment.addCompoundFullBlockAnchor(w, fb, w.getBlockState(fb));
+            BlockPos ownerTop = fb.above();
+            bottomSlab(w, ownerTop);
+            SlabAnchorAttachment.addCompoundVisibleOwnerTopSlab(w, ownerTop, w.getBlockState(ownerTop),
+                    fb, w.getBlockState(fb));
+            return ownerTop;
+        });
         double slabDy = dy(w, slab);
         if (Math.abs(slabDy + 1.0) > EPS) {
             throw helper.assertionException("scene premise: the owner-top slab must read -1.0, got " + slabDy);
@@ -298,6 +310,7 @@ public final class WaterlogReadSymmetryTest {
         bottomSlab(w, base.above(1));
         BlockPos support = base.above(2);
         w.setBlock(support, Blocks.STONE.defaultBlockState(), 2);
+        FrozenDySceneFixture.authorScene(helper);
         double supportDy = dy(w, support);
         if (Math.abs(supportDy + 0.5) > EPS) {
             throw helper.assertionException("scene premise: the support must read -0.5, got " + supportDy);
@@ -336,6 +349,7 @@ public final class WaterlogReadSymmetryTest {
         w.setBlock(base.above(2), Blocks.STONE.defaultBlockState(), 2);
         BlockPos topSupport = helper.absolutePos(new BlockPos(2, 3, 2));
         w.setBlock(topSupport, Blocks.STONE_SLAB.defaultBlockState().setValue(SlabBlock.TYPE, SlabType.TOP), 2);
+        FrozenDySceneFixture.authorScene(helper);
         double supportDy = dy(w, topSupport);
         if (Math.abs(supportDy + 0.5) > EPS) {
             throw helper.assertionException("scene premise: the side-lowered TOP support must read -0.5, got " + supportDy);
@@ -377,6 +391,7 @@ public final class WaterlogReadSymmetryTest {
         BlockPos owner = buildMarkedLowerSlab(helper, w);
         BlockPos member = owner.west();
         bottomSlab(w, member);   // over AIR: the live cantilever/side lane, no attachments
+        FrozenDySceneFixture.authorScene(helper);
         double memberDy = dy(w, member);
         if (memberDy > -EPS) {
             throw helper.assertionException("scene premise: the side member must inherit a lowered dy, got " + memberDy);
@@ -449,6 +464,7 @@ public final class WaterlogReadSymmetryTest {
         BlockPos slab = ground.above();
         w.setBlock(ground, Blocks.STONE.defaultBlockState(), 2);
         bottomSlab(w, slab);
+        FrozenDySceneFixture.authorScene(helper);
         setWaterlogged(w, slab, true);
         assertDy(helper, w, slab, 0.0,
                 "control: a plain waterlogged bottom slab on flush ground stays flush (no over-lowering)");
@@ -471,15 +487,18 @@ public final class WaterlogReadSymmetryTest {
 
     /** The genuine compound stack WITHOUT a side slab: ground, slab, stone, slab, marked FB (-1.0). */
     private static BlockPos buildCompoundSourceFb(GameTestHelper helper, ServerLevel w) {
-        BlockPos base = helper.absolutePos(new BlockPos(3, 1, 2));
-        w.setBlock(base, Blocks.STONE.defaultBlockState(), 2);
-        bottomSlab(w, base.above(1));
-        w.setBlock(base.above(2), Blocks.STONE.defaultBlockState(), 2);
-        bottomSlab(w, base.above(3));
-        BlockPos fb = base.above(4);
-        w.setBlock(fb, Blocks.STONE.defaultBlockState(), 2);
-        SlabAnchorAttachment.addAnchor(w, fb, w.getBlockState(fb));
-        SlabAnchorAttachment.addCompoundFullBlockAnchor(w, fb, w.getBlockState(fb));
+        BlockPos fb = FrozenDySceneFixture.authored(helper, () -> {
+            BlockPos base = helper.absolutePos(new BlockPos(3, 1, 2));
+            w.setBlock(base, Blocks.STONE.defaultBlockState(), 2);
+            bottomSlab(w, base.above(1));
+            w.setBlock(base.above(2), Blocks.STONE.defaultBlockState(), 2);
+            bottomSlab(w, base.above(3));
+            BlockPos source = base.above(4);
+            w.setBlock(source, Blocks.STONE.defaultBlockState(), 2);
+            SlabAnchorAttachment.addAnchor(w, source, w.getBlockState(source));
+            SlabAnchorAttachment.addCompoundFullBlockAnchor(w, source, w.getBlockState(source));
+            return source;
+        });
         double fbDy = dy(w, fb);
         if (Math.abs(fbDy + 1.0) > EPS) {
             throw helper.assertionException("scene premise: compound source FB must read -1.0, got " + fbDy);
@@ -600,6 +619,7 @@ public final class WaterlogReadSymmetryTest {
         bottomSlab(w, base.above(1));
         BlockPos support = base.above(2);
         w.setBlock(support, Blocks.STONE.defaultBlockState(), 2);
+        FrozenDySceneFixture.authorScene(helper);
         double supportDy = dy(w, support);
         if (Math.abs(supportDy + 0.5) > EPS) {
             throw helper.assertionException("scene premise: the support must read -0.5, got " + supportDy);
@@ -649,6 +669,7 @@ public final class WaterlogReadSymmetryTest {
         w.setBlock(base.above(2), Blocks.STONE.defaultBlockState(), 2);
         BlockPos topSupport = helper.absolutePos(new BlockPos(2, 3, 2));
         w.setBlock(topSupport, Blocks.STONE_SLAB.defaultBlockState().setValue(SlabBlock.TYPE, SlabType.TOP), 2);
+        FrozenDySceneFixture.authorScene(helper);
         double supportDy = dy(w, topSupport);
         if (Math.abs(supportDy + 0.5) > EPS) {
             throw helper.assertionException("scene premise: the side-lowered TOP support must read -0.5, got "
@@ -667,6 +688,7 @@ public final class WaterlogReadSymmetryTest {
                 "DRY BASELINE: the dry rider must survive the support break (L8 persistence)");
         w.destroyBlock(rider, false);
         w.setBlock(topSupport, Blocks.STONE_SLAB.defaultBlockState().setValue(SlabBlock.TYPE, SlabType.TOP), 2);
+        FrozenDySceneFixture.authorScene(helper);   // the rebuilt support is a new cell: its fact died with the break
         double rebuiltDy = dy(w, topSupport);
         if (Math.abs(rebuiltDy + 0.5) > EPS) {
             throw helper.assertionException("scene premise: the rebuilt TOP support must read -0.5, got "
@@ -794,19 +816,22 @@ public final class WaterlogReadSymmetryTest {
 
     /** Marked side-UPPER TOP slab rig (D2's CeilingFlushRulingTest rig): -1.0, authored marker. */
     private static BlockPos buildMarkedUpperTopSlabRig(GameTestHelper helper, ServerLevel w) {
-        BlockPos base = helper.absolutePos(new BlockPos(3, 1, 2));
-        w.setBlock(base, Blocks.STONE.defaultBlockState(), 2);
-        bottomSlab(w, base.above(1));
-        w.setBlock(base.above(2), Blocks.STONE.defaultBlockState(), 2);
-        bottomSlab(w, base.above(3));
-        BlockPos fb = base.above(4);
-        w.setBlock(fb, Blocks.STONE.defaultBlockState(), 2);
-        SlabAnchorAttachment.addAnchor(w, fb, w.getBlockState(fb));
-        SlabAnchorAttachment.addCompoundFullBlockAnchor(w, fb, w.getBlockState(fb));
-        BlockPos slab = fb.west();
-        w.setBlock(slab, Blocks.STONE_SLAB.defaultBlockState().setValue(SlabBlock.TYPE, SlabType.TOP), 2);
-        SlabAnchorAttachment.addCompoundVisibleSideUpperSlab(w, slab, w.getBlockState(slab),
-                fb, w.getBlockState(fb));
+        BlockPos slab = FrozenDySceneFixture.authored(helper, () -> {
+            BlockPos base = helper.absolutePos(new BlockPos(3, 1, 2));
+            w.setBlock(base, Blocks.STONE.defaultBlockState(), 2);
+            bottomSlab(w, base.above(1));
+            w.setBlock(base.above(2), Blocks.STONE.defaultBlockState(), 2);
+            bottomSlab(w, base.above(3));
+            BlockPos fb = base.above(4);
+            w.setBlock(fb, Blocks.STONE.defaultBlockState(), 2);
+            SlabAnchorAttachment.addAnchor(w, fb, w.getBlockState(fb));
+            SlabAnchorAttachment.addCompoundFullBlockAnchor(w, fb, w.getBlockState(fb));
+            BlockPos marked = fb.west();
+            w.setBlock(marked, Blocks.STONE_SLAB.defaultBlockState().setValue(SlabBlock.TYPE, SlabType.TOP), 2);
+            SlabAnchorAttachment.addCompoundVisibleSideUpperSlab(w, marked, w.getBlockState(marked),
+                    fb, w.getBlockState(fb));
+            return marked;
+        });
         double slabDy = dy(w, slab);
         if (Math.abs(slabDy + 1.0) > EPS) {
             throw helper.assertionException("scene premise: the marked side-UPPER top slab must read -1.0, got "
@@ -827,6 +852,7 @@ public final class WaterlogReadSymmetryTest {
         BlockPos chain = slab.below();
         w.setBlock(chain, Blocks.IRON_CHAIN.defaultBlockState()
                 .setValue(BlockStateProperties.AXIS, Direction.Axis.Y), 2);
+        FrozenDySceneFixture.authorScene(helper);
         assertDy(helper, w, chain, -0.5,
                 "scene premise: the dry chain merges at -0.5 under the -1.0 marked slab (walk B compensation)");
         setWaterlogged(w, chain, true);
@@ -843,6 +869,7 @@ public final class WaterlogReadSymmetryTest {
         BlockPos trapdoor = slab.below();
         w.setBlock(trapdoor, Blocks.OAK_TRAPDOOR.defaultBlockState()
                 .setValue(BlockStateProperties.HALF, Half.TOP), 2);
+        FrozenDySceneFixture.authorScene(helper);
         assertDy(helper, w, trapdoor, -0.5,
                 "scene premise: the dry TOP trapdoor merges at -0.5 under the -1.0 marked slab");
         setWaterlogged(w, trapdoor, true);
@@ -863,6 +890,7 @@ public final class WaterlogReadSymmetryTest {
         BlockPos lantern = slab.below();
         w.setBlock(lantern, Blocks.LANTERN.defaultBlockState()
                 .setValue(BlockStateProperties.HANGING, true), 2);
+        FrozenDySceneFixture.authorScene(helper);
         assertDy(helper, w, lantern, -0.5,
                 "scene premise: the dry hanging lantern merges at -0.5 under the -1.0 marked slab (walk A)");
         setWaterlogged(w, lantern, true);

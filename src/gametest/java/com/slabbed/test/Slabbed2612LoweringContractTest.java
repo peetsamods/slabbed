@@ -73,6 +73,7 @@ public final class Slabbed2612LoweringContractTest {
         helper.setBlock(base.above(2), Blocks.STONE.defaultBlockState());   // L1
         helper.setBlock(base.above(3), bottomSlab());                       // L2
         helper.setBlock(base.above(4), Blocks.STONE.defaultBlockState());   // L3
+        FrozenDySceneFixture.authorScene(helper);
 
         assertDy(helper, level, base.above(1), 0.0, "L0 bottom slab on solid ground");
         assertDy(helper, level, base.above(2), -0.5, "L1 stone on bottom slab");
@@ -90,8 +91,12 @@ public final class Slabbed2612LoweringContractTest {
      */
     private static void authorBlock(GameTestHelper helper, ServerLevel level, BlockPos rel, BlockState state) {
         BlockPos abs = helper.absolutePos(rel);
-        level.setBlock(abs, state, Block.UPDATE_ALL);
-        state.getBlock().setPlacedBy(level, abs, level.getBlockState(abs), null, ItemStack.EMPTY);
+        // setPlacedBy's freeze classifier reads getYOffset at a cell that has no placement fact yet, so
+        // it must run with the frozen store off; the scene's facts are published on the way out.
+        FrozenDySceneFixture.authored(helper, () -> {
+            level.setBlock(abs, state, Block.UPDATE_ALL);
+            state.getBlock().setPlacedBy(level, abs, level.getBlockState(abs), null, ItemStack.EMPTY);
+        });
     }
 
     /** Real BlockItem useOn placement, matching the production capture route used by the law tests. */
@@ -150,6 +155,7 @@ public final class Slabbed2612LoweringContractTest {
 
         helper.setBlock(blockRel.below(), bottomSlab());
         helper.setBlock(blockRel, Blocks.STONE.defaultBlockState());
+        FrozenDySceneFixture.authorScene(helper);
 
         assertDy(helper, level, blockRel, -0.5,
                 "unfrozen (terrain) stone on a bottom slab lowers to -0.5 (control)");
@@ -177,6 +183,7 @@ public final class Slabbed2612LoweringContractTest {
         // hanger -0.5 (a visible gap under the flush ceiling).
         helper.setBlock(rootsRel.below(), Blocks.STONE.defaultBlockState());
         helper.setBlock(rootsRel.below(2), bottomSlab());
+        FrozenDySceneFixture.authorScene(helper);
 
         assertDy(helper, level, rootsRel.above(), 0.0, "ceiling slab should be flush");
         assertDy(helper, level, rootsRel, 0.0,
@@ -198,15 +205,18 @@ public final class Slabbed2612LoweringContractTest {
         ServerLevel level = helper.getLevel();
         // Lowered, anchored stone support with AIR below (so the hanger can occupy that cell).
         BlockPos support = new BlockPos(2, 3, 2);
-        helper.setBlock(support.below(), bottomSlab());                    // temp carrier
-        helper.setBlock(support, Blocks.STONE.defaultBlockState());        // stone -> -0.5
-        BlockPos supportAbs = helper.absolutePos(support);
-        SlabAnchorAttachment.addAnchor(level, supportAbs, level.getBlockState(supportAbs));
-        helper.setBlock(support.below(), Blocks.AIR.defaultBlockState());  // remove carrier; anchor holds -0.5
+        FrozenDySceneFixture.authored(helper, () -> {
+            helper.setBlock(support.below(), bottomSlab());                    // temp carrier
+            helper.setBlock(support, Blocks.STONE.defaultBlockState());        // stone -> -0.5
+            BlockPos supportAbs = helper.absolutePos(support);
+            SlabAnchorAttachment.addAnchor(level, supportAbs, level.getBlockState(supportAbs));
+            helper.setBlock(support.below(), Blocks.AIR.defaultBlockState());  // remove carrier; anchor holds -0.5
+        });
         assertDy(helper, level, support, -0.5, "SETUP: anchored stone support stays lowered -0.5 with air below");
 
         BlockPos rootsRel = support.below();
         helper.setBlock(rootsRel, Blocks.HANGING_ROOTS.defaultBlockState());
+        FrozenDySceneFixture.authorScene(helper);
         assertDy(helper, level, rootsRel, -0.5,
                 "hanging roots under a LOWERED support MUST follow it down (-0.5), staying attached to its "
                 + "lowered underside (no droop/gap) — same rule as the HANGING lantern");
@@ -225,6 +235,7 @@ public final class Slabbed2612LoweringContractTest {
         BlockPos snowRel = new BlockPos(2, 3, 2);
         helper.setBlock(snowRel.below(), bottomSlab());
         helper.setBlock(snowRel, Blocks.POWDER_SNOW.defaultBlockState());
+        FrozenDySceneFixture.authorScene(helper);
         assertDy(helper, level, snowRel, 0.0,
                 "powder snow (natural terrain full cube) MUST stay flush (0.0) on a slab, not step -0.5");
         helper.succeed();
@@ -328,20 +339,23 @@ public final class Slabbed2612LoweringContractTest {
 
         // A genuinely lowered full-block carrier: stone on a bottom slab (dy=-0.5).
         BlockPos carrier = new BlockPos(2, 2, 2);
-        helper.setBlock(carrier, bottomSlab());
-        helper.setBlock(carrier.above(), Blocks.STONE.defaultBlockState());
-        BlockPos sourcePos = helper.absolutePos(carrier.above());
-        BlockState sourceState = level.getBlockState(sourcePos);
-
         // A NEW full block beside it (east), standing on its OWN flush ground (stone below).
         BlockPos besideRel = carrier.above().east();
-        helper.setBlock(besideRel.below(), Blocks.STONE.defaultBlockState());
-        helper.setBlock(besideRel, Blocks.STONE.defaultBlockState());
-        BlockPos besideAbs = helper.absolutePos(besideRel);
-        BlockState besideState = level.getBlockState(besideAbs);
+        FrozenDySceneFixture.authored(helper, () -> {
+            helper.setBlock(carrier, bottomSlab());
+            helper.setBlock(carrier.above(), Blocks.STONE.defaultBlockState());
+            BlockPos sourcePos = helper.absolutePos(carrier.above());
+            BlockState sourceState = level.getBlockState(sourcePos);
 
-        // Drive the exact side-placement path BlockItemPlacementIntentMixin uses on a horizontal click.
-        SlabAnchorAttachment.addSideAdjacentLoweredFullAnchor(level, besideAbs, besideState, sourcePos, sourceState);
+            helper.setBlock(besideRel.below(), Blocks.STONE.defaultBlockState());
+            helper.setBlock(besideRel, Blocks.STONE.defaultBlockState());
+            BlockPos besideAbs = helper.absolutePos(besideRel);
+            BlockState besideState = level.getBlockState(besideAbs);
+
+            // Drive the exact side-placement path BlockItemPlacementIntentMixin uses on a horizontal click.
+            SlabAnchorAttachment.addSideAdjacentLoweredFullAnchor(
+                    level, besideAbs, besideState, sourcePos, sourceState);
+        });
 
         assertDy(helper, level, besideRel, 0.0,
                 "full block placed beside a lowered carrier on its own flush ground MUST stay flush (0.0); "
@@ -363,12 +377,14 @@ public final class Slabbed2612LoweringContractTest {
         BlockPos slab = new BlockPos(2, 2, 2);
         helper.setBlock(slab, bottomSlab());
         helper.setBlock(slab.above(), Blocks.STONE.defaultBlockState());
+        FrozenDySceneFixture.authorScene(helper);
         assertDy(helper, level, slab.above(), -0.5, "tower stone on a bottom slab is lowered (source)");
 
         // Cantilever stone beside the lowered stone, with AIR directly below it (nothing placed at
         // slab.above().east().below()). It hangs out over empty space, connected to the tower.
         BlockPos cantileverRel = slab.above().east();
         helper.setBlock(cantileverRel, Blocks.STONE.defaultBlockState());
+        FrozenDySceneFixture.authorScene(helper);
 
         assertDy(helper, level, cantileverRel, -0.5,
                 "full block cantilevered over air, connected to a lowered tower, MUST merge to -0.5");
@@ -392,6 +408,7 @@ public final class Slabbed2612LoweringContractTest {
         BlockPos besideRel = slab.above().east();
         helper.setBlock(besideRel.below(), Blocks.STONE.defaultBlockState());
         helper.setBlock(besideRel, Blocks.STONE.defaultBlockState());
+        FrozenDySceneFixture.authorScene(helper);
 
         assertDy(helper, level, besideRel, 0.0,
                 "full block on its OWN solid ground beside a lowered tower MUST stay flush (no sink)");
@@ -411,17 +428,19 @@ public final class Slabbed2612LoweringContractTest {
         BlockPos base = new BlockPos(2, 1, 2);
 
         // Genuine compound stack: ground, slab(0), stone(-0.5), slab(-0.5), log(-1.0).
-        helper.setBlock(base, Blocks.STONE.defaultBlockState());
-        helper.setBlock(base.above(1), bottomSlab());                       // L0 slab dy 0
-        helper.setBlock(base.above(2), Blocks.STONE.defaultBlockState());   // L1 stone dy -0.5
-        helper.setBlock(base.above(3), bottomSlab());                       // L2 slab dy -0.5
         BlockPos logRel = base.above(4);
-        helper.setBlock(logRel, Blocks.SPRUCE_LOG.defaultBlockState());     // L3 log
         BlockPos logAbs = helper.absolutePos(logRel);
+        FrozenDySceneFixture.authored(helper, () -> {
+            helper.setBlock(base, Blocks.STONE.defaultBlockState());
+            helper.setBlock(base.above(1), bottomSlab());                       // L0 slab dy 0
+            helper.setBlock(base.above(2), Blocks.STONE.defaultBlockState());   // L1 stone dy -0.5
+            helper.setBlock(base.above(3), bottomSlab());                       // L2 slab dy -0.5
+            helper.setBlock(logRel, Blocks.SPRUCE_LOG.defaultBlockState());     // L3 log
 
-        // Record the compound anchor the real placement path would record (log on a lowered slab).
-        SlabAnchorAttachment.addAnchor(level, logAbs, level.getBlockState(logAbs));
-        SlabAnchorAttachment.addCompoundFullBlockAnchor(level, logAbs, level.getBlockState(logAbs));
+            // Record the compound anchor the real placement path would record (log on a lowered slab).
+            SlabAnchorAttachment.addAnchor(level, logAbs, level.getBlockState(logAbs));
+            SlabAnchorAttachment.addCompoundFullBlockAnchor(level, logAbs, level.getBlockState(logAbs));
+        });
         assertDy(helper, level, logRel, -1.0, "SETUP: compound log starts lowered -1.0 on the lowered slab");
 
         // Now FLUSH the slab directly below the log: remove its lowering source (L1) so L2 -> 0.0.
@@ -458,16 +477,19 @@ public final class Slabbed2612LoweringContractTest {
         // Build a lowered, ANCHORED stone support with AIR below it (so the lantern can hang there):
         // place stone on a temp slab (-> -0.5), anchor it, then remove the slab (freeze keeps -0.5).
         BlockPos support = new BlockPos(2, 3, 2);
-        helper.setBlock(support.below(), bottomSlab());                          // temp carrier
-        helper.setBlock(support, Blocks.STONE.defaultBlockState());             // stone -> -0.5
-        BlockPos supportAbs = helper.absolutePos(support);
-        SlabAnchorAttachment.addAnchor(level, supportAbs, level.getBlockState(supportAbs));
-        helper.setBlock(support.below(), Blocks.AIR.defaultBlockState());        // remove carrier; anchor holds -0.5
+        FrozenDySceneFixture.authored(helper, () -> {
+            helper.setBlock(support.below(), bottomSlab());                          // temp carrier
+            helper.setBlock(support, Blocks.STONE.defaultBlockState());             // stone -> -0.5
+            BlockPos supportAbs = helper.absolutePos(support);
+            SlabAnchorAttachment.addAnchor(level, supportAbs, level.getBlockState(supportAbs));
+            helper.setBlock(support.below(), Blocks.AIR.defaultBlockState());        // remove carrier; anchor holds -0.5
+        });
         assertDy(helper, level, support, -0.5, "SETUP: anchored stone support stays lowered -0.5 with air below");
 
         // Hanging lantern directly under the lowered support.
         BlockPos lanternRel = support.below();
         helper.setBlock(lanternRel, hangingLantern());
+        FrozenDySceneFixture.authorScene(helper);
 
         assertDy(helper, level, lanternRel, -0.5,
                 "HANGING lantern under a lowered support MUST follow it down (-0.5), not stay at 0.0 and "
@@ -486,6 +508,7 @@ public final class Slabbed2612LoweringContractTest {
         helper.setBlock(support, Blocks.STONE.defaultBlockState());   // flush support
         BlockPos lanternRel = support.below();
         helper.setBlock(lanternRel, hangingLantern());
+        FrozenDySceneFixture.authorScene(helper);
         assertDy(helper, level, lanternRel, 0.0,
                 "HANGING lantern under a flush support stays flush (0.0), no -0.5 gap");
         helper.succeed();
@@ -526,15 +549,17 @@ public final class Slabbed2612LoweringContractTest {
     public void compoundAnchorBlockStaysMinusOneOnGenuinelyLoweredSlab(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
         BlockPos base = new BlockPos(2, 1, 2);
-        helper.setBlock(base, Blocks.STONE.defaultBlockState());
-        helper.setBlock(base.above(1), bottomSlab());                       // L0 slab 0
-        helper.setBlock(base.above(2), Blocks.STONE.defaultBlockState());   // L1 stone -0.5
-        helper.setBlock(base.above(3), bottomSlab());                       // L2 slab -0.5 (stays lowered)
         BlockPos logRel = base.above(4);
-        helper.setBlock(logRel, Blocks.SPRUCE_LOG.defaultBlockState());
         BlockPos logAbs = helper.absolutePos(logRel);
-        SlabAnchorAttachment.addAnchor(level, logAbs, level.getBlockState(logAbs));
-        SlabAnchorAttachment.addCompoundFullBlockAnchor(level, logAbs, level.getBlockState(logAbs));
+        FrozenDySceneFixture.authored(helper, () -> {
+            helper.setBlock(base, Blocks.STONE.defaultBlockState());
+            helper.setBlock(base.above(1), bottomSlab());                       // L0 slab 0
+            helper.setBlock(base.above(2), Blocks.STONE.defaultBlockState());   // L1 stone -0.5
+            helper.setBlock(base.above(3), bottomSlab());                       // L2 slab -0.5 (stays lowered)
+            helper.setBlock(logRel, Blocks.SPRUCE_LOG.defaultBlockState());
+            SlabAnchorAttachment.addAnchor(level, logAbs, level.getBlockState(logAbs));
+            SlabAnchorAttachment.addCompoundFullBlockAnchor(level, logAbs, level.getBlockState(logAbs));
+        });
         assertDy(helper, level, logRel, -1.0,
                 "compound log on a genuinely lowered slab (-0.5) MUST stay -1.0 (real compound preserved)");
         helper.succeed();
@@ -549,15 +574,17 @@ public final class Slabbed2612LoweringContractTest {
     public void compoundAnchorBlockKeepsMinusOneWhenSlabBelowRemoved(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
         BlockPos base = new BlockPos(2, 1, 2);
-        helper.setBlock(base, Blocks.STONE.defaultBlockState());
-        helper.setBlock(base.above(1), bottomSlab());                       // L0 slab 0
-        helper.setBlock(base.above(2), Blocks.STONE.defaultBlockState());   // L1 stone -0.5
-        helper.setBlock(base.above(3), bottomSlab());                       // L2 slab -0.5
         BlockPos logRel = base.above(4);
-        helper.setBlock(logRel, Blocks.SPRUCE_LOG.defaultBlockState());
         BlockPos logAbs = helper.absolutePos(logRel);
-        SlabAnchorAttachment.addAnchor(level, logAbs, level.getBlockState(logAbs));
-        SlabAnchorAttachment.addCompoundFullBlockAnchor(level, logAbs, level.getBlockState(logAbs));
+        FrozenDySceneFixture.authored(helper, () -> {
+            helper.setBlock(base, Blocks.STONE.defaultBlockState());
+            helper.setBlock(base.above(1), bottomSlab());                       // L0 slab 0
+            helper.setBlock(base.above(2), Blocks.STONE.defaultBlockState());   // L1 stone -0.5
+            helper.setBlock(base.above(3), bottomSlab());                       // L2 slab -0.5
+            helper.setBlock(logRel, Blocks.SPRUCE_LOG.defaultBlockState());
+            SlabAnchorAttachment.addAnchor(level, logAbs, level.getBlockState(logAbs));
+            SlabAnchorAttachment.addCompoundFullBlockAnchor(level, logAbs, level.getBlockState(logAbs));
+        });
         assertDy(helper, level, logRel, -1.0, "SETUP: compound log -1.0");
 
         // Remove the slab DIRECTLY below the log entirely (air below the log).
@@ -582,6 +609,7 @@ public final class Slabbed2612LoweringContractTest {
         helper.setBlock(carrier, bottomSlab());
         helper.setBlock(carrier.above(), Blocks.STONE.defaultBlockState());
         BlockPos loweredStone = carrier.above();
+        FrozenDySceneFixture.authorScene(helper);
         assertDy(helper, level, loweredStone, -0.5, "SETUP: lowered carrier stone");
 
         // Author a slab BESIDE the lowered stone, cantilevered over AIR (nothing below it).
@@ -612,12 +640,14 @@ public final class Slabbed2612LoweringContractTest {
         helper.setBlock(base.above(2), Blocks.STONE.defaultBlockState());
         helper.setBlock(base.above(3), bottomSlab());
         BlockPos loweredSlab = base.above(3);
+        FrozenDySceneFixture.authorScene(helper);
         assertDy(helper, level, loweredSlab, -0.5, "SETUP: column top slab is lowered");
 
         BlockPos arm = loweredSlab.east();                 // cantilevered beside it, air below
 
         // Control: a TERRAIN slab here geometrically lowers -0.5 (the snap config is real).
         helper.setBlock(arm, bottomSlab());
+        FrozenDySceneFixture.authorScene(helper);
         assertDy(helper, level, arm, -0.5,
                 "CONTROL: terrain slab beside a lowered slab lowers geometrically to -0.5");
 
@@ -909,14 +939,17 @@ public final class Slabbed2612LoweringContractTest {
     public void chainUnderLoweredSupportDoesNotFollowDownLikeLantern(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
         BlockPos support = new BlockPos(2, 3, 2);
-        helper.setBlock(support.below(), bottomSlab());
-        helper.setBlock(support, Blocks.STONE.defaultBlockState());
-        BlockPos supportAbs = helper.absolutePos(support);
-        SlabAnchorAttachment.addAnchor(level, supportAbs, level.getBlockState(supportAbs));
-        helper.setBlock(support.below(), Blocks.AIR.defaultBlockState());
+        FrozenDySceneFixture.authored(helper, () -> {
+            helper.setBlock(support.below(), bottomSlab());
+            helper.setBlock(support, Blocks.STONE.defaultBlockState());
+            BlockPos supportAbs = helper.absolutePos(support);
+            SlabAnchorAttachment.addAnchor(level, supportAbs, level.getBlockState(supportAbs));
+            helper.setBlock(support.below(), Blocks.AIR.defaultBlockState());
+        });
         assertDy(helper, level, support, -0.5, "SETUP: lowered anchored support");
 
         helper.setBlock(support.below(), yChain());
+        FrozenDySceneFixture.authorScene(helper);
         assertDy(helper, level, support.below(), 0.0,
                 "Y-axis chain under a lowered support does NOT follow it down (chains keep connect-up; "
                 + "unlike a hanging lantern which follows to -0.5)");
@@ -935,6 +968,7 @@ public final class Slabbed2612LoweringContractTest {
         BlockPos chain = new BlockPos(2, 3, 2);
         helper.setBlock(chain.above(), Blocks.STONE_SLAB.defaultBlockState().setValue(SlabBlock.TYPE, SlabType.TOP));
         helper.setBlock(chain, yChain());
+        FrozenDySceneFixture.authorScene(helper);
         assertDy(helper, level, chain, 0.0,
                 "Y-axis chain directly under a TOP slab hangs FLUSH (D2 2026-07-03 flush-ceiling ruling)");
         helper.succeed();
@@ -950,6 +984,7 @@ public final class Slabbed2612LoweringContractTest {
         BlockPos chain = new BlockPos(2, 3, 2);
         helper.setBlock(chain.above(), Blocks.STONE_SLAB.defaultBlockState().setValue(SlabBlock.TYPE, SlabType.TOP));
         helper.setBlock(chain, yChain());
+        FrozenDySceneFixture.authorScene(helper);
         assertDy(helper, level, chain, 0.0,
                 "P26-8 setup: direct Y-chain under a TOP slab hangs flush (D2 flush-ceiling ruling)");
 
@@ -982,6 +1017,7 @@ public final class Slabbed2612LoweringContractTest {
         helper.setBlock(upperChain.above(), Blocks.STONE_SLAB.defaultBlockState().setValue(SlabBlock.TYPE, SlabType.TOP));
         helper.setBlock(upperChain, yChain());
         helper.setBlock(lowerChain, yChain());
+        FrozenDySceneFixture.authorScene(helper);
         assertDy(helper, level, upperChain, 0.0,
                 "P26-6 setup: direct Y-chain under a TOP slab hangs flush (D2 flush-ceiling ruling)");
         assertDy(helper, level, lowerChain, 0.0,
@@ -1002,6 +1038,7 @@ public final class Slabbed2612LoweringContractTest {
         helper.setBlock(chain.above(), Blocks.STONE_SLAB.defaultBlockState().setValue(SlabBlock.TYPE, SlabType.TOP));
         helper.setBlock(chain, yChain());
         helper.setBlock(lantern, hangingLantern());
+        FrozenDySceneFixture.authorScene(helper);
         assertDy(helper, level, chain, 0.0,
                 "P26-7 setup: direct Y-chain under a TOP slab hangs flush (D2 flush-ceiling ruling)");
         assertDy(helper, level, lantern, 0.0,
@@ -1026,6 +1063,7 @@ public final class Slabbed2612LoweringContractTest {
         BlockPos b = new BlockPos(3, 2, 2);
         helper.setBlock(a, Blocks.OAK_FENCE.defaultBlockState());
         helper.setBlock(b, Blocks.OAK_FENCE.defaultBlockState());
+        FrozenDySceneFixture.authorScene(helper);
         assertDy(helper, level, a, -0.5, "SETUP fence A on bottom slab is lowered");
         assertDy(helper, level, b, 0.0, "SETUP fence B on stone is flush");
 
@@ -1049,6 +1087,7 @@ public final class Slabbed2612LoweringContractTest {
         BlockPos b = new BlockPos(3, 2, 2);
         helper.setBlock(a, Blocks.OAK_FENCE.defaultBlockState());
         helper.setBlock(b, Blocks.OAK_FENCE.defaultBlockState());
+        FrozenDySceneFixture.authorScene(helper);
         assertDy(helper, level, a, 0.0, "SETUP flat fence A");
         assertDy(helper, level, b, 0.0, "SETUP flat fence B");
 
@@ -1072,6 +1111,7 @@ public final class Slabbed2612LoweringContractTest {
         BlockPos b = new BlockPos(3, 2, 2);
         helper.setBlock(a, Blocks.IRON_BARS.defaultBlockState());
         helper.setBlock(b, Blocks.IRON_BARS.defaultBlockState());
+        FrozenDySceneFixture.authorScene(helper);
         assertDy(helper, level, a, -0.5, "SETUP iron-bars A on bottom slab is lowered");
         assertDy(helper, level, b, 0.0, "SETUP iron-bars B on stone is flush");
 
@@ -1095,6 +1135,7 @@ public final class Slabbed2612LoweringContractTest {
         BlockPos b = new BlockPos(3, 2, 2);
         helper.setBlock(a, Blocks.COBBLESTONE_WALL.defaultBlockState());
         helper.setBlock(b, Blocks.COBBLESTONE_WALL.defaultBlockState());
+        FrozenDySceneFixture.authorScene(helper);
         assertDy(helper, level, a, -0.5, "SETUP wall A on bottom slab is lowered");
         assertDy(helper, level, b, 0.0, "SETUP wall B on stone is flush");
 
@@ -1133,6 +1174,7 @@ public final class Slabbed2612LoweringContractTest {
     public void rc2aBottomSlabCantileverBesideLoweredFullBlockLowers(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
         BlockPos lowered = loweredTower(helper, new BlockPos(2, 2, 2));
+        FrozenDySceneFixture.authorScene(helper);
         assertDy(helper, level, lowered, -0.5, "SETUP lowered full block");
         BlockPos arm = lowered.east();                       // below(arm) is air (cantilever)
         authorBlock(helper, level, arm, bottomSlab());
@@ -1214,6 +1256,7 @@ public final class Slabbed2612LoweringContractTest {
         helper.setBlock(base.above(1), bottomSlab());
         helper.setBlock(base.above(2), Blocks.STONE.defaultBlockState());
         helper.setBlock(base.above(3), bottomSlab());                     // lowered slab -0.5
+        FrozenDySceneFixture.authorScene(helper);
         assertDy(helper, level, base.above(3), -0.5, "SETUP lowered slab lane");
         BlockPos arm = base.above(3).east();                              // air below
         authorBlock(helper, level, arm, Blocks.OAK_FENCE.defaultBlockState());
@@ -1276,6 +1319,7 @@ public final class Slabbed2612LoweringContractTest {
         helper.setBlock(base.above(1), bottomSlab());
         helper.setBlock(base.above(2), Blocks.STONE.defaultBlockState());
         helper.setBlock(base.above(3), bottomSlab());
+        FrozenDySceneFixture.authorScene(helper);
         assertDy(helper, level, base.above(3), -0.5, "SETUP lowered lane slab");
         BlockPos arm = base.above(3).east();
         helper.setBlock(arm.below(), Blocks.STONE.defaultBlockState());   // OWN solid ground
@@ -1305,6 +1349,7 @@ public final class Slabbed2612LoweringContractTest {
         helper.setBlock(base.above(2), Blocks.STONE.defaultBlockState());   // L1 = -0.5
         helper.setBlock(base.above(3), bottomSlab());                       // L2 = -0.5
         helper.setBlock(base.above(4), Blocks.STONE.defaultBlockState());   // L3 = -1.0
+        FrozenDySceneFixture.authorScene(helper);
         assertDy(helper, level, base.above(1), 0.0, "L0");
         assertDy(helper, level, base.above(2), -0.5, "L1");
         assertDy(helper, level, base.above(3), -0.5, "L2");
@@ -1361,6 +1406,7 @@ public final class Slabbed2612LoweringContractTest {
     public void gap1SlabCantileverBesideCompoundMinusOneStackLowersFull(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
         BlockPos top = compoundLoweredTower(helper, new BlockPos(2, 1, 2));
+        FrozenDySceneFixture.authorScene(helper);
         assertDy(helper, level, top, -1.0, "SETUP: compound stack top must be -1.0");
         BlockPos arm = top.east();                                            // below(arm) is air (cantilever)
         authorBlock(helper, level, arm, bottomSlab());
@@ -1375,6 +1421,7 @@ public final class Slabbed2612LoweringContractTest {
     public void gap1FenceCantileverBesideCompoundMinusOneStackLowersFull(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
         BlockPos top = compoundLoweredTower(helper, new BlockPos(2, 1, 2));
+        FrozenDySceneFixture.authorScene(helper);
         assertDy(helper, level, top, -1.0, "SETUP: compound stack top must be -1.0");
         BlockPos arm = top.east();
         authorBlock(helper, level, arm, Blocks.OAK_FENCE.defaultBlockState());

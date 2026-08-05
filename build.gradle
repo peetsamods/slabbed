@@ -190,6 +190,8 @@ sourceSets {
             include("com/slabbed/test/PlacementCaptureBoundaryGameTest.java")
             include("com/slabbed/test/RegistrySweepTest.java")
             include("com/slabbed/test/RegistrySweepArtifacts.java")
+            // Shared fixture support (no @GameTest methods, so no fabric.mod.json entrypoint).
+            include("com/slabbed/test/FrozenDySceneFixture.java")
             include("com/slabbed/test/SlabRigCommandSmokeTest.java")
             include("com/slabbed/test/SlabRigCaseCatalogTest.java")
             include("com/slabbed/test/SlabRigHangingCatalogTest.java")
