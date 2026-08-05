@@ -654,7 +654,12 @@ public final class SlabAnchorAttachment {
             addAnchorUnchecked(world, pos);
             return;
         }
-        double dy = SlabSupport.getYOffset(world, pos, state);
+        // The placement fact for THIS cell is published only after {@code BlockItem.place} returns, so
+        // at {@code setPlacedBy} the public read still answers with the stable-flat stand-in and every
+        // genuinely lowered placement would be classified as FLAT. Read the explicit placement-time
+        // height instead — the documented read-only reading for exactly this seam. Under frozen-OFF the
+        // two entries are the same code, so this is byte-identical there.
+        double dy = SlabSupport.getUnstoredYOffset(world, pos, state);
         if (dy < -1.0e-6) {
             // A placed SLAB that reads lowered ONLY because of a lowered SIDE neighbour (slab-lane
             // inheritance), with no genuine lowered support directly below it, must NOT snap down to
@@ -1721,12 +1726,19 @@ public final class SlabAnchorAttachment {
             BlockPos pos,
             BlockState state
     ) {
+        // SUBJECT reading (same seam as freezeLoweredOnPlace): both callers of this qualifier judge the
+        // cell being placed RIGHT NOW — the placement-time write belt and the place-RETURN candidate
+        // gate — and that cell's fact publishes only after {@code BlockItem.place} returns. The public
+        // read would answer with the stable-flat stand-in and disqualify every genuine -0.5 landing, so
+        // the subject term takes the explicit placement-time reading. The SUPPORT term below stays on
+        // the public read: it is a different cell whose fact already exists, or fact-less scenery that
+        // must keep reading exactly as it is drawn.
         if (world == null || pos == null || state == null
                 || !(state.getBlock() instanceof SlabBlock)
                 || !state.hasProperty(SlabBlock.TYPE)
                 || state.getValue(SlabBlock.TYPE) != SlabType.BOTTOM
                 || !state.getFluidState().isEmpty()
-                || SlabSupport.getYOffset(world, pos, state) != -0.5) {
+                || SlabSupport.getUnstoredYOffset(world, pos, state) != -0.5) {
             return false;
         }
         BlockPos belowPos = pos.below();
