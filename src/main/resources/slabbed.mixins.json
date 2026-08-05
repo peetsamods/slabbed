@@ -21,6 +21,7 @@
     "BlockItemPlacementIntentMixin",
     "PlayerInteractBlockPacketRecorderMixin",
     "ServerPlayNetworkHandlerRecorderMixin",
+    "ServerInteractBlockHitToleranceMixin",
     "SlabBlockPlacementRecorderMixin",
     "BlockOnPlacedAnchorMixin",
     "BlockOnStateReplacedAnchorMixin",
