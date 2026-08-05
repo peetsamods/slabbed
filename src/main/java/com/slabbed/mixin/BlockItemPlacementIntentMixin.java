@@ -1,9 +1,16 @@
 package com.slabbed.mixin;
 
+import com.llamalad7.mixinextras.injector.wrapmethod.WrapMethod;
+import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
+import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import com.slabbed.Slabbed;
+import com.slabbed.anchor.C3TestPhaseTrace;
 import com.slabbed.anchor.SlabAnchorAttachment;
+import com.slabbed.compat.CompatHooks;
+import com.slabbed.placement.ConnectorPlacementSettle;
 import com.slabbed.util.SlabSupport;
 import com.slabbed.util.RuntimeDiagnostics;
+import net.minecraft.block.BedBlock;
 import net.minecraft.block.BlockEntityProvider;
 import net.minecraft.block.Blocks;
 import net.minecraft.block.BlockState;
@@ -11,9 +18,13 @@ import net.minecraft.block.CraftingTableBlock;
 import net.minecraft.block.ShapeContext;
 import net.minecraft.block.SlabBlock;
 import net.minecraft.block.TrapdoorBlock;
+import net.minecraft.block.enums.DoubleBlockHalf;
 import net.minecraft.block.enums.SlabType;
+import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.item.BlockItem;
+import net.minecraft.item.ItemStack;
+import net.minecraft.state.property.Properties;
 import net.minecraft.item.ItemPlacementContext;
 import net.minecraft.item.ItemUsageContext;
 import net.minecraft.registry.Registries;
@@ -31,6 +42,13 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.ModifyArg;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
+
+import java.util.ArrayDeque;
+import java.util.ArrayList;
+import java.util.Deque;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
 
 @Mixin(BlockItem.class)
 public abstract class BlockItemPlacementIntentMixin {
@@ -56,6 +74,311 @@ public abstract class BlockItemPlacementIntentMixin {
     }
 
     private record CompoundVisibleOwnerTopIntent(BlockPos sourcePos, BlockPos candidatePos) {
+    }
+
+    // ── C3 placement capture (frozen-dy store, Slice 2b) ────────────────────────────────────
+    // ONE frame per vanilla BlockItem.place call. The frame latches the target vanilla actually
+    // chose, snapshots the candidate cells BEFORE the write, computes the height exactly once at the
+    // stack-consume point, and publishes after place returns — so the store gets one authoritative
+    // batch per placement and nothing else on this line ever writes it.
+    //
+    // RESOLVER-ABSENT form: the 26.2 donor keys the height off an immutable root aim captured at
+    // useOnBlock. That resolver is Slice 2d on this line, so every frame here is effectively aimless
+    // and the height always comes from the explicit placement-time reading
+    // (SlabSupport#getUnstoredYOffset) at the cell vanilla filled.
+
+    private static final ThreadLocal<Deque<PlacementFrame>> C3_PLACE_FRAMES =
+            ThreadLocal.withInitial(ArrayDeque::new);
+
+    private record CellSnapshot(
+            BlockState priorState,
+            SlabAnchorAttachment.PlacementDyFact priorBacking
+    ) {
+    }
+
+    private record PendingCapture(Map<BlockPos, Long> rawBitsByPos) {
+        private PendingCapture {
+            rawBitsByPos = Map.copyOf(rawBitsByPos);
+        }
+    }
+
+    private static final class PlacementFrame {
+        final LinkedHashMap<BlockPos, CellSnapshot> snapshots = new LinkedHashMap<>();
+        ItemPlacementContext actualContext;
+        BlockState placementState;
+        PendingCapture pending;
+        boolean actualTargetSeen;
+        boolean pendingComputed;
+        boolean markerAuthorsCompleted;
+        boolean published;
+    }
+
+    private static PlacementFrame slabbed$c3Frame() {
+        Deque<PlacementFrame> frames = C3_PLACE_FRAMES.get();
+        return frames.isEmpty() ? null : frames.peek();
+    }
+
+    @WrapMethod(method = "place(Lnet/minecraft/item/ItemPlacementContext;)Lnet/minecraft/util/ActionResult;")
+    private ActionResult slabbed$c3PlaceScope(
+            ItemPlacementContext context,
+            Operation<ActionResult> original
+    ) {
+        PlacementFrame frame = new PlacementFrame();
+        Deque<PlacementFrame> frames = C3_PLACE_FRAMES.get();
+        frames.push(frame);
+        try {
+            ActionResult result = original.call(context);
+            if (result != null && result.isAccepted()) {
+                if (frame.actualTargetSeen && frame.pendingComputed && frame.markerAuthorsCompleted) {
+                    slabbed$c3Publish(frame);
+                } else {
+                    Slabbed.LOGGER.warn(
+                            "[C3] accepted place had incomplete capture state target={} pending={} markers={}",
+                            frame.actualTargetSeen, frame.pendingComputed, frame.markerAuthorsCompleted);
+                }
+            }
+            return result;
+        } finally {
+            frames.pop();
+            if (frames.isEmpty()) {
+                C3_PLACE_FRAMES.remove();
+            }
+        }
+    }
+
+    /**
+     * Latches the target vanilla actually placed into. Scaffolding and other self-transforming items
+     * move the clicked position here, and the store must land on the transformed cell, never on the
+     * cell the player clicked.
+     */
+    @WrapOperation(
+            method = "place(Lnet/minecraft/item/ItemPlacementContext;)Lnet/minecraft/util/ActionResult;",
+            at = @At(value = "INVOKE",
+                    target = "Lnet/minecraft/item/BlockItem;getPlacementContext(Lnet/minecraft/item/ItemPlacementContext;)Lnet/minecraft/item/ItemPlacementContext;")
+    )
+    private ItemPlacementContext slabbed$c3CaptureActualContext(
+            BlockItem instance,
+            ItemPlacementContext context,
+            Operation<ItemPlacementContext> original
+    ) {
+        ItemPlacementContext actual = original.call(instance, context);
+        PlacementFrame frame = slabbed$c3Frame();
+        if (frame != null && actual != null) {
+            frame.actualContext = actual;
+            frame.actualTargetSeen = true;
+        }
+        return actual;
+    }
+
+    @WrapOperation(
+            method = "place(Lnet/minecraft/item/ItemPlacementContext;)Lnet/minecraft/util/ActionResult;",
+            at = @At(value = "INVOKE",
+                    target = "Lnet/minecraft/item/BlockItem;getPlacementState(Lnet/minecraft/item/ItemPlacementContext;)Lnet/minecraft/block/BlockState;")
+    )
+    private BlockState slabbed$c3CapturePlacementState(
+            BlockItem instance,
+            ItemPlacementContext context,
+            Operation<BlockState> original
+    ) {
+        BlockState placementState = original.call(instance, context);
+        PlacementFrame frame = slabbed$c3Frame();
+        if (frame != null && placementState != null) {
+            frame.actualContext = context;
+            frame.actualTargetSeen = true;
+            frame.placementState = placementState;
+            slabbed$c3SnapshotCandidates(frame, context, placementState);
+        }
+        return placementState;
+    }
+
+    /**
+     * The height is computed here, immediately before vanilla consumes the stack: the block is in the
+     * world, the placement-time markers authored at {@code Block.onPlaced} exist, and {@code place}
+     * has not yet returned. Fails CLOSED — any throwable leaves an empty batch, so a capture bug can
+     * never author a wrong height.
+     */
+    @WrapOperation(
+            method = "place(Lnet/minecraft/item/ItemPlacementContext;)Lnet/minecraft/util/ActionResult;",
+            at = @At(value = "INVOKE",
+                    target = "Lnet/minecraft/item/ItemStack;decrementUnlessCreative(ILnet/minecraft/entity/LivingEntity;)V")
+    )
+    private void slabbed$c3ComputeBeforeConsume(
+            ItemStack stack,
+            int amount,
+            LivingEntity entity,
+            Operation<Void> original
+    ) {
+        PlacementFrame frame = slabbed$c3Frame();
+        if (frame != null) {
+            try {
+                slabbed$c3ComputePending(frame);
+            } catch (Throwable t) {
+                frame.pending = new PendingCapture(Map.of());
+                frame.pendingComputed = true;
+                Slabbed.LOGGER.warn("[C3] capture computation failed closed", t);
+            }
+        }
+        original.call(stack, amount, entity);
+    }
+
+    private static void slabbed$c3SnapshotCandidates(
+            PlacementFrame frame,
+            ItemPlacementContext context,
+            BlockState placementState
+    ) {
+        World world = context.getWorld();
+        BlockPos primary = context.getBlockPos().toImmutable();
+        ArrayList<BlockPos> positions = new ArrayList<>();
+        positions.add(primary);
+        if (placementState.contains(Properties.DOUBLE_BLOCK_HALF)) {
+            positions.add(primary.up());
+            positions.add(primary.down());
+        }
+        if (placementState.getBlock() instanceof BedBlock
+                || placementState.contains(Properties.BED_PART)) {
+            positions.add(primary.north());
+            positions.add(primary.south());
+            positions.add(primary.west());
+            positions.add(primary.east());
+        }
+        for (BlockPos pos : positions) {
+            BlockPos immutable = pos.toImmutable();
+            frame.snapshots.putIfAbsent(immutable, new CellSnapshot(
+                    world.getBlockState(immutable),
+                    SlabAnchorAttachment.rawPlacementDyFact(world, immutable)));
+        }
+    }
+
+    private static void slabbed$c3ComputePending(PlacementFrame frame) {
+        frame.pendingComputed = true;
+        if (!frame.actualTargetSeen || frame.actualContext == null) {
+            frame.pending = new PendingCapture(Map.of());
+            return;
+        }
+        World world = frame.actualContext.getWorld();
+        BlockPos primary = frame.actualContext.getBlockPos().toImmutable();
+        BlockState finalState = world.getBlockState(primary);
+        if (finalState.isAir() || slabbed$c3CompatOwns(finalState)) {
+            frame.pending = new PendingCapture(Map.of());
+            return;
+        }
+        List<BlockPos> group = slabbed$c3ValidatedGroup(frame, world, primary, finalState);
+        boolean paired = finalState.contains(Properties.DOUBLE_BLOCK_HALF)
+                || (finalState.getBlock() instanceof BedBlock
+                && finalState.contains(Properties.BED_PART));
+        if (paired && group.isEmpty()) {
+            frame.pending = new PendingCapture(Map.of());
+            Slabbed.LOGGER.warn("[C3] malformed reciprocal pair at {}; publishing no dy", primary);
+            return;
+        }
+        if (group.isEmpty()) {
+            group = List.of(primary);
+        }
+
+        long rawBits;
+        CellSnapshot primarySnapshot = frame.snapshots.get(primary);
+        // Same-cell DOUBLE upgrade: a second slab dropped into an occupied single-slab cell is not a
+        // new landing, it is the SAME piece growing. Its height was decided when the first slab was
+        // placed, so carry those exact bits forward verbatim rather than judging the cell afresh.
+        boolean occupiedSingleSlabBecameDouble = finalState.getBlock() instanceof SlabBlock
+                && finalState.contains(SlabBlock.TYPE)
+                && finalState.get(SlabBlock.TYPE) == SlabType.DOUBLE
+                && primarySnapshot != null
+                && primarySnapshot.priorState().getBlock() == finalState.getBlock()
+                && primarySnapshot.priorState().contains(SlabBlock.TYPE)
+                && primarySnapshot.priorState().get(SlabBlock.TYPE) != SlabType.DOUBLE;
+        if (occupiedSingleSlabBecameDouble) {
+            SlabAnchorAttachment.PlacementDyFact priorBacking = primarySnapshot.priorBacking();
+            double priorDy = priorBacking.valueOrNaN();
+            rawBits = priorBacking.present() && Double.isFinite(priorDy)
+                    ? priorBacking.rawBits()
+                    : Double.doubleToRawLongBits(0.0d);
+        } else {
+            double dy = SlabSupport.getUnstoredYOffset(world, primary, finalState);
+            if (!Double.isFinite(dy)) {
+                frame.pending = new PendingCapture(Map.of());
+                return;
+            }
+            rawBits = Double.doubleToRawLongBits(dy);
+        }
+        LinkedHashMap<BlockPos, Long> facts = new LinkedHashMap<>();
+        for (BlockPos pos : group) {
+            facts.put(pos.toImmutable(), rawBits);
+        }
+        frame.pending = new PendingCapture(facts);
+    }
+
+    /**
+     * Reciprocal-pair validation for the two vanilla multi-cell families (doors / tall flowers via
+     * DOUBLE_BLOCK_HALF, beds via BED_PART). Both halves must be present, be the same block, and name
+     * each other; anything else is malformed and publishes nothing at all rather than half a pair.
+     * The returned list is sorted by packed position so publication order is deterministic.
+     */
+    private static List<BlockPos> slabbed$c3ValidatedGroup(
+            PlacementFrame frame,
+            World world,
+            BlockPos primary,
+            BlockState state
+    ) {
+        if (state.contains(Properties.DOUBLE_BLOCK_HALF)) {
+            DoubleBlockHalf half = state.get(Properties.DOUBLE_BLOCK_HALF);
+            BlockPos partnerPos = half == DoubleBlockHalf.LOWER ? primary.up() : primary.down();
+            BlockState partner = world.getBlockState(partnerPos);
+            if (!frame.snapshots.containsKey(partnerPos)
+                    || partner.getBlock() != state.getBlock()
+                    || !partner.contains(Properties.DOUBLE_BLOCK_HALF)
+                    || partner.get(Properties.DOUBLE_BLOCK_HALF) == half) {
+                return List.of();
+            }
+            return primary.asLong() <= partnerPos.asLong()
+                    ? List.of(primary, partnerPos)
+                    : List.of(partnerPos, primary);
+        }
+        if (state.getBlock() instanceof BedBlock && state.contains(Properties.BED_PART)) {
+            BlockPos partnerPos = primary.offset(BedBlock.getOppositePartDirection(state));
+            BlockState partner = world.getBlockState(partnerPos);
+            if (!frame.snapshots.containsKey(partnerPos)
+                    || partner.getBlock() != state.getBlock()
+                    || !partner.contains(Properties.BED_PART)
+                    || partner.get(Properties.BED_PART) == state.get(Properties.BED_PART)
+                    || !primary.equals(partnerPos.offset(BedBlock.getOppositePartDirection(partner)))) {
+                return List.of();
+            }
+            return primary.asLong() <= partnerPos.asLong()
+                    ? List.of(primary, partnerPos)
+                    : List.of(partnerPos, primary);
+        }
+        return List.of(primary);
+    }
+
+    private static void slabbed$c3Publish(PlacementFrame frame) {
+        frame.published = true;
+        C3TestPhaseTrace.markTestPhase("publish");
+        if (frame.pending == null || frame.pending.rawBitsByPos().isEmpty() || frame.actualContext == null) {
+            return;
+        }
+        World world = frame.actualContext.getWorld();
+        if (world.isClient()) {
+            // No client prediction on this line: the client receives the fact with the chunk sync.
+            return;
+        }
+        SlabAnchorAttachment.writePlacementDyBatch(world, frame.pending.rawBitsByPos());
+        // The published fact is only now visible to reads. Connector arms (fence/wall/pane) were
+        // already decided earlier in this same place() call — at getPlacementState and at the
+        // setBlockState-driven neighbour shape update — while this cell still had no fact and read the
+        // stable-flat stand-in. Re-run vanilla's own arm derivation for the published cells and their
+        // horizontal neighbours so both ends decide from the published height. Heights are untouched;
+        // see ConnectorPlacementSettle for the LAW.md reasoning.
+        ConnectorPlacementSettle.settlePublishedPlacements(world, frame.pending.rawBitsByPos().keySet());
+    }
+
+    /**
+     * A compat mod that owns a state's own height must own its store entry too — Slabbed publishes no
+     * fact for a cell it does not govern.
+     */
+    private static boolean slabbed$c3CompatOwns(BlockState state) {
+        return state != null
+                && (CompatHooks.shouldSkipOffset(state) || CompatHooks.shouldSkipSlabSupport(state));
     }
 
     private static boolean slabbed$isOrdinaryLoweredFullBlock(ItemUsageContext context, BlockPos pos, BlockState state) {
@@ -866,7 +1189,34 @@ public abstract class BlockItemPlacementIntentMixin {
         return slabbed$inspectReturn(context, remappedContext, "remapped");
     }
 
-    @Inject(method = "place", at = @At("RETURN"))
+    /**
+     * C3 ordering gate. The legacy marker authors below are the LAST writers that run inside vanilla
+     * {@code place} (the rest run earlier, at {@code Block.onPlaced}); the placement fact must not be
+     * published until every one of them has finished, or the store would freeze a height taken before
+     * the markers that decide it exist. Reaching this method's end IS that completion signal, so the
+     * legacy body is called from here and the latch is set in a {@code finally} — an author throwing
+     * must not leave the frame looking complete-and-silent.
+     */
+    @Inject(method = "place(Lnet/minecraft/item/ItemPlacementContext;)Lnet/minecraft/util/ActionResult;",
+            at = @At("RETURN"))
+    private void slabbed$c3RunLegacyMarkerAuthors(
+            ItemPlacementContext context,
+            CallbackInfoReturnable<net.minecraft.util.ActionResult> cir
+    ) {
+        PlacementFrame frame = slabbed$c3Frame();
+        ItemPlacementContext actualContext = frame == null || frame.actualContext == null
+                ? context
+                : frame.actualContext;
+        try {
+            slabbed$anchorLoweredFullBlockSidePlacement(actualContext, cir);
+        } finally {
+            C3TestPhaseTrace.markTestPhase("markers_complete");
+            if (frame != null) {
+                frame.markerAuthorsCompleted = true;
+            }
+        }
+    }
+
     private void slabbed$anchorLoweredFullBlockSidePlacement(
             ItemPlacementContext context,
             CallbackInfoReturnable<net.minecraft.util.ActionResult> cir

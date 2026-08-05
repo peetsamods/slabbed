@@ -3,6 +3,8 @@ package com.slabbed.compat;
 import com.slabbed.compat.terrainslabs.TerrainSlabsCompat;
 import net.minecraft.block.BlockState;
 
+import java.util.function.Predicate;
+
 /**
  * Central compat dispatch. All compat hooks must be subtractive-only and
  * unreachable when their target mod is not present.
@@ -10,6 +12,14 @@ import net.minecraft.block.BlockState;
 public final class CompatHooks {
     private CompatHooks() {
     }
+
+    /**
+     * Test-only injection point for the compat-ownership boundary. Null in every shipped run; a
+     * gametest installs a predicate to stand in for a compat mod that is not on the dev classpath,
+     * and restores the previous value in a {@code finally}. Consulted FIRST so the stand-in is
+     * authoritative for the states it names.
+     */
+    public static volatile Predicate<BlockState> shouldSkipSlabSupportTestOverride = null;
 
     /**
      * Returns true if compat requires skipping slab offset behavior for this state.
@@ -26,6 +36,10 @@ public final class CompatHooks {
      * instead of becoming a Slabbed support source.
      */
     public static boolean shouldSkipSlabSupport(BlockState state) {
+        Predicate<BlockState> override = shouldSkipSlabSupportTestOverride;
+        if (override != null && override.test(state)) {
+            return true;
+        }
         if (TerrainSlabsCompat.isLoaded()) {
             return TerrainSlabsCompat.shouldSkipSlabSupport(state);
         }

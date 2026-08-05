@@ -1,10 +1,15 @@
 package com.slabbed.anchor;
 
 import java.util.function.Predicate;
+import java.util.IdentityHashMap;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import com.mojang.serialization.Codec;
+import com.mojang.serialization.codecs.RecordCodecBuilder;
 import com.slabbed.Slabbed;
 import com.slabbed.util.SlabSupport;
 import com.slabbed.util.RuntimeDiagnostics;
+import it.unimi.dsi.fastutil.longs.Long2DoubleOpenHashMap;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 import net.fabricmc.fabric.api.attachment.v1.AttachmentRegistry;
 import net.fabricmc.fabric.api.attachment.v1.AttachmentSyncPredicate;
@@ -72,6 +77,20 @@ public final class SlabAnchorAttachment {
     public static Predicate<BlockPos> clientCompoundVisibleSideDoubleSlabLookup = null;
     public static Predicate<BlockPos> clientCompoundVisibleOwnerTopSlabLookup = null;
 
+    /**
+     * Client-side fallback for placement-dy reads issued by chunk render paths that receive a
+     * non-{@link World} {@link net.minecraft.world.BlockView} (e.g. {@code ChunkRendererRegion}).
+     * Same seam family as the marker lookups above; installed by {@code SlabAnchorClientSync}.
+     * Without it, mesh-thread reads under frozen-ON would answer absent and render every stored
+     * height flat while outline/raycast (client-World reads) honour the store — a visual-triad
+     * split. Null on a dedicated server.
+     */
+    public interface ClientPlacementDyFactLookup {
+        PlacementDyFact lookup(BlockPos pos);
+    }
+
+    public static ClientPlacementDyFactLookup clientPlacementDyLookup = null;
+
     private static final Identifier ANCHOR_ID = Identifier.of(Slabbed.MOD_ID, "slab_anchors");
     private static final Identifier FROZEN_FLAT_ID = Identifier.of(Slabbed.MOD_ID, "frozen_flat");
     private static final Identifier LOWERED_SLAB_CARRIER_ID =
@@ -86,6 +105,7 @@ public final class SlabAnchorAttachment {
             Identifier.of(Slabbed.MOD_ID, "compound_visible_side_double_slabs");
     private static final Identifier COMPOUND_VISIBLE_OWNER_TOP_SLAB_ID =
             Identifier.of(Slabbed.MOD_ID, "compound_visible_owner_top_slabs");
+    private static final Identifier PLACEMENT_DY_ID = Identifier.of(Slabbed.MOD_ID, "placement_dy");
 
     /**
      * Codec for the anchor set.  Backed by {@code long[]} so the NBT representation is
@@ -175,6 +195,222 @@ public final class SlabAnchorAttachment {
                     .syncWith(PACKET_CODEC, AttachmentSyncPredicate.all())
             );
 
+    // ── FROZEN-DY value store (LAW.md restoration, Slice 2b) ──────────────────────────
+    // The law: a block's height is decided ONCE at placement and STAYS. Unlike the presence flags
+    // above, this records the actual height (a double) per position, so a read answers with the exact
+    // value the player aimed at — never a value derived afresh from the current neighbours. Synced to
+    // clients exactly like the flags, so the frozen height is what renders.
+
+    private record DyEntry(long pos, double dy) {
+    }
+
+    /** Presence and raw bits are one indivisible C3 authority fact. */
+    public record PlacementDyFact(boolean present, long rawBits) {
+        /**
+         * PERF: {@code absent()} is the answer for every cell in ordinary terrain, and the chunk
+         * mesher asks it many times per non-air block per section compile. A fresh record per ask is
+         * pure garbage on the mesh worker threads. The value is a constant, the record is immutable,
+         * and its {@code equals} is value-based, so one shared instance is indistinguishable from a
+         * fresh one at every call site.
+         */
+        private static final PlacementDyFact ABSENT = new PlacementDyFact(false, 0L);
+
+        public static PlacementDyFact absent() {
+            return ABSENT;
+        }
+
+        public static PlacementDyFact present(double value) {
+            if (!Double.isFinite(value)) {
+                throw new IllegalArgumentException("placement dy must be finite");
+            }
+            return new PlacementDyFact(true, Double.doubleToRawLongBits(value));
+        }
+
+        public double valueOrNaN() {
+            return present ? Double.longBitsToDouble(rawBits) : Double.NaN;
+        }
+    }
+
+    private static final Codec<DyEntry> DY_ENTRY_CODEC = RecordCodecBuilder.create(inst -> inst.group(
+            Codec.LONG.fieldOf("p").forGetter(DyEntry::pos),
+            Codec.DOUBLE.fieldOf("d").forGetter(DyEntry::dy)
+    ).apply(inst, DyEntry::new));
+
+    private static Long2DoubleOpenHashMap newDyMap() {
+        Long2DoubleOpenHashMap m = new Long2DoubleOpenHashMap();
+        m.defaultReturnValue(Double.NaN);
+        return m;
+    }
+
+    private static final Codec<Long2DoubleOpenHashMap> DY_MAP_CODEC = DY_ENTRY_CODEC.listOf().xmap(
+            list -> {
+                Long2DoubleOpenHashMap m = newDyMap();
+                for (DyEntry e : list) {
+                    m.put(e.pos(), e.dy());
+                }
+                return m;
+            },
+            map -> {
+                java.util.List<DyEntry> l = new java.util.ArrayList<>(map.size());
+                for (var e : map.long2DoubleEntrySet()) {
+                    l.add(new DyEntry(e.getLongKey(), e.getDoubleValue()));
+                }
+                return l;
+            }
+    );
+
+    private static final PacketCodec<RegistryByteBuf, Long2DoubleOpenHashMap> DY_MAP_PACKET_CODEC =
+            PacketCodec.of(
+                    (map, buf) -> {
+                        buf.writeVarInt(map.size());
+                        for (var e : map.long2DoubleEntrySet()) {
+                            buf.writeLong(e.getLongKey());
+                            buf.writeDouble(e.getDoubleValue());
+                        }
+                    },
+                    buf -> {
+                        int n = buf.readVarInt();
+                        Long2DoubleOpenHashMap m = newDyMap();
+                        for (int i = 0; i < n; i++) {
+                            long k = buf.readLong();
+                            double v = buf.readDouble();
+                            m.put(k, v);
+                        }
+                        return m;
+                    }
+            );
+
+    public static final AttachmentType<Long2DoubleOpenHashMap> PLACEMENT_DY_TYPE =
+            AttachmentRegistry.<Long2DoubleOpenHashMap>create(PLACEMENT_DY_ID, builder -> builder
+                    .persistent(DY_MAP_CODEC)
+                    .syncWith(DY_MAP_PACKET_CODEC, AttachmentSyncPredicate.all())
+            );
+
+    /**
+     * Master switch for the FROZEN-DY value store (LAW.md restoration): when true, height reads route
+     * through the stored placement height instead of the live read-lanes.
+     *
+     * <p>Default ON, matching the 26.2 donor; {@code -Dslabbed.frozenDy=false} is the escape hatch and
+     * the mode the gametest suite currently pins (see {@code build.gradle}). Legacy worlds carry no
+     * stored value for blocks placed before the flip; those cells resolve to stable flat {@code 0.0}
+     * with no recovery from live neighbour geometry — there is no retro-migration.
+     *
+     * <p>Deliberately MUTABLE: fixtures and law rows flip it in-process to run a single scenario under
+     * the shipped mode while the rest of the suite stays on the legacy configuration.
+     */
+    public static boolean FROZEN_DY_ENABLED =
+            Boolean.parseBoolean(System.getProperty("slabbed.frozenDy", "true"));
+
+    /**
+     * Writes a server-authoritative C3 batch with at most one attachment publication per chunk.
+     *
+     * @param rawBitsByPos raw {@code Double.doubleToRawLongBits} height per cell
+     * @return the number of cells whose stored fact actually changed
+     */
+    public static int writePlacementDyBatch(World world, Map<BlockPos, Long> rawBitsByPos) {
+        if (world == null || world.isClient() || rawBitsByPos == null || rawBitsByPos.isEmpty()) {
+            return 0;
+        }
+        LinkedHashMap<BlockPos, PlacementDyFact> facts = new LinkedHashMap<>();
+        for (Map.Entry<BlockPos, Long> entry : rawBitsByPos.entrySet()) {
+            double value = Double.longBitsToDouble(entry.getValue());
+            if (!Double.isFinite(value)) {
+                throw new IllegalArgumentException("non-finite placement dy batch value");
+            }
+            facts.put(entry.getKey().toImmutable(), new PlacementDyFact(true, entry.getValue()));
+        }
+        return writePlacementDyFactsInternal(world, facts);
+    }
+
+    /**
+     * COPY-ON-WRITE: the attached map is never mutated in place (a live map handed out to a render
+     * thread must stay stable), and each touched chunk publishes exactly ONCE, at the end. An
+     * unchanged value short-circuits before the chunk is marked, so an idempotent rewrite publishes
+     * nothing at all.
+     */
+    private static int writePlacementDyFactsInternal(World world, Map<BlockPos, PlacementDyFact> facts) {
+        IdentityHashMap<WorldChunk, Long2DoubleOpenHashMap> copies = new IdentityHashMap<>();
+        IdentityHashMap<WorldChunk, Boolean> changedChunks = new IdentityHashMap<>();
+        int writes = 0;
+        for (Map.Entry<BlockPos, PlacementDyFact> entry : facts.entrySet()) {
+            BlockPos pos = entry.getKey();
+            PlacementDyFact desired = entry.getValue();
+            if (pos == null || desired == null) {
+                continue;
+            }
+            WorldChunk chunk = world.getChunk(pos.getX() >> 4, pos.getZ() >> 4);
+            if (chunk == null) {
+                continue;
+            }
+            Long2DoubleOpenHashMap map = copies.computeIfAbsent(chunk, ignored -> {
+                Long2DoubleOpenHashMap existing = chunk.getAttached(PLACEMENT_DY_TYPE);
+                Long2DoubleOpenHashMap copy = existing == null
+                        ? newDyMap()
+                        : new Long2DoubleOpenHashMap(existing);
+                copy.defaultReturnValue(Double.NaN);
+                return copy;
+            });
+            long key = pos.asLong();
+            PlacementDyFact current = map.containsKey(key)
+                    ? new PlacementDyFact(true, Double.doubleToRawLongBits(map.get(key)))
+                    : PlacementDyFact.absent();
+            if (current.equals(desired)) {
+                continue;
+            }
+            if (desired.present()) {
+                double value = Double.longBitsToDouble(desired.rawBits());
+                if (!Double.isFinite(value)) {
+                    throw new IllegalArgumentException("non-finite authoritative placement dy");
+                }
+                map.put(key, value);
+            } else {
+                map.remove(key);
+            }
+            changedChunks.put(chunk, Boolean.TRUE);
+            writes++;
+        }
+        for (WorldChunk chunk : changedChunks.keySet()) {
+            chunk.setAttached(PLACEMENT_DY_TYPE, copies.get(chunk));
+        }
+        return writes;
+    }
+
+    /** The frozen placement height at {@code pos}, or {@link Double#NaN} if none was stored. */
+    public static double storedPlacementDy(BlockView world, BlockPos pos) {
+        return rawPlacementDyFact(world, pos).valueOrNaN();
+    }
+
+    /**
+     * Direct authoritative backing read. A non-{@link World} view (a client render region) has no
+     * chunk handle, so it resolves through {@link #clientPlacementDyLookup} — the same client-world
+     * bridge the marker lookups use — and answers absent only when no bridge is installed
+     * (dedicated server) or the client world has no fact.
+     */
+    public static PlacementDyFact rawPlacementDyFact(BlockView world, BlockPos pos) {
+        if (pos == null) {
+            return PlacementDyFact.absent();
+        }
+        if (!(world instanceof World w)) {
+            ClientPlacementDyFactLookup lookup = clientPlacementDyLookup;
+            if (lookup != null) {
+                PlacementDyFact fact = lookup.lookup(pos);
+                if (fact != null) {
+                    return fact;
+                }
+            }
+            return PlacementDyFact.absent();
+        }
+        WorldChunk chunk = w.getChunk(pos.getX() >> 4, pos.getZ() >> 4);
+        if (chunk == null) {
+            return PlacementDyFact.absent();
+        }
+        Long2DoubleOpenHashMap map = chunk.getAttached(PLACEMENT_DY_TYPE);
+        long key = pos.asLong();
+        return (map != null && map.containsKey(key))
+                ? new PlacementDyFact(true, Double.doubleToRawLongBits(map.get(key)))
+                : PlacementDyFact.absent();
+    }
+
     /**
      * Triggers static-init class loading. Call once from the mod entrypoint so the
      * attachment is registered before any chunk loads.
@@ -188,7 +424,8 @@ public final class SlabAnchorAttachment {
                 || COMPOUND_VISIBLE_SIDE_LOWER_SLAB_TYPE == null
                 || COMPOUND_VISIBLE_SIDE_UPPER_SLAB_TYPE == null
                 || COMPOUND_VISIBLE_SIDE_DOUBLE_SLAB_TYPE == null
-                || COMPOUND_VISIBLE_OWNER_TOP_SLAB_TYPE == null) {
+                || COMPOUND_VISIBLE_OWNER_TOP_SLAB_TYPE == null
+                || PLACEMENT_DY_TYPE == null) {
             throw new IllegalStateException("SlabAnchorAttachment failed to register");
         }
     }
@@ -287,7 +524,15 @@ public final class SlabAnchorAttachment {
         if (isAnchored(world, pos) || isFrozenFlat(world, pos)) {
             return;
         }
-        double dy = SlabSupport.getYOffset(world, pos, state);
+        // SUBJECT reading: the placement fact for THIS cell is published only after
+        // {@code BlockItem.place} returns, so at {@code onPlaced} time the public read still answers
+        // with the stable-flat stand-in and every genuinely lowered placement would classify as FLAT.
+        // Take the explicit placement-time reading instead — the documented read-only entry for
+        // exactly this seam. Under frozen-OFF the two entries are provably the same code, so this is
+        // byte-identical there. SUPPORT / neighbour terms below stay on the public read: those are
+        // different cells whose facts already exist, or fact-less scenery that must keep reading
+        // exactly as it is drawn.
+        double dy = SlabSupport.getUnstoredYOffset(world, pos, state);
         // Only STRUCTURAL pieces (ordinary full blocks and slabs) freeze. Decorative followers
         // (lanterns, torches, hangers, signs, the crafting-table/BE "objects", …) must stay fully
         // GEOMETRIC so they always track their support's current surface — exactly the anchor
@@ -514,6 +759,20 @@ public final class SlabAnchorAttachment {
                 "compound_visible_side_double_slab");
         removeFromAttachment(world, pos, COMPOUND_VISIBLE_OWNER_TOP_SLAB_TYPE,
                 "compound_visible_owner_top_slab");
+        // FROZEN-DY: the stored placement height dies with the block, so a fresh placement in the same
+        // cell captures its own aim from scratch. Copy-on-write, exactly like the writer.
+        if (world != null && !world.isClient()) {
+            WorldChunk dyChunk = world.getChunk(pos.getX() >> 4, pos.getZ() >> 4);
+            if (dyChunk != null) {
+                Long2DoubleOpenHashMap dyMap = dyChunk.getAttached(PLACEMENT_DY_TYPE);
+                if (dyMap != null && dyMap.containsKey(pos.asLong())) {
+                    Long2DoubleOpenHashMap copy = new Long2DoubleOpenHashMap(dyMap);
+                    copy.defaultReturnValue(Double.NaN);
+                    copy.remove(pos.asLong());
+                    dyChunk.setAttached(PLACEMENT_DY_TYPE, copy);
+                }
+            }
+        }
     }
 
     public static void removePersistentLoweredSlabCarrier(World world, BlockPos pos) {
@@ -1134,12 +1393,18 @@ public final class SlabAnchorAttachment {
             BlockPos pos,
             BlockState state
     ) {
+        // SUBJECT reading (same seam as freezeLoweredOnPlace): this qualifier judges the cell being
+        // placed RIGHT NOW, and that cell's fact publishes only after {@code BlockItem.place} returns.
+        // The public read would answer with the stable-flat stand-in and disqualify every genuine
+        // -0.5 landing, so the subject term takes the explicit placement-time reading. The SUPPORT
+        // term below stays on the public read — a different cell whose fact already exists. Under
+        // frozen-OFF the two entries are provably the same code, so this is byte-identical there.
         if (world == null || pos == null || state == null
                 || !(state.getBlock() instanceof SlabBlock)
                 || !state.contains(SlabBlock.TYPE)
                 || state.get(SlabBlock.TYPE) != SlabType.BOTTOM
                 || !state.getFluidState().isEmpty()
-                || SlabSupport.getYOffset(world, pos, state) != -0.5) {
+                || SlabSupport.getUnstoredYOffset(world, pos, state) != -0.5) {
             return false;
         }
         BlockPos belowPos = pos.down();

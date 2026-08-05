@@ -3,6 +3,7 @@ package com.slabbed.test;
 import com.slabbed.Slabbed;
 import com.slabbed.anchor.SlabAnchorAttachment;
 import com.slabbed.util.SlabSupport;
+import it.unimi.dsi.fastutil.longs.Long2DoubleOpenHashMap;
 import net.minecraft.block.Block;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.Blocks;
@@ -26,6 +27,7 @@ import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Direction;
 import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.GameMode;
+import net.minecraft.world.chunk.WorldChunk;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -80,6 +82,32 @@ public final class NeighborUpdateInvarianceTest {
     private static boolean sameHeight(double a, double b) {
         return Double.doubleToRawLongBits(a == 0.0 ? 0.0 : a)
                 == Double.doubleToRawLongBits(b == 0.0 ? 0.0 : b);
+    }
+
+    /** Test-only fixture: drop exactly one placement-dy fact, leaving the block itself untouched. */
+    private static void removePlacementDyOnly(TestContext h, ServerWorld world, BlockPos subject) {
+        WorldChunk chunk = world.getChunk(subject.getX() >> 4, subject.getZ() >> 4);
+        Long2DoubleOpenHashMap existing = chunk.getAttached(SlabAnchorAttachment.PLACEMENT_DY_TYPE);
+        h.assertTrue(existing != null && existing.containsKey(subject.asLong()),
+                "premise: subject PLACEMENT_DY fact was already absent at " + subject);
+        Long2DoubleOpenHashMap copy = new Long2DoubleOpenHashMap(existing);
+        copy.defaultReturnValue(Double.NaN);
+        copy.remove(subject.asLong());
+        chunk.setAttached(SlabAnchorAttachment.PLACEMENT_DY_TYPE, copy);
+    }
+
+    /** Test-only corruption fixture: overwrite exactly one placement-dy fact with the supplied bits. */
+    private static void overwritePlacementDyRaw(
+            TestContext h, ServerWorld world, BlockPos subject, long rawBits
+    ) {
+        WorldChunk chunk = world.getChunk(subject.getX() >> 4, subject.getZ() >> 4);
+        Long2DoubleOpenHashMap existing = chunk.getAttached(SlabAnchorAttachment.PLACEMENT_DY_TYPE);
+        h.assertTrue(existing != null && existing.containsKey(subject.asLong()),
+                "premise: subject PLACEMENT_DY fact was absent before overwrite at " + subject);
+        Long2DoubleOpenHashMap copy = new Long2DoubleOpenHashMap(existing);
+        copy.defaultReturnValue(Double.NaN);
+        copy.put(subject.asLong(), Double.longBitsToDouble(rawBits));
+        chunk.setAttached(SlabAnchorAttachment.PLACEMENT_DY_TYPE, copy);
     }
 
     private static void bslab(ServerWorld w, BlockPos p) {
@@ -290,11 +318,17 @@ public final class NeighborUpdateInvarianceTest {
 
     // ── the parametric law assertion: one @GameTest per subject, loops all mutations ─────────
     private void runSubject(TestContext h, NamedSubject subject) {
+        runSubject(h, subject, false);
+    }
+
+    private void runSubject(TestContext h, NamedSubject subject, boolean authorSceneFacts) {
         ServerWorld w = h.getWorld();
         List<String> violations = new ArrayList<>();
         for (NamedMutation m : MUTATIONS) {
             clearArena(h, w);
-            BlockPos subj = subject.builder().build(h, w);
+            BlockPos subj = authorSceneFacts
+                    ? FrozenDySceneFixture.authored(h, () -> subject.builder().build(h, w))
+                    : subject.builder().build(h, w);
             h.assertTrue(!w.getBlockState(subj).isAir(),
                     "premise: subject '" + subject.name() + "' failed to place");
             double before = dy(w, subj);
@@ -316,15 +350,37 @@ public final class NeighborUpdateInvarianceTest {
         h.complete();
     }
 
+    /**
+     * Runs a law row under the shipped frozen-store mode while the suite's compatibility floor stays
+     * OFF. The rig is built inside a forced-OFF window and then has its facts authored
+     * ({@link FrozenDySceneFixture#authored}), because the rig's own {@code setBlockState} terrain
+     * carries no placement facts and would otherwise all read the stable-flat stand-in; the real
+     * {@code useOnBlock} placement that creates the SUBJECT runs outside that window, under the store,
+     * since it is the shipped path under test.
+     */
+    private void runSubjectWithFrozenStore(TestContext h, NamedSubject subject) {
+        boolean previous = SlabAnchorAttachment.FROZEN_DY_ENABLED;
+        SlabAnchorAttachment.FROZEN_DY_ENABLED = true;
+        try {
+            runSubject(h, subject, true);
+        } finally {
+            SlabAnchorAttachment.FROZEN_DY_ENABLED = previous;
+        }
+    }
+
     @GameTest(templateName = "fabric-gametest-api-v1:empty", required = false)
     public void torchOnMarkedSlabSurvivesNeighborEdits(TestContext h) {
         runSubject(h, SUBJECTS.get(0));
     }
 
-    @GameTest(templateName = "fabric-gametest-api-v1:empty", required = false)
+    /**
+     * REQUIRED LAW GATE as of Slice 2b: with the frozen store on, the placed fence gate's height is
+     * byte-identical across every neighbour mutation. This row was census-optional only because the
+     * store did not exist on this line.
+     */
+    @GameTest(templateName = "fabric-gametest-api-v1:empty")
     public void fenceGateOnMarkedSlabSurvivesNeighborEdits(TestContext h) {
-        // Donor runs this row under the frozen store (FROZEN_DY_ENABLED); this line has no store yet.
-        runSubject(h, SUBJECTS.get(1));
+        runSubjectWithFrozenStore(h, SUBJECTS.get(1));
     }
 
     @GameTest(templateName = "fabric-gametest-api-v1:empty", required = false)
@@ -361,6 +417,123 @@ public final class NeighborUpdateInvarianceTest {
     @GameTest(templateName = "fabric-gametest-api-v1:empty", required = false)
     public void slabOnDeepLoweredFullBlockSurvivesNeighborEdits(TestContext h) {
         runSubject(h, SUBJECTS.get(8));
+    }
+
+    /**
+     * STABLE-FLAT law (store now exists on this line): a cell whose PLACEMENT_DY fact is missing
+     * resolves to raw positive {@code 0.0} and STAYS there across a neighbour edit — it must never
+     * fall back to the live lanes, because that fallback is exactly the height churn the store ends.
+     *
+     * <p>PORT NOTE: the donor drives this from its deep {@code -1.5} rest rig. That depth needs the
+     * landing resolver (Slice 2d), so this line uses the minimal capability that produces a non-zero
+     * stored value — a real-placed stone resting on a real-placed bottom slab, {@code -0.5}.
+     */
+    @GameTest(templateName = "fabric-gametest-api-v1:empty")
+    public void missingPlacementDyResolvesStableFlatAcrossNeighborEdit(TestContext h) {
+        ServerWorld world = h.getWorld();
+        boolean previous = SlabAnchorAttachment.FROZEN_DY_ENABLED;
+        SlabAnchorAttachment.FROZEN_DY_ENABLED = true;
+        try {
+            clearArena(h, world);
+            BlockPos subject = frozenLoweredSubject(h, world);
+
+            SlabAnchorAttachment.PlacementDyFact authored =
+                    SlabAnchorAttachment.rawPlacementDyFact(world, subject);
+            h.assertTrue(authored.present()
+                            && authored.rawBits() == Double.doubleToRawLongBits(-0.5d)
+                            && sameHeight(dy(world, subject), -0.5d),
+                    "premise: subject should carry raw-exact authored/stored/live dy -0.5, got "
+                            + authored.valueOrNaN() + " / " + dy(world, subject));
+
+            removePlacementDyOnly(h, world, subject);
+            h.assertTrue(!SlabAnchorAttachment.rawPlacementDyFact(world, subject).present(),
+                    "premise: subject PLACEMENT_DY fact remained after removal");
+            h.assertTrue(!world.getBlockState(subject).isAir(),
+                    "premise: removing PLACEMENT_DY removed the subject");
+
+            double fallbackBefore = dy(world, subject);
+            world.breakBlock(subject.down(), false);
+            h.assertTrue(!world.getBlockState(subject).isAir(),
+                    "premise: neighbor edit removed the subject");
+            double fallbackAfter = dy(world, subject);
+            long positiveZeroBits = Double.doubleToRawLongBits(0.0d);
+            h.assertTrue(Double.doubleToRawLongBits(fallbackBefore) == positiveZeroBits
+                            && Double.doubleToRawLongBits(fallbackAfter) == positiveZeroBits,
+                    "missing PLACEMENT_DY must resolve raw positive 0.0 before/after neighbor edit; "
+                            + "observed fallbackBefore=" + fallbackBefore
+                            + ", fallbackAfter=" + fallbackAfter);
+        } finally {
+            SlabAnchorAttachment.FROZEN_DY_ENABLED = previous;
+        }
+        h.complete();
+    }
+
+    /**
+     * STABLE-FLAT law for a CORRUPT fact: NaN / ±Infinity in the store resolve to raw positive
+     * {@code 0.0} before and after a neighbour edit, and the stored bits themselves are left exactly
+     * as found (a read never repairs, rewrites, or re-derives the store).
+     */
+    @GameTest(templateName = "fabric-gametest-api-v1:empty")
+    public void corruptPlacementDyResolvesStablePositiveZeroAcrossNeighborEdit(TestContext h) {
+        ServerWorld world = h.getWorld();
+        long positiveZeroBits = Double.doubleToRawLongBits(0.0d);
+        long[] corruptBits = {
+                Double.doubleToRawLongBits(Double.NaN),
+                Double.doubleToRawLongBits(Double.POSITIVE_INFINITY),
+                Double.doubleToRawLongBits(Double.NEGATIVE_INFINITY)
+        };
+        boolean previous = SlabAnchorAttachment.FROZEN_DY_ENABLED;
+        SlabAnchorAttachment.FROZEN_DY_ENABLED = true;
+        try {
+            for (long corruptRawBits : corruptBits) {
+                clearArena(h, world);
+                BlockPos subject = frozenLoweredSubject(h, world);
+
+                overwritePlacementDyRaw(h, world, subject, corruptRawBits);
+                SlabAnchorAttachment.PlacementDyFact corruptBefore =
+                        SlabAnchorAttachment.rawPlacementDyFact(world, subject);
+                h.assertTrue(corruptBefore.present() && corruptBefore.rawBits() == corruptRawBits,
+                        "premise: exact corrupt PLACEMENT_DY bits were not stored; wanted="
+                                + Long.toHexString(corruptRawBits)
+                                + " observed=" + Long.toHexString(corruptBefore.rawBits()));
+
+                double fallbackBefore = dy(world, subject);
+                world.breakBlock(subject.down(), false);
+                h.assertTrue(!world.getBlockState(subject).isAir(),
+                        "premise: corrupt-value neighbor edit removed the subject");
+                SlabAnchorAttachment.PlacementDyFact corruptAfter =
+                        SlabAnchorAttachment.rawPlacementDyFact(world, subject);
+                double fallbackAfter = dy(world, subject);
+                h.assertTrue(corruptAfter.present() && corruptAfter.rawBits() == corruptRawBits,
+                        "premise: neighbor edit changed corrupt PLACEMENT_DY bits");
+                h.assertTrue(Double.doubleToRawLongBits(fallbackBefore) == positiveZeroBits
+                                && Double.doubleToRawLongBits(fallbackAfter) == positiveZeroBits,
+                        "corrupt PLACEMENT_DY must resolve raw positive 0.0 before/after neighbor edit; "
+                                + "corrupt=" + Long.toHexString(corruptRawBits)
+                                + " fallbackBefore=" + fallbackBefore
+                                + " fallbackAfter=" + fallbackAfter);
+            }
+        } finally {
+            SlabAnchorAttachment.FROZEN_DY_ENABLED = previous;
+        }
+        h.complete();
+    }
+
+    /**
+     * Real-useOnBlock rig producing a subject whose stored placement height is exactly {@code -0.5}:
+     * ground stone, a slab placed on it, a stone placed on the slab. Every cell is authored through
+     * the shipped placement path, so the whole rig carries genuine facts.
+     */
+    private static BlockPos frozenLoweredSubject(TestContext h, ServerWorld world) {
+        BlockPos ground = h.getAbsolutePos(new BlockPos(3, 1, 3));
+        FrozenDySceneFixture.authored(h, () ->
+                world.setBlockState(ground, Blocks.STONE.getDefaultState(), Block.NOTIFY_LISTENERS));
+        place(h, Items.STONE_SLAB, ground, Direction.UP, 0.0d);
+        place(h, Items.STONE, ground.up(), Direction.UP, 0.0d);
+        BlockPos subject = ground.up(2);
+        h.assertTrue(!world.getBlockState(subject).isAir(),
+                "premise: frozen lowered subject failed to place at " + subject);
+        return subject;
     }
 
     @GameTest(templateName = "fabric-gametest-api-v1:empty", required = false)

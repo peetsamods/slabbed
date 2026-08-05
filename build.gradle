@@ -34,6 +34,8 @@ sourceSets {
                     "com/slabbed/test/RedstoneWireConnectionTest.java",
                     "com/slabbed/test/BottomSlabSpawnProofTest.java",
                     "com/slabbed/test/NeighborUpdateInvarianceTest.java",
+                    "com/slabbed/test/FrozenDySceneFixture.java",
+                    "com/slabbed/test/PlacementCaptureBoundaryGameTest.java",
                     "com/slabbed/anchor/FrozenFlatAttachmentCapacityTest.java"
             ])
         }
@@ -106,6 +108,18 @@ def slabbedForwardedRunPropertyArgs = {
 tasks.withType(JavaExec).configureEach {
     doFirst {
         jvmArgs slabbedForwardedRunPropertyArgs()
+    }
+}
+
+// Slice 2b: the gametest suite is pinned to the LEGACY (frozen-dy OFF) configuration. The shipped
+// default is frozen ON, but converting every setBlockState-built fixture to author placement facts is
+// a later slice; until then the suite's compatibility floor is OFF and the frozen-specific rows opt in
+// per-test by flipping SlabAnchorAttachment.FROZEN_DY_ENABLED in-process.
+tasks.matching { it.name == "runGameTest" }.configureEach {
+    if (it instanceof JavaExec) {
+        it.doFirst {
+            it.jvmArgs "-Dslabbed.frozenDy=false"
+        }
     }
 }
 

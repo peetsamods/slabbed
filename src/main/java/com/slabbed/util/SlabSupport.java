@@ -1184,6 +1184,17 @@ public final class SlabSupport {
             return 0.0;
         }
 
+        // FROZEN-DY (LAW.md restoration, flag-gated -Dslabbed.frozenDy): answer with the finite height
+        // this block was placed at, stored verbatim — the value the player aimed at, never re-derived
+        // from the current neighbours. A missing / non-finite fact resolves flat and STAYS flat; the
+        // placement-time height is taken explicitly through getUnstoredYOffset instead of this public
+        // read path. Deliberately unconditional: falling through to the live lanes when a fact is
+        // absent is exactly the law violation this store exists to end.
+        if (SlabAnchorAttachment.FROZEN_DY_ENABLED) {
+            double frozen = SlabAnchorAttachment.storedPlacementDy(world, pos);
+            return Double.isFinite(frozen) ? frozen : 0.0d;
+        }
+
         // Recursion guard: isSolidBlock → getCollisionShape → getOutlineShape (mixin) → getYOffset
         if (IN_GET_Y_OFFSET.get()) {
             if (state.getBlock() instanceof SlabBlock
@@ -1207,6 +1218,49 @@ public final class SlabSupport {
             // Evaluated INSIDE the recursion guard so the isFullCube -> getOutlineShape -> mixin ->
             // getYOffset re-entry returns 0 (no recursion). Takes precedence over the anchor lanes in
             // getYOffsetInner so already-frozen-flat builds also correct; the step-cull hides the seam.
+            double tsBottomFullCubeDy = placedTerrainSlabBottomFullCubeDy(world, pos, state);
+            if (!Double.isNaN(tsBottomFullCubeDy)) {
+                return tsBottomFullCubeDy;
+            }
+            return getYOffsetInner(world, pos, state);
+        } finally {
+            IN_GET_Y_OFFSET.set(Boolean.FALSE);
+        }
+    }
+
+    /**
+     * The explicit placement-time offset reading at {@code pos}: byte-identical to
+     * {@link #getYOffset} except that it omits the frozen-store branch, so it always goes straight to
+     * the live lanes. Read-only and side-effect-free; it shares the same null / air / compat-skip
+     * guards, the same powder-snow hard zero, the same {@link #IN_GET_Y_OFFSET} recursion guard and
+     * the same Terrain Slabs full-cube lane.
+     *
+     * <p>Under frozen-OFF the two entries are the same code. Its callers are exactly the seams that
+     * must judge a cell whose placement fact does not exist yet: the C3 capture in
+     * {@code BlockItemPlacementIntentMixin}, the placement-time classifiers in
+     * {@code SlabAnchorAttachment}, and the scene fixture that authors facts for {@code setBlockState}
+     * terrain. It does not alter {@link #getYOffset} or any lane.
+     */
+    public static double getUnstoredYOffset(BlockView world, BlockPos pos, BlockState state) {
+        if (world == null || pos == null) {
+            return 0.0;
+        }
+        if (state == null || state.isAir()) {
+            return 0.0;
+        }
+        if (CompatHooks.shouldSkipOffset(state)) {
+            return 0.0;
+        }
+        if (state.getBlock() instanceof PowderSnowBlock) {
+            return 0.0;
+        }
+        // Deliberately skips getYOffset's frozen-store / stable-flat policy: this IS the explicit
+        // placement-time offset value, straight from the live lanes.
+        if (IN_GET_Y_OFFSET.get()) {
+            return 0.0;
+        }
+        IN_GET_Y_OFFSET.set(Boolean.TRUE);
+        try {
             double tsBottomFullCubeDy = placedTerrainSlabBottomFullCubeDy(world, pos, state);
             if (!Double.isNaN(tsBottomFullCubeDy)) {
                 return tsBottomFullCubeDy;
