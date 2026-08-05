@@ -558,6 +558,100 @@ public final class Slabbed2612UseOnPlacementTest {
         helper.succeed();
     }
 
+    /**
+     * REGRESSION (shipped-config only): the placement-time attachment classifiers must see the REAL
+     * height of the placement they are classifying, not the pre-publication stand-in.
+     *
+     * <p>{@code SlabAnchorAttachment.freezeLoweredOnPlace} runs at {@code Block.setPlacedBy} HEAD,
+     * which is strictly BEFORE C3 publishes the placement fact for that cell (C3 publishes after
+     * {@code BlockItem.place} returns). Under the SHIPPED default {@code FROZEN_DY_ENABLED=true} the
+     * public height read at a fact-less cell is the stable-flat {@code 0.0}, so every genuinely
+     * lowered placement was filed as {@code FROZEN_FLAT} instead of as an anchor. Height itself stayed
+     * correct (C3's store is authoritative for height), but {@code isAnchored}/{@code isFrozenFlat}
+     * and the carrier/marker family are consumed by never-pop, carrier qualification and the compound
+     * markers — so the WRONG family was recorded for the whole shipped configuration.
+     *
+     * <p>The gametest JVM pins {@code slabbed.frozenDy=false} (build.gradle, the frozen-OFF
+     * compatibility floor), where the two height entries are the same code and the bug cannot exist —
+     * hence the local force, exactly as the G2a connector scene above does.
+     *
+     * <p>Subject choice: the full block on a bottom slab pins the stored height, but its anchor is
+     * ALSO reachable through {@code qualifiesForAnchor}'s pure-state {@code hasBottomSlabBelow} lane,
+     * so it cannot discriminate. The SLAB on the lowered full block can: slabs are rejected by
+     * {@code isOrdinaryFullBlockAnchorCandidate}, so the classifier's own height branch is the only
+     * thing that can anchor it. Both are driven through the real {@code useOn} path so every cell in
+     * the stack earns a published fact, the way a player's would.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void useOnLoweredPlacementIsClassifiedAnchoredUnderFrozenDy(GameTestHelper helper) {
+        boolean previousFrozen = SlabAnchorAttachment.FROZEN_DY_ENABLED;
+        SlabAnchorAttachment.FROZEN_DY_ENABLED = true;
+        try {
+            ServerLevel level = helper.getLevel();
+            helper.setBlock(new BlockPos(2, 1, 2), Blocks.STONE.defaultBlockState());
+            BlockPos ground = helper.absolutePos(new BlockPos(2, 1, 2));
+            Player player = mockPlayerNear(helper, helper.absolutePos(new BlockPos(2, 5, 2)));
+
+            BlockPos slab = placeBlockVia(player, ground, Direction.UP, upHit(ground), Blocks.STONE_SLAB);
+            assertStoredDy(helper, level, slab, new BlockPos(2, 2, 2), 0.0,
+                    "premise: the bottom slab placed on flush ground stores 0.0");
+
+            // (a) the full block on that bottom slab lands and STORES -0.5 ...
+            BlockPos fullBlock = placeBlockVia(player, slab, Direction.UP, upHit(slab), Blocks.STONE);
+            assertBlockDy(helper, level, fullBlock, new BlockPos(2, 3, 2), Blocks.STONE, -0.5,
+                    "premise: the full block placed on a bottom slab is drawn at -0.5");
+            assertStoredDy(helper, level, fullBlock, new BlockPos(2, 3, 2), -0.5,
+                    "(a): the full block on a bottom slab stores -0.5");
+            // ... and (b) is filed as ANCHORED, never as frozen-flat.
+            assertAnchoredNotFrozenFlat(helper, level, fullBlock, new BlockPos(2, 3, 2),
+                    "(b): the full block placed on a bottom slab");
+
+            // The discriminating subject: a SLAB on that lowered full block. Nothing but the
+            // classifier's own height branch can anchor this one.
+            BlockPos rider = placeBlockVia(player, fullBlock, Direction.UP, upHit(fullBlock),
+                    Blocks.STONE_SLAB);
+            log("frozen_slab_on_lowered_full_block", level, rider);
+            if (!(level.getBlockState(rider).getBlock() instanceof SlabBlock)) {
+                throw helper.assertionException(new BlockPos(2, 4, 2),
+                        "premise: useOn must place a slab on the lowered full block, got "
+                                + level.getBlockState(rider).getBlock());
+            }
+            assertStoredDy(helper, level, rider, new BlockPos(2, 4, 2), -0.5,
+                    "(a): the slab riding the lowered full block stores -0.5");
+            assertAnchoredNotFrozenFlat(helper, level, rider, new BlockPos(2, 4, 2),
+                    "(b): the slab placed on a lowered full block");
+        } finally {
+            SlabAnchorAttachment.FROZEN_DY_ENABLED = previousFrozen;
+        }
+        helper.succeed();
+    }
+
+    /** Asserts the C3-stored placement height at {@code abs} (the frozen-ON render authority). */
+    private static void assertStoredDy(GameTestHelper helper, ServerLevel level, BlockPos abs,
+                                       BlockPos relForErr, double expectedDy, String what) {
+        double stored = SlabAnchorAttachment.storedPlacementDy(level, abs);
+        if (Double.isNaN(stored)) {
+            throw helper.assertionException(relForErr, what + ": no placement height was stored at all");
+        }
+        if (Math.abs(stored - expectedDy) > EPS) {
+            throw helper.assertionException(relForErr,
+                    what + ": expected stored dy=" + expectedDy + " got " + stored);
+        }
+    }
+
+    /** The classifier saw the real height: the cell is anchored and is NOT filed flat. */
+    private static void assertAnchoredNotFrozenFlat(GameTestHelper helper, ServerLevel level, BlockPos abs,
+                                                    BlockPos relForErr, String what) {
+        if (SlabAnchorAttachment.isFrozenFlat(level, abs)) {
+            throw helper.assertionException(relForErr, what + " must NOT be filed FROZEN_FLAT — the "
+                    + "classifier read the pre-publication stand-in instead of its real placement height");
+        }
+        if (!SlabAnchorAttachment.isAnchored(level, abs)) {
+            throw helper.assertionException(relForErr, what + " must be ANCHORED — a lowered placement "
+                    + "records an anchor so a later support removal cannot pop it");
+        }
+    }
+
     // ── A1: freeze-on-place via the REAL useOn path — slab on its OWN flush ground beside a lowered
     //         block must stay flat (0.0) AND record FROZEN_FLAT (NEVER-POP). ──────────────────────────
 
