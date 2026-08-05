@@ -56,6 +56,7 @@
       "com.slabbed.test.ModelStaleSentinelContractTest",
       "com.slabbed.test.ModelStaleSentinelAllocationGateTest",
       "com.slabbed.test.FrozenStoreCollisionAllocationGateTest",
+      "com.slabbed.test.FrozenStoreRenderReadAllocationGateTest",
       "com.slabbed.test.RecorderUpgradeContractTest",
       "com.slabbed.test.EnsembleCoherenceContractTest",
       "com.slabbed.test.EnsemblePlacementCoherenceTest",

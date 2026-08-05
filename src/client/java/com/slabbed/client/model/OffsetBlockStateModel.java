@@ -4,7 +4,9 @@ import com.slabbed.Slabbed;
 import com.slabbed.util.SlabEnsembleCoherence;
 import com.slabbed.util.SlabbedDiagnosticsBridge;
 import com.slabbed.util.SlabSupport;
+import net.fabricmc.fabric.api.client.renderer.v1.mesh.MutableQuadView;
 import net.fabricmc.fabric.api.client.renderer.v1.mesh.QuadEmitter;
+import net.fabricmc.fabric.api.client.renderer.v1.mesh.QuadTransform;
 import net.fabricmc.fabric.api.client.renderer.v1.model.FabricBlockStateModel;
 import net.minecraft.client.renderer.block.BlockAndTintGetter;
 import net.minecraft.client.renderer.block.dispatch.BlockStateModel;
@@ -27,6 +29,8 @@ import java.util.function.Predicate;
 @SuppressWarnings({"RedundantSuppression", "DataFlowIssue"})
 public final class OffsetBlockStateModel implements BlockStateModel {
     private static final boolean CULL_TRACE = Boolean.getBoolean("slabbed.render.offset.cullTrace");
+    /** {@code Direction.values()} clones its array on every call; this runs per block per section. */
+    private static final Direction[] DIRECTIONS = Direction.values();
 
     private final BlockStateModel wrapped;
     private final FabricBlockStateModel fabricWrapped;
@@ -87,9 +91,16 @@ public final class OffsetBlockStateModel implements BlockStateModel {
         // flat side of a lowered-vs-flat seam was left culled. Wrap (clearing cullFace on mismatched-dy
         // faces, no Y shift when dy=0) whenever this block is offset OR any neighbour sits at a
         // different dy. Renderer-agnostic (edits the quad's own cullFace). Port of 1.21.1 clearStepCullFaces.
-        boolean stepSeam = dy != 0.0f || slabbed$anyMismatchedNeighborDy(view, pos, dy);
-        QuadEmitter out = stepSeam ? YOffsetEmitter.wrap(emitter, dy, slabbed$hasMismatchedNeighborDy(view, pos, dy)) : emitter;
-        fabricWrapped.emitQuads(out, view, pos, state, random, slabbed$offsetAwareCullTest(view, pos, state, dy, cullTest));
+        // PERF (render-path fix-round F3): ONE seam state per block. It memoises each of the six
+        // neighbour dys on first demand and is simultaneously the offset-aware cull predicate, the
+        // step-seam probe, and the cull-face-clearing quad transform — three consumers that previously
+        // each allocated their own capturing lambda and each re-resolved the same neighbour dy (the
+        // per-quad one re-resolving it for every emitted quad). Lazy, so the early-exit behaviour of
+        // the step-seam probe and the "dy != 0 short-circuits it entirely" ordering are unchanged.
+        SeamState seam = new SeamState(view, pos, state, dy, cullTest);
+        boolean stepSeam = dy != 0.0f || seam.anyMismatchedNeighborDy();
+        QuadEmitter out = stepSeam ? YOffsetEmitter.wrapWithTransform(emitter, dy, seam) : emitter;
+        fabricWrapped.emitQuads(out, view, pos, state, random, seam);
         // Phase 3a band emission PULLED after live rejection (TEST (9), 2026-07-07): BAKE_LOCK_UV
         // derives UVs from vertex positions, and band tops exceed the unit square — the UVs walk off
         // the block's sprite into NEIGHBORING ATLAS SPRITES, painting alien texture strips on every
@@ -205,21 +216,74 @@ public final class OffsetBlockStateModel implements BlockStateModel {
         }
     }
 
-    private static Predicate<Direction> slabbed$offsetAwareCullTest(
-            BlockAndTintGetter view,
-            BlockPos pos,
-            BlockState state,
-            float dy,
-            Predicate<Direction> cullTest
-    ) {
-        return direction -> {
+    /**
+     * Per-block, per-emission neighbour-dy state (fix-round F3). Not thread-safe and not reused: one
+     * instance lives for exactly one {@link #emitQuads} call on one mesh worker thread, and the render
+     * view it reads is immutable for the duration of a section compile — which is why memoising a
+     * neighbour's dy cannot change any answer relative to resolving it afresh at each of the three
+     * consumers.
+     *
+     * <p>As {@link Predicate}: the offset-aware cull test — a face whose neighbour sits at a different
+     * model dy is never culled (its step strip is exposed), otherwise vanilla decides.
+     *
+     * <p>As {@link QuadTransform}: the DODO step-face fix — clear the {@code cullFace} of a quad facing
+     * a mismatched neighbour (keeping it as the nominal face) so the strip the neighbour's offset
+     * exposes is not culled into a see-through ghost window.
+     */
+    private static final class SeamState implements Predicate<Direction>, QuadTransform {
+        private final BlockAndTintGetter view;
+        private final BlockPos pos;
+        private final BlockState state;
+        private final float dy;
+        private final Predicate<Direction> cullTest;
+        /** Two 6-bit masks instead of a float array: only the mismatch verdict is ever consumed, and
+         *  the trace path (off by default) is the sole reader of the dy value itself. */
+        private int resolvedMask;
+        private int mismatchMask;
+
+        SeamState(BlockAndTintGetter view, BlockPos pos, BlockState state, float dy,
+                  Predicate<Direction> cullTest) {
+            this.view = view;
+            this.pos = pos;
+            this.state = state;
+            this.dy = dy;
+            this.cullTest = cullTest;
+        }
+
+        /** True if ANY of the 6 neighbours sits at a different model dy than this block (a lowered-vs-
+         *  flat step seam). Exits on the first mismatch, so a seam block resolves only what it must. */
+        boolean anyMismatchedNeighborDy() {
+            for (Direction direction : DIRECTIONS) {
+                if (mismatched(direction)) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        private boolean mismatched(Direction direction) {
+            int bit = 1 << direction.ordinal();
+            if ((resolvedMask & bit) == 0) {
+                float resolved = slabbed$neighborModelDy(view, pos.relative(direction));
+                resolvedMask |= bit;
+                if (Math.abs(resolved - dy) > 1.0e-6f) {
+                    mismatchMask |= bit;
+                }
+            }
+            return (mismatchMask & bit) != 0;
+        }
+
+        @Override
+        public boolean test(Direction direction) {
             if (direction == null || cullTest == null) {
                 return false;
             }
-            BlockPos neighborPos = pos.relative(direction);
-            float neighborDy = slabbed$neighborModelDy(view, neighborPos);
-            if (Math.abs(neighborDy - dy) > 1.0e-6f) {
+            if (mismatched(direction)) {
                 if (CULL_TRACE) {
+                    BlockPos neighborPos = pos.relative(direction);
+                    // Trace-only re-read: the value is identical (the view is immutable for the
+                    // section compile), and keeping it out of the steady-state path costs nothing.
+                    float neighborDy = slabbed$neighborModelDy(view, neighborPos);
                     BlockState neighborState;
                     try {
                         neighborState = view.getBlockState(neighborPos);
@@ -227,31 +291,23 @@ public final class OffsetBlockStateModel implements BlockStateModel {
                         neighborState = null;
                     }
                     boolean vanillaCull = cullTest.test(direction);
-                    slabbed$traceCullDecision(pos, direction, dy, neighborPos, neighborDy, state, neighborState, vanillaCull);
+                    slabbed$traceCullDecision(pos, direction, dy, neighborPos,
+                            neighborDy, state, neighborState, vanillaCull);
                 }
                 return false;
             }
             return cullTest.test(direction);
-        };
-    }
-
-    private static Predicate<Direction> slabbed$hasMismatchedNeighborDy(BlockAndTintGetter view, BlockPos pos, float dy) {
-        return direction -> {
-            float neighborDy = slabbed$neighborModelDy(view, pos.relative(direction));
-            return Math.abs(neighborDy - dy) > 1.0e-6f;
-        };
-    }
-
-    /** True if ANY of the 6 neighbours sits at a different model dy than this block (a lowered-vs-flat
-     *  step seam). Used to clear cull faces even for a dy=0 block at a seam (the DODO ghost-window fix). */
-    private static boolean slabbed$anyMismatchedNeighborDy(BlockAndTintGetter view, BlockPos pos, float dy) {
-        for (Direction direction : Direction.values()) {
-            float neighborDy = slabbed$neighborModelDy(view, pos.relative(direction));
-            if (Math.abs(neighborDy - dy) > 1.0e-6f) {
-                return true;
-            }
         }
-        return false;
+
+        @Override
+        public boolean transform(MutableQuadView quad) {
+            Direction cullFace = quad.cullFace();
+            if (cullFace != null && mismatched(cullFace)) {
+                quad.cullFace(null);
+                quad.nominalFace(cullFace);
+            }
+            return true;
+        }
     }
 
     private static void slabbed$traceCullDecision(
