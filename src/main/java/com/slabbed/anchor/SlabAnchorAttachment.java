@@ -238,12 +238,27 @@ public final class SlabAnchorAttachment {
      * pop"): locks the FLAT half of a placement's height at the moment it is placed. Server-side
      * only; called from {@code BlockOnPlacedAnchorMixin.onPlaced} after {@link #addAnchor}.
      *
-     * <p>If a STRUCTURAL piece (ordinary full block or slab) is placed FLAT (dy ≈ 0) it records a
-     * {@link #FROZEN_FLAT_TYPE} marker, so a slab / lowered carrier placed under or beside it later
-     * can no longer pull it down (the exact live down-pop Maintainer reported: "I placed the slab, the
-     * spruce log popped down"). No-op for decorative followers (lanterns / torches / hangers /
-     * signs) so they keep tracking their supports, and for pieces already anchored or frozen.
-     * Natural / setBlockState blocks never call onPlaced, so terrain stays fully geometric.
+     * <p>If a piece is placed FLAT (dy ≈ 0) it records a {@link #FROZEN_FLAT_TYPE} marker, so a
+     * slab / lowered carrier placed under or beside it later can no longer pull it down (the exact
+     * live down-pop Maintainer reported: "I placed the slab, the spruce log popped down"). No-op for
+     * pieces that must keep tracking a support ABOVE them, and for pieces already anchored or
+     * frozen. Natural / setBlockState blocks never call onPlaced, so terrain stays fully geometric.
+     *
+     * <p><b>BOTH HALVES OF THE LAW LIVE HERE NOW (2026-08-06).</b> A placement that resolves LOWERED
+     * and earned no anchor from any of {@link #addAnchor}'s qualifier lanes records its height in
+     * {@link SlabPlacementDyAttachment} instead — no anchor, just the number. The header below
+     * explains why the two are not the same thing; {@code LAW.md} lane B is the cell that proves
+     * the anchor lanes do not cover every lowered placement.
+     *
+     * <p><b>ELIGIBILITY IS BEHAVIOUR, NOT BLOCK CLASS (LAW 2, 2026-08-06).</b> This gate used to be
+     * an allow-list of block TYPES — ordinary anchor candidate, {@link SlabBlock},
+     * {@link BlockEntityProvider} — and the sentence above it already described, almost verbatim,
+     * the failure a candle was being excluded from. S-2's {@code candle_placed_flat_then_neighbored}
+     * proved it live: a candle placed flat read {@code 0.0}, a lowering source appeared beside its
+     * support, and the candle went to {@code -0.5} because nothing had recorded that it was placed
+     * flat. The intent always covered every flat placement; only the list did not. The seventh
+     * exclude-by-classname of this campaign, and the standing rule says express the rule as what
+     * the block DOES.
      *
      * <p>MAIN-SHAPE DECISION vs the donor (compat 8aafd1ff): the donor also records an UNCHECKED
      * flat anchor for any piece placed LOWERED (dy &lt; 0). Main's anchor read-back grammar is
@@ -263,24 +278,39 @@ public final class SlabAnchorAttachment {
         if (isAnchored(world, pos) || isFrozenFlat(world, pos)) {
             return;
         }
+        if (hangsFromTheCellAbove(world, pos, state) || heightIsSharedWithACellThisHookNeverSees(state)) {
+            return;
+        }
         double dy = SlabSupport.getYOffset(world, pos, state);
         if (dy < -1.0e-6) {
-            // Lowered placements are height-locked by the qualifier-lane anchors added in
-            // addAnchor (see the MAIN-SHAPE DECISION above); nothing more to record here.
+            // THE LOWERED HALF, for the cells the anchor lanes miss. Reaching this line already
+            // proves addAnchor declined every one of its qualifier lanes (the guard above returns
+            // for an anchored cell), so this placement renders LOWERED with nothing recording how
+            // far — the exact shape LAW.md lane B names and S-2's
+            // cantilever_full_block_beside_minus_one proves: an ordinary full block placed beside a
+            // -1.0 owner is lowered by a boolean adjacency check, while
+            // qualifiesForAdjacentLoweredFullBlockAnchor demands its neighbour read EXACTLY -0.5,
+            // so the cell holds -0.5 only while that neighbour stands and pops to 0.0 the moment it
+            // is broken.
+            //
+            // Record the placed height. NO ANCHOR IS ADDED, deliberately: an anchor is PRESENCE,
+            // and presence is what the column walks and the adjacency checks read as "this cell is
+            // a lowering source" (hasLoweringSourceInColumnBelow, isAdjacentToLoweredSupport,
+            // isLoweredSideSlabSource, hasLoweredNonSlabTopSupport, the gap-fill lane, the step-cull
+            // dispatch, and qualifiesForBelowAnchoredBlockAnchor). Widening what earns an anchor has
+            // caused a Terrain Slabs over-lowering regression on this line twice, and
+            // KNOWN_INCOMPLETE's L11-broader entry for it is still OPEN. A stored NUMBER has exactly
+            // one consumer — getYOffsetInner's stored-height branch — and answers only for this
+            // cell, so it cannot spread to a neighbour or up a column.
+            //
+            // Nothing here decides WHAT height the cell gets; getYOffset already did, one line
+            // above, from the surroundings, which is the single moment LAW 1 allows the
+            // surroundings a vote. This only writes it down.
+            SlabPlacementDyAttachment.record(world, pos, dy);
             return;
         }
-        // dy ≈ 0: lock the FLAT height of a STRUCTURAL piece (ordinary full block or slab) so a
-        // slab / lowered carrier placed under or beside it later can no longer pull it down.
-        boolean structural = isOrdinaryAnchorCandidate(world, pos, state)
-                || state.getBlock() instanceof SlabBlock
-                // A flat-placed block entity (hopper/chest/furnace resting on the ground) must
-                // also freeze-flat so a slab shoved under it later cannot pull it down. Ceiling-
-                // hung block entities (hanging signs) are excluded — they follow their support.
-                || (state.getBlock() instanceof BlockEntityProvider
-                        && !SlabSupport.isAlwaysCeilingHungDecoration(state));
-        if (!structural) {
-            return;
-        }
+        // dy ≈ 0: lock the FLAT height of this placement so a slab / lowered carrier placed under
+        // or beside it later can no longer pull it down.
         WorldChunk chunk = world.getChunk(pos.getX() >> 4, pos.getZ() >> 4);
         if (chunk == null) {
             return;
@@ -295,6 +325,53 @@ public final class SlabAnchorAttachment {
                         pos.toShortString(), chunk.getPos(), set.size());
             }
         }
+    }
+
+    /**
+     * THE ONE PRINCIPLED EXCLUSION from freeze-on-place: does this block, <em>in this state, right
+     * now</em>, hang from the cell ABOVE it?
+     *
+     * <p>Such a piece must keep following that support — the standing project ruling that a hanging
+     * lantern goes down when the block it hangs from goes down — so pinning it to the height it
+     * happened to have at placement would be wrong. This is the exclusion the old block-class
+     * allow-list was reaching for and kept missing in both directions: it excluded a FLOOR lever, a
+     * standing chain and a candle (none of which hang from anything) while it had no way to say
+     * what it actually meant.
+     *
+     * <p>{@link SlabSupport#isCeilingAttached} is a ROLE predicate as of {@code 3a7c17c0} — it asks
+     * the block's own state (a lantern's {@code HANGING}, a lever's {@code BLOCK_FACE}, a bell's
+     * {@code ATTACHMENT}, a stalactite's {@code VERTICAL_DIRECTION}) and, for the two families
+     * vanilla gives no such property, the world above — so it can carry this exclusion honestly.
+     *
+     * <p>{@link SlabSupport#isAlwaysCeilingHungDecoration} is NOT subsumed by it and is still
+     * needed: pale hanging moss is an intrinsic hanger that carries no {@code HANGING} property and
+     * is not one of the classes the role predicate answers for, so the role predicate returns false
+     * for it. The two are asked together, never one instead of the other.
+     */
+    private static boolean hangsFromTheCellAbove(World world, BlockPos pos, BlockState state) {
+        return SlabSupport.isCeilingAttached(world, pos, state)
+                || SlabSupport.isAlwaysCeilingHungDecoration(state);
+    }
+
+    /**
+     * The second exclusion, and a KNOWN GAP stated rather than half-fixed: a block whose resolved
+     * height is shared with a companion cell that this hook never sees.
+     *
+     * <p>{@code onPlaced} fires once, for the clicked cell. A bed's HEAD is written by
+     * {@code BedBlock.onPlaced} <em>after</em> it calls {@code super.onPlaced}, so at this instant
+     * the companion cell does not exist yet; and {@code SlabSupport.shouldOffset} resolves BOTH
+     * halves of a bed from EITHER half's column. Marking the half we can see would therefore split
+     * the pair — foot at 0.0, head at -0.5 — which is a worse defect than the one being closed.
+     *
+     * <p>{@code DOUBLE_BLOCK_HALF} is listed with it for the same reason even though no vanilla
+     * member reaches here today: {@code DoorBlock.onPlaced} and {@code TallPlantBlock.onPlaced}
+     * both write their upper half WITHOUT calling {@code super.onPlaced} (verified against the
+     * 1.21.11 bytecode), so this hook never runs for them at all. Freezing a multi-cell piece
+     * properly means marking every cell it occupies; that is a separate change and is recorded as
+     * a gap, not attempted here.
+     */
+    private static boolean heightIsSharedWithACellThisHookNeverSees(BlockState state) {
+        return state.contains(Properties.BED_PART) || state.contains(Properties.DOUBLE_BLOCK_HALF);
     }
 
     /**
