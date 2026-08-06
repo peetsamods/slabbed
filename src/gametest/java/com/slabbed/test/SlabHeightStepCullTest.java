@@ -267,20 +267,129 @@ public final class SlabHeightStepCullTest {
         ctx.complete();
     }
 
+    // ------------------------------------------------------------------------
+    // ANCHOR-BOOLEAN ELIGIBILITY (Maintainer, live re-test 2026-08-06: the back-row see-through holes
+    // SURVIVED the magnitude fix). Recorder session 8248751f pins the surviving pair:
+    //
+    //     dy -0.5 (anchor=none)  |  dy -1.0 (anchor=none)     -> both UNANCHORED
+    //
+    // and her /slabdy readout on the deep cell reads dy=-1.000, src=geometric, FLAGS: DODO.
+    //
+    // isSlabHeightStepFace dispatched on isLoweredOpaqueFullCubeForStepCull, which is
+    //   isDirectCustomSlabSupportedObject(..) || ((opaqueFullCube || slab) && isAnchored(..))
+    // — an ANCHOR BOOLEAN. Both cells are lowered PURELY GEOMETRICALLY (column inheritance; no
+    // anchor was ever recorded), so both read "not lowered", the pair fell into the neither-lowered
+    // tier, and the magnitude comparison the previous commit added was never reached.
+    //
+    // MAINTAINER'S LAW (2026-08-06): "everything should be able to lower; no exceptions" — eligibility
+    // for lowering-related behaviour may not depend on a block having earned an anchor. So the
+    // step test must key on RESOLVED HEIGHT, not on anchor status.
+    // ------------------------------------------------------------------------
+
+    // THE RED: Maintainer's exact live pair, rebuilt with NO anchors anywhere in the scene. Both cubes
+    // are lowered by pure column geometry (-0.5 and -1.0), and both assert !isAnchored so the test
+    // cannot silently pass through the anchored (tier 3) lane that already worked.
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void unanchoredGeometricMinusOneBesideMinusHalfRedrawsSteppedFace(TestContext ctx) {
+        ServerWorld w = ctx.getWorld();
+        GeometricStepPair pair = buildUnanchoredGeometricStepPair(ctx, 1, 0);
+
+        boolean shallowFace = SlabSupport.isSlabHeightStepFace(
+                w, pair.shallow(), w.getBlockState(pair.shallow()), Direction.WEST);
+        ctx.assertTrue(shallowFace,
+                "THE RED (Maintainer live 2026-08-06, recorder 8248751f): a GEOMETRICALLY lowered -0.5 "
+                        + "cube with anchor=none beside a GEOMETRICALLY lowered -1.0 cube with "
+                        + "anchor=none exposes a real 0.5 seam and must redraw its stepped face. "
+                        + "Step-cull eligibility keyed on an ANCHOR BOOLEAN, so neither side counted "
+                        + "as 'lowered' and the seam stayed culled; got " + shallowFace);
+
+        // The GH#24 lesson: BOTH sides of the seam must be redrawn, not just one.
+        boolean deepFace = SlabSupport.isSlabHeightStepFace(
+                w, pair.deep(), w.getBlockState(pair.deep()), Direction.EAST);
+        ctx.assertTrue(deepFace,
+                "the unanchored -1.0 cube's own face toward the unanchored -0.5 cube must be "
+                        + "redrawn too; got " + deepFace);
+        ctx.complete();
+    }
+
+    // Same law, the MIXED anchor state: one side anchored, the other lowered to a DIFFERENT depth
+    // by pure geometry. The old form answered this one correctly by accident (exactly one side
+    // read "lowered" -> true), so it is a keep-green guard that the new height-based dispatch must
+    // not lose while it stops keying on the anchor.
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void anchoredCubeBesideUnanchoredGeometricCubeRedrawsSteppedFace(TestContext ctx) {
+        ServerWorld w = ctx.getWorld();
+        // Same scene as the RED, then anchor ONLY the deep side — a mixed-state pair.
+        GeometricStepPair pair = buildUnanchoredGeometricStepPair(ctx, 1, 3);
+        SlabAnchorAttachment.addAnchor(w, pair.deep(), w.getBlockState(pair.deep()));
+        ctx.assertTrue(SlabAnchorAttachment.isAnchored(w, pair.deep())
+                        && !SlabAnchorAttachment.isAnchored(w, pair.shallow()),
+                "setup: exactly one side of the step must carry an anchor (the MIXED state)");
+
+        boolean shallowFace = SlabSupport.isSlabHeightStepFace(
+                w, pair.shallow(), w.getBlockState(pair.shallow()), Direction.WEST);
+        ctx.assertTrue(shallowFace,
+                "an unanchored, geometrically lowered cube beside an ANCHORED deeper cube must "
+                        + "redraw its stepped face; got " + shallowFace);
+
+        boolean deepFace = SlabSupport.isSlabHeightStepFace(
+                w, pair.deep(), w.getBlockState(pair.deep()), Direction.EAST);
+        ctx.assertTrue(deepFace,
+                "and the anchored side's own face toward it too; got " + deepFace);
+        ctx.complete();
+    }
+
+    // REGRESSION GUARD for the new tier: two cubes lowered EQUALLY by pure geometry (both -0.5,
+    // both anchor=none) must still NOT redraw. Making eligibility height-based must not turn every
+    // slab-topped terrace into extra faces — only a genuine height STEP counts.
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void twoEquallyGeometricallyLoweredCubesNeverRedraw(TestContext ctx) {
+        ServerWorld w = ctx.getWorld();
+        BlockPos a = ctx.getAbsolutePos(BlockPos.ORIGIN).add(4, 4, 6);
+        BlockPos b = a.east();
+        for (BlockPos p : new BlockPos[] {a, b}) {
+            w.setBlockState(p.down(2), Blocks.STONE.getDefaultState(), Block.NOTIFY_LISTENERS);
+            w.setBlockState(p.down(), bottomSlab(Blocks.STONE_SLAB), Block.NOTIFY_LISTENERS);
+            w.setBlockState(p, Blocks.STONE.getDefaultState(), Block.NOTIFY_LISTENERS);
+        }
+        ctx.assertTrue(!SlabAnchorAttachment.isAnchored(w, a) && !SlabAnchorAttachment.isAnchored(w, b),
+                "setup: neither cube may be anchored");
+        double dyA = SlabSupport.getYOffset(w, a, w.getBlockState(a));
+        double dyB = SlabSupport.getYOffset(w, b, w.getBlockState(b));
+        ctx.assertTrue(Math.abs(dyA - dyB) <= EPS && dyA < -EPS,
+                "setup: both cubes must be geometrically lowered to the SAME depth, got "
+                        + dyA + " and " + dyB);
+
+        boolean stepFace = SlabSupport.isSlabHeightStepFace(w, a, w.getBlockState(a), Direction.EAST);
+        ctx.assertTrue(!stepFace,
+                "two EQUALLY (geometrically) lowered cubes have no height step and must not "
+                        + "redraw; got " + stepFace);
+        ctx.complete();
+    }
+
     // PERF GUARD (this is the chunk-render hot path; the project has shipped a lag regression
-    // twice). Height resolution is a bounded column walk — it must happen ONLY when both sides are
-    // lowered candidates and the answer genuinely depends on the magnitudes. Ordinary terrain, and
-    // the "exactly one side lowered" case that the boolean form already answered, must both resolve
-    // ZERO heights. Counter-based, never wall-clock: a fixed-ms budget false-REDs on a loaded
-    // machine. The final cell is a same-run CALIBRATION — without it a permanently-broken counter
-    // would make every zero assertion vacuously green.
+    // twice). Height resolution is a bounded walk that takes a global monitor — it must happen ONLY
+    // when the answer genuinely depends on the magnitudes. Ordinary terrain, and the "exactly one
+    // side lowered" case that the boolean form already answered, must both resolve ZERO heights;
+    // the paths that DO pay must be bounded and lazily one-sided. Counter-based, never wall-clock:
+    // a fixed-ms budget false-REDs on a loaded machine. The calibration cells are same-run — without
+    // them a permanently-broken counter would make every zero assertion vacuously green.
+    //
+    // FIXTURE CHANGE (2026-08-06, reported, not silently adjusted): cell (a) previously stood its
+    // "ordinary terrain" pair in MID-AIR. Air below a block is not ordinary terrain — it is the
+    // gap-fill / cantilever lowering lane, which renders -0.5 with anchor=none — so that fixture
+    // never tested the thing it named, and the height-based tier legitimately pays there. It now
+    // stands on solid ground, which is what ordinary terrain means; the mid-air case is asserted
+    // separately in cell (e) as a BOUNDED cost rather than a free one.
     @GameTest(structure = "fabric-gametest-api-v1:empty")
     public void fastPathsResolveZeroHeights(TestContext ctx) {
         ServerWorld w = ctx.getWorld();
 
-        // (a) ordinary terrain: neither side lowered.
-        BlockPos flushA = ctx.getAbsolutePos(BlockPos.ORIGIN).add(0, 6, 0);
+        // (a) ordinary terrain: two solid cubes standing on solid ground, nothing lowered.
+        BlockPos flushA = ctx.getAbsolutePos(BlockPos.ORIGIN).add(0, 5, 0);
         BlockPos flushB = flushA.east();
+        w.setBlockState(flushA.down(), Blocks.DIRT.getDefaultState(), Block.NOTIFY_LISTENERS);
+        w.setBlockState(flushB.down(), Blocks.DIRT.getDefaultState(), Block.NOTIFY_LISTENERS);
         w.setBlockState(flushA, Blocks.DIRT.getDefaultState(), Block.NOTIFY_LISTENERS);
         w.setBlockState(flushB, Blocks.DIRT.getDefaultState(), Block.NOTIFY_LISTENERS);
 
@@ -295,31 +404,61 @@ public final class SlabHeightStepCullTest {
         ctx.assertTrue(SlabAnchorAttachment.isAnchored(w, oneLowered) && !SlabAnchorAttachment.isAnchored(w, oneFlush),
                 "setup: exactly one of the pair must be a lowered candidate");
 
-        // (c) calibration: both sides lowered at different magnitudes — the only case that may pay.
+        // (c) calibration: both sides ANCHOR-lowered at different magnitudes.
         BlockPos deep = buildAnchoredMinusOneCube(ctx, 2, 2);
         BlockPos shallow = buildAnchoredMinusHalfNeighbor(ctx, deep.east(), Blocks.STONE.getDefaultState(), -0.5);
+
+        // (d) the NEW tier: both sides lowered by pure GEOMETRY, no anchors. Bounded at two.
+        GeometricStepPair geometric = buildUnanchoredGeometricStepPair(ctx, 5, 7);
+
+        // (e) one-sided laziness: a geometrically lowered cube beside genuine flush terrain. The
+        // flush side is screened out structurally and must NOT be resolved, so this costs ONE.
+        BlockPos loweredSide = ctx.getAbsolutePos(BlockPos.ORIGIN).add(0, 3, 3);
+        BlockPos flushSide = loweredSide.east();
+        w.setBlockState(loweredSide.down(2), Blocks.STONE.getDefaultState(), Block.NOTIFY_LISTENERS);
+        w.setBlockState(loweredSide.down(), bottomSlab(Blocks.STONE_SLAB), Block.NOTIFY_LISTENERS);
+        w.setBlockState(loweredSide, Blocks.STONE.getDefaultState(), Block.NOTIFY_LISTENERS);
+        w.setBlockState(flushSide.down(2), Blocks.STONE.getDefaultState(), Block.NOTIFY_LISTENERS);
+        w.setBlockState(flushSide.down(), Blocks.STONE.getDefaultState(), Block.NOTIFY_LISTENERS);
+        w.setBlockState(flushSide, Blocks.STONE.getDefaultState(), Block.NOTIFY_LISTENERS);
 
         SlabSupport.beginStepCullHeightResolutionCount();
         try {
             SlabSupport.isSlabHeightStepFace(w, flushA, w.getBlockState(flushA), Direction.EAST);
             long afterFlush = SlabSupport.stepCullHeightResolutionCount();
             ctx.assertTrue(afterFlush == 0L,
-                    "PERF: ordinary terrain (neither side lowered) must resolve ZERO heights on the "
-                            + "chunk-render hot path; resolved " + afterFlush);
+                    "PERF: ordinary terrain (solid cubes on solid ground, nothing lowered) must "
+                            + "resolve ZERO heights on the chunk-render hot path — the structural "
+                            + "screen has to decide it from the block below alone; resolved " + afterFlush);
 
             SlabSupport.isSlabHeightStepFace(w, oneLowered, w.getBlockState(oneLowered), Direction.EAST);
             long afterOne = SlabSupport.stepCullHeightResolutionCount();
             ctx.assertTrue(afterOne == 0L,
-                    "PERF: 'exactly one side lowered' is decidable from the cheap prefilter alone and "
-                            + "must resolve ZERO heights; resolved " + afterOne);
+                    "PERF: 'exactly one side definitely lowered' is decidable from the cheap "
+                            + "prefilter alone and must resolve ZERO heights; resolved " + afterOne);
 
             SlabSupport.isSlabHeightStepFace(w, deep, w.getBlockState(deep), Direction.EAST);
             long afterBoth = SlabSupport.stepCullHeightResolutionCount();
             ctx.assertTrue(afterBoth == 2L,
-                    "CALIBRATION: the both-sides-lowered case must resolve exactly the two heights it "
-                            + "compares — otherwise the zero assertions above are vacuous (a dead "
+                    "CALIBRATION: the both-sides-anchored case must resolve exactly the two heights "
+                            + "it compares — otherwise the zero assertions above are vacuous (a dead "
                             + "counter reads 0 forever); resolved " + afterBoth
                             + ", shallow neighbour at " + shallow.toShortString());
+
+            SlabSupport.isSlabHeightStepFace(w, geometric.shallow(), w.getBlockState(geometric.shallow()),
+                    Direction.WEST);
+            long afterGeometric = SlabSupport.stepCullHeightResolutionCount();
+            ctx.assertTrue(afterGeometric - afterBoth == 2L,
+                    "PERF: the NEW unanchored-geometric tier must be BOUNDED at two heights per "
+                            + "face (one per side), never an unbounded search; resolved "
+                            + (afterGeometric - afterBoth));
+
+            SlabSupport.isSlabHeightStepFace(w, loweredSide, w.getBlockState(loweredSide), Direction.EAST);
+            long afterLazy = SlabSupport.stepCullHeightResolutionCount();
+            ctx.assertTrue(afterLazy - afterGeometric == 1L,
+                    "PERF: a side the structural screen rules out is known flush and must contribute "
+                            + "0.0 WITHOUT a resolution, so a lowered cube beside plain terrain costs "
+                            + "ONE height, not two; resolved " + (afterLazy - afterGeometric));
         } finally {
             SlabSupport.endStepCullHeightResolutionCount();
         }
@@ -327,6 +466,58 @@ public final class SlabHeightStepCullTest {
     }
 
     // ------------------------------------------------------------------------
+
+    /** The two laterally-adjacent, ANCHOR-FREE cubes of Maintainer's live pair. */
+    private record GeometricStepPair(BlockPos shallow, BlockPos deep) { }
+
+    /**
+     * Builds Maintainer's live failing pair with ZERO anchors anywhere, at plot-relative {@code (x, z)}
+     * and {@code (x + 1, z)}:
+     *
+     * <pre>
+     *   y+3          [stone -1.0]  [stone -0.5]   &lt;- the adjacent subjects
+     *   y+2          [bottom slab] [bottom slab]
+     *   y+1          [stone -0.5]  [stone  0.0]
+     *   y            [bottom slab] [stone  0.0]
+     * </pre>
+     *
+     * <p>Left (deep) column: the documented stacked/mixed lane — a bottom slab under a stone under
+     * another bottom slab compounds to -1.0 at the top.
+     * <br>Right (shallow) column: a plain stone on a bottom slab on solid ground -> -0.5. Its slab
+     * sits on a genuinely FLUSH seat, so the flush-seat guard keeps it from inheriting the deep
+     * column's drop sideways and the two columns stay at different heights.
+     *
+     * <p>Nothing here is ever {@code addAnchor}ed: every dy is pure live geometry, which is exactly
+     * what {@code /slabdy} reported as {@code src=geometric, anchor=none}.
+     */
+    private GeometricStepPair buildUnanchoredGeometricStepPair(TestContext ctx, int x, int z) {
+        ServerWorld w = ctx.getWorld();
+        BlockPos base = ctx.getAbsolutePos(BlockPos.ORIGIN).add(x, 1, z);
+
+        w.setBlockState(base, bottomSlab(Blocks.STONE_SLAB), Block.NOTIFY_LISTENERS);
+        w.setBlockState(base.up(), Blocks.STONE.getDefaultState(), Block.NOTIFY_LISTENERS);
+        w.setBlockState(base.up(2), bottomSlab(Blocks.STONE_SLAB), Block.NOTIFY_LISTENERS);
+        BlockPos deep = base.up(3);
+        w.setBlockState(deep, Blocks.STONE.getDefaultState(), Block.NOTIFY_LISTENERS);
+
+        BlockPos shallow = deep.east();
+        w.setBlockState(shallow.down(3), Blocks.STONE.getDefaultState(), Block.NOTIFY_LISTENERS);
+        w.setBlockState(shallow.down(2), Blocks.STONE.getDefaultState(), Block.NOTIFY_LISTENERS);
+        w.setBlockState(shallow.down(), bottomSlab(Blocks.STONE_SLAB), Block.NOTIFY_LISTENERS);
+        w.setBlockState(shallow, Blocks.STONE.getDefaultState(), Block.NOTIFY_LISTENERS);
+
+        ctx.assertTrue(!SlabAnchorAttachment.isAnchored(w, shallow) && !SlabAnchorAttachment.isAnchored(w, deep),
+                "fixture: NEITHER subject may be anchored — an anchored scene takes the tier-3 lane "
+                        + "that already worked and FALSE-GREENS this test");
+        double shallowDy = SlabSupport.getYOffset(w, shallow, w.getBlockState(shallow));
+        ctx.assertTrue(Math.abs(shallowDy + 0.5) <= EPS,
+                "fixture: the shallow subject must render -0.5 by pure geometry, got " + shallowDy);
+        double deepDy = SlabSupport.getYOffset(w, deep, w.getBlockState(deep));
+        ctx.assertTrue(Math.abs(deepDy + 1.0) <= EPS,
+                "fixture: the deep subject must render -1.0 by pure geometry, got " + deepDy);
+        return new GeometricStepPair(shallow, deep);
+    }
+
 
     /**
      * Builds the proven vanilla-only {@code follower_on_minus_one} recipe (the same scene

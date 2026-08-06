@@ -304,23 +304,55 @@ public final class SlabSupport {
      * fixed this on the TS-compat line with a dy difference; this line never received it and
      * independently evolved the boolean form, gaining the slab widening above and losing
      * magnitude. Both properties are kept: the boolean prefilter still answers first, and the
-     * heights are compared only in the one case it cannot answer (see the tiers below).
+     * heights are compared only in the cases it cannot answer (see the tiers below).
+     *
+     * <p>ELIGIBILITY IS NOT ANCHOR STATUS (2026-08-06, Maintainer's ruling "everything should be able
+     * to lower; no exceptions", after a second live re-test still showed back-row see-through
+     * holes). Recorder session {@code 8248751f} pins the surviving pair: dy −0.5 beside dy −1.0,
+     * {@code anchor=none} on BOTH, {@code src=geometric}. The tier-1/2/3 dispatch above keys on
+     * {@link #isLoweredOpaqueFullCubeForStepCull}, an ANCHOR BOOLEAN — so two geometrically
+     * lowered, never-anchored cubes both read "not lowered", landed in tier 1, and the magnitude
+     * comparison was never reached. That is the same bug class as the three fixed before it: an
+     * anchor boolean standing in for "is this lowered", when geometric lowering exists with no
+     * anchor at all. Tier 4 below closes it by ACTUAL RESOLVED HEIGHT.
      *
      * <p>PERFORMANCE — this is the chunk-render hot path, up to four calls per block per section
      * compile, and a lag regression has shipped twice. Height resolution ({@link #getYOffset}) is
-     * a bounded column walk, so it is reached only when it can change the answer:
+     * a bounded walk but NOT free (a slab's lowering test allocates a BFS queue), and
+     * {@link #getVisualYOffset} takes a global monitor, so it is reached only when it can change
+     * the answer. Four tiers:
      * <ol>
-     *   <li>neither side a lowered candidate (ordinary terrain, the overwhelming majority) —
-     *       false, ZERO heights resolved; exactly as cheap as before this change;</li>
-     *   <li>exactly one side a lowered candidate — true, ZERO heights resolved; the old boolean
+     *   <li>NEITHER side carries a cheap "definitely lowered" marker AND neither passes the cheap
+     *       structural {@link #mayBeLoweredForStepCull} screen — ordinary terrain, the
+     *       overwhelming majority — false, ZERO heights resolved;</li>
+     *   <li>exactly one side definitely lowered — true, ZERO heights resolved; the old boolean
      *       answer, kept verbatim;</li>
-     *   <li>BOTH sides lowered candidates (rare) — only here are the two heights resolved and
-     *       compared. This is the tier the boolean form got wrong.</li>
+     *   <li>BOTH sides definitely lowered (rare) — resolve both and compare magnitude;</li>
+     *   <li>NEITHER definitely lowered but at least one passes the structural screen (a slab, or a
+     *       cube whose support could lower it) — resolve ONLY the screened side(s); a side the
+     *       screen rejected is known-flush and contributes 0.0 without a resolution.</li>
      * </ol>
-     * Because tiers 1 and 2 reproduce the old answers exactly and tier 3 only ever turns a former
-     * {@code false} into {@code true}, this method remains a strict superset of its previous
-     * results: it can only ever ADD faces, never cull one that is drawn today. Pinned by
-     * {@code SlabHeightStepCullTest#fastPathsResolveZeroHeights}.
+     * For a non-slab opaque full cube the screen is one {@code pos.down()} + {@code getBlockState}
+     * plus a handful of precomputed, view-independent state flags — one short-lived {@code BlockPos}
+     * per screened side, the same allocation class as the {@code pos.offset(direction)} this method
+     * already made, and no reflection, logging, or collection allocation at all. So plain terrain (a
+     * solid cube standing on a plain, flush, unanchored solid cube) still resolves ZERO heights — pinned by
+     * {@code SlabHeightStepCullTest#fastPathsResolveZeroHeights}. Miss path (screen says "maybe"):
+     * one {@link #getVisualYOffset} per screened side, i.e. AT MOST 2 per face — the same read
+     * {@code OffsetBlockStateModel#emitQuads} already performs once per block, so the worst case
+     * is a bounded constant multiple of an already-paid per-block cost, never an unbounded walk.
+     *
+     * <p>ONLY-ADDS (strict superset), re-derived for the four-tier form: tiers 2 and 3 are the old
+     * tiers 2 and 3, byte-identical, so every input that returned {@code true} before still does.
+     * The ONLY input class whose handling changed is "neither side definitely lowered", where the
+     * old form unconditionally returned {@code false}; tier 4 either reproduces that {@code false}
+     * or upgrades it to {@code true}. So no {@code true} can become {@code false}: this method can
+     * only ever ADD faces, never cull one that is drawn today. Note this argument does NOT depend
+     * on {@link #mayBeLoweredForStepCull} being a perfect superset of "dy ≠ 0" — a screen that is
+     * wrongly negative merely leaves a face undrawn exactly as today (an under-draw, i.e. the
+     * status quo), and can never remove a face. Tiers 2/3 are deliberately NOT merged into the
+     * height comparison: merging them could flip an old {@code true} to {@code false} when an
+     * anchored block and an unanchored-but-equally-lowered neighbour resolve to the same dy.
      *
      * <p>The height read is {@link #getVisualYOffset} — the same read the model path
      * ({@code OffsetBlockStateModel#emitQuads} → {@code YOffsetEmitter}) shifts the quads by, and
@@ -329,13 +361,6 @@ public final class SlabSupport {
      * actually renders with, so the un-culled face could be decided from a different height than
      * the geometry it belongs to. It is also the cheaper read on the render worker (a cache hit
      * skips the column walk entirely).
-     *
-     * <p>KNOWN RESIDUAL GAP: magnitude is now handled, so the remaining hole is only the
-     * ELIGIBILITY prefilter — a block lowered ONLY by live adjacency/column inheritance and NOT
-     * YET anchored (a narrow, transient window; most real placements anchor within the same tick)
-     * is still not a "lowered candidate", so a pair in which NEITHER side is anchored never
-     * reaches the height comparison. Closing that would mean resolving heights for ordinary
-     * terrain, which tier 1 exists to avoid. Only ever ADDS faces.
      */
     public static boolean isSlabHeightStepFace(BlockView world, BlockPos pos, BlockState state, Direction direction) {
         if (STEP_CULL_DISABLED || world == null || pos == null || state == null || direction == null
@@ -349,34 +374,127 @@ public final class SlabSupport {
         }
         boolean selfLowered = isLoweredOpaqueFullCubeForStepCull(world, pos, state);
         boolean neighborLowered = isLoweredOpaqueFullCubeForStepCull(world, neighborPos, neighbor);
-        // Tier 1 — ordinary terrain. No lowering anywhere, so no step. ZERO heights resolved.
-        if (!selfLowered && !neighborLowered) {
-            return false;
-        }
-        // Tier 2 — exactly one side lowered: a step exists by construction, no magnitude needed.
-        // ZERO heights resolved, and the old boolean answer is preserved verbatim, which is what
-        // makes this method a strict superset of its previous results.
+        // Tier 2 — exactly one side DEFINITELY lowered: a step exists by construction, no magnitude
+        // needed. ZERO heights resolved, and the old boolean answer is preserved verbatim, which is
+        // half of what makes this method a strict superset of its previous results.
         if (selfLowered != neighborLowered) {
             return true;
         }
-        // Tier 3 — both lowered. The boolean form said "no step" here and was wrong whenever the
-        // two lowerings differ in DEPTH (−1.0 beside −0.5 = a real 0.5 seam).
-        if (stepCullHeightResolutionCounting) {
-            STEP_CULL_HEIGHT_RESOLUTIONS.addAndGet(2L);
+        // Tier 3 — both definitely lowered. The boolean form said "no step" here and was wrong
+        // whenever the two lowerings differ in DEPTH (−1.0 beside −0.5 = a real 0.5 seam).
+        if (selfLowered) {
+            return stepHeightsDiffer(world, pos, state, neighborPos, neighbor, true, true);
         }
-        double selfDy = getVisualYOffset(world, pos, state);
-        double neighborDy = getVisualYOffset(world, neighborPos, neighbor);
+        // NEITHER side carries an anchor / TS-direct-support marker. The old form stopped here and
+        // returned false, which is exactly how Maintainer's −0.5(anchor=none) | −1.0(anchor=none) pair
+        // kept its culled seam. Screen both sides structurally first — that is what keeps tier 1
+        // free — and resolve only the sides the screen could not rule out.
+        boolean selfMaybe = mayBeLoweredForStepCull(world, pos, state);
+        boolean neighborMaybe = mayBeLoweredForStepCull(world, neighborPos, neighbor);
+        // Tier 1 — ordinary terrain. Nothing here can be lowered, so no step. ZERO heights resolved.
+        if (!selfMaybe && !neighborMaybe) {
+            return false;
+        }
+        // Tier 4 — geometric lowering. A screened-out side is known flush and contributes 0.0
+        // WITHOUT a resolution, so a lowered cube beside plain terrain costs one resolution, not two.
+        return stepHeightsDiffer(world, pos, state, neighborPos, neighbor, selfMaybe, neighborMaybe);
+    }
+
+    private static boolean stepHeightsDiffer(BlockView world, BlockPos pos, BlockState state,
+                                             BlockPos neighborPos, BlockState neighbor,
+                                             boolean resolveSelf, boolean resolveNeighbor) {
+        double selfDy = resolveSelf ? resolveStepCullDy(world, pos, state) : 0.0;
+        double neighborDy = resolveNeighbor ? resolveStepCullDy(world, neighborPos, neighbor) : 0.0;
         return Math.abs(selfDy - neighborDy) > 1.0e-6;
+    }
+
+    private static double resolveStepCullDy(BlockView world, BlockPos pos, BlockState state) {
+        if (stepCullHeightResolutionCounting) {
+            STEP_CULL_HEIGHT_RESOLUTIONS.incrementAndGet();
+        }
+        return getVisualYOffset(world, pos, state);
     }
 
     private static boolean isStepCullEligibleSubject(BlockState state) {
         return state.isOpaqueFullCube() || (state.getBlock() instanceof SlabBlock && state.contains(SlabBlock.TYPE));
     }
 
+    /**
+     * Cheap, view-independent, O(1)-lookup "this block is DEFINITELY lowered" marker: an object
+     * resting directly on a Terrain-Slabs-owned custom surface, or a persistently
+     * {@link SlabAnchorAttachment#isAnchored anchored} opaque full cube / slab (the ordinary "full
+     * block placed on a slab" case that is this mod's own core product intent, RULES.md §1).
+     *
+     * <p>It is a SUFFICIENT condition, never a necessary one — geometric lowering carries no
+     * anchor at all. Used only to pick the dispatch tier in {@link #isSlabHeightStepFace}; the
+     * "is this block eligible for lowering behaviour" question is answered by resolved HEIGHT
+     * (tier 4), never by this boolean (Maintainer's law: everything should be able to lower).
+     */
     private static boolean isLoweredOpaqueFullCubeForStepCull(BlockView world, BlockPos pos, BlockState state) {
         return isDirectCustomSlabSupportedObject(world, pos, state)
                 || ((state.isOpaqueFullCube() || state.getBlock() instanceof SlabBlock)
                         && SlabAnchorAttachment.isAnchored(world, pos));
+    }
+
+    /**
+     * Structural screen for tier 4 of {@link #isSlabHeightStepFace}: could this
+     * {@link #isStepCullEligibleSubject eligible} block possibly resolve to a non-zero
+     * {@link #getVisualYOffset}, WITHOUT resolving it? Conservative by design — it answers
+     * "maybe" whenever it cannot cheaply prove "no", and a wrong "no" costs only an undrawn face
+     * (the status quo), never a wrongly culled one.
+     *
+     * <p>NON-SLAB OPAQUE FULL CUBE (the terrain case that must stay free). Enumerating the lowering
+     * lanes {@code getYOffsetInner} can take for such a state, each needs something the block
+     * BELOW must supply:
+     * <ul>
+     *   <li>anchor lane — excluded by the caller (tier 4 runs only when
+     *       {@link #isLoweredOpaqueFullCubeForStepCull} is false);</li>
+     *   <li>frozen-flat lane — returns a hard {@code 0.0}, screened out below;</li>
+     *   <li>gap-fill and cantilever lanes — both gated on {@code getBlockState(pos.down()).isAir()};</li>
+     *   <li>{@code directCustomSlabSupportDy} / {@code loweredCuratedCarrierDy} — need a Terrain
+     *       Slabs surface, or a curated {@code isSlabSitCandidate} carrier, directly below;</li>
+     *   <li>{@code shouldOffset} → {@code hasSlabInColumn} — its own natural-terrain stop returns
+     *       false on the FIRST iteration when the block below is a plain, unanchored, non-slab
+     *       opaque full cube, so the column can never reach a slab deeper down;</li>
+     *   <li>every remaining branch is guarded by {@code state.isOpaqueFullCube() → return 0.0}.</li>
+     * </ul>
+     * So a plain opaque cube standing on a plain, flush, unanchored, non-curated opaque cube is
+     * provably at dy 0 — one {@code getBlockState} plus a few precomputed state flags decides it,
+     * and no height is resolved. Everything else answers "maybe".
+     *
+     * <p>SLAB SUBJECT. A slab's dy can come from a purely LATERAL source
+     * ({@code isAdjacentSideSlabLowered} BFSs sideways through the connected slab chain), so no
+     * bounded look at the block below is a sound screen for it. A slab therefore always answers
+     * "maybe" unless it is frozen-flat. HONEST COST: an unanchored slab pair now pays up to two
+     * {@link #getVisualYOffset} calls per face where it previously paid none. Slabs are a
+     * vanishing fraction of terrain blocks (worldgen places none), the calls are the same ones
+     * the model path already makes once per block, and the alternative — re-deriving a cheap
+     * lateral superset here — would be a second copy of the BFS's stop rules and would rot out of
+     * sync with it (the shared-predicate half-fix trap). Revisit only if a live FPS check bites.
+     */
+    private static boolean mayBeLoweredForStepCull(BlockView world, BlockPos pos, BlockState state) {
+        // FREEZE-ON-PLACE is a hard 0.0 in both the slab and non-slab lanes of getYOffsetInner,
+        // read immediately after the anchor lane the caller already ruled out.
+        if (SlabAnchorAttachment.isFrozenFlat(world, pos)) {
+            return false;
+        }
+        if (state.getBlock() instanceof SlabBlock) {
+            return true;
+        }
+        // Bed / double-block halves resolve their support from a DIFFERENT cell than pos.down()
+        // (the other half, or two blocks down), so the below-only reasoning does not apply.
+        if (state.contains(Properties.BED_PART) || state.contains(Properties.DOUBLE_BLOCK_HALF)) {
+            return true;
+        }
+        BlockPos belowPos = pos.down();
+        BlockState below = getBlockStateOrNull(world, belowPos);
+        return below == null                                        // outside the render region
+                || below.isAir()                                    // gap-fill / cantilever lanes
+                || below.getBlock() instanceof SlabBlock            // any slab support
+                || !below.isOpaqueFullCube()                        // the column walk can pass through
+                || getDirectObjectSupportTopOffset(below) > 0.0     // a Terrain Slabs custom surface
+                || SlabAnchorAttachment.isAnchored(world, belowPos) // a lowered support below
+                || isSlabSitCandidate(world, belowPos, below);      // GH#22 curated carrier
     }
 
     /**
