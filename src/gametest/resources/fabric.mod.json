@@ -57,6 +57,7 @@
       "com.slabbed.test.ThinTopLayerLoweringTest",
       "com.slabbed.test.ClientCarpetDyAuthorityTest",
       "com.slabbed.test.PottedTransformNeverPopTest",
+      "com.slabbed.test.NeighborUpdateInvarianceTest",
       "com.slabbed.client.BetaNoticeDismissedWorldsTest",
       "com.slabbed.client.BetaNoticeSessionGateTest"
     ],
