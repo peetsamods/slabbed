@@ -60,6 +60,7 @@
       "com.slabbed.test.ClientCarpetDyAuthorityTest",
       "com.slabbed.test.PottedTransformNeverPopTest",
       "com.slabbed.test.NeighborUpdateInvarianceTest",
+      "com.slabbed.test.CeilingRoleNotClassnameTest",
       "com.slabbed.client.BetaNoticeDismissedWorldsTest",
       "com.slabbed.client.BetaNoticeSessionGateTest"
     ],

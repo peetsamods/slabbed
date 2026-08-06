@@ -543,12 +543,19 @@ public final class SlabAnchorAttachment {
      * other qualifier lanes apply either — they had NO anchor coverage at all, unlike every other
      * subject category.
      *
-     * <p>Ceiling-attached / always-ceiling-hung decorations (lanterns hanging under a support,
-     * chains, hanging signs, spore blossom, ...) are explicitly excluded: their whole design is
+     * <p>Ceiling-attached / always-ceiling-hung decorations (a lantern hanging under a support, a
+     * hung chain, hanging signs, spore blossom, ...) are explicitly excluded: their whole design is
      * to keep DYNAMICALLY following the support above them (see
      * {@code SlabSupport#isLoweredUndersideHangerOwner}), so freezing them at a placement-time
      * anchor would be wrong — if their support's own dy later changes, they must follow it, not
      * stay pinned to the old value.
+     *
+     * <p><b>That exclusion is a ROLE test, not a classname test</b> ({@code isCeilingAttached} now
+     * takes world context). A FLOOR lever, a FLOOR button, a STANDING Y-axis chain and a TOP-half
+     * trapdoor with open air above it hang from nothing at all; they used to match the old
+     * block-TYPE list, lose their anchor, and pop the moment the block below them was broken (S-2's
+     * `chain_on_lowered_support_ceiling_scenery`). They now reach this qualifier and lock, exactly
+     * like the candle and the fence trapdoor above.
      */
     private static boolean qualifiesForDecorativeObjectAnchor(BlockView world, BlockPos pos, BlockState state) {
         if (state == null || state.isAir() || !state.getFluidState().isEmpty()) {
@@ -560,7 +567,8 @@ public final class SlabAnchorAttachment {
         if (isOrdinaryAnchorCandidate(world, pos, state)) {
             return false;
         }
-        if (SlabSupport.isCeilingAttached(state) || SlabSupport.isAlwaysCeilingHungDecoration(state)) {
+        if (SlabSupport.isCeilingAttached(world, pos, state)
+                || SlabSupport.isAlwaysCeilingHungDecoration(state)) {
             return false;
         }
         return SlabSupport.getYOffset(world, pos, state) < -1.0e-6;

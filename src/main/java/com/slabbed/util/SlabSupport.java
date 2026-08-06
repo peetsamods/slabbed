@@ -37,7 +37,9 @@ import net.minecraft.block.WallBlock;
 import net.minecraft.block.WallHangingSignBlock;
 import net.minecraft.block.WallSignBlock;
 import net.minecraft.block.WallTorchBlock;
+import net.minecraft.block.enums.Attachment;
 import net.minecraft.block.enums.BedPart;
+import net.minecraft.block.enums.BlockFace;
 import net.minecraft.block.enums.DoubleBlockHalf;
 import net.minecraft.block.enums.BlockHalf;
 import net.minecraft.block.enums.SlabType;
@@ -565,46 +567,131 @@ public final class SlabSupport {
     private static final ThreadLocal<Boolean> IN_GET_Y_OFFSET = ThreadLocal.withInitial(() -> Boolean.FALSE);
 
     /**
-     * Returns true if the block state represents a ceiling-attached block —
-     * one that hangs from the block above it by nature.
+     * ROLE, NOT CLASSNAME: true iff the block at {@code pos} — <em>in this state, right now</em> —
+     * actually hangs from the cell above it, and must therefore keep following that support instead
+     * of being height-locked to a support below.
+     *
+     * <p>The INTENT of this predicate is unchanged and is correct: a lantern on a chain, a hanging
+     * sign, cave vines genuinely hang from above, and if the block above sits lower they must sit
+     * lower with it. What was wrong was the IMPLEMENTATION — it was a list of block TYPES, so every
+     * class that <em>can</em> be ceiling-mounted matched in <em>every</em> state. A lever on the
+     * FLOOR matched {@code LeverBlock}; a floor button matched {@code ButtonBlock}; a chain
+     * STANDING on a block matched (a chain is Y-axis either way); a TOP-half trapdoor matched even
+     * though it is hinged to a side block and needs nothing above it. None of those hang from
+     * anything, yet all were denied a height anchor and left deriving their height live from the
+     * block BELOW them — so they popped the instant that block was broken. That was S-2's standing
+     * RED (`chain_on_lowered_support_ceiling_scenery`, −0.5 → 0.0 on `break_directly_below`) and it
+     * is LAW 2's exclude-by-BEHAVIOUR rule: ask what the block IS doing, never what its class could
+     * do.
+     *
+     * <p>Three answer shapes, in order of how much context each family needs:
+     * <ol>
+     *   <li><b>Intrinsic</b> — hangs by definition in every state it has: {@code HANGING=true}
+     *       (lantern), hanging sign, cave vines head/body, spore blossom, hanging roots. No query;
+     *       their behaviour is deliberately left exactly as it was.</li>
+     *   <li><b>Decided by the block's own vanilla property</b> — the class is ambiguous but the
+     *       state is not: lever/button carry {@link Properties#BLOCK_FACE} (only {@code CEILING}
+     *       hangs), a bell carries {@link Properties#ATTACHMENT} (only {@code CEILING} hangs), and
+     *       pointed dripstone carries {@link Properties#VERTICAL_DIRECTION} (only the DOWN-pointing
+     *       stalactite hangs; an UP-pointing stalagmite stands on the floor).</li>
+     *   <li><b>Decided by the world</b> — vanilla gives a Y-axis chain and a TOP-half trapdoor no
+     *       property at all that separates hung from standing, so these two ask
+     *       {@link #hasCeilingSupportAbove}: is there actually something up there to attach to?</li>
+     * </ol>
      */
-    public static boolean isCeilingAttached(BlockState state) {
-        // HANGING property (lanterns, etc.)
+    public static boolean isCeilingAttached(BlockView world, BlockPos pos, BlockState state) {
+        if (state == null || state.isAir()) {
+            return false;
+        }
+        // ── 1. Intrinsic hangers: true in every state, no query, behaviour deliberately unchanged.
+        // HANGING property (lanterns): the floor variant is HANGING=false and was never matched.
         if (state.contains(Properties.HANGING) && state.get(Properties.HANGING)) {
             return true;
         }
-        // Y-axis chains
-        if (state.getBlock() instanceof ChainBlock
-                && state.contains(Properties.AXIS)
-                && state.get(Properties.AXIS) == Direction.Axis.Y) {
-            return true;
-        }
-        // Hanging signs
-        if (state.getBlock() instanceof HangingSignBlock) {
-            return true;
-        }
-        // Top-half trapdoors (ceiling-mounted)
-        if (state.getBlock() instanceof TrapdoorBlock
-                && state.contains(Properties.BLOCK_HALF)
-                && state.get(Properties.BLOCK_HALF) == BlockHalf.TOP) {
-            return true;
-        }
-        // Bells, levers, buttons (can all be ceiling-mounted)
         Block block = state.getBlock();
-        if (block instanceof BellBlock
-                || block instanceof LeverBlock
-                || block instanceof ButtonBlock) {
-            return true;
-        }
-        // Specific ceiling-only block types
-        if (block instanceof SporeBlossomBlock
+        if (block instanceof HangingSignBlock
+                || block instanceof SporeBlossomBlock
                 || block instanceof HangingRootsBlock
-                || block instanceof PointedDripstoneBlock
                 || block instanceof CaveVinesHeadBlock
                 || block instanceof CaveVinesBodyBlock) {
             return true;
         }
+        // ── 2. The block's own vanilla property already answers it.
+        // Pointed dripstone: DOWN = stalactite (hangs), UP = stalagmite (stands on the floor).
+        if (block instanceof PointedDripstoneBlock) {
+            return state.contains(Properties.VERTICAL_DIRECTION)
+                    && state.get(Properties.VERTICAL_DIRECTION) == Direction.DOWN;
+        }
+        // Lever / button: FLOOR / WALL / CEILING. Only CEILING hangs; a floor lever or floor
+        // button rests on the block below and must be allowed to lock to it.
+        if (block instanceof LeverBlock || block instanceof ButtonBlock) {
+            return state.contains(Properties.BLOCK_FACE)
+                    && state.get(Properties.BLOCK_FACE) == BlockFace.CEILING;
+        }
+        // Bell: FLOOR / CEILING / SINGLE_WALL / DOUBLE_WALL. Only CEILING hangs.
+        if (block instanceof BellBlock) {
+            return state.contains(Properties.ATTACHMENT)
+                    && state.get(Properties.ATTACHMENT) == Attachment.CEILING;
+        }
+        // ── 3. No property distinguishes hung from standing — ask the world.
+        if (isVerticalChain(state) || isTopHalfTrapdoor(state)) {
+            return hasCeilingSupportAbove(world, pos);
+        }
         return false;
+    }
+
+    /** A Y-axis chain: the shape that is identical whether it hangs or stands. */
+    private static boolean isVerticalChain(BlockState state) {
+        return state.getBlock() instanceof ChainBlock
+                && state.contains(Properties.AXIS)
+                && state.get(Properties.AXIS) == Direction.Axis.Y;
+    }
+
+    /** A TOP-half (ceiling-mounted) trapdoor: sits flush with the underside of the cell above. */
+    private static boolean isTopHalfTrapdoor(BlockState state) {
+        return state.getBlock() instanceof TrapdoorBlock
+                && state.contains(Properties.BLOCK_HALF)
+                && state.get(Properties.BLOCK_HALF) == BlockHalf.TOP;
+    }
+
+    /**
+     * The world query behind role case 3: is there anything above this cell to attach to?
+     *
+     * <p>Walks up through a run of same-family members (a chain is normally a column of chains; a
+     * ceiling trapdoor stack is a column of trapdoors — see {@code c611b60f}, which added TOP-half
+     * trapdoors precisely so a 2× stack under a top slab both raise together). The run's TERMINATOR
+     * is the answer: open air above means nothing to hang from, so the subject is STANDING; any
+     * real block caps the run, so the subject hangs from it.
+     *
+     * <p>Two deliberate tie-breaks, both chosen to preserve genuinely-hanging behaviour:
+     * <ul>
+     *   <li>A chain that is <em>both</em> seated on a floor and capped by a ceiling is called
+     *       hanging — vanilla renders the two identically, and answering "hanging" keeps the
+     *       pre-existing result for that ambiguous cell rather than inventing a new one.</li>
+     *   <li>A {@code null} state (outside a render region — see {@link #getBlockStateOrNull}) is
+     *       treated as a cap for the same reason: when we cannot see the ceiling we must not
+     *       downgrade a real hanger into a floor mount.</li>
+     * </ul>
+     * Depth is capped by {@link #MAX_CHAIN_DEPTH}, matching every other column walk in this file;
+     * only the two ambiguous families ever reach it, so no other subject pays for it.
+     */
+    private static boolean hasCeilingSupportAbove(BlockView world, BlockPos pos) {
+        BlockPos cursor = pos.up();
+        for (int i = 0; i < MAX_CHAIN_DEPTH; i++) {
+            BlockState above = getBlockStateOrNull(world, cursor);
+            if (above == null) {
+                return true;
+            }
+            if (above.isAir()) {
+                return false;
+            }
+            if (isVerticalChain(above) || isTopHalfTrapdoor(above)) {
+                cursor = cursor.up();
+                continue;
+            }
+            return true;
+        }
+        return true;
     }
 
     /**
@@ -641,20 +728,21 @@ public final class SlabSupport {
         // blocks under a top slab that get +0.5 UP via getYOffset should not
         // also get -0.5 DOWN. Use isCeilingAttached here (safe, no shape calcs)
         // since shouldOffset is called from paths outside the recursion guard.
-        if (isCeilingAttached(state) && isTopLikeCeilingSurface(world.getBlockState(pos.up()))) {
+        if (isCeilingAttached(world, pos, state)
+                && isTopLikeCeilingSurface(world.getBlockState(pos.up()))) {
             return false;
         }
 
         // ceiling-attached blocks further down a chain of ceiling blocks
         // leading to a top slab also get +0.5 UP; exclude from -0.5
-        if (isCeilingAttached(state)) {
+        if (isCeilingAttached(world, pos, state)) {
             BlockPos cursor = pos.up();
             for (int i = 0; i < MAX_CHAIN_DEPTH; i++) {
                 BlockState cur = world.getBlockState(cursor);
                 if (isTopLikeCeilingSurface(cur)) {
                     return false;
                 }
-                if (isCeilingAttached(cur)) {
+                if (isCeilingAttached(world, cursor, cur)) {
                     cursor = cursor.up();
                     continue;
                 }
@@ -1245,7 +1333,7 @@ public final class SlabSupport {
             if (isLoweringTopLikeCeiling(cur)) {
                 return 0.5;
             }
-            if (isCeilingAttached(cur)) {
+            if (isCeilingAttached(world, cursor, cur)) {
                 cursor = cursor.up();
                 continue;
             }
@@ -1524,20 +1612,20 @@ public final class SlabSupport {
         // isLoweringTopLikeCeiling — otherwise it smooshes the hanger +0.5 up into the flush TS
         // block (L4). This is the sibling of the ceilingHungDecorationDy walk fixed for the
         // always-hung family; both must share the guard or lanterns/chains/dripstone regress.
-        if (isCeilingAttached(state) && isLoweringTopLikeCeiling(above)) {
+        if (isCeilingAttached(world, pos, state) && isLoweringTopLikeCeiling(above)) {
             return 0.5;
         }
 
         // cascading: ceiling-attached block below other ceiling-attached blocks
         // leading up to a top slab (e.g. 2nd dripstone, 2nd vine segment)
-        if (isCeilingAttached(state)) {
+        if (isCeilingAttached(world, pos, state)) {
             BlockPos cursor = pos.up();
             for (int i = 0; i < MAX_CHAIN_DEPTH; i++) {
                 BlockState cur = world.getBlockState(cursor);
                 if (isLoweringTopLikeCeiling(cur)) {
                     return 0.5;
                 }
-                if (isCeilingAttached(cur)) {
+                if (isCeilingAttached(world, cursor, cur)) {
                     cursor = cursor.up();
                     continue;
                 }

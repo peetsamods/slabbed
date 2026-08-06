@@ -93,6 +93,16 @@ re-specced.
 only.** This is a smaller RED surface than the A–F table below predicted, and it exposed a lane the
 table did not name:
 
+> **UPDATE (2026-08-06, later the same day): S-2 now reports 8 of 8 subjects CLEAN under
+> `-Dslabbed.lawGate=true`** — lane G closed by the placement-dy store (`d4f38510`), lane C closed
+> by the ceiling ROLE predicate (see the lane C row below). **This is NOT a claim that the line
+> obeys LAW 1, and the default must not be flipped on this evidence.** The audit below stands
+> verbatim: 6 of the 8 subjects cannot be moved by ANY mutation, so a clean matrix is a clean
+> reading of two reachable cells plus six that assert nothing. The honest statement is *"both
+> subjects S-2 can actually move now hold their height"*. Flipping the default is Phase 2's exit
+> criterion and Maintainer's call, and it should not be taken until the fixture defects named below are
+> repaired and the matrix has subjects its own mutations can reach.
+
 **Lane G — support-removal-driven magnitude re-derivation (confirmed, S-2-proven, and CLOSED
 2026-08-06 by the placement-dy store).** The RED subject `full_block_on_anchored_minus_one_support`
 (−1.0→−0.5) WAS anchored — presence protection held — but its height still moved, because the
@@ -163,7 +173,7 @@ counterpart, confirmed live by S-2 itself):**
 |---|---|---|
 | A | Command / rig / worldgen-authored cells — `onPlaced` never fires, so no lane anchors | Certain (this is what the rig fix addresses) |
 | B | Cantilever adjacency renders on "is lowered" (booleans, no magnitude), but the anchor twin demands `dy == -0.5` **exactly** (`SlabAnchorAttachment.qualifiesForAdjacentLoweredFullBlockAnchor`) — a −1.0 neighbour renders lowered and refuses to anchor, so the block gets neither an anchor nor a frozen-flat marker. **Scope:** reachable only by ordinary full blocks and connecting structurals — the qualifier is gated on `isOrdinaryAnchorCandidate`, which rejects slabs, carpets, block entities and decorations before the equality is evaluated. **UNTESTED: no S-2 subject enters this lane** (audit 2026-08-06). | High (any TS or mixed-slab world) |
-| C | Object-follows-support-below, denied an anchor by `isCeilingAttached`'s **classname list** — floor lever/button, Y-chain, **TOP-half trapdoor** (needs no support, so the real-click repro) | Moderate, real-click reachable |
+| C | ~~Object-follows-support-below, denied an anchor by `isCeilingAttached`'s **classname list** — floor lever/button, Y-chain, **TOP-half trapdoor** (needs no support, so the real-click repro)~~ **CLOSED 2026-08-06** — `isCeilingAttached` now asks the ROLE (does this block, in this state, actually hang from above?) instead of the block TYPE: lever/button by `BLOCK_FACE`, bell by `ATTACHMENT`, dripstone by `VERTICAL_DIRECTION`, and the two families vanilla gives no property (Y-chain, TOP-half trapdoor) by a world query for something above to hang from. Floor-mounted subjects now reach `qualifiesForDecorativeObjectAnchor` and lock. Intrinsic hangers (lantern `HANGING=true`, hanging sign, cave vines, spore blossom, hanging roots) are untouched by construction. | Moderate, real-click reachable |
 | D | Full block on an unanchored adjacency-lowered TOP/DOUBLE slab | Old worlds, authored cells |
 | E | Standing-object probe vs a column walk that stops at air | Low |
 | F | Gap-fill under an anchored lowered block entity | Low |
