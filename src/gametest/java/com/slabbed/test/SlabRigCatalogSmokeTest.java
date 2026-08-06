@@ -1,6 +1,8 @@
 package com.slabbed.test;
 
+import com.slabbed.anchor.SlabAnchorAttachment;
 import com.slabbed.command.SlabRigCommand;
+import com.slabbed.util.SlabSupport;
 import com.slabbed.util.SlabTestKit;
 import net.fabricmc.fabric.api.gametest.v1.GameTest;
 import net.minecraft.block.Block;
@@ -262,6 +264,67 @@ public final class SlabRigCatalogSmokeTest {
         List<String> mismatches = SlabRigCommand.verify(world, built.plan());
         ctx.assertTrue(mismatches.isEmpty(),
                 "mega does not measure what its signs say: " + String.join("; ", mismatches));
+
+        SlabRigCommand.clear(world, built.plan());
+        ctx.complete();
+    }
+
+    /**
+     * LIVE_LEDGER (2026-08-06, Maintainer's chain/ceiling pop): {@code mega} row 3
+     * ({@code overhang_and_ceiling}) writes its CEILING as plain scenery (a stone block one cell
+     * above the subject), authored via a bare {@code plan.put} with no anchor and no freeze
+     * marker. It rendered lowered purely from a LIVE geometric derivation (the subject beneath it
+     * is anchored, so the ceiling's own column walk found a lowering source), so it looked correct
+     * the moment it was built — and then popped to vanilla (flush) position the instant the
+     * subject below it was broken, even though the ceiling itself was never touched. That is a
+     * LAW 1 violation authored by the rig, not a product bug: a real player click on the identical
+     * shape anchors correctly.
+     *
+     * <p>Built through the real {@code /slabrig}-equivalent commit path ({@link
+     * SlabRigCommand#buildMega}), not a hand-simulated anchor call, so this proves the ACTUAL rig
+     * code. Row 3's reference column (n=0, no kit columns needed) is enough: ceiling at
+     * {@code (2,4,6)} sits directly above the subject at {@code (2,3,6)}, both inside the 8x8x8
+     * plot.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void megaCeilingSceneryNeverPopsWhenItsSubjectBreaks(TestContext ctx) {
+        ServerWorld world = ctx.getWorld();
+        BlockPos origin = ctx.getAbsolutePos(BlockPos.ORIGIN);
+
+        SlabRigCommand.BuiltRig built = SlabRigCommand.buildMega(world, origin, 0);
+        ctx.assertTrue(built != null, "mega must build at a clear origin");
+
+        // Row 3 (overhang_and_ceiling), reference column: subject at y+3, ceiling scenery at y+4.
+        BlockPos subjectPos = origin.add(2, 3, 6);
+        BlockPos ceilingPos = origin.add(2, 4, 6);
+        ctx.assertTrue(world.getBlockState(subjectPos).isOf(Blocks.STRIPPED_JUNGLE_LOG),
+                "fixture: row 3's reference subject must be the stripped_jungle_log, found "
+                        + world.getBlockState(subjectPos));
+        ctx.assertTrue(world.getBlockState(ceilingPos).isOf(Blocks.STONE),
+                "fixture: row 3's ceiling scenery must be stone, found " + world.getBlockState(ceilingPos));
+
+        // RED assertion 1: the ceiling scenery must carry the same never-pop anchor a real click
+        // on this exact geometry would record. Before the fix this is false — plan.put wrote it
+        // with no anchor and no freeze marker.
+        ctx.assertTrue(SlabAnchorAttachment.isAnchored(world, ceilingPos),
+                "row 3 ceiling scenery at " + ceilingPos.toShortString()
+                        + " must be anchored like a real click would leave it — it is not");
+
+        double ceilingDyBefore = SlabSupport.getYOffset(world, ceilingPos, world.getBlockState(ceilingPos));
+
+        // Break the subject below (the real "chain popped" trigger) — a genuine break, not a raw
+        // setBlockState, so it fires the same onStateReplaced path a player mining it would.
+        world.breakBlock(subjectPos, false);
+
+        double ceilingDyAfter = SlabSupport.getYOffset(world, ceilingPos, world.getBlockState(ceilingPos));
+
+        // RED assertion 2: breaking the subject must NOT change the ceiling's height (LAW 1 — a
+        // placed block stays where it was placed). Before the fix, the ceiling's dy was purely
+        // live-derived from the subject's own anchored dy, so removing the subject collapsed the
+        // column walk and the ceiling snapped from its lowered dy to flush.
+        ctx.assertTrue(Math.abs(ceilingDyAfter - ceilingDyBefore) < 1.0e-6,
+                "breaking the subject below must not move the ceiling scenery: before="
+                        + ceilingDyBefore + " after=" + ceilingDyAfter);
 
         SlabRigCommand.clear(world, built.plan());
         ctx.complete();

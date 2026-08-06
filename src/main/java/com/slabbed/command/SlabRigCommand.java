@@ -37,6 +37,7 @@ import net.minecraft.util.math.Direction;
 import net.minecraft.world.World;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -317,19 +318,34 @@ public final class SlabRigCommand {
             anchors.removeIf(pos -> !cells.containsKey(pos));
             checks.removeIf(check -> !cells.containsKey(check.pos()));
 
-            for (BlockPos pos : anchors) {
-                SlabAnchorAttachment.addAnchor(world, pos, world.getBlockState(pos));
-            }
-            // NEVER-POP AUTHORING (LIVE_LEDGER 2026-08-05 second pass, "popping in the back
-            // row"): a real click runs BlockOnPlacedAnchorMixin.onPlaced = addAnchor THEN
-            // freezeLoweredOnPlace. Rig subjects got only the addAnchor half (the loop above),
-            // so a FLAT-placed subject recorded neither an anchor (the qualifier lanes only
-            // accept lowered placements) nor the FROZEN_FLAT marker — it kept re-deriving live
-            // and popped on neighbour change. Complete the pair through the SAME entry point a
-            // click uses (no new lane): freezeLoweredOnPlace self-gates on structural/decorative
-            // semantics and no-ops for already-anchored or lowered cells.
-            for (BlockPos pos : subjects.keySet()) {
-                SlabAnchorAttachment.freezeLoweredOnPlace(world, pos, world.getBlockState(pos));
+            // NEVER-POP AUTHORING (LIVE_LEDGER 2026-08-05 second + third pass, "popping in the
+            // back row" / "ceiling scenery popping when its subject breaks"): a real click runs
+            // BlockOnPlacedAnchorMixin.onPlaced = addAnchor THEN freezeLoweredOnPlace for the ONE
+            // block it placed. Earlier this loop ran addAnchor over `anchors` and freeze over
+            // `subjects` only, so any cell written by a plain put() — ceiling stone, arms, seat
+            // stacks, sign pedestals — got NEITHER call: it rendered lowered (or flat) purely via
+            // live geometric derivation with anchor=none, and popped the instant a neighbour
+            // changed. Sweep BOTH calls over every written cell instead — the same two functions
+            // a real click's onPlaced would call, just for every cell the rig writes, not only the
+            // ones some caller happened to mark. No new anchoring lane: both entry points already
+            // self-gate on their own qualifier lanes and no-op for cells that don't qualify.
+            //
+            // ORDER MATTERS: qualifiesForColumnLoweredAnchor / hasLoweringSourceInColumnBelow (and
+            // their slab-side/adjacent mirrors) treat "the cell below is ALREADY anchored" as a
+            // lowering source in its own right, not just "the cell below is geometrically a slab".
+            // A real vertical build authors bottom-up, so by the time a cell's onPlaced runs, its
+            // own support has already had its onPlaced run too. `cells`' LinkedHashMap insertion
+            // order is NOT reliably bottom-up across every builder shape here — e.g. row 3's
+            // overhang_and_ceiling seat inserts the y+4 ceiling BEFORE the y+3 subject cell that
+            // sits spatially beneath it (planSeat writes the ceiling, then the caller writes the
+            // subject on the returned position afterwards) — so sort by Y ascending (stable, so
+            // same-Y cells keep their authored order) rather than trusting map iteration order.
+            List<BlockPos> anchorOrder = new ArrayList<>(cells.keySet());
+            anchorOrder.sort(Comparator.comparingInt(BlockPos::getY));
+            for (BlockPos pos : anchorOrder) {
+                BlockState cellState = world.getBlockState(pos);
+                SlabAnchorAttachment.addAnchor(world, pos, cellState);
+                SlabAnchorAttachment.freezeLoweredOnPlace(world, pos, cellState);
             }
             for (Map.Entry<BlockPos, String[]> e : signs.entrySet()) {
                 writeSign(world, e.getKey(), e.getValue());
