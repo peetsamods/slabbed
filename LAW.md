@@ -78,11 +78,19 @@ re-specced.
 only.** This is a smaller RED surface than the A–F table below predicted, and it exposed a lane the
 table did not name:
 
-**Lane G — support-removal-driven magnitude re-derivation (confirmed, S-2-proven).** Both RED
-subjects (`full_block_on_anchored_minus_one_support`: −1.0→−0.5; `chain_on_lowered_support`:
-−0.5→0.0) WERE anchored — presence protection held — but their height still moved, because the
+**Lane G — support-removal-driven magnitude re-derivation (confirmed, S-2-proven, and CLOSED
+2026-08-06 by the placement-dy store).** The RED subject `full_block_on_anchored_minus_one_support`
+(−1.0→−0.5) WAS anchored — presence protection held — but its height still moved, because the
 anchor records only *that* the cell is lowered, not *how far*, and the magnitude re-derives live
-from a support that `break_directly_below` just destroyed. This is the sharpest demonstration yet
+from a support that `break_directly_below` just destroyed.
+
+> **CORRECTION (2026-08-06).** An earlier revision of this file claimed **both** S-2 REDs were
+> anchored. That was wrong, and it was my error, not the test's.
+> `chain_on_lowered_support_ceiling_scenery` is **never anchored** — probed directly:
+> `chainAnchored=false`. The Y-axis chain is rejected by every anchor lane and explicitly excluded
+> by `isCeilingAttached`. **It is a lane C cell, not lane G.** The RED message corroborates this on
+> its face: it falls to *exactly* `0.0`, which an anchored cell can never produce — an anchored
+> cell floors at `-0.5` once its seat becomes air. Lane G was therefore 1 of 2, not 2 of 2. This is the sharpest demonstration yet
 of the project's own thesis: **an anchor is a boolean fact, not a stored number**, so it cannot
 protect a value that depends on a neighbour which no longer exists. Every lane A–F below is "no
 anchor at all"; lane G is "anchored, and still not enough" — the harder half of the problem, and

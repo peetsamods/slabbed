@@ -127,6 +127,9 @@ public final class SlabAnchorAttachment {
         if (ANCHOR_TYPE == null || FROZEN_FLAT_TYPE == null) {
             throw new IllegalStateException("SlabAnchorAttachment failed to register");
         }
+        // The magnitude store travels with the anchor set it completes, so it registers here and
+        // can never be left unregistered by a new entrypoint that only knows about anchors.
+        SlabPlacementDyAttachment.register();
     }
 
     // ── server-side mutation ──────────────────────────────────────────
@@ -191,10 +194,42 @@ public final class SlabAnchorAttachment {
                 Slabbed.LOGGER.info("[ANCHOR] add success pos={} chunk={} setSize={}",
                         pos.toShortString(), chunk.getPos(), set.size());
             }
+            recordPlacementDy(world, pos, state);
             if (SlabbedAuditBridge.isLiveTraceEnabled()) {
                 BlockPos supportPos = sideSlabAnchor ? pos : pos.down();
                 SlabbedAuditBridge.captureLiveTrace(world, supportPos, pos, "ANCHOR_ADDED");
             }
+        }
+    }
+
+    /**
+     * LANE G ({@code LAW.md}): the anchor just recorded above says only THAT this cell is lowered.
+     * Capture HOW FAR, once, right here, and hand it to {@link SlabPlacementDyAttachment}.
+     *
+     * <p>Read AFTER the anchor is in the set, deliberately: at this instant {@code getYOffset}
+     * takes the anchor lane, so the number captured is exactly the height the player sees the
+     * moment the block appears — the placed height, which is the only height the law lets this
+     * cell ever have. The store holds no fact for {@code pos} yet, so this read cannot see its own
+     * uninitialised value; the anchor lane resolves it from the surroundings, which is the one
+     * legitimate time the surroundings get a say.
+     *
+     * <p>Only a LOWERED result is stored. A zero here is the seat correction that lifts a piece out
+     * of a support it would otherwise sink into — a property of the shapes involved, not a placed
+     * magnitude — and the flat half of the law already belongs to {@link #FROZEN_FLAT_TYPE}, whose
+     * precedence must not change.
+     *
+     * <p>KNOWN, AND DELIBERATE: {@code SlabSupport.supportSeatDy} has a hole — a lowered TOP or
+     * DOUBLE slab support matches none of its three arms and reports nothing, so a piece standing
+     * on one settles on the {@code -0.5} floor instead of its true depth. Reading through that path
+     * here therefore captures the floor. That is the correct capture anyway: the number worth
+     * keeping is the height the player SAW when the block appeared, and the floor is what they saw.
+     * Repairing the hole would change where such a piece is drawn, which is a separate question
+     * about placement-time resolution, not about this store; it is reported, not fixed here.
+     */
+    private static void recordPlacementDy(World world, BlockPos pos, BlockState state) {
+        double dy = SlabSupport.getYOffset(world, pos, state);
+        if (dy < -1.0e-6) {
+            SlabPlacementDyAttachment.record(world, pos, dy);
         }
     }
 
@@ -289,6 +324,9 @@ public final class SlabAnchorAttachment {
                 Slabbed.LOGGER.info("[ANCHOR] frozen_flat remove pos={}", pos.toShortString());
             }
         }
+        // The stored magnitude belongs to the anchor and dies with it: the cell is being emptied or
+        // handed to a piece that must be measured from scratch.
+        SlabPlacementDyAttachment.clear(world, pos);
         LongOpenHashSet existing = chunk.getAttached(ANCHOR_TYPE);
         if (existing == null || existing.isEmpty()) {
             if (TRACE) {

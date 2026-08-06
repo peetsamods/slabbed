@@ -2,6 +2,7 @@ package com.slabbed.util;
 
 import com.slabbed.Slabbed;
 import com.slabbed.anchor.SlabAnchorAttachment;
+import com.slabbed.anchor.SlabPlacementDyAttachment;
 import com.slabbed.compat.CompatSlabSurfaceKind;
 import com.slabbed.compat.CompatHooks;
 import it.unimi.dsi.fastutil.longs.Long2DoubleOpenHashMap;
@@ -1269,10 +1270,11 @@ public final class SlabSupport {
         // inherits the same -0.5 dy so the stack stays visually continuous (no gap).
         if (state.getBlock() instanceof SlabBlock) {
             if (SlabAnchorAttachment.isAnchored(world, pos)) {
-                // The anchor is a boolean membership set, not a stored height — resolve the dy
-                // from the support's ACTUAL rendered top face (live-reported 0.5 floating gap for
-                // a slab placed on a support already at -1.0). Floors at the historical -0.5.
-                return loweredFollowerDy(world, pos, 0);
+                // The anchor is a boolean membership set, not a stored height. anchoredCellDy
+                // returns the height this slab was PLACED at when the store has it, and otherwise
+                // resolves from the support's ACTUAL rendered top face exactly as before
+                // (live-reported 0.5 floating gap for a slab placed on a support already at -1.0).
+                return anchoredCellDy(world, pos, 0);
             }
             // FREEZE-ON-PLACE: a slab locked FLAT at placement stays at 0 — a lowered carrier
             // placed beside/under it later can no longer make it inherit a lowered position
@@ -1319,7 +1321,7 @@ public final class SlabSupport {
             // loweredFollowerDy is recursion-safe and floors at -0.5, so every other anchor case
             // (block on a plain slab, persisted anchor after its slab was broken, column /
             // adjacent / below-anchored) is unchanged.
-            double anchorDy = loweredFollowerDy(world, pos, 0);
+            double anchorDy = anchoredCellDy(world, pos, 0);
             if (com.slabbed.anchor.SlabAnchorAttachment.TRACE) {
                 String side = (world instanceof net.minecraft.world.World w && w.isClient()) ? "CLIENT" : "SERVER";
                 Slabbed.LOGGER.info("[ANCHOR] dy applied side={} pos={} state={} dy={}",
@@ -1707,7 +1709,7 @@ public final class SlabSupport {
         // adjacency case below stays a flat -0.5: that is a SIDE relationship, and the resolver
         // reads the support BELOW.
         if (SlabAnchorAttachment.isAnchored(world, pos)) {
-            return loweredFollowerDy(world, pos, 0);
+            return anchoredCellDy(world, pos, 0);
         }
         BlockPos belowPos = pos.down();
         BlockState below = world.getBlockState(belowPos);
@@ -1758,6 +1760,33 @@ public final class SlabSupport {
      *
      * <p>Never calls {@link #getYOffset} — safe inside the {@code IN_GET_Y_OFFSET} guard.
      */
+    /**
+     * THE ANCHORED-CELL HEIGHT — asked in exactly one place, so a stored placement height and the
+     * live resolver can never be consulted by only half the lanes.
+     *
+     * <p>{@code LAW.md} lane G, proven live by {@code NeighborUpdateInvarianceTest}: an anchor is
+     * presence, not magnitude, so every lane holding one used to answer by deriving the number
+     * afresh from whatever happened to still be standing underneath — and a neighbour edit that
+     * removed that support silently moved a placed block. When
+     * {@link SlabPlacementDyAttachment} holds the height this cell was placed at, that number IS
+     * the answer and no surrounding block gets a vote. With no stored fact — every cell of every
+     * world saved before the store existed — this is {@link #loweredFollowerDy} verbatim, so
+     * absence is indistinguishable from the behaviour that shipped.
+     *
+     * <p>Folded into the shared helper rather than patched at one call site, per this project's
+     * shared-predicate law: six lanes ask an anchored cell how high it sits (the two
+     * {@link #getYOffsetInner} branches, the two support mirrors, the column walk, and the
+     * bottom-slab support mirror). If one answered from the store and another from the live walk,
+     * the two would disagree about the same cell — the split this file has already paid for.
+     */
+    private static double anchoredCellDy(BlockView world, BlockPos pos, int depth) {
+        double stored = SlabPlacementDyAttachment.storedDy(world, pos);
+        if (!Double.isNaN(stored)) {
+            return stored;
+        }
+        return loweredFollowerDy(world, pos, depth);
+    }
+
     private static double loweredFollowerDy(BlockView world, BlockPos pos, int depth) {
         if (world == null || pos == null || depth >= MAX_SUPPORT_RESOLVE_DEPTH) {
             return -0.5;
@@ -1904,8 +1933,9 @@ public final class SlabSupport {
         }
         if (SlabAnchorAttachment.isAnchored(world, pos)) {
             // An anchor records THAT this block was placed on a lowered surface, not HOW FAR down
-            // it went. Resolve its actual dy from its own support (floors at the historical -0.5).
-            return loweredFollowerDy(world, pos, depth);
+            // it went. anchoredCellDy supplies the stored placement height when there is one, and
+            // otherwise resolves from this block's own support exactly as before.
+            return anchoredCellDy(world, pos, depth);
         }
         double directCustomDy = directCustomSlabSupportDy(world, pos, state);
         if (!Double.isNaN(directCustomDy)) {
@@ -2178,8 +2208,9 @@ public final class SlabSupport {
         }
         if (SlabAnchorAttachment.isAnchored(world, supportPos)) {
             // Same anchor-is-not-a-height correction as loweredFullBlockUndersideSupportDy: an
-            // anchored bottom slab may itself sit deeper than -0.5. Floors at -0.5.
-            return loweredFollowerDy(world, supportPos, depth);
+            // anchored bottom slab may itself sit deeper than -0.5, and its own placement height
+            // wins when the store has it.
+            return anchoredCellDy(world, supportPos, depth);
         }
         double directCustomDy = directCustomSlabSupportDy(world, supportPos, s);
         if (Double.isFinite(directCustomDy) && directCustomDy < -1.0e-6) {
@@ -2316,9 +2347,10 @@ public final class SlabSupport {
             }
             if (SlabAnchorAttachment.isAnchored(world, cursor)) {
                 // Third mirror of the flat-constant defect: the anchored block in this column may
-                // itself render deeper than -0.5, and whatever stacks on it inherits its ACTUAL
-                // top face. Same resolver as the two anchor lanes; floors at -0.5.
-                return loweredFollowerDy(world, cursor, depth);
+                // itself render deeper than -0.5, and whatever stacks on it takes its ACTUAL top
+                // face. Same helper as the other anchor lanes, so a stored placement height is
+                // seen here too; floors at -0.5.
+                return anchoredCellDy(world, cursor, depth);
             }
             if (cur.isAir() || cur.getBlock() instanceof SlabBlock || isThinTopLayer(cur)) {
                 return 0.0;

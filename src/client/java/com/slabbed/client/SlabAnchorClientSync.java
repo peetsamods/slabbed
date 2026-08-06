@@ -2,7 +2,9 @@ package com.slabbed.client;
 
 import com.slabbed.Slabbed;
 import com.slabbed.anchor.SlabAnchorAttachment;
+import com.slabbed.anchor.SlabPlacementDyAttachment;
 import com.slabbed.util.SlabSupport;
+import it.unimi.dsi.fastutil.longs.Long2ByteOpenHashMap;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
@@ -63,6 +65,19 @@ public final class SlabAnchorClientSync {
             return set != null && set.contains(pos.asLong());
         };
 
+        // Same client-world fallback for the PLACEMENT-HEIGHT store (LAW.md lane G). Without it the
+        // chunk mesh would resolve an anchored cell's height live while outline and raycast — which
+        // do get a World — read the stored placement height, and the three would draw the same
+        // block at two different heights.
+        SlabPlacementDyAttachment.clientPlacementDyLookup = pos -> {
+            MinecraftClient mc = MinecraftClient.getInstance();
+            if (mc == null || mc.world == null) {
+                return Double.NaN;
+            }
+            return SlabPlacementDyAttachment.lookup(
+                    mc.world.getChunk(pos.getX() >> 4, pos.getZ() >> 4), pos);
+        };
+
         ClientChunkEvents.CHUNK_LOAD.register(SlabAnchorClientSync::onChunkLoad);
     }
 
@@ -106,6 +121,33 @@ public final class SlabAnchorClientSync {
                 scheduleRerendersForSet(mc, initialFrozenFlat);
             }
         }
+
+        // PLACEMENT-HEIGHT store: same live-sync + initial-population rerender handling. The stored
+        // height changes what a cell draws at without changing any BlockState, so nothing else
+        // would ever mark the section dirty.
+        chunk.<Long2ByteOpenHashMap>onAttachedSet(SlabPlacementDyAttachment.PLACEMENT_DY_TYPE)
+                .register((oldFacts, newFacts) -> {
+                    MinecraftClient mc = MinecraftClient.getInstance();
+                    if (mc.worldRenderer == null) {
+                        return;
+                    }
+                    scheduleRerendersForPositions(mc, oldFacts);
+                    scheduleRerendersForPositions(mc, newFacts);
+                });
+        Long2ByteOpenHashMap initialPlacementDy = chunk.getAttached(SlabPlacementDyAttachment.PLACEMENT_DY_TYPE);
+        if (initialPlacementDy != null && !initialPlacementDy.isEmpty()) {
+            MinecraftClient mc = MinecraftClient.getInstance();
+            if (mc.worldRenderer != null) {
+                scheduleRerendersForPositions(mc, initialPlacementDy);
+            }
+        }
+    }
+
+    private static void scheduleRerendersForPositions(MinecraftClient mc, Long2ByteOpenHashMap facts) {
+        if (facts == null || facts.isEmpty()) {
+            return;
+        }
+        scheduleRerendersForSet(mc, new LongOpenHashSet(facts.keySet()));
     }
 
     private static void scheduleRerendersForSet(MinecraftClient mc, LongOpenHashSet set) {

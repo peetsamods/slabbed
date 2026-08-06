@@ -29,6 +29,8 @@
       "com.slabbed.test.NeverPopMatrixTest",
       "com.slabbed.test.BlockEntityNeverPopTest",
       "com.slabbed.anchor.FrozenFlatAttachmentCapacityTest",
+      "com.slabbed.anchor.PlacementDyAttachmentCapacityTest",
+      "com.slabbed.anchor.PlacementDyStoreTest",
       "com.slabbed.test.SmooshUnderTerrainSlabsTest",
       "com.slabbed.test.DySpecificationTest",
       "com.slabbed.test.AuditFixesTest",

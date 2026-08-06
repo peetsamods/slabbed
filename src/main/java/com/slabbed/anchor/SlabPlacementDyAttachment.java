@@ -1,0 +1,322 @@
+package com.slabbed.anchor;
+
+import com.mojang.serialization.Codec;
+import com.mojang.serialization.codecs.RecordCodecBuilder;
+import com.slabbed.Slabbed;
+import it.unimi.dsi.fastutil.longs.Long2ByteOpenHashMap;
+import it.unimi.dsi.fastutil.longs.LongArrayList;
+import java.util.function.ToDoubleFunction;
+import java.util.stream.IntStream;
+import java.util.stream.LongStream;
+import net.fabricmc.fabric.api.attachment.v1.AttachmentRegistry;
+import net.fabricmc.fabric.api.attachment.v1.AttachmentSyncPredicate;
+import net.fabricmc.fabric.api.attachment.v1.AttachmentType;
+import net.minecraft.network.RegistryByteBuf;
+import net.minecraft.network.codec.PacketCodec;
+import net.minecraft.util.Identifier;
+import net.minecraft.util.math.BlockPos;
+import net.minecraft.world.BlockView;
+import net.minecraft.world.World;
+import net.minecraft.world.chunk.WorldChunk;
+
+/**
+ * THE PLACEMENT-HEIGHT STORE — the number an anchor was never able to carry.
+ *
+ * <p>{@code LAW.md} lane G, proven live by {@code NeighborUpdateInvarianceTest}: a cell can hold a
+ * {@link SlabAnchorAttachment#ANCHOR_TYPE} anchor, keep it across every neighbour edit, and STILL
+ * change height — because the anchor is a {@code LongOpenHashSet} of positions. It records THAT a
+ * cell is lowered, never HOW FAR, so the magnitude is derived afresh on every read from a support
+ * that the neighbour edit may have just destroyed. Presence protection cannot protect a value.
+ * This attachment stores the value.
+ *
+ * <p>SCOPE, deliberately narrow. A fact is written only where {@link SlabAnchorAttachment#addAnchor}
+ * decides a cell has earned an anchor, and only when the height it resolves to at that moment is
+ * lowered. Cells with no anchor are untouched and keep deriving live exactly as before; the flat
+ * half of the law stays with {@link SlabAnchorAttachment#FROZEN_FLAT_TYPE}. This is NOT the frozen
+ * height architecture — no master switch, no stable-flat rule, no old-world migration. It gives the
+ * cells that already have presence protection their magnitude too, and nothing else.
+ *
+ * <p>OLD WORLDS ARE THE ABSENT CASE, BY CONSTRUCTION. A world saved before this attachment existed
+ * simply has no such attachment, so {@link #storedDy} answers {@link Double#NaN} and every caller
+ * takes the identical path it took before this class existed. Absence must remain indistinguishable
+ * from the previous behaviour — that is the migration-safety contract, and
+ * {@code PlacementDyStoreTest} pins it.
+ *
+ * <p>VALUES ARE QUANTISED to sixteenths of a block (the vanilla pixel grid) and held that way in
+ * memory, on disk and on the wire, so a height read in-session is bit-identical to the same height
+ * read after a world reload. {@code DY_SPEC.md} CS-CAP bounds the real alphabet to
+ * {@code {-1.0, -0.5, 0.0}}; a height that does not land exactly on the sixteenth grid, or falls
+ * outside a signed byte of sixteenths, is simply not recorded (the cell keeps its live behaviour)
+ * rather than being silently rounded into a different height.
+ *
+ * <p>SYNC CAPACITY IS ENFORCED, NOT ASSUMED (issue #38, {@code 5817d264}). Every write asks
+ * {@link ChunkPositionDyMapPacketCodec#encodedByteLength} what the chunk will cost and refuses to
+ * grow past {@link #SYNC_SAFE_ENCODED_BYTES}, so a dense chunk degrades to "no new facts" instead
+ * of throwing out of {@code setAttached}. {@code PlacementDyAttachmentCapacityTest} characterises
+ * where that boundary sits.
+ */
+public final class SlabPlacementDyAttachment {
+
+    private SlabPlacementDyAttachment() {
+    }
+
+    /** Sixteenths of a block: the vanilla pixel grid, and a power of two so the maths is exact. */
+    private static final double QUANTUM_DENOMINATOR = 16.0;
+
+    /** Sentinel for "this height cannot be represented exactly on the stored grid". */
+    private static final int UNREPRESENTABLE = Integer.MIN_VALUE;
+
+    /**
+     * Largest number of bytes this attachment may encode to.
+     *
+     * <p>Fabric rejects a synchronized attachment whose Netty backing array exceeds 32,502 bytes,
+     * and Netty rounds the backing array up to a power of two, so 16,384 is the largest capacity
+     * that clears the ceiling and a write of 16,385 bytes is already over. Fabric prefixes one
+     * boolean of its own, leaving 16,383 for the codec — this is exactly the arithmetic that made
+     * 2,047 raw longs fit and 2,048 fail in issue #38, restated for this attachment.
+     */
+    static final int SYNC_SAFE_ENCODED_BYTES = 16_383;
+
+    /**
+     * Client-side fallback for placement-height queries from chunk render paths that receive a
+     * non-{@link World} {@link BlockView} (e.g. {@code ChunkRendererRegion}). Same contract as
+     * {@link SlabAnchorAttachment#clientAnchorLookup}: set by the client entrypoint, always null on
+     * a dedicated server, answers {@link Double#NaN} when there is no fact. Without it the chunk
+     * mesh would read the live height while outline and raycast read the stored one, and the three
+     * would disagree — the exact split this project treats as a first-class defect.
+     */
+    public static ToDoubleFunction<BlockPos> clientPlacementDyLookup = null;
+
+    /** One WARN per session when a chunk saturates, not one per click there. */
+    private static volatile boolean budgetReported = false;
+
+    private static final Identifier PLACEMENT_DY_ID = Identifier.of(Slabbed.MOD_ID, "placement_dy");
+
+    /**
+     * Disk form: a {@code LongArrayTag} of packed positions beside an {@code IntArrayTag} of the
+     * matching quantised heights, both in ascending position order so a save is stable.
+     */
+    private static final Codec<Long2ByteOpenHashMap> MAP_CODEC = RecordCodecBuilder.create(
+            instance -> instance.group(
+                    Codec.LONG_STREAM.fieldOf("positions")
+                            .forGetter(map -> LongStream.of(sortedPositions(map))),
+                    Codec.INT_STREAM.fieldOf("dy_sixteenths")
+                            .forGetter(map -> IntStream.of(quantisedHeightsInPositionOrder(map)))
+            ).apply(instance, SlabPlacementDyAttachment::fromStreams));
+
+    private static final PacketCodec<RegistryByteBuf, Long2ByteOpenHashMap> PACKET_CODEC =
+            ChunkPositionDyMapPacketCodec.INSTANCE;
+
+    /**
+     * Package-private proof seam for the capacity regression test, mirroring
+     * {@code SlabAnchorAttachment.packetCodecForTesting} so the test cannot exercise a duplicate
+     * approximation of the production sync path.
+     */
+    static PacketCodec<RegistryByteBuf, Long2ByteOpenHashMap> packetCodecForTesting() {
+        return PACKET_CODEC;
+    }
+
+    /** Package-private proof seam: the exact size prediction the write guard consults. */
+    static int encodedByteLengthForTesting(Long2ByteOpenHashMap facts) {
+        return ChunkPositionDyMapPacketCodec.encodedByteLength(facts);
+    }
+
+    public static final AttachmentType<Long2ByteOpenHashMap> PLACEMENT_DY_TYPE =
+            AttachmentRegistry.<Long2ByteOpenHashMap>create(PLACEMENT_DY_ID, builder -> builder
+                    .persistent(MAP_CODEC)
+                    .syncWith(PACKET_CODEC, AttachmentSyncPredicate.all())
+            );
+
+    /** Touches the class so the static field registers with Fabric before any chunk loads. */
+    public static void register() {
+        if (PLACEMENT_DY_TYPE == null) {
+            throw new IllegalStateException("SlabPlacementDyAttachment failed to register");
+        }
+    }
+
+    // ── server-side mutation ──────────────────────────────────────────
+
+    /**
+     * Records {@code dy} as the placement height of {@code pos}. Server-side only. No-op when the
+     * height is not exactly representable on the stored grid, or when the chunk's encoded size
+     * would pass {@link #SYNC_SAFE_ENCODED_BYTES} — in both cases the cell simply has no fact and
+     * behaves exactly as it did before this store existed.
+     *
+     * @return true if a fact was written
+     */
+    public static boolean record(World world, BlockPos pos, double dy) {
+        if (world == null || world.isClient() || pos == null) {
+            return false;
+        }
+        int quantised = quantise(dy);
+        if (quantised == UNREPRESENTABLE) {
+            if (SlabAnchorAttachment.TRACE) {
+                Slabbed.LOGGER.info("[PLACEMENT_DY] skip pos={} dy={} reason=not_on_sixteenth_grid",
+                        pos.toShortString(), dy);
+            }
+            return false;
+        }
+        WorldChunk chunk = world.getChunk(pos.getX() >> 4, pos.getZ() >> 4);
+        if (chunk == null) {
+            return false;
+        }
+        Long2ByteOpenHashMap existing = chunk.getAttached(PLACEMENT_DY_TYPE);
+        if (existing != null && existing.containsKey(pos.asLong())
+                && existing.get(pos.asLong()) == (byte) quantised) {
+            return false;
+        }
+        Long2ByteOpenHashMap facts =
+                existing == null ? new Long2ByteOpenHashMap() : new Long2ByteOpenHashMap(existing);
+        facts.put(pos.asLong(), (byte) quantised);
+        if (ChunkPositionDyMapPacketCodec.encodedByteLength(facts) > SYNC_SAFE_ENCODED_BYTES) {
+            // Issue #38's lesson applied before the fact rather than after: refuse the write and
+            // leave this cell on its pre-existing live behaviour instead of throwing out of
+            // setAttached in a real world. Reported ONCE per session at WARN — a saturated chunk
+            // would otherwise log on every click there, which is exactly the per-block logging the
+            // pre-release hygiene gate exists to catch.
+            if (!budgetReported) {
+                budgetReported = true;
+                Slabbed.LOGGER.warn(
+                        "[PLACEMENT_DY] chunk {} reached the attachment sync budget at {} stored "
+                                + "heights; further cells there keep their live height",
+                        chunk.getPos(), facts.size() - 1);
+            }
+            if (SlabAnchorAttachment.TRACE) {
+                Slabbed.LOGGER.info("[PLACEMENT_DY] skip pos={} reason=sync_budget chunk={}",
+                        pos.toShortString(), chunk.getPos());
+            }
+            return false;
+        }
+        chunk.setAttached(PLACEMENT_DY_TYPE, facts);
+        if (SlabAnchorAttachment.TRACE) {
+            Slabbed.LOGGER.info("[PLACEMENT_DY] store pos={} dy={} chunk={} facts={}",
+                    pos.toShortString(), dy, chunk.getPos(), facts.size());
+        }
+        return true;
+    }
+
+    /** Clears any stored placement height at {@code pos}. Server-side only. */
+    public static void clear(World world, BlockPos pos) {
+        if (world == null || world.isClient() || pos == null) {
+            return;
+        }
+        WorldChunk chunk = world.getChunk(pos.getX() >> 4, pos.getZ() >> 4);
+        if (chunk == null) {
+            return;
+        }
+        Long2ByteOpenHashMap existing = chunk.getAttached(PLACEMENT_DY_TYPE);
+        if (existing == null || !existing.containsKey(pos.asLong())) {
+            return;
+        }
+        Long2ByteOpenHashMap facts = new Long2ByteOpenHashMap(existing);
+        facts.remove(pos.asLong());
+        if (facts.isEmpty()) {
+            chunk.removeAttached(PLACEMENT_DY_TYPE);
+        } else {
+            chunk.setAttached(PLACEMENT_DY_TYPE, facts);
+        }
+        if (SlabAnchorAttachment.TRACE) {
+            Slabbed.LOGGER.info("[PLACEMENT_DY] clear pos={}", pos.toShortString());
+        }
+    }
+
+    // ── shared query ──────────────────────────────────────────────────
+
+    /**
+     * The placement height stored for {@code pos}, or {@link Double#NaN} when there is none.
+     *
+     * <p>Safe on both server and client (the client mirror arrives by attachment sync). A
+     * {@link BlockView} that is not a full {@link World} defers to
+     * {@link #clientPlacementDyLookup}, so the chunk mesh path sees the same fact as outline and
+     * raycast.
+     */
+    public static double storedDy(BlockView world, BlockPos pos) {
+        if (pos == null) {
+            return Double.NaN;
+        }
+        if (!(world instanceof World w)) {
+            return clientPlacementDyLookup == null ? Double.NaN : clientPlacementDyLookup.applyAsDouble(pos);
+        }
+        WorldChunk chunk = w.getChunk(pos.getX() >> 4, pos.getZ() >> 4);
+        if (chunk == null) {
+            return Double.NaN;
+        }
+        return lookup(chunk, pos);
+    }
+
+    /** Chunk-level lookup, shared by {@link #storedDy} and the client render-path bridge. */
+    public static double lookup(WorldChunk chunk, BlockPos pos) {
+        if (chunk == null || pos == null) {
+            return Double.NaN;
+        }
+        Long2ByteOpenHashMap facts = chunk.getAttached(PLACEMENT_DY_TYPE);
+        if (facts == null) {
+            return Double.NaN;
+        }
+        long packed = pos.asLong();
+        if (!facts.containsKey(packed)) {
+            return Double.NaN;
+        }
+        return facts.get(packed) / QUANTUM_DENOMINATOR;
+    }
+
+    /** True if {@code pos} carries a stored placement height. */
+    public static boolean hasStoredDy(BlockView world, BlockPos pos) {
+        return !Double.isNaN(storedDy(world, pos));
+    }
+
+    // ── quantisation ──────────────────────────────────────────────────
+
+    /**
+     * {@code dy} expressed in sixteenths of a block, or {@link #UNREPRESENTABLE} when the value
+     * does not land exactly on that grid or does not fit a signed byte. The exactness test is a
+     * round-trip comparison, not a tolerance, so a stored height always reads back bit-identical.
+     */
+    private static int quantise(double dy) {
+        if (!Double.isFinite(dy)) {
+            return UNREPRESENTABLE;
+        }
+        long sixteenths = Math.round(dy * QUANTUM_DENOMINATOR);
+        if (sixteenths < Byte.MIN_VALUE || sixteenths > Byte.MAX_VALUE) {
+            return UNREPRESENTABLE;
+        }
+        int quantised = (int) sixteenths;
+        if (quantised / QUANTUM_DENOMINATOR != dy) {
+            return UNREPRESENTABLE;
+        }
+        return quantised;
+    }
+
+    // ── persistence helpers ───────────────────────────────────────────
+
+    private static long[] sortedPositions(Long2ByteOpenHashMap map) {
+        LongArrayList positions = new LongArrayList(map.keySet());
+        long[] array = positions.toLongArray();
+        java.util.Arrays.sort(array);
+        return array;
+    }
+
+    private static int[] quantisedHeightsInPositionOrder(Long2ByteOpenHashMap map) {
+        long[] positions = sortedPositions(map);
+        int[] heights = new int[positions.length];
+        for (int index = 0; index < positions.length; index++) {
+            heights[index] = map.get(positions[index]);
+        }
+        return heights;
+    }
+
+    private static Long2ByteOpenHashMap fromStreams(LongStream positions, IntStream heights) {
+        long[] positionArray = positions.toArray();
+        int[] heightArray = heights.toArray();
+        int count = Math.min(positionArray.length, heightArray.length);
+        Long2ByteOpenHashMap map = new Long2ByteOpenHashMap(count);
+        for (int index = 0; index < count; index++) {
+            int height = heightArray[index];
+            if (height < Byte.MIN_VALUE || height > Byte.MAX_VALUE) {
+                continue;
+            }
+            map.put(positionArray[index], (byte) height);
+        }
+        return map;
+    }
+}
