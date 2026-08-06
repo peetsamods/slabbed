@@ -216,11 +216,22 @@ public final class NeighborUpdateInvarianceTest {
             }),
             // #5 — a slab on a lowered bottom slab (9e4dffb5's new behaviour): the seat is itself the
             // cantilever slab from SlabOnLoweredBottomSlabTest's recipe; the subject is a second slab
-            // placed ON that seat via real useOn, expected to inherit -1.0.
+            // placed ON that seat via real useOn, expected to inherit -1.0. FIX (2026-08-06 S-2
+            // matrix repair): the old -0.25 NORTH nudge minted a TOP seat (originalHitPos.y ==
+            // targetY+0.25 >= targetY, so BlockItemPlacementIntentMixin's upperHalfIntent fires),
+            // not BOTTOM, so the subject never actually built the -1.0 geometry its name claims —
+            // it sat at the -0.5 floor and no mutation could ever move it. -0.75 keeps
+            // originalHitPos.y (= targetY - 0.25) inside the lowered FB's LOWER visual half
+            // ([targetY-0.5, targetY)), which the mixin's own comment documents as the BOTTOM lane.
+            // Moving mutation: break_directly_below (removes the seat out from under the subject) —
+            // whether this lands the subject on the -1.0-preserving placement-dy store or the -0.5
+            // floor is exactly what this row now measures (LAW.md lane G).
             new NamedSubject("slab_on_lowered_bottom_slab", (ctx, w) -> {
                 BlockPos fb = loweredFullBlockWithAirNorthRig(ctx, w, 3, 3);
-                place(ctx, Blocks.STONE_SLAB.asItem(), fb, Direction.NORTH, -0.25);
+                place(ctx, Blocks.STONE_SLAB.asItem(), fb, Direction.NORTH, -0.75);
                 BlockPos seat = fb.north();
+                ctx.assertTrue(w.getBlockState(seat).get(SlabBlock.TYPE) == SlabType.BOTTOM,
+                        "premise: the seat must be a BOTTOM slab (the wrong nudge mints TOP via the intent mixin)");
                 double seatDy = dy(w, seat);
                 ctx.assertTrue(Math.abs(seatDy + 0.5) <= EPS,
                         "premise: the cantilever seat slab must render -0.5, got " + seatDy);
@@ -240,10 +251,24 @@ public final class NeighborUpdateInvarianceTest {
             }),
             // #7 — decoration placed flat then neighboured: the donor's
             // candle_placed_flat_then_neighbored, a clean case of live geometric re-derivation with
-            // no anchor at all (LAW.md lane E/F).
+            // no anchor at all (LAW.md lane E/F). FIX (2026-08-06 S-2 matrix repair): the original
+            // rig was vacuous — a candle has zero protection but reads its dy only through its
+            // SUPPORT's neighbours (getYOffsetInner's cantilever-fallback branch calls
+            // isAdjacentToLoweredSupport(pos.down()), not on the candle's own neighbours), and every
+            // mutation in the matrix writes at the subject's own level or above. Plant a DORMANT
+            // lowering source one cell below-and-east of the support so it is invisible at
+            // construction (isAdjacentToLoweredSupport skips an air neighbour) but becomes live the
+            // moment add_lowered_stack_east fills the support's east neighbour with a solid block —
+            // hasLoweringSourceInColumnBelow then finds the planted slab and the candle's cantilever
+            // fallback fires. Moving mutation: add_lowered_stack_east.
             new NamedSubject("candle_placed_flat_then_neighbored", (ctx, w) -> {
-                BlockPos ground = ctx.getAbsolutePos(new BlockPos(3, 1, 3));
+                BlockPos ground = ctx.getAbsolutePos(new BlockPos(3, 2, 3));   // y=2: room below for the dormant source
                 w.setBlockState(ground, Blocks.STONE.getDefaultState(), Block.NOTIFY_LISTENERS);
+                // Dormant at placement (ground.east() is air here, so isAdjacentToLoweredSupport
+                // skips it) — add_lowered_stack_east later fills ground.east() with a solid block,
+                // making it a genuine lowering source via hasLoweringSourceInColumnBelow, which is
+                // what the candle's cantilever fallback actually reads.
+                bslab(w, ground.east().down());
                 place(ctx, Blocks.CANDLE.asItem(), ground, Direction.UP, 0.0);
                 return ground.up();
             }),
@@ -263,6 +288,29 @@ public final class NeighborUpdateInvarianceTest {
                         "premise: the chain's support must render -0.5, got " + supportDy);
                 place(ctx, Blocks.IRON_CHAIN.asItem(), support, Direction.UP, 0.0);
                 return support.up();
+            }),
+            // #9 — lane B (new, 2026-08-06 S-2 matrix repair): an ordinary full block beside a -1.0
+            // owner. The live cantilever-adjacency check (isAdjacentToLoweredSupport) is a boolean —
+            // "is the neighbour anchored / does it have a lowering source" — with no magnitude test,
+            // so it renders this subject lowered (-0.5, the branch's own hardcoded floor) even
+            // though its true neighbour sits at -1.0. The PERSISTED anchor twin
+            // (qualifiesForAdjacentLoweredFullBlockAnchor) demands the neighbour's own
+            // getYOffset == -0.5d EXACTLY, which a -1.0 owner never satisfies, so this subject gets
+            // neither an anchor nor a frozen-flat marker — it is live-derived and unprotected while
+            // still rendering lowered. Reachable only by ordinary full blocks and connecting
+            // structurals (isOrdinaryAnchorCandidate filters everything else out first). The click
+            // is a literal horizontal (NORTH) side click, not an up-face-edge inference, so
+            // BlockItemPlacementIntentMixin's remap gate (yOffset == -0.5d at the target) does not
+            // fire for a -1.0 owner — verified against the CURRENT mixin: the remap short-circuits
+            // at "yOffset != -0.5d" and returns the untouched context, so the block lands via
+            // vanilla's own ordinary side-placement at owner.north(). Moving mutation:
+            // break_south_neighbor (breaks the owner, which sits south of the subject) — the live
+            // boolean check finds no lowered neighbour once the owner is gone, and the subject
+            // re-derives from 0.0-floor geometry with no anchor to hold it at -0.5.
+            new NamedSubject("cantilever_full_block_beside_minus_one", (ctx, w) -> {
+                BlockPos owner = minusOneLoweredStoneTowerRig(ctx, w, 3, 3);
+                place(ctx, Blocks.STONE.asItem(), owner, Direction.NORTH, -0.25);
+                return owner.north();
             })
     );
 
@@ -398,5 +446,10 @@ public final class NeighborUpdateInvarianceTest {
     @GameTest(structure = "fabric-gametest-api-v1:empty")
     public void chainOnLoweredSupportSurvivesNeighborEdits(TestContext ctx) {
         runSubject(ctx, SUBJECTS.get(7));
+    }
+
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void cantileverFullBlockBesideMinusOneSurvivesNeighborEdits(TestContext ctx) {
+        runSubject(ctx, SUBJECTS.get(8));
     }
 }
