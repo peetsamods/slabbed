@@ -4,6 +4,7 @@ import com.slabbed.anchor.SlabAnchorAttachment;
 import com.slabbed.util.SlabSupport;
 import net.fabricmc.fabric.api.gametest.v1.GameTest;
 import net.minecraft.block.Block;
+import net.minecraft.block.BlockState;
 import net.minecraft.block.Blocks;
 import net.minecraft.block.SlabBlock;
 import net.minecraft.block.enums.SlabType;
@@ -203,5 +204,189 @@ public final class SlabHeightStepCullTest {
         boolean stepFace = SlabSupport.isSlabHeightStepFace(w, slabAPos, w.getBlockState(slabAPos), Direction.EAST);
         ctx.assertTrue(!stepFace, "two EQUALLY lowered slabs (no height step) must not redraw; got " + stepFace);
         ctx.complete();
+    }
+
+    // ------------------------------------------------------------------------
+    // MAGNITUDE BLINDNESS (Maintainer, 2026-08-06, live on the /slabrig mega board: "back row has
+    // DODOs still" — REAL see-through holes). The recorder board (session cc01ab17) shows five
+    // laterally-adjacent pairs of ANCHORED stone at alternating -1.0 / -0.5 along the back row,
+    // e.g. (104,-57,1)=-1.0 beside (105,-57,1)=-0.5. Each pair exposes a 0.5-block seam.
+    //
+    // isLoweredOpaqueFullCubeForStepCull returns a BOOLEAN, so both a -1.0 and a -0.5 anchored
+    // cube read `true`, and `selfLowered != neighborLowered` evaluates `true != true` = FALSE —
+    // no step face, seam culled, see-through hole. The predicate knows THAT a block is lowered
+    // but not BY HOW MUCH.
+    //
+    // Commit 3a3f57e7 (TS-compat 1.21.11 line, 2026-06-12) fixed exactly this with a dy-difference
+    // comparison; this line never received it and independently evolved the boolean form, which
+    // gained the widened slab eligibility above and lost magnitude sensitivity.
+    // ------------------------------------------------------------------------
+
+    private static final double EPS = 1.0e-6;
+
+    // THE RED: two ANCHORED opaque full cubes side by side at -1.0 and -0.5. Both are "lowered",
+    // so the boolean form sees no disagreement and culls the real 0.5 seam between them.
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void minusOneCubeBesideMinusHalfCubeRedrawsSteppedFace(TestContext ctx) {
+        ServerWorld w = ctx.getWorld();
+        BlockPos deep = buildAnchoredMinusOneCube(ctx, 2, 2);
+        BlockPos shallow = buildAnchoredMinusHalfNeighbor(ctx, deep.east(), Blocks.STONE.getDefaultState(), -0.5);
+
+        boolean deepFace = SlabSupport.isSlabHeightStepFace(w, deep, w.getBlockState(deep), Direction.EAST);
+        ctx.assertTrue(deepFace,
+                "an anchored -1.0 cube beside an anchored -0.5 cube exposes a real 0.5 seam and must "
+                        + "redraw its stepped face — both sides are 'lowered', so the boolean "
+                        + "lowered/not-lowered form is magnitude-blind and culls it (Maintainer's live "
+                        + "back-row DODOs); got " + deepFace);
+
+        // The GH#24 lesson: BOTH sides of the seam must be redrawn, not just one.
+        boolean shallowFace = SlabSupport.isSlabHeightStepFace(w, shallow, w.getBlockState(shallow), Direction.WEST);
+        ctx.assertTrue(shallowFace,
+                "the -0.5 cube's own face toward the -1.0 cube must be redrawn too; got " + shallowFace);
+        ctx.complete();
+    }
+
+    // Magnitude blindness combined with THIS line's widened slab eligibility: an anchored SLAB at
+    // -0.5 beside an anchored cube at -1.0. Guards that restoring magnitude sensitivity does not
+    // cost the slab-as-subject/neighbour widening (which commit 3a3f57e7 never had).
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void minusOneCubeBesideAnchoredMinusHalfSlabRedrawsSteppedFace(TestContext ctx) {
+        ServerWorld w = ctx.getWorld();
+        BlockPos deep = buildAnchoredMinusOneCube(ctx, 2, 2);
+        BlockPos slab = buildAnchoredMinusHalfNeighbor(ctx, deep.east(), bottomSlab(Blocks.BIRCH_SLAB), -0.5);
+        ctx.assertTrue(!w.getBlockState(slab).isOpaqueFullCube(),
+                "setup: the neighbour must be a real slab, not an opaque full cube (that is the widening)");
+
+        boolean slabFace = SlabSupport.isSlabHeightStepFace(w, slab, w.getBlockState(slab), Direction.WEST);
+        ctx.assertTrue(slabFace,
+                "an anchored -0.5 SLAB beside an anchored -1.0 cube must redraw its stepped face — "
+                        + "magnitude sensitivity must not cost the widened slab eligibility; got " + slabFace);
+
+        boolean cubeFace = SlabSupport.isSlabHeightStepFace(w, deep, w.getBlockState(deep), Direction.EAST);
+        ctx.assertTrue(cubeFace, "the cube's own face toward the lowered slab must be redrawn too; got " + cubeFace);
+        ctx.complete();
+    }
+
+    // PERF GUARD (this is the chunk-render hot path; the project has shipped a lag regression
+    // twice). Height resolution is a bounded column walk — it must happen ONLY when both sides are
+    // lowered candidates and the answer genuinely depends on the magnitudes. Ordinary terrain, and
+    // the "exactly one side lowered" case that the boolean form already answered, must both resolve
+    // ZERO heights. Counter-based, never wall-clock: a fixed-ms budget false-REDs on a loaded
+    // machine. The final cell is a same-run CALIBRATION — without it a permanently-broken counter
+    // would make every zero assertion vacuously green.
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void fastPathsResolveZeroHeights(TestContext ctx) {
+        ServerWorld w = ctx.getWorld();
+
+        // (a) ordinary terrain: neither side lowered.
+        BlockPos flushA = ctx.getAbsolutePos(BlockPos.ORIGIN).add(0, 6, 0);
+        BlockPos flushB = flushA.east();
+        w.setBlockState(flushA, Blocks.DIRT.getDefaultState(), Block.NOTIFY_LISTENERS);
+        w.setBlockState(flushB, Blocks.DIRT.getDefaultState(), Block.NOTIFY_LISTENERS);
+
+        // (b) exactly one side lowered — already decidable without any height.
+        BlockPos oneSlab = ctx.getAbsolutePos(BlockPos.ORIGIN).add(5, 5, 5);
+        BlockPos oneLowered = oneSlab.up();
+        BlockPos oneFlush = oneLowered.east();
+        w.setBlockState(oneSlab, bottomSlab(Blocks.SMOOTH_STONE_SLAB), Block.NOTIFY_LISTENERS);
+        w.setBlockState(oneLowered, Blocks.DIRT.getDefaultState(), Block.NOTIFY_LISTENERS);
+        SlabAnchorAttachment.addAnchor(w, oneLowered, w.getBlockState(oneLowered));
+        w.setBlockState(oneFlush, Blocks.DIRT.getDefaultState(), Block.NOTIFY_LISTENERS);
+        ctx.assertTrue(SlabAnchorAttachment.isAnchored(w, oneLowered) && !SlabAnchorAttachment.isAnchored(w, oneFlush),
+                "setup: exactly one of the pair must be a lowered candidate");
+
+        // (c) calibration: both sides lowered at different magnitudes — the only case that may pay.
+        BlockPos deep = buildAnchoredMinusOneCube(ctx, 2, 2);
+        BlockPos shallow = buildAnchoredMinusHalfNeighbor(ctx, deep.east(), Blocks.STONE.getDefaultState(), -0.5);
+
+        SlabSupport.beginStepCullHeightResolutionCount();
+        try {
+            SlabSupport.isSlabHeightStepFace(w, flushA, w.getBlockState(flushA), Direction.EAST);
+            long afterFlush = SlabSupport.stepCullHeightResolutionCount();
+            ctx.assertTrue(afterFlush == 0L,
+                    "PERF: ordinary terrain (neither side lowered) must resolve ZERO heights on the "
+                            + "chunk-render hot path; resolved " + afterFlush);
+
+            SlabSupport.isSlabHeightStepFace(w, oneLowered, w.getBlockState(oneLowered), Direction.EAST);
+            long afterOne = SlabSupport.stepCullHeightResolutionCount();
+            ctx.assertTrue(afterOne == 0L,
+                    "PERF: 'exactly one side lowered' is decidable from the cheap prefilter alone and "
+                            + "must resolve ZERO heights; resolved " + afterOne);
+
+            SlabSupport.isSlabHeightStepFace(w, deep, w.getBlockState(deep), Direction.EAST);
+            long afterBoth = SlabSupport.stepCullHeightResolutionCount();
+            ctx.assertTrue(afterBoth == 2L,
+                    "CALIBRATION: the both-sides-lowered case must resolve exactly the two heights it "
+                            + "compares — otherwise the zero assertions above are vacuous (a dead "
+                            + "counter reads 0 forever); resolved " + afterBoth
+                            + ", shallow neighbour at " + shallow.toShortString());
+        } finally {
+            SlabSupport.endStepCullHeightResolutionCount();
+        }
+        ctx.complete();
+    }
+
+    // ------------------------------------------------------------------------
+
+    /**
+     * Builds the proven vanilla-only {@code follower_on_minus_one} recipe (the same scene
+     * {@code AnchoredFollowerSupportDyTest} keeps green) at plot-relative {@code (x, z)},
+     * occupying {@code z} and {@code z + 1}, and returns an ANCHORED opaque full cube at -1.0.
+     * Terrain Slabs cannot load on this line, so the -1.0 must come from a vanilla stack.
+     */
+    private BlockPos buildAnchoredMinusOneCube(TestContext ctx, int x, int z) {
+        ServerWorld w = ctx.getWorld();
+        BlockPos base = ctx.getAbsolutePos(BlockPos.ORIGIN).add(x, 1, z);
+        BlockPos source = base.add(0, 0, 1);
+
+        // Source column: stone / bottom slab / stone — the top stone is lowered -0.5 by the slab.
+        w.setBlockState(source, Blocks.STONE.getDefaultState(), Block.NOTIFY_LISTENERS);
+        w.setBlockState(source.up(), bottomSlab(Blocks.STONE_SLAB), Block.NOTIFY_LISTENERS);
+        BlockPos sourceTop = source.up(2);
+        w.setBlockState(sourceTop, Blocks.STONE.getDefaultState(), Block.NOTIFY_LISTENERS);
+        SlabAnchorAttachment.addAnchor(w, sourceTop, w.getBlockState(sourceTop));
+
+        // Seat column: ground stone, AIR, then the seat slab beside the lowered source — a
+        // legitimate cantilever (air under the seat), not the interpenetration shape the
+        // flush-seat guard outlaws.
+        w.setBlockState(base, Blocks.STONE.getDefaultState(), Block.NOTIFY_LISTENERS);
+        BlockPos seat = base.up(2);
+        w.setBlockState(seat, bottomSlab(Blocks.STONE_SLAB), Block.NOTIFY_LISTENERS);
+        SlabAnchorAttachment.addAnchor(w, seat, w.getBlockState(seat));
+
+        BlockPos subject = seat.up();
+        w.setBlockState(subject, Blocks.STONE.getDefaultState(), Block.NOTIFY_LISTENERS);
+        SlabAnchorAttachment.addAnchor(w, subject, w.getBlockState(subject));
+        ctx.assertTrue(SlabAnchorAttachment.isAnchored(w, subject),
+                "fixture: the -1.0 subject must carry a real anchor — an un-anchored scene takes a "
+                        + "different lane and FALSE-GREENS this test");
+        double dy = SlabSupport.getYOffset(w, subject, w.getBlockState(subject));
+        ctx.assertTrue(Math.abs(dy + 1.0) <= EPS,
+                "fixture: the subject cube must render -1.0, got " + dy);
+        return subject;
+    }
+
+    /**
+     * Stands {@code state} at {@code pos} on a flush bottom slab over solid ground and anchors it,
+     * so it renders {@code expectedDy} (the shallow half of the alternating back-row pair).
+     */
+    private BlockPos buildAnchoredMinusHalfNeighbor(TestContext ctx, BlockPos pos, BlockState state, double expectedDy) {
+        ServerWorld w = ctx.getWorld();
+        w.setBlockState(pos.down(3), Blocks.STONE.getDefaultState(), Block.NOTIFY_LISTENERS);
+        w.setBlockState(pos.down(2), Blocks.STONE.getDefaultState(), Block.NOTIFY_LISTENERS);
+        w.setBlockState(pos.down(), bottomSlab(Blocks.STONE_SLAB), Block.NOTIFY_LISTENERS);
+        w.setBlockState(pos, state, Block.NOTIFY_LISTENERS);
+        SlabAnchorAttachment.addAnchor(w, pos, w.getBlockState(pos));
+        ctx.assertTrue(SlabAnchorAttachment.isAnchored(w, pos),
+                "fixture: the shallow neighbour must be anchored — that is what makes BOTH sides "
+                        + "'lowered' and exposes the magnitude blindness");
+        double dy = SlabSupport.getYOffset(w, pos, w.getBlockState(pos));
+        ctx.assertTrue(Math.abs(dy - expectedDy) <= EPS,
+                "fixture: the shallow neighbour must render " + expectedDy + ", got " + dy);
+        return pos;
+    }
+
+    private static BlockState bottomSlab(Block slab) {
+        return slab.getDefaultState().with(SlabBlock.TYPE, SlabType.BOTTOM);
     }
 }

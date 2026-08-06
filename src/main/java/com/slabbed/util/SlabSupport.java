@@ -54,6 +54,7 @@ import java.util.ArrayDeque;
 import java.util.HashSet;
 import java.util.Objects;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Predicate;
 
 /**
@@ -238,6 +239,39 @@ public final class SlabSupport {
     private static final boolean STEP_CULL_DISABLED = Boolean.getBoolean("slabbed.disableStepCull");
 
     /**
+     * Gametest-only instrumentation for {@link #isSlabHeightStepFace}'s height-resolution budget.
+     *
+     * <p>{@code isSlabHeightStepFace} runs on the chunk-render hot path, up to four times per
+     * block per section compile, and this project has shipped a lag regression twice. The
+     * load-bearing perf property is therefore that ordinary terrain resolves ZERO heights — and a
+     * property that important is pinned by a gametest, not by review
+     * ({@code SlabHeightStepCullTest#fastPathsResolveZeroHeights}).
+     *
+     * <p>Ambient cost in a shipped build: the flag is never armed, so the counter is never
+     * written; all that remains is one uncontended {@code volatile boolean} read, and only on the
+     * branch that is already about to walk two block columns. The zero-resolution fast paths
+     * never even reach the read.
+     */
+    private static volatile boolean stepCullHeightResolutionCounting;
+    private static final AtomicLong STEP_CULL_HEIGHT_RESOLUTIONS = new AtomicLong();
+
+    /** Arms {@link #stepCullHeightResolutionCount} and resets it to zero. Gametest use only. */
+    public static void beginStepCullHeightResolutionCount() {
+        STEP_CULL_HEIGHT_RESOLUTIONS.set(0L);
+        stepCullHeightResolutionCounting = true;
+    }
+
+    /** Heights resolved by {@link #isSlabHeightStepFace} since {@link #beginStepCullHeightResolutionCount}. */
+    public static long stepCullHeightResolutionCount() {
+        return STEP_CULL_HEIGHT_RESOLUTIONS.get();
+    }
+
+    /** Disarms the counter. Always call from a {@code finally}. */
+    public static void endStepCullHeightResolutionCount() {
+        stepCullHeightResolutionCounting = false;
+    }
+
+    /**
      * True if the {@code direction} side face of the opaque cube {@code state} at
      * {@code pos} should be DRAWN even though the chunk mesher culls it, because exactly
      * one of this block and its {@code direction} neighbour is lowered — i.e. they sit at
@@ -262,10 +296,46 @@ public final class SlabSupport {
      * seam invisible. Widened to also accept slab states so a slab can itself be the subject or
      * the neighbour of this check, same as an opaque full cube already was.
      *
-     * <p>KNOWN RESIDUAL GAP: a block lowered ONLY by live adjacency/column inheritance and
-     * NOT YET anchored (a narrow, transient window — most real placements anchor within the
-     * same tick) is still not covered here; widening further would need the full dy
-     * resolution this method deliberately avoids for performance. Only ever ADDS faces.
+     * <p>MAGNITUDE (2026-08-06, Maintainer live on the {@code /slabrig mega} board: "back row has
+     * DODOs still"). "Lowered" is a boolean, but a height step is a DIFFERENCE: two ANCHORED
+     * cubes at −1.0 and −0.5 both read lowered, so the old {@code selfLowered != neighborLowered}
+     * evaluated {@code true != true} = false and culled a real 0.5 seam. The recorder board shows
+     * five such laterally-adjacent alternating pairs along the back row. Commit {@code 3a3f57e7}
+     * fixed this on the TS-compat line with a dy difference; this line never received it and
+     * independently evolved the boolean form, gaining the slab widening above and losing
+     * magnitude. Both properties are kept: the boolean prefilter still answers first, and the
+     * heights are compared only in the one case it cannot answer (see the tiers below).
+     *
+     * <p>PERFORMANCE — this is the chunk-render hot path, up to four calls per block per section
+     * compile, and a lag regression has shipped twice. Height resolution ({@link #getYOffset}) is
+     * a bounded column walk, so it is reached only when it can change the answer:
+     * <ol>
+     *   <li>neither side a lowered candidate (ordinary terrain, the overwhelming majority) —
+     *       false, ZERO heights resolved; exactly as cheap as before this change;</li>
+     *   <li>exactly one side a lowered candidate — true, ZERO heights resolved; the old boolean
+     *       answer, kept verbatim;</li>
+     *   <li>BOTH sides lowered candidates (rare) — only here are the two heights resolved and
+     *       compared. This is the tier the boolean form got wrong.</li>
+     * </ol>
+     * Because tiers 1 and 2 reproduce the old answers exactly and tier 3 only ever turns a former
+     * {@code false} into {@code true}, this method remains a strict superset of its previous
+     * results: it can only ever ADD faces, never cull one that is drawn today. Pinned by
+     * {@code SlabHeightStepCullTest#fastPathsResolveZeroHeights}.
+     *
+     * <p>The height read is {@link #getVisualYOffset} — the same read the model path
+     * ({@code OffsetBlockStateModel#emitQuads} → {@code YOffsetEmitter}) shifts the quads by, and
+     * both cull paths share this predicate. Reading {@link #getYOffset} directly would bypass the
+     * published per-position visual value that the mesh worker's {@code ChunkRendererRegion}
+     * actually renders with, so the un-culled face could be decided from a different height than
+     * the geometry it belongs to. It is also the cheaper read on the render worker (a cache hit
+     * skips the column walk entirely).
+     *
+     * <p>KNOWN RESIDUAL GAP: magnitude is now handled, so the remaining hole is only the
+     * ELIGIBILITY prefilter — a block lowered ONLY by live adjacency/column inheritance and NOT
+     * YET anchored (a narrow, transient window; most real placements anchor within the same tick)
+     * is still not a "lowered candidate", so a pair in which NEITHER side is anchored never
+     * reaches the height comparison. Closing that would mean resolving heights for ordinary
+     * terrain, which tier 1 exists to avoid. Only ever ADDS faces.
      */
     public static boolean isSlabHeightStepFace(BlockView world, BlockPos pos, BlockState state, Direction direction) {
         if (STEP_CULL_DISABLED || world == null || pos == null || state == null || direction == null
@@ -279,7 +349,24 @@ public final class SlabSupport {
         }
         boolean selfLowered = isLoweredOpaqueFullCubeForStepCull(world, pos, state);
         boolean neighborLowered = isLoweredOpaqueFullCubeForStepCull(world, neighborPos, neighbor);
-        return selfLowered != neighborLowered;
+        // Tier 1 — ordinary terrain. No lowering anywhere, so no step. ZERO heights resolved.
+        if (!selfLowered && !neighborLowered) {
+            return false;
+        }
+        // Tier 2 — exactly one side lowered: a step exists by construction, no magnitude needed.
+        // ZERO heights resolved, and the old boolean answer is preserved verbatim, which is what
+        // makes this method a strict superset of its previous results.
+        if (selfLowered != neighborLowered) {
+            return true;
+        }
+        // Tier 3 — both lowered. The boolean form said "no step" here and was wrong whenever the
+        // two lowerings differ in DEPTH (−1.0 beside −0.5 = a real 0.5 seam).
+        if (stepCullHeightResolutionCounting) {
+            STEP_CULL_HEIGHT_RESOLUTIONS.addAndGet(2L);
+        }
+        double selfDy = getVisualYOffset(world, pos, state);
+        double neighborDy = getVisualYOffset(world, neighborPos, neighbor);
+        return Math.abs(selfDy - neighborDy) > 1.0e-6;
     }
 
     private static boolean isStepCullEligibleSubject(BlockState state) {
