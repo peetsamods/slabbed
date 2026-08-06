@@ -7,8 +7,10 @@ import net.minecraft.block.Block;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.Blocks;
 import net.minecraft.block.SlabBlock;
+import net.minecraft.block.enums.DoubleBlockHalf;
 import net.minecraft.block.enums.SlabType;
 import net.minecraft.server.world.ServerWorld;
+import net.minecraft.state.property.Properties;
 import net.minecraft.test.TestContext;
 import net.minecraft.util.math.BlockPos;
 
@@ -39,6 +41,19 @@ import net.minecraft.util.math.BlockPos;
  * sits on the log and must inherit -1.0. (A naive "anchored slab on anchored slab" cannot be used:
  * {@code addAnchor} rejects slabs on the direct/column lanes, so such a column silently reads -0.5
  * and builds the wrong scene.)
+ *
+ * <p><b>SECOND WAVE (2026-08-06, Maintainer's live pass, recorder {@code 339a58aa}): the same symptom
+ * one level up — the SUPPORT is not a cube.</b> Everything above fixed "the support's dy was read
+ * as a constant". What remained was "the support was not recognised as a support at all":
+ * {@code supportSeatDy} classified a seat with {@code isSolidBlock}, a VOLUME test, when a seat
+ * only needs a top-FACE test. A fence, a door, a wall and a pane draw their top face at exactly
+ * their cell top and fail the volume test, so every one of them matched no arm and sent its
+ * follower to {@code loweredFollowerDy}'s hardcoded {@code -0.5} floor.
+ *
+ * <p><b>Why this was invisible until a {@code -1.0} support existed:</b> the floor
+ * COINCIDENTALLY EQUALS the right answer at {@code -0.5}. Only at {@code -1.0} does it become a
+ * visible half-block gap. The rows below are therefore all built on a {@code -1.0} support on
+ * purpose — a {@code -0.5} version of any of them would pass while broken.
  */
 public final class AnchoredFollowerSupportDyTest {
 
@@ -153,6 +168,186 @@ public final class AnchoredFollowerSupportDyTest {
         double dy = SlabSupport.getYOffset(w, block, w.getBlockState(block));
         ctx.assertTrue(Math.abs(dy + 0.5) <= EPS,
                 "regression: anchored block on a FLAT bottom slab must stay at -0.5, got " + dy);
+        ctx.complete();
+    }
+
+    // ── the support is not a cube: fence / door seats (live 2026-08-06) ──────────────────────
+
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void signOnMinusOneFenceInheritsMinusOne(TestContext ctx) {
+        assertFollowerOnFenceInheritsMinusOne(ctx, 1, 1, "oak_sign", Blocks.OAK_SIGN.getDefaultState());
+    }
+
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void lanternOnMinusOneFenceInheritsMinusOne(TestContext ctx) {
+        assertFollowerOnFenceInheritsMinusOne(ctx, 1, 1, "lantern", Blocks.LANTERN.getDefaultState());
+    }
+
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void fullBlockOnMinusOneFenceInheritsMinusOne(TestContext ctx) {
+        assertFollowerOnFenceInheritsMinusOne(ctx, 1, 1, "stripped_jungle_log",
+                Blocks.STRIPPED_JUNGLE_LOG.getDefaultState());
+    }
+
+    /**
+     * THE TWO LANES MUST AGREE ABOUT THE SAME CELL — the sharpest form of this bug, and the reason
+     * it poisoned the placement-dy store rather than merely rendering wrong.
+     *
+     * <p>MEASURED before the fix: {@code geometricDy=-1.0 anchored=true anchoredDy=-0.5}. The
+     * GEOMETRIC lane already read the fence correctly (its column walk reaches the fence's own
+     * anchor and asks {@code anchoredCellDy}); the ANCHOR lane, which {@code getYOffsetInner}
+     * consults FIRST, went through {@code supportSeatDy}, matched no arm on a fence, and returned
+     * the floor. Because {@code SlabAnchorAttachment.addAnchor} evaluates its qualifiers BEFORE the
+     * anchor exists and calls {@code recordPlacementDy} AFTER, a real click read {@code -1.0} to
+     * decide the block qualified and then STORED {@code -0.5} — LAW 1 freezing the wrong number.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void fenceSeatAnchorLaneAgreesWithGeometricLane(TestContext ctx) {
+        ServerWorld w = ctx.getWorld();
+        BlockPos fence = buildAnchoredMinusOneFence(ctx, 1, 1);
+        BlockPos followerPos = fence.up();
+        place(w, followerPos, Blocks.OAK_SIGN.getDefaultState());
+        double geometric = SlabSupport.getYOffset(w, followerPos, w.getBlockState(followerPos));
+        SlabAnchorAttachment.addAnchor(w, followerPos, w.getBlockState(followerPos));
+        ctx.assertTrue(SlabAnchorAttachment.isAnchored(w, followerPos),
+                "setup: the sign must take the ANCHOR lane, or this test compares one lane to itself");
+        double anchored = SlabSupport.getYOffset(w, followerPos, w.getBlockState(followerPos));
+        ctx.assertTrue(Math.abs(geometric - anchored) <= EPS,
+                "the geometric and anchor lanes must give the SAME height for a follower on a -1.0 "
+                        + "fence: geometric=" + geometric + " anchored=" + anchored);
+        ctx.assertTrue(Math.abs(anchored + 1.0) <= EPS,
+                "and that height must be -1.0, got " + anchored);
+        ctx.complete();
+    }
+
+    /**
+     * The cut-in-half door. A door's UPPER half is written by {@code DoorBlock.onPlaced} with
+     * {@code setBlockState}, so it never sees {@code onPlaced}, holds no anchor and no stored
+     * height, and must resolve purely from the cell below it — which is the door's own LOWER half,
+     * a support that is not a slab and not a solid cube.
+     *
+     * <p>MEASURED before the fix: {@code lowerDy=-1.0 upperDy=0.0} — the two halves a full block
+     * apart. (Maintainer's live scene put the upper half on the {@code -0.5} floor rather than at
+     * {@code 0.0} because its {@code shouldOffset} double-block branch found a bottom slab two
+     * cells down; same defect, different fallback.)
+     *
+     * <p><b>What this closes and what it does NOT.</b> It closes the RESOLUTION: the upper half now
+     * reads its support's real top face and lands on the lower half. It does not close the
+     * multi-cell FREEZE-REGISTRATION gap — {@code freezeLoweredOnPlace}'s
+     * {@code heightIsSharedWithACellThisHookNeverSees} still declines every
+     * {@code DOUBLE_BLOCK_HALF} piece, so neither half records a placed height of its own and the
+     * upper half remains live-derived. That gap stays open and is deliberately not touched here.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void upperDoorHalfMatchesItsMinusOneLowerHalf(TestContext ctx) {
+        ServerWorld w = ctx.getWorld();
+        BlockPos subject = buildAnchoredMinusOneSubject(ctx, 1, 1);
+        BlockPos lower = subject.up();
+        place(w, lower, Blocks.OAK_DOOR.getDefaultState()
+                .with(Properties.DOUBLE_BLOCK_HALF, DoubleBlockHalf.LOWER));
+        place(w, lower.up(), Blocks.OAK_DOOR.getDefaultState()
+                .with(Properties.DOUBLE_BLOCK_HALF, DoubleBlockHalf.UPPER));
+        SlabAnchorAttachment.addAnchor(w, lower, w.getBlockState(lower));
+        double lowerDy = SlabSupport.getYOffset(w, lower, w.getBlockState(lower));
+        ctx.assertTrue(Math.abs(lowerDy + 1.0) <= EPS,
+                "fixture: the door's LOWER half on a -1.0 log must read -1.0, got " + lowerDy);
+        ctx.assertTrue(!SlabAnchorAttachment.isAnchored(w, lower.up()),
+                "fixture: the UPPER half must be un-anchored — onPlaced never fires for it, and an "
+                        + "anchored upper half would test a lane real doors never take");
+        double upperDy = SlabSupport.getYOffset(w, lower.up(), w.getBlockState(lower.up()));
+        ctx.assertTrue(Math.abs(upperDy - lowerDy) <= EPS,
+                "a door's two halves must render at the SAME height: lower=" + lowerDy
+                        + " upper=" + upperDy + " (the upper half resolves from the lower half, "
+                        + "which is neither a slab nor a solid cube)");
+        ctx.complete();
+    }
+
+    /**
+     * THE TRIAD MOVED TOGETHER, and the raw-shape probe did not switch the outline offset off.
+     *
+     * <p>{@code SlabSupport.presentsCellTopAsTopFace} reads a block's un-offset outline through
+     * {@code IN_RAW_SHAPE_PROBE}, a flag {@code SlabSupportStateMixin} and {@code CarpetDyShapeMixin}
+     * honour by returning the vanilla shape. If that flag ever leaked — set and not cleared, or
+     * honoured too broadly — outlines would silently stop being offset everywhere and the model
+     * would drift from the wireframe with no test noticing. This asserts the ORDINARY outline is
+     * still offset by the resolved dy, on the very geometry the probe is used for.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void fenceSeatFollowerOutlineFollowsItsDy(TestContext ctx) {
+        ServerWorld w = ctx.getWorld();
+        BlockPos fence = buildAnchoredMinusOneFence(ctx, 1, 1);
+        BlockPos followerPos = fence.up();
+        place(w, followerPos, Blocks.STRIPPED_JUNGLE_LOG.getDefaultState());
+        SlabAnchorAttachment.addAnchor(w, followerPos, w.getBlockState(followerPos));
+        double dy = SlabSupport.getYOffset(w, followerPos, w.getBlockState(followerPos));
+        ctx.assertTrue(Math.abs(dy + 1.0) <= EPS, "fixture: the follower must be at -1.0, got " + dy);
+        double outlineMinY = w.getBlockState(followerPos)
+                .getOutlineShape(w, followerPos)
+                .getMin(net.minecraft.util.math.Direction.Axis.Y);
+        ctx.assertTrue(Math.abs(outlineMinY - dy) <= EPS,
+                "the OUTLINE must be offset by the same dy the model is (" + dy + "), got minY="
+                        + outlineMinY + " — a leaked raw-shape probe flag would read 0.0 here");
+        ctx.complete();
+    }
+
+    /**
+     * THE ACCEPT-ONLY PROPERTY, asserted rather than assumed. {@code presentsCellTopAsTopFace} must
+     * admit a support ONLY when its top face really is at its own cell top. A carpet's is at
+     * {@code 1/16}, so a carpet must NOT become a full-height seat — a follower on one keeps the
+     * {@code -0.5} floor it has always had instead of inheriting the carpet's depth outright.
+     *
+     * <p>This is the guard against "fix the fence, break everything thin": the resolver's alphabet
+     * is {@code {-1.0, -0.5, 0.0}} and a {@code 1/16} seat has no representation in it.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void carpetSupportIsNotPromotedToAFullHeightSeat(TestContext ctx) {
+        ServerWorld w = ctx.getWorld();
+        BlockPos subject = buildAnchoredMinusOneSubject(ctx, 1, 1);
+        BlockPos carpet = subject.up();
+        place(w, carpet, Blocks.WHITE_CARPET.getDefaultState());
+        SlabAnchorAttachment.addAnchor(w, carpet, w.getBlockState(carpet));
+        BlockPos follower = carpet.up();
+        place(w, follower, Blocks.STRIPPED_JUNGLE_LOG.getDefaultState());
+        SlabAnchorAttachment.addAnchor(w, follower, w.getBlockState(follower));
+        double dy = SlabSupport.getYOffset(w, follower, w.getBlockState(follower));
+        ctx.assertTrue(dy >= -0.5 - EPS,
+                "a carpet is a 1/16 seat, not a full-height one: a follower above it must not be "
+                        + "given the carpet's own depth, got " + dy);
+        ctx.complete();
+    }
+
+    /**
+     * Builds {@link #buildAnchoredMinusOneSubject}'s -1.0 log and stands an anchored birch fence on
+     * it — the exact scene {@link #anchoredFenceOnMinusOneSupportInheritsMinusOne} already pins at
+     * -1.0. Returns the fence cell, which is the SUPPORT under test.
+     */
+    private BlockPos buildAnchoredMinusOneFence(TestContext ctx, int x, int z) {
+        ServerWorld w = ctx.getWorld();
+        BlockPos subject = buildAnchoredMinusOneSubject(ctx, x, z);
+        BlockPos fence = subject.up();
+        place(w, fence, Blocks.BIRCH_FENCE.getDefaultState());
+        SlabAnchorAttachment.addAnchor(w, fence, w.getBlockState(fence));
+        ctx.assertTrue(SlabAnchorAttachment.isAnchored(w, fence),
+                "fixture: the fence support must anchor (connecting structural on a lowered column)");
+        double fenceDy = SlabSupport.getYOffset(w, fence, w.getBlockState(fence));
+        ctx.assertTrue(Math.abs(fenceDy + 1.0) <= EPS,
+                "fixture: the fence support must itself render -1.0, got " + fenceDy);
+        return fence;
+    }
+
+    private void assertFollowerOnFenceInheritsMinusOne(TestContext ctx, int x, int z, String family,
+                                                        BlockState follower) {
+        ServerWorld w = ctx.getWorld();
+        BlockPos fence = buildAnchoredMinusOneFence(ctx, x, z);
+        BlockPos followerPos = fence.up();
+        place(w, followerPos, follower);
+        SlabAnchorAttachment.addAnchor(w, followerPos, w.getBlockState(followerPos));
+
+        double dy = SlabSupport.getYOffset(w, followerPos, w.getBlockState(followerPos));
+        ctx.assertTrue(Math.abs(dy + 1.0) <= EPS,
+                family + " resting on a -1.0 FENCE must inherit -1.0, got " + dy
+                        + " (the seat resolver classifies a support by isSolidBlock, so a fence "
+                        + "matches no arm and the follower falls to the hardcoded -0.5 floor)");
         ctx.complete();
     }
 

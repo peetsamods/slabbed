@@ -48,6 +48,7 @@ import net.minecraft.registry.tag.BlockTags;
 import net.minecraft.state.property.Properties;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Direction;
+import net.minecraft.util.shape.VoxelShape;
 import net.minecraft.world.BlockView;
 import net.minecraft.world.World;
 import net.minecraft.world.WorldView;
@@ -1156,7 +1157,7 @@ public final class SlabSupport {
         // cantilever path, which renders -0.5 with anchor=none). A slab cantilevered off such a
         // support must follow it down too, or it reads 0.0 and freezeLoweredOnPlace locks it flat
         // (the live "cantilever placed 0.5 too high" bug). Both mirrors are recursion-safe.
-        double ownDy = loweredFullBlockUndersideSupportDy(world, pos, state);
+        double ownDy = loweredFullHeightSupportDy(world, pos, state);
         if (Double.isFinite(ownDy) && ownDy < -1.0e-6) {
             return true;
         }
@@ -1320,7 +1321,7 @@ public final class SlabSupport {
                 // raised-attach baseline on top of the slab's lowering.
                 return isTopSlab(above) ? slabSupportDy + 0.5 : slabSupportDy;
             }
-            double fullBlockSupportDy = loweredFullBlockUndersideSupportDy(world, supportPos, above);
+            double fullBlockSupportDy = loweredFullHeightSupportDy(world, supportPos, above);
             if (Double.isFinite(fullBlockSupportDy) && fullBlockSupportDy < -1.0e-6) {
                 return fullBlockSupportDy;
             }
@@ -1561,7 +1562,7 @@ public final class SlabSupport {
                 // its +0.5 raised-attach baseline on top of the slab's lowering.
                 return isTopSlab(supportState) ? slabSupportDy + 0.5 : slabSupportDy;
             }
-            double fullBlockSupportDy = loweredFullBlockUndersideSupportDy(world, supportPos, supportState);
+            double fullBlockSupportDy = loweredFullHeightSupportDy(world, supportPos, supportState);
             if (Double.isFinite(fullBlockSupportDy) && fullBlockSupportDy < -1.0e-6) {
                 return fullBlockSupportDy;
             }
@@ -1594,7 +1595,7 @@ public final class SlabSupport {
         // walk above can MISS this lowering — e.g. when the support is lowered by a persisted
         // anchor or by adjacency but its own column below is air (a cantilever stops the walk)
         // or a full-height solid block (no slab in the lantern's column at all). Resolve the
-        // support's actual rendered dy via the recursion-safe loweredFullBlockUndersideSupportDy
+        // support's actual rendered dy via the recursion-safe loweredFullHeightSupportDy
         // (anchor / direct-custom-TS / lowered column / compound -1.0; adjacency-lowered
         // cantilevers report through their persisted anchor), which never re-enters getYOffset,
         // and inherit it. Reached only by non-solid objects (solid blocks returned 0.0 just
@@ -1602,13 +1603,13 @@ public final class SlabSupport {
         // support so flush cases stay untouched.
         BlockPos sitSupportPos = pos.down();
         BlockState sitSupport = world.getBlockState(sitSupportPos);
-        double sitSupportDy = loweredFullBlockUndersideSupportDy(world, sitSupportPos, sitSupport);
+        double sitSupportDy = loweredFullHeightSupportDy(world, sitSupportPos, sitSupport);
         if (Double.isFinite(sitSupportDy) && sitSupportDy < -1.0e-6) {
             return sitSupportDy;
         }
         // Cantilever fallback: a support lowered LIVE purely by adjacency to a lowered full
         // block (no persisted anchor yet, e.g. the first client frame after a side-placement)
-        // is not yet reported by loweredFullBlockUndersideSupportDy, so detect it directly.
+        // is not yet reported by loweredFullHeightSupportDy, so detect it directly.
         if (!(sitSupport.getBlock() instanceof SlabBlock)
                 && !(sitSupport.getBlock() instanceof BlockEntityProvider)
                 && sitSupport.isSolidBlock(world, sitSupportPos)
@@ -1753,7 +1754,7 @@ public final class SlabSupport {
         }
         IN_STANDING_OBJECT_PROBE.set(Boolean.TRUE);
         try {
-            double supportDy = loweredFullBlockUndersideSupportDy(world, belowPos, below);
+            double supportDy = loweredFullHeightSupportDy(world, belowPos, below);
             return Double.isFinite(supportDy) && supportDy < -1.0e-6 ? supportDy : Double.NaN;
         } finally {
             IN_STANDING_OBJECT_PROBE.set(Boolean.FALSE);
@@ -1940,12 +1941,31 @@ public final class SlabSupport {
      *   <li>HALF-HEIGHT seat (vanilla bottom slab): the top face is half a block below the grid,
      *       so the follower takes the slab's own dy PLUS {@code -0.5}. This is exactly the
      *       pre-existing "mixed slab" compound.</li>
-     *   <li>FULL-HEIGHT seat (solid non-slab full block): the follower's grid bottom already
-     *       coincides with the support's grid top, so it inherits the support's dy unchanged.
-     *       This is the lane that was missing — {@code loweredBottomSlabSupportDy} reports
-     *       {@link Double#NaN} for anything that is not a bottom slab, so the live
-     *       {@code stripped_jungle_log} support contributed nothing at all.</li>
+     *   <li>FULL-HEIGHT seat (any non-slab support whose top face is at its own cell top — see
+     *       {@link #presentsCellTopAsTopFace}): the follower's grid bottom already coincides with
+     *       the support's grid top, so it inherits the support's dy unchanged. This is the lane
+     *       that was missing — {@code loweredBottomSlabSupportDy} reports {@link Double#NaN} for
+     *       anything that is not a bottom slab, so the live {@code stripped_jungle_log} support
+     *       contributed nothing at all.</li>
      * </ul>
+     *
+     * <p><b>THE {@code -0.5} FLOOR IN {@link #loweredFollowerDy} IS THIS METHOD'S {@code NaN}, AND
+     * IT MASKED THIS BUG FOR AS LONG AS THE TRUE ANSWER WAS ALSO {@code -0.5}.</b> Every support
+     * this method cannot classify sends its follower to that floor, and until a {@code -1.0}
+     * support existed the floor coincided with the right answer everywhere, so nothing was
+     * observably wrong. The floor is KEPT, deliberately and narrowly, because it is the only thing
+     * holding a persisted anchor whose support was broken away (removing it would pop such a cell
+     * to {@code 0.0} in every world saved before the placement-dy store existed — a LAW 1
+     * violation, and the exact regression class this file exists to prevent).
+     *
+     * <p><b>What it still masks, now that the full-height arm is geometric</b> — say it out loud
+     * rather than let the next {@code -1.5} lattice discover it: supports that occupy a REAL,
+     * sub-cell fraction of their own cell. A carpet ({@code 1/16}), a snow layer, a torch, a
+     * standing lantern, a closed bottom trapdoor ({@code 3/16}), a honey block ({@code 15/16}) and
+     * a non-{@code UP} wall post ({@code 14/16}) all draw a genuine top face at a height this
+     * resolver has no vocabulary for, because this line's whole offset alphabet is
+     * {@code {-1.0, -0.5, 0.0}} ({@code DY_SPEC} CS-CAP). Anything resting on one of those still
+     * takes the floor. That is a bounded, named residual — not "the support type is excluded".</p>
      *
      * <p>FLUSH seat ({@code 0.0}): the support is present and its top face is AT the grid line —
      * a flush solid non-slab full block, or a flush TOP/DOUBLE slab (top face at the cell top).
@@ -1965,7 +1985,7 @@ public final class SlabSupport {
         if (!Double.isNaN(bottomSlabDy)) {
             return bottomSlabDy - 0.5;
         }
-        double fullBlockDy = loweredFullBlockUndersideSupportDy(world, supportPos, support, depth);
+        double fullBlockDy = loweredFullHeightSupportDy(world, supportPos, support, depth);
         if (!Double.isNaN(fullBlockDy)) {
             return fullBlockDy;
         }
@@ -2004,7 +2024,7 @@ public final class SlabSupport {
         if (!seat.isSolidBlock(world, seatPos)) {
             return false;
         }
-        double ownDy = loweredFullBlockUndersideSupportDy(world, seatPos, seat);
+        double ownDy = loweredFullHeightSupportDy(world, seatPos, seat);
         if (Double.isFinite(ownDy) && ownDy < -1.0e-6) {
             return false;   // the seat itself renders lowered
         }
@@ -2028,24 +2048,176 @@ public final class SlabSupport {
     }
 
     /**
-     * Recursion-safe rendered dy of a SOLID NON-SLAB full-block support directly
-     * above a hanger, mirroring the anchor / direct-custom / column branches of
-     * {@link #getYOffsetInner} without re-entering {@link #getYOffset}. Returns a
-     * negative lowered dy ({@code -0.5} / {@code -1.0}), {@code 0.0} (not lowered),
-     * or {@link Double#NaN} (not a qualifying full block).
+     * TOP-FACE GEOMETRY, ASKED OF THE BLOCK ITSELF — the height of this state's own top face
+     * within its own cell, as a fraction of a block ({@code 1.0} = the cell top). {@code NaN}
+     * when the state occupies no volume at all.
+     *
+     * <p>Precomputed into the state's shape cache at registry bootstrap, so this is a field read:
+     * no allocation, no world access, no per-call shape maths, and view-independent (it answers
+     * identically on the render thread and the server thread, unlike {@code isSolidBlock}, which
+     * returns FALSE for a solid cube under {@code ChunkRendererRegion} — the trap documented on
+     * {@link #isClassFlushPinnedSubject}).
+     *
+     * <p><b>It is a CULLING shape, so it is empty for anything that does not occlude</b> — a door,
+     * a glass pane, iron bars all report empty here even though they visibly reach their cell top.
+     * That is why this is an ACCEPT-only term inside {@link #presentsCellTopAsTopFace} and never a
+     * reject, and why {@link #rawOutlineReachesCellTop} exists behind it.
      */
-    private static double loweredFullBlockUndersideSupportDy(BlockView world, BlockPos pos, BlockState state) {
-        return loweredFullBlockUndersideSupportDy(world, pos, state, 0);
+    private static boolean cullingShapeReachesCellTop(BlockState state) {
+        VoxelShape culling = state.getCullingShape();
+        return !culling.isEmpty() && culling.getMax(Direction.Axis.Y) >= 1.0 - 1.0e-6;
     }
 
-    private static double loweredFullBlockUndersideSupportDy(BlockView world, BlockPos pos, BlockState state,
-                                                             int depth) {
+    /**
+     * Reentrancy fence for the raw-shape probe below, and the reason
+     * {@link #rawOutlineReachesCellTop} can ask for an outline at all.
+     *
+     * <p>{@code SlabSupportStateMixin} OFFSETS {@code getOutlineShape} (and the raycast shape) by
+     * the very dy this resolver is computing, and {@code CarpetDyShapeMixin} does the same for
+     * carpets. An unguarded read here would classify a support's geometry from a shape that had
+     * already been moved by the answer — and, on a client world, would additionally publish the
+     * recursion guard's {@code 0.0} into the shared visual-dy cache for that position. While this
+     * flag is set every one of those hooks returns the vanilla shape untouched, so what comes back
+     * is the block's own un-offset geometry and nothing is written anywhere.
+     */
+    private static final ThreadLocal<Boolean> IN_RAW_SHAPE_PROBE =
+            ThreadLocal.withInitial(() -> Boolean.FALSE);
+
+    /** True while {@link #rawOutlineReachesCellTop} is reading a raw shape — see that field. */
+    public static boolean isRawShapeProbeActive() {
+        return IN_RAW_SHAPE_PROBE.get();
+    }
+
+    /**
+     * Memo for {@link #rawOutlineReachesCellTop}. Keyed on {@link BlockState}, which is a permanent
+     * registry singleton with identity equality, so this map is bounded by the number of distinct
+     * states ever asked and can never leak. It exists so the cold path costs ONE shape read per
+     * state per JVM rather than one per call: this resolver runs during chunk meshing and this
+     * project has shipped a per-block hot-path lag regression twice.
+     */
+    private static final java.util.concurrent.ConcurrentHashMap<BlockState, Boolean>
+            RAW_OUTLINE_REACHES_CELL_TOP = new java.util.concurrent.ConcurrentHashMap<>();
+
+    /**
+     * Does this state's own, un-offset outline reach the top of its cell?
+     *
+     * <p>Asked against {@link EmptyBlockView} at {@link BlockPos#ORIGIN} on purpose: the outline of
+     * every family this term exists for (doors, panes, iron bars, gates, ladders, chains,
+     * trapdoors) is a pure function of the STATE — vanilla bakes the neighbour connections into the
+     * state's own properties — so a position-independent read gives the identical answer and is
+     * memoisable. A block with genuinely dynamic bounds answers from its default geometry, which
+     * can only under-admit (falling back to the pre-existing behaviour), never invent a height.
+     */
+    private static boolean rawOutlineReachesCellTop(BlockState state) {
+        Boolean cached = RAW_OUTLINE_REACHES_CELL_TOP.get(state);
+        if (cached != null) {
+            return cached;
+        }
+        boolean reaches;
+        // Save/restore rather than set/clear: the mixins honour this flag by returning early, so a
+        // nested probe is impossible today, but a future hook that is NOT guarded would otherwise
+        // have the flag cleared out from under it by the inner finally.
+        boolean outerProbe = IN_RAW_SHAPE_PROBE.get();
+        IN_RAW_SHAPE_PROBE.set(Boolean.TRUE);
+        try {
+            VoxelShape outline = state.getOutlineShape(
+                    net.minecraft.world.EmptyBlockView.INSTANCE, BlockPos.ORIGIN,
+                    net.minecraft.block.ShapeContext.absent());
+            reaches = !outline.isEmpty() && outline.getMax(Direction.Axis.Y) >= 1.0 - 1.0e-6;
+        } catch (RuntimeException ignored) {
+            // A block whose outline genuinely needs world context (a block entity read, a
+            // neighbour query) may object to the empty view. That is not a reason to fail a render
+            // — it is a reason to leave that support unclassified, exactly as it was before this
+            // term existed.
+            reaches = false;
+        } finally {
+            IN_RAW_SHAPE_PROBE.set(outerProbe);
+        }
+        RAW_OUTLINE_REACHES_CELL_TOP.put(state, reaches);
+        return reaches;
+    }
+
+    /**
+     * Does the block at {@code pos} present its OWN CELL TOP as a top face — i.e. is a block
+     * resting on it seated at this block's own dy, with no further drop?
+     *
+     * <p>This is the question {@code isSolidBlock} was standing in for and OVER-asking. Solidity is
+     * a VOLUME statement ("is the collision box a full cube"); a seat only needs a FACE statement
+     * ("is the top at the cell top"). A fence, a door, a wall, a pane and a set of iron bars all
+     * draw their top face at exactly the cell top and all fail the volume test, which is why a
+     * block resting on any of them lost its support's height entirely (Maintainer's live pass
+     * 2026-08-06, recorder {@code 339a58aa}: sign / lantern / log at {@code -0.5} on a
+     * {@code birch_fence} at {@code -1.0}).
+     *
+     * <p>Four terms, ordered so the common cases never pay for the rare ones:
+     * <ol>
+     *   <li>{@link BlockState#isOpaqueFullCube()} — a precomputed, view-independent flag. Ordinary
+     *       terrain never gets past this line.</li>
+     *   <li>{@link #cullingShapeReachesCellTop} — the state's culling shape is precomputed into
+     *       the shape cache at registry bootstrap, so this is a field read: no allocation, no
+     *       world access, no shape maths. It catches fences, walls, stairs and top/double slabs.
+     *       It is only ever used to ACCEPT: a culling shape is a subset of the block's volume, so
+     *       "the culling shape reaches the cell top" implies the block does. It can never
+     *       false-accept, and where it is empty (doors, panes — culling is about occluding
+     *       neighbours, and a transparent block occludes nothing) the next terms answer.</li>
+     *   <li>{@code isSolidBlock} — kept as a widening term so every state admitted before this
+     *       predicate existed is still admitted byte-identically. Nothing was removed here.</li>
+     *   <li>{@link #rawOutlineReachesCellTop} — the memoised, probe-guarded outline read, for the
+     *       cold tail the first three miss (doors, panes, bars, gates, ladders, trapdoors).</li>
+     * </ol>
+     *
+     * <p>NOT a classname list, and it must never become one: {@code LAW 2} says eligibility follows
+     * geometry, and this campaign has now found exclude-by-classname eight times. If a block type
+     * appears to need adding here, the shape it draws is the thing to ask about instead.
+     */
+    private static boolean presentsCellTopAsTopFace(BlockView world, BlockPos pos, BlockState state) {
+        return state.isOpaqueFullCube()
+                || cullingShapeReachesCellTop(state)
+                || state.isSolidBlock(world, pos)
+                || rawOutlineReachesCellTop(state);
+    }
+
+    /**
+     * Recursion-safe rendered dy of a NON-SLAB support whose top face is at its own cell top —
+     * the support a follower's grid bottom rests directly on, whether that support is above the
+     * caller (a hanger's ceiling) or below it (a seat). Mirrors the anchor / direct-custom /
+     * column branches of {@link #getYOffsetInner} without re-entering {@link #getYOffset}. Returns
+     * a negative lowered dy ({@code -0.5} / {@code -1.0}), {@code 0.0} (not lowered), or
+     * {@link Double#NaN} (this support does not present a full-height top face).
+     *
+     * <p><b>Renamed from {@code loweredFullBlockUndersideSupportDy} (2026-08-06).</b> The old name
+     * and the old {@code isSolidBlock} gate both said "full BLOCK" when the geometry only ever
+     * needed "full-HEIGHT top face". Under the old gate a fence, a door, a wall and a pane matched
+     * no arm of {@link #supportSeatDy} at all, so everything resting on one fell to
+     * {@link #loweredFollowerDy}'s {@code -0.5} floor — invisible while the true answer happened to
+     * be {@code -0.5}, and a visible half-block gap the moment a real {@code -1.0} support existed
+     * (Maintainer's live pass, recorder {@code 339a58aa}: sign/lantern/log at {@code -0.5} on a
+     * {@code birch_fence} at {@code -1.0}). See {@link #presentsCellTopAsTopFace}.
+     */
+    private static double loweredFullHeightSupportDy(BlockView world, BlockPos pos, BlockState state) {
+        return loweredFullHeightSupportDy(world, pos, state, 0);
+    }
+
+    private static double loweredFullHeightSupportDy(BlockView world, BlockPos pos, BlockState state,
+                                                     int depth) {
         if (world == null || pos == null || state == null
                 || state.isAir()
                 || state.getBlock() instanceof SlabBlock
                 || !state.getFluidState().isEmpty()
-                || !state.isSolidBlock(world, pos)) {
+                || !presentsCellTopAsTopFace(world, pos, state)) {
             return Double.NaN;
+        }
+        // THE STORED PLACEMENT HEIGHT IS THE ANSWER, asked here exactly as getYOffsetInner asks it
+        // at the top of its own body — for EVERY cell, not only anchored ones. LAW 1 says a placed
+        // height is frozen and every later read returns it verbatim, and this mirror is a "later
+        // read". Reading it only inside the anchor branch below would leave lane B's cells (lowered
+        // placements that earn no anchor, whose height freezeLoweredOnPlace records WITHOUT one)
+        // resolving one way for themselves and another way for whatever rests on them — the
+        // two-lanes-disagree split this file has already paid for repeatedly. Absent facts answer
+        // NaN, so every world saved before the store existed takes the identical path below.
+        double storedDy = SlabPlacementDyAttachment.storedDy(world, pos);
+        if (!Double.isNaN(storedDy)) {
+            return storedDy;
         }
         if (SlabAnchorAttachment.isAnchored(world, pos)) {
             // An anchor records THAT this block was placed on a lowered surface, not HOW FAR down
@@ -2226,7 +2398,7 @@ public final class SlabSupport {
      * log shares its drop instead of staying flush (GH #22 slab-log DODO). Deliberately narrow:
      * ONLY a direct log-family support qualifies — walking through arbitrary opaque terrain would
      * reopen the world-hole guard this same method sits beside. Mirrors
-     * {@link #loweredFullBlockUndersideSupportDy} in shape but for a below-support (not an
+     * {@link #loweredFullHeightSupportDy} in shape but for a below-support (not an
      * underside-hanger) query, and never calls {@link #getYOffset} so it is safe to call from
      * inside the {@code IN_GET_Y_OFFSET} recursion guard.
      */
@@ -2323,7 +2495,7 @@ public final class SlabSupport {
             return Double.NaN;
         }
         if (SlabAnchorAttachment.isAnchored(world, supportPos)) {
-            // Same anchor-is-not-a-height correction as loweredFullBlockUndersideSupportDy: an
+            // Same anchor-is-not-a-height correction as loweredFullHeightSupportDy: an
             // anchored bottom slab may itself sit deeper than -0.5, and its own placement height
             // wins when the store has it.
             return anchoredCellDy(world, supportPos, depth);

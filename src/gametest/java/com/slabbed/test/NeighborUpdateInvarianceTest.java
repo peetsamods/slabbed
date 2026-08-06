@@ -177,6 +177,31 @@ public final class NeighborUpdateInvarianceTest {
     }
 
     /**
+     * The same SBSB tower as {@link #minusOneLoweredStoneTowerRig}, built one cell LOWER (ground at
+     * plot y=0 instead of y=1) so a subject two cells above its top still leaves the
+     * {@code add_full_block_above} mutation a cell inside the 8x8x8 plot. Same premise assert, same
+     * real-useOn clicks; the only difference is the base height.
+     */
+    private static BlockPos minusOneLoweredStoneTowerRigAtGroundLevel(TestContext ctx, ServerWorld w,
+                                                                      int x, int z) {
+        BlockPos ground = ctx.getAbsolutePos(new BlockPos(x, 0, z));
+        w.setBlockState(ground, Blocks.STONE.getDefaultState(), Block.NOTIFY_LISTENERS);
+        Item[] tower = {
+                Blocks.STONE_SLAB.asItem(), Blocks.STONE.asItem(),
+                Blocks.STONE_SLAB.asItem(), Blocks.STONE.asItem()
+        };
+        BlockPos cursor = ground;
+        for (Item item : tower) {
+            place(ctx, item, cursor, Direction.UP, 0.0);
+            cursor = cursor.up();
+        }
+        double topDy = dy(w, cursor);
+        ctx.assertTrue(Math.abs(topDy + 1.0) <= EPS,
+                "premise: ground-level SBSB tower top stone should read -1.0, got " + topDy);
+        return cursor;
+    }
+
+    /**
      * A full block that renders lowered (-0.5) with air to its NORTH — the
      * {@code FlushSeatGuardTest#cantileverWithAirBelowStillLowersAndAnchors} / donor
      * {@code loweredFullBlockWithAirWest} shape (rotated to NORTH; semantics identical).
@@ -497,6 +522,54 @@ public final class NeighborUpdateInvarianceTest {
                 BlockPos owner = minusOneLoweredStoneTowerRig(ctx, w, 3, 3);
                 place(ctx, Blocks.STONE.asItem(), owner, Direction.NORTH, -0.25);
                 return owner.north();
+            }),
+            // #10 — THE MATRIX'S COVERAGE BOUNDARY, closed (2026-08-06, Maintainer's live pass): every
+            // subject above rests on a SLAB or a SOLID CUBE. Nothing in this matrix has ever rested
+            // a block on a support that is neither, which is exactly why S-2 stayed 9/9 CLEAN
+            // through a live bug in which a sign, a lantern and a log all sat half a block above a
+            // birch_fence at -1.0. supportSeatDy classified a seat with isSolidBlock — a VOLUME
+            // test — so a fence matched no arm and everything on it fell to loweredFollowerDy's
+            // hardcoded -0.5 floor, which was invisible for as long as -0.5 was also the right
+            // answer.
+            //
+            // Geometry: a real-useOn SBSB tower whose top stone is the -1.0 owner, a FENCE placed
+            // on it (which therefore also reads -1.0), and the subject placed on the fence. Built
+            // at ground level so the subject sits at plot y=6 and add_full_block_above still writes
+            // inside the 8x8x8 plot. The subject is a full block, not a decoration, deliberately:
+            // break_directly_below removes a decoration by vanilla mechanic and the runner's
+            // carve-out would skip the row, so the one mutation that reaches this subject would
+            // assert nothing.
+            //
+            // Moving mutation: break_directly_below — it destroys the FENCE the subject's
+            // magnitude comes from. MEASURED (2026-08-06, by the protection-stripping method the
+            // 49691609 audit established — probe added, run, and removed):
+            //   fully protected            : -1.0 -> -1.0, subject still standing (this row, CLEAN)
+            //   anchor+frozen+store stripped: -1.0 ->  0.0   (the mutation provably reaches it)
+            //   store cleared, anchor kept : -1.0 -> -0.5   (the anchor alone gives only the floor)
+            // So this is one of the STRONG rows: it discriminates the stored NUMBER from both the
+            // anchor boolean and the -0.5 fallback, on the exact support shape the matrix had never
+            // covered.
+            new NamedSubject("full_block_on_minus_one_fence_support", (ctx, w) -> {
+                BlockPos owner = minusOneLoweredStoneTowerRigAtGroundLevel(ctx, w, 3, 3);
+                place(ctx, Blocks.BIRCH_FENCE.asItem(), owner, Direction.UP, 0.0);
+                BlockPos fence = owner.up();
+                ctx.assertTrue(w.getBlockState(fence).isOf(Blocks.BIRCH_FENCE),
+                        "premise: the fence support must land on the -1.0 tower top, got "
+                                + w.getBlockState(fence));
+                double fenceDy = dy(w, fence);
+                ctx.assertTrue(Math.abs(fenceDy + 1.0) <= EPS,
+                        "premise: the FENCE support must itself render -1.0 — a -0.5 fence would "
+                                + "make this row coincide with the fallback floor and prove nothing, "
+                                + "got " + fenceDy);
+                place(ctx, Blocks.STONE.asItem(), fence, Direction.UP, 0.0);
+                BlockPos subject = fence.up();
+                ctx.assertTrue(w.getBlockState(subject).isOf(Blocks.STONE),
+                        "premise: the subject must land on the fence, got " + w.getBlockState(subject));
+                double d = dy(w, subject);
+                ctx.assertTrue(Math.abs(d + 1.0) <= EPS,
+                        "premise: a block resting on a -1.0 fence must be placed at -1.0 (this is "
+                                + "the live bug this subject exists for), got " + d);
+                return subject;
             })
     );
 
@@ -637,5 +710,10 @@ public final class NeighborUpdateInvarianceTest {
     @GameTest(structure = "fabric-gametest-api-v1:empty")
     public void cantileverFullBlockBesideMinusOneSurvivesNeighborEdits(TestContext ctx) {
         runSubject(ctx, SUBJECTS.get(8));
+    }
+
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void fullBlockOnMinusOneFenceSupportSurvivesNeighborEdits(TestContext ctx) {
+        runSubject(ctx, SUBJECTS.get(9));
     }
 }

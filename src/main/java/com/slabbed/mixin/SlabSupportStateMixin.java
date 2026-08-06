@@ -151,6 +151,13 @@ public abstract class SlabSupportStateMixin {
                                        CallbackInfoReturnable<VoxelShape> cir) {
         BlockState self = (BlockState) (Object) this;
 
+        // RAW-SHAPE PROBE: SlabSupport is asking this block for its OWN un-offset geometry in
+        // order to decide the dy. Offsetting it here would make that decision depend on its own
+        // answer. See SlabSupport.isRawShapeProbeActive.
+        if (SlabSupport.isRawShapeProbeActive()) {
+            return;
+        }
+
         // Fences/walls/panes now render lowered on a vanilla slab too (GH #21 model fix
         // in OffsetBlockStateModel.emitQuads), so their outline AND raycast shape MUST
         // follow getVisualYOffset — the old connection-block bail-out here was the mirror
@@ -173,6 +180,13 @@ public abstract class SlabSupportStateMixin {
     private void slabbed$offsetOutline(BlockView world, BlockPos pos, ShapeContext ctx,
                                        CallbackInfoReturnable<VoxelShape> cir) {
         BlockState self = (BlockState) (Object) this;
+
+        // RAW-SHAPE PROBE (see slabbed$offsetRaycast above and
+        // SlabSupport.isRawShapeProbeActive): hand back the block's own un-offset outline while
+        // the dy resolver is measuring where this block's top face actually is.
+        if (SlabSupport.isRawShapeProbeActive()) {
+            return;
+        }
 
         // CARPET IS OWNED BY CarpetDyShapeMixin (client), NOT BY THIS LAYER. Both inject on an
         // outline path that the other reaches — AbstractBlockState.getOutlineShape calls

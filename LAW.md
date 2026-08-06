@@ -49,21 +49,19 @@ says every block is entitled to the right height in the first place.**
 - **`NeighborUpdateInvarianceTest`** (the S-2 gate): place via the real `useOn` path, record the
   height exactly, mutate every class of neighbour without touching the block, assert the height is
   byte-identical. **This test *is* LAW 1.**
-- **S-2's VERDICT is characterization by default; the RUN never is.** Earlier revisions of this
-  section read as though S-2 already blocks. It does not, and could not honestly: the section below
-  says this line does not yet obey LAW 1, so a blocking S-2 would make CI permanently red for a
-  state this constitution declares expected — and a permanently red CI is a CI nobody reads.
-  **The full matrix executes on every run either way** — every subject built, every mutation
+- **✅ S-2 is BLOCKING BY DEFAULT (flipped 2026-08-06 by Maintainer).** `./gradlew build runGameTest` —
+  no flag — enforces the law directly. `-Dslabbed.lawGate=false` is the escape hatch for a session
+  deliberately introducing a new RED subject and needing the inventory without failing the build
+  while it's fixed forward; it is never a way to land a known violation quietly.
+  **The full matrix executes on every run in either mode** — every subject built, every mutation
   applied, every violation collected — because the RED inventory is the entire value of the test.
-  Only the verdict differs: by default violations are **logged, not thrown**, one greppable
-  `[LAW-GATE]` line per subject (`CHARACTERIZATION` when a subject moved, `CLEAN` when none did, so
-  silence can never be mistaken for a run that did not happen). **S-2 is never skipped and never
-  short-circuited; a green-because-skipped law gate would be the worst false green this project
-  could ship.**
-- **✅ FLIPPED (2026-08-06, Maintainer): S-2 is now blocking BY DEFAULT.** `./gradlew build runGameTest`
-  — no flag — enforces the law directly; `-Dslabbed.lawGate=false` is the escape hatch for a
-  session deliberately introducing a new RED subject and needing the inventory without failing the
-  build while it's fixed forward. Phase 2's exit criterion (below) is met.
+  Only the verdict differs: violations are thrown by default, or **logged instead** when disabled,
+  one greppable `[LAW-GATE]` line per subject (`CLEAN` when none moved, so silence can never be
+  mistaken for a run that did not happen). **S-2 is never skipped and never short-circuited; a
+  green-because-skipped law gate would be the worst false green this project could ship.**
+  (An earlier revision of this bullet read "characterization by default; a blocking S-2 could not
+  be honest while this line does not obey LAW 1". That was true when written and is kept in the
+  history below rather than pretended away — the line now passes.)
 - **The diff tripwire** (`tools/hooks/commit-msg`): an added line in `src/main/**` containing
   `geometric | merge | follow | inherit | cantilever | recompute | isAdjacent.*Lowered` is presumed
   a LAW 1 violation and blocks the commit without a logged `LAW-SIGNOFF:` and a new invariance row.
@@ -87,6 +85,13 @@ says every block is entitled to the right height in the first place.**
 the record of the state that title described — not because it is still true.** As of `c51ec869`,
 S-2 passes with 9 of 9 subjects CLEAN under enforcement, and the default flag flip (this commit)
 makes that the standing state of `./gradlew build runGameTest`, not an opt-in check.
+
+> **AMENDED 2026-08-06 (night, second): 10 of 10 CLEAN, and the tenth subject exists because a
+> PLAYER found what the gate could not.** Maintainer's live pass caught followers floating above a
+> `−1.0` fence while S-2 read 9/9 CLEAN, because no subject had ever rested on a support that was
+> neither a slab nor a solid cube. The gate was not wrong about what it tested; it had never been
+> asked. Read the paragraph below with that as the live example of what "precisely" means: a green
+> S-2 certifies its own scenes and nothing outside them.
 
 **What this claim covers, precisely, so it is not over-read a second time (LAW.md was wrong about
 this once already, in the "8 of 8" revision below):** it covers the 9 subjects and 10 mutations
@@ -179,7 +184,7 @@ them found something worse.** Neither result contradicted a prediction:
   an ordinary full block beside a −1.0 owner, verified empirically (not assumed) to land via plain
   vanilla side-placement. **RED:** `break_south_neighbor: -0.5 → 0.0`.
 
-### ✅ AUDIT COMPLETE (`49691609`, 2026-08-06): 9 of 9 subjects provably reachable
+### ✅ AUDIT COMPLETE (`49691609`, 2026-08-06): 9 of 9 subjects provably reachable — now 10 of 10
 
 The audit was finished by **measurement, not reasoning**: probe gametests built every subject with
 the real builders, **stripped its protection** (`removeAnchor` clears anchor + frozen-flat + stored
@@ -198,6 +203,17 @@ holds this"* from *"the floor happens to equal it"*. Probes were removed afterwa
 | 7 | `candle_placed_flat_then_neighbored` | `add_lowered_stack_east` `0.0→−0.5` | **RED** — no protection |
 | 8 | `chain_on_lowered_support_ceiling_scenery` | `break_directly_below` `−0.5→0.0` | CLEAN — anchor; store NOT discriminated |
 | 9 | `cantilever_full_block_beside_minus_one` | `break_south_neighbor` `−0.5→0.0` | **RED** — no protection |
+| 10 | `full_block_on_minus_one_fence_support` | `break_directly_below` `−1.0→0.0` | CLEAN — store, **discriminated** |
+
+**Subject #10 added 2026-08-06 (night, second) — it exists because this table's coverage boundary
+was found by a player, not by the gate.** Every one of subjects #1–#9 rests on a SLAB or a SOLID
+CUBE. Nothing here had ever rested a block on a fence, so S-2 stayed 9/9 CLEAN through a live bug
+in which a sign, a lantern and a log all floated half a block above a `birch_fence` at `−1.0`
+(`supportSeatDy` classified a seat by `isSolidBlock`, a volume test, so a fence matched no arm and
+its followers fell to the `−0.5` floor — invisible for as long as `−0.5` was also the right
+answer). Measured by the same protection-stripping method as the rest of the table: fully protected
+`−1.0→−1.0`; bare `−1.0→0.0`; **store cleared with the anchor kept `−1.0→−0.5`**, so like #3, #5
+and #6 it discriminates the stored NUMBER from both the anchor boolean and the fallback floor.
 
 Subject #6 was renamed from `carpet_on_minus_one_owner` when it was rebuilt: the old name described
 geometry it no longer has, and a lying subject name is precisely the defect that made #5 test the

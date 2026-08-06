@@ -52,6 +52,12 @@ public class CarpetDyShapeMixin {
     @Inject(method = "getOutlineShape", at = @At("RETURN"), cancellable = true)
     private void slabbed$offsetCarpetOutline(BlockState state, BlockView world, BlockPos pos, ShapeContext ctx,
                                              CallbackInfoReturnable<VoxelShape> cir) {
+        // RAW-SHAPE PROBE: SlabSupport is measuring this block's own un-offset outline to decide
+        // where its top face is. Offsetting it here would feed the answer back into the question.
+        // See SlabSupport.isRawShapeProbeActive.
+        if (com.slabbed.util.SlabSupport.isRawShapeProbeActive()) {
+            return;
+        }
         double dy = ClientDy.dyFor(world, pos, state);
         if (dy != 0.0) {
             cir.setReturnValue(cir.getReturnValue().offset(0.0, dy, 0.0));
