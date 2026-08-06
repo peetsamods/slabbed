@@ -1,5 +1,7 @@
 package com.slabbed.test;
 
+import com.slabbed.anchor.SlabAnchorAttachment;
+import com.slabbed.anchor.SlabPlacementDyAttachment;
 import com.slabbed.util.SlabSupport;
 import net.fabricmc.fabric.api.gametest.v1.GameTest;
 import net.minecraft.block.Block;
@@ -60,6 +62,16 @@ import java.util.List;
  *
  * <p>Extending: add a SUBJECT builder or a MUTATION and every existing pairing exercises it — you
  * cannot add a height behaviour without this matrix testing whether it obeys the law.
+ *
+ * <p><b>VACUITY RULE ({@code LAW.md}, standing): every subject must name, in a comment, the
+ * mutation that would move it.</b> A green row here is proof ONLY if at least one mutation
+ * provably reaches the subject's resolver; a row nothing can move reads as coverage while
+ * asserting nothing, which is worse than no row at all. All nine subjects below carry that comment
+ * and every claim in one was MEASURED, not reasoned: build the subject, strip its protection
+ * ({@code SlabAnchorAttachment.removeAnchor} clears the anchor, the frozen-flat marker and the
+ * stored magnitude in one call), apply the mutation, and see whether the resolver's answer moves.
+ * If it does not move even bare, the mutation cannot reach the subject and the row is decorative.
+ * Re-run that measurement before trusting any row you did not write.
  *
  * <p><b>VERDICT MODE — see {@link #LAW_GATE_PROPERTY}.</b> The matrix ALWAYS runs in full; only
  * what happens to the collected violations changes.
@@ -185,23 +197,115 @@ public final class NeighborUpdateInvarianceTest {
     }
 
     private static final List<NamedSubject> SUBJECTS = List.of(
-            // #1 — control: flat full block on flat ground. Must be law-compliant already.
+            // #1 — control: a flat-placed full block, now held flat under REAL PRESSURE.
+            // REPAIR (2026-08-06, S-2 matrix audit, second pass): the original rig — stone on flat
+            // ground — was VACUOUS. Measured with every protection stripped, 0 of 10 mutations
+            // moved it, so its green row proved only that the harness executed. A control that
+            // nothing can move is not a control.
+            //
+            // It now runs the candle's own technique (a DORMANT lowering source, planted so it is
+            // invisible at construction and becomes live only when the mutation fires) against a
+            // PROTECTED subject, which is the whole point: same class of pressure, opposite
+            // outcome, because this subject goes through freezeLoweredOnPlace and the candle does
+            // not (isOrdinaryAnchorCandidate accepts a solid full block and rejects a candle).
+            //
+            // Geometry: the subject is placed FLAT with AIR BELOW (a cantilever). That is not
+            // decoration — it is the ONLY geometry in which any mutation can reach a full block's
+            // resolver at all. Resting on solid ground, every lowering lane is closed by
+            // construction: the gap-fill / cantilever-adjacency branch is gated on
+            // pos.down().isAir(), shouldOffset's column walk stops dead at the opaque support
+            // (hasSlabInColumn's natural-terrain stop), and isClassFlushPinnedSubject pins any
+            // opaque full cube at 0.0 before the follow-your-support lanes are ever reached.
+            //
+            // Moving mutation: add_full_block_north. It fills the north cell with a SOLID block,
+            // which hasLoweringSourceInColumnBelow then resolves as lowered via the planted slab
+            // beneath it, so isAdjacentToLoweredSupport(subject) turns true and getYOffsetInner's
+            // cantilever branch returns -0.5. MEASURED with the frozen-flat marker removed:
+            // 0.0 -> -0.5. With the marker: 0.0 -> 0.0. The marker is the load-bearing part, so
+            // this CLEAN row now asserts LAW 1's flat half — "a block placed flat stays flat even
+            // when a lowering source appears beside it" — instead of asserting nothing.
+            // NOT add_lowered_stack_east (the candle's mutation): it plants a SLAB at the
+            // subject's own level, and isAdjacentToLoweredSupport skips slab neighbours outright,
+            // so it is provably inert against ANY full block — measured 0.0 -> 0.0 with protection
+            // stripped. The two controls therefore take different mutations on purpose.
             new NamedSubject("flat_full_block_control", (ctx, w) -> {
-                BlockPos ground = ctx.getAbsolutePos(new BlockPos(3, 1, 3));
-                w.setBlockState(ground, Blocks.STONE.getDefaultState(), Block.NOTIFY_LISTENERS);
-                place(ctx, Blocks.STONE.asItem(), ground, Direction.UP, 0.0);
-                return ground.up();
+                BlockPos subject = ctx.getAbsolutePos(new BlockPos(3, 3, 3));
+                // The block clicked to place the subject: plain, flat, no lowering source of its
+                // own (air below it too, so it can never become one).
+                w.setBlockState(subject.west(), Blocks.STONE.getDefaultState(), Block.NOTIFY_LISTENERS);
+                // DORMANT: subject.north() is air at construction and isAdjacentToLoweredSupport
+                // skips air neighbours, so this slab is invisible to every lane until
+                // add_full_block_north fills the cell above it.
+                bslab(w, subject.north().down());
+                place(ctx, Blocks.STONE.asItem(), subject.west(), Direction.EAST, 0.0);
+                ctx.assertTrue(w.getBlockState(subject).isOf(Blocks.STONE),
+                        "premise: the control block must land in the cantilever cell, got "
+                                + w.getBlockState(subject));
+                ctx.assertTrue(w.getBlockState(subject.down()).isAir(),
+                        "premise: the control must be a CANTILEVER (air below) or no mutation can "
+                                + "reach a full block's resolver at all");
+                double d = dy(w, subject);
+                ctx.assertTrue(Math.abs(d) <= EPS,
+                        "premise: the control must be placed FLAT (the dormant source must still "
+                                + "be dormant), got " + d);
+                ctx.assertTrue(SlabAnchorAttachment.isFrozenFlat(w, subject),
+                        "premise: this row's protection IS freezeLoweredOnPlace's FROZEN_FLAT "
+                                + "marker — without the marker the row proves nothing");
+                return subject;
             }),
-            // #2 — control: flat slab on flat ground. Must be law-compliant already.
+            // #2 — control: a flat-placed SLAB, held flat under the candle's own mutation.
+            // REPAIR (2026-08-06, S-2 matrix audit, second pass): same vacuity as #1 — measured
+            // 0 of 10 mutations moved the old ground-resting rig with protection stripped.
+            //
+            // Geometry: air below, for a different reason than #1. A BOTTOM slab resting on flush
+            // ground can never take the side-adjacency lane at all: isAdjacentSideSlabLowered's
+            // FLUSH-SEAT GUARD refuses (followerSinksIntoFlushSeat is true for a BOTTOM slab, and
+            // flush stone is a flush seat), and hasLoweredNonSlabTopSupport does not recognise an
+            // adjacency-lowered support either. With air below, the guard passes and the lane is
+            // live.
+            //
+            // Moving mutation: add_lowered_stack_east — the CANDLE'S mutation, the contrast the
+            // whole repair is for. It plants a bottom slab at the subject's own level whose new
+            // stone support sits on the DORMANT slab planted two cells down, so
+            // isVerticallyLoweredSlabSource sees it, isAdjacentSideSlabLowered's BFS finds it, and
+            // getYOffsetInner's slab branch would return -0.5. MEASURED with the frozen-flat
+            // marker removed: 0.0 -> -0.5. With it: 0.0 -> 0.0, because the slab branch reads
+            // isFrozenFlat BEFORE any geometric inheritance walk. Same scene, same mutation as
+            // the candle; the candle has no protection and goes RED, this one is protected and
+            // stays CLEAN. That contrast is the proof.
             new NamedSubject("flat_slab_control", (ctx, w) -> {
-                BlockPos ground = ctx.getAbsolutePos(new BlockPos(3, 1, 3));
-                w.setBlockState(ground, Blocks.STONE.getDefaultState(), Block.NOTIFY_LISTENERS);
-                place(ctx, Blocks.STONE_SLAB.asItem(), ground, Direction.UP, 0.0);
-                return ground.up();
+                BlockPos subject = ctx.getAbsolutePos(new BlockPos(3, 3, 3));
+                w.setBlockState(subject.west(), Blocks.STONE.getDefaultState(), Block.NOTIFY_LISTENERS);
+                // DORMANT: two cells below-and-east, so nothing at the subject's level or its
+                // support's level sees it until add_lowered_stack_east builds the stack on top.
+                bslab(w, subject.east().down().down());
+                place(ctx, Blocks.STONE_SLAB.asItem(), subject.west(), Direction.EAST, -0.25);
+                var placed = w.getBlockState(subject);
+                ctx.assertTrue(placed.getBlock() instanceof SlabBlock
+                                && placed.get(SlabBlock.TYPE) == SlabType.BOTTOM,
+                        "premise: the control must be a BOTTOM slab in the cantilever cell, got "
+                                + placed);
+                ctx.assertTrue(w.getBlockState(subject.down()).isAir(),
+                        "premise: the control must be a CANTILEVER (air below) — on a flush seat "
+                                + "the flush-seat guard closes the only lane that can reach it");
+                double d = dy(w, subject);
+                ctx.assertTrue(Math.abs(d) <= EPS,
+                        "premise: the control must be placed FLAT (the dormant source must still "
+                                + "be dormant), got " + d);
+                ctx.assertTrue(SlabAnchorAttachment.isFrozenFlat(w, subject),
+                        "premise: this row's protection IS freezeLoweredOnPlace's FROZEN_FLAT "
+                                + "marker — without the marker the row proves nothing");
+                return subject;
             }),
             // #3 — an anchored full block on a real, anchored -1.0 support (translated equivalent of
             // the donor's markedSlabRig "full_block_on_lowered_stack" — this line has no compound
             // marked-slab entry point, so the deep support is a real-useOn SBSB tower instead).
+            // Moving mutation: break_directly_below — it destroys the -1.0 support this subject's
+            // magnitude was derived from. VERIFIED reachable (2026-08-06 audit, second pass): with
+            // the anchor and the store stripped this subject reads -1.0 -> 0.0. It holds -1.0
+            // because SlabPlacementDyAttachment stores the number, and -1.0 is NOT the value any
+            // fallback would produce (loweredFollowerDy floors at -0.5), so this row discriminates
+            // the STORE from both the floor and the live walk. This is LAW.md lane G's own subject.
             new NamedSubject("full_block_on_anchored_minus_one_support", (ctx, w) -> {
                 BlockPos owner = minusOneLoweredStoneTowerRig(ctx, w, 3, 3);
                 place(ctx, Blocks.STONE.asItem(), owner, Direction.UP, 0.0);
@@ -209,10 +313,30 @@ public final class NeighborUpdateInvarianceTest {
             }),
             // #4 — the legitimate cantilever (air below): FlushSeatGuardTest's own contract subject,
             // ported to real useOn. Donor's "cantilever_slab_beside_lowered_block".
+            // Moving mutation: break_south_neighbor — it breaks `fb`, the lowered full block that
+            // is this subject's ONLY lowering source (the subject cantilevers off it with air
+            // below, so nothing else can hold it down). VERIFIED reachable (2026-08-06 audit,
+            // second pass), and the row is a real never-pop assertion: with the anchor stripped
+            // the subject reads -0.5 -> 0.0, so the persisted side-slab anchor is what holds it.
+            // HONEST LIMIT OF THIS ROW, stated rather than implied: it does NOT discriminate the
+            // placement-dy STORE. The stored value is -0.5 and loweredFollowerDy's floor is also
+            // -0.5 (supportSeatDy over the now-empty cell below returns NaN), so measured with the
+            // store cleared but the anchor kept, this subject still reads -0.5. This row proves
+            // the ANCHOR is load-bearing; only #3, #5 and #6 prove the store's magnitude is.
+            // Note the geometry the -0.25 NORTH nudge actually builds: the intent mixin's
+            // upperHalfIntent gate fires on a -0.5 target (originalHitPos.y == fb.y + 0.25 >=
+            // fb.y), so the subject is a TOP slab. That is the FlushSeatGuardTest shape and is
+            // correct here — a TOP slab is the one follower exempt from followerSinksIntoFlushSeat
+            // — but it is written down so it cannot be mistaken for the BOTTOM-slab lane #5 tests.
             new NamedSubject("cantilever_slab_beside_lowered_block", (ctx, w) -> {
                 BlockPos fb = loweredFullBlockWithAirNorthRig(ctx, w, 3, 3);
                 place(ctx, Blocks.STONE_SLAB.asItem(), fb, Direction.NORTH, -0.25);
-                return fb.north();
+                BlockPos subject = fb.north();
+                ctx.assertTrue(w.getBlockState(subject).getBlock() instanceof SlabBlock
+                                && w.getBlockState(subject).get(SlabBlock.TYPE) == SlabType.TOP,
+                        "premise: the -0.25 nudge on a -0.5 target mints a TOP slab via the intent "
+                                + "mixin's upperHalfIntent gate — got " + w.getBlockState(subject));
+                return subject;
             }),
             // #5 — a slab on a lowered bottom slab (9e4dffb5's new behaviour): the seat is itself the
             // cantilever slab from SlabOnLoweredBottomSlabTest's recipe; the subject is a second slab
@@ -238,15 +362,69 @@ public final class NeighborUpdateInvarianceTest {
                 place(ctx, Blocks.OAK_SLAB.asItem(), seat, Direction.UP, 0.0);
                 return seat.up();
             }),
-            // #6 — a carpet on a -1.0 owner (649f2090's fix): ThinTopLayerLoweringTest /
-            // ClientCarpetDyAuthorityTest's donor evidence cell, ported to real useOn placement.
-            new NamedSubject("carpet_on_minus_one_owner", (ctx, w) -> {
-                BlockPos owner = minusOneLoweredStoneTowerRig(ctx, w, 3, 3);
-                place(ctx, Blocks.WHITE_CARPET.asItem(), owner, Direction.UP, 0.0);
-                BlockPos subject = owner.up();
+            // #6 — a carpet whose SUPPORT changes height underneath it while staying standing.
+            // REPAIR (2026-08-06, S-2 matrix audit, second pass) — and a RENAME, because the old
+            // name described geometry this subject no longer has. Was `carpet_on_minus_one_owner`:
+            // a carpet on the -1.0 tower top. LAW.md flagged it vacuous and the measurement agreed
+            // — its ONLY live mutation was break_directly_below, which removes the carpet's
+            // support, so vanilla removes the carpet, the runner takes its legitimate
+            // vanilla-mechanic carve-out, and the subject contributed ZERO assertions. The other
+            // nine mutations could not touch it: a carpet on an anchored -1.0 tower resolves
+            // through the anchor branch, and nothing at or above the subject's level changes what
+            // that branch reads.
+            //
+            // The fix the law actually needs is a support that CHANGES HEIGHT WITHOUT BEING
+            // DESTROYED. The mutation set makes exactly one such move available, so this rig is
+            // built around it: add_lowered_stack_east writes at s.east().down(), which is at the
+            // SUPPORT'S level, not the subject's. Everything else (break_{north,east,west,south})
+            // acts at the subject's own level and can never reach a support's lateral
+            // relationships; only break_directly_below reaches the support at all, and that
+            // destroys it. So the support is a BOTTOM SLAB with air beneath it (a floating seat —
+            // legal for a slab, and required so isAdjacentSideSlabLowered's flush-seat guard does
+            // not refuse), and the lowering source that will reach it is planted DORMANT two cells
+            // below-and-east.
+            //
+            // Moving mutation: add_lowered_stack_east. Its new stone lands beside the support slab
+            // and rests on the planted slab, so isLoweredSideSlabSource sees it,
+            // isAdjacentSideSlabLowered turns the support from flat to -0.5, and the carpet's own
+            // live lane (shouldOffset -> "bottom slab below that is adjacent-side-slab lowered")
+            // would resolve -1.0. MEASURED: with all protection stripped, -0.5 -> -1.0.
+            //
+            // Result: CLEAN, and this is the STRONGEST discriminator in the matrix. Measured with
+            // the decorative anchor KEPT but the placement-dy store CLEARED, the subject still
+            // moves -0.5 -> -1.0 (loweredBottomSlabSupportDy reports the support's new -0.5, so
+            // supportSeatDy compounds to -1.0). The anchor alone does NOT hold this cell: the
+            // stored NUMBER does. That is LAW.md lane G's thesis — "an anchor is a boolean fact,
+            // not a stored number" — asserted directly, on a carpet, from the flat side.
+            //
+            // The -1.0 carpet evidence cell the old rig carried is not lost: it is the standing
+            // subject of ThinTopLayerLoweringTest and ClientCarpetDyAuthorityTest, both green.
+            new NamedSubject("carpet_on_laterally_lowered_slab_support", (ctx, w) -> {
+                BlockPos subject = ctx.getAbsolutePos(new BlockPos(3, 3, 3));
+                // The support: a floating BOTTOM slab. Floating on purpose — a flush seat under it
+                // would make isFlushSeat refuse the side-adjacency lane and the rig would go inert.
+                bslab(w, subject.down());
+                // DORMANT: two cells below-and-east. Nothing at the support's level sees it until
+                // add_lowered_stack_east builds the stone on top of it.
+                bslab(w, subject.east().down().down());
+                place(ctx, Blocks.WHITE_CARPET.asItem(), subject.down(), Direction.UP, 0.0);
+                ctx.assertTrue(w.getBlockState(subject).isOf(Blocks.WHITE_CARPET),
+                        "premise: the carpet must land on the slab support, got "
+                                + w.getBlockState(subject));
+                ctx.assertTrue(w.getBlockState(subject.down(2)).isAir(),
+                        "premise: the support slab must FLOAT (air below) or the flush-seat guard "
+                                + "closes the lane the moving mutation needs");
+                double supportDy = dy(w, subject.down());
+                ctx.assertTrue(Math.abs(supportDy) <= EPS,
+                        "premise: the support must start FLAT — the dormant source must still be "
+                                + "dormant, got " + supportDy);
                 double d = dy(w, subject);
-                ctx.assertTrue(Math.abs(d + 1.0) <= EPS,
-                        "premise: carpet placed on the -1.0 owner should itself read -1.0, got " + d);
+                ctx.assertTrue(Math.abs(d + 0.5) <= EPS,
+                        "premise: a carpet on a flat bottom slab reads -0.5, got " + d);
+                ctx.assertTrue(SlabAnchorAttachment.isAnchored(w, subject)
+                                && SlabPlacementDyAttachment.hasStoredDy(w, subject),
+                        "premise: this row's protection IS the decorative anchor PLUS the stored "
+                                + "magnitude — the anchor alone measurably does not hold this cell");
                 return subject;
             }),
             // #7 — decoration placed flat then neighboured: the donor's
@@ -276,6 +454,17 @@ public final class NeighborUpdateInvarianceTest {
             // Y-axis chain placed via a REAL click on top of a lowered (-0.5) support, exercising the
             // isCeilingAttached classname-list lane lane C names (floor lever/button, Y-chain,
             // TOP-half trapdoor) through the real placement path this time, not a rig-authored cell.
+            // Moving mutation: break_directly_below — it destroys the -0.5 support the standing
+            // chain is following. RE-VERIFIED post-lane-C (2026-08-06 audit, second pass), rather
+            // than inferred from the historical RED: the chain SURVIVES the break (vanilla imposes
+            // no support requirement on a chain, so the carve-out does not fire and the row really
+            // does assert), and with the anchor stripped it reads -0.5 -> 0.0 — byte-identical to
+            // the RED this subject reported before 3a7c17c0 taught isCeilingAttached to ask the
+            // ROLE instead of the block TYPE. So the decorative-object anchor is what holds it,
+            // and this row is the standing regression test for that fix.
+            // Like #4, it does NOT discriminate the store: measured with the store cleared and the
+            // anchor kept it still reads -0.5, because loweredFollowerDy's floor over the emptied
+            // cell below is also -0.5.
             new NamedSubject("chain_on_lowered_support_ceiling_scenery", (ctx, w) -> {
                 BlockPos ground = ctx.getAbsolutePos(new BlockPos(3, 1, 3));
                 w.setBlockState(ground, Blocks.STONE.getDefaultState(), Block.NOTIFY_LISTENERS);
@@ -434,7 +623,7 @@ public final class NeighborUpdateInvarianceTest {
     }
 
     @GameTest(structure = "fabric-gametest-api-v1:empty")
-    public void carpetOnMinusOneOwnerSurvivesNeighborEdits(TestContext ctx) {
+    public void carpetOnLaterallyLoweredSlabSupportSurvivesNeighborEdits(TestContext ctx) {
         runSubject(ctx, SUBJECTS.get(5));
     }
 
