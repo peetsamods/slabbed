@@ -1354,6 +1354,34 @@ public final class SlabSupport {
         if (isAlwaysCeilingHungDecoration(state)) {
             return ceilingHungDecorationDy(world, pos, state);
         }
+        // THE STORED PLACEMENT HEIGHT IS THE ANSWER, whoever recorded it (LAW 1: a placed height is
+        // computed once and then frozen; every later read returns the stored value verbatim).
+        //
+        // This read used to be reachable only through anchoredCellDy, i.e. only inside an "if this
+        // cell is anchored" branch. That was behaviourally identical for as long as every stored
+        // fact belonged to an anchored cell — but it made "does this cell have a recorded height"
+        // a question only anchored cells were permitted to ask, and LAW.md lane B is precisely the
+        // cell that renders lowered while earning no anchor. Giving it a number and then reading
+        // that number only for anchored cells would store a fact nobody consults.
+        //
+        // THE CONCERN THAT KEPT THIS READ POSITIONAL IS NOW STATED DIRECTLY INSTEAD. The
+        // placement-dy author's reason for leaving it inside the anchor branch was that a top-level
+        // read could silently change CEILING-HUNG behaviour the first time an unanchored cell
+        // acquired a fact — a hanger must keep following the support ABOVE it, and a stored number
+        // would pin it. That is now enforced where the fact is minted:
+        // SlabAnchorAttachment.freezeLoweredOnPlace refuses to record for a block that hangs from
+        // the cell above (isCeilingAttached — a ROLE predicate as of 3a7c17c0 — or
+        // isAlwaysCeilingHungDecoration), so a hanger can never own a fact for this line to honour.
+        // The always-ceiling-hung family is additionally dispatched above this line, exactly as
+        // before, so its resolution is untouched either way.
+        //
+        // Absence is still indistinguishable from the behaviour that shipped: with no fact this
+        // falls through to the identical lanes below, which is the migration-safety contract every
+        // world saved before the store existed relies on.
+        double placedDy = SlabPlacementDyAttachment.storedDy(world, pos);
+        if (!Double.isNaN(placedDy)) {
+            return placedDy;
+        }
         // Slab-on-offset-block: a slab placed on top of a solid block that sits on a bottom slab
         // inherits the same -0.5 dy so the stack stays visually continuous (no gap).
         if (state.getBlock() instanceof SlabBlock) {
