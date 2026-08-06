@@ -26,7 +26,6 @@ import net.minecraft.block.LeverBlock;
 import net.minecraft.block.PaleMossCarpetBlock;
 import net.minecraft.block.PaneBlock;
 import net.minecraft.block.PointedDripstoneBlock;
-import net.minecraft.block.PowderSnowBlock;
 import net.minecraft.block.SlabBlock;
 import net.minecraft.block.SnowBlock;
 import net.minecraft.block.SporeBlossomBlock;
@@ -90,48 +89,50 @@ public final class SlabSupport {
      * sites, and that was BUG A (live 2026-08-06, recorder {@code eeac23d0-…}): a
      * {@code white_carpet} at {@code (219,-55,-34)} read {@code dy 0.0} while the stone it was
      * lying on read {@code -0.5}, floating half a block in the air — Maintainer's "placing too high".
-     * Eligibility now follows GEOMETRY via {@link #isEnvironmentDepositedSurfaceFill}, per her
-     * binding law of 2026-08-06: <i>"everything should be able to lower; no exceptions."</i>
+     * Eligibility now follows GEOMETRY alone, per her binding law of 2026-08-06:
+     * <i>"everything should be able to lower; no exceptions."</i>
+     *
+     * <p><b>THE SNOW EXCLUSION IS GONE TOO (2026-08-06, second ruling) — read this before adding
+     * another one.</b> {@code 112d1449} replaced the classname family with a narrower BEHAVIOUR
+     * predicate, {@code isEnvironmentDepositedSurfaceFill} ({@code Properties.LAYERS} plus
+     * {@code PowderSnowBlock}), to keep the one hazard {@code 8d3f105f} (2026-02-10, "prevent
+     * client offset of thin top-layer blocks") and {@code 135d125f} (2026-06-10, powder snow)
+     * actually closed: weather lays snow across whole biomes, so if it lowered wherever a slab
+     * happened to lie beneath, half a continuous snowy surface would render at {@code -0.5} and
+     * half at {@code 0.0} — a step through terrain the player never placed, cannot see the cause
+     * of, and cannot align. Maintainer has since ruled against that exclusion as well (recorder
+     * {@code 0ba17cf0-ddb6-45f6-b4b9-921d50c9d2d8}: {@code (306,-58,-56) powder_snow dy=0.000}
+     * over a {@code -0.5} {@code stone_slab}, reported as "Snow blocks are not lowering"). The
+     * predicate, and the separate {@code PowderSnowBlock} short-circuit at the head of
+     * {@link #getYOffset}, were both deleted.
+     *
+     * <p><b>What closes the hazard now: geometry, not a block list.</b> The bounded column walks
+     * ({@link #hasSlabInColumn}, {@link #slabColumnYOffset}) stop dead on the first
+     * {@code isOpaqueFullCube} below the subject — the L5 world-hole guard, added by
+     * {@code 8d1b42ef} AFTER the powder-snow exclusion and closing the same hazard class
+     * generally. Snow lying on grass/dirt/stone/snow_block therefore cannot see a slab buried
+     * under that terrain at all, however deep it is. Only snow resting DIRECTLY on a slab (or on a
+     * lowered non-terrain object) lowers, and there it is geometrically right: it seats on the
+     * surface it lies on instead of floating in vanilla's half-block gap. The exclusion had become
+     * a narrower, hand-listed duplicate of a guard the codebase already had.
+     *
+     * <p><b>The three snow ids after the change.</b> {@code minecraft:snow} (this class, LAYERS)
+     * and {@code minecraft:powder_snow} lower when they rest directly on a slab-height surface.
+     * {@code minecraft:snow_block} is an ordinary opaque full cube, was never in either predicate,
+     * and behaves exactly like stone — including staying flush on top of other terrain, which is
+     * the world-hole guard, not a snow rule.
+     *
+     * <p><b>The residual reachable case</b> — Terrain Slabs, which turns natural terrain into
+     * half-height surfaces world-wide, so weather snow lands directly on "slabs" across whole
+     * biomes — is tracked in {@code KNOWN_INCOMPLETE.md} 1k for a live judgement. Pinned by
+     * {@code ThinTopLayerLoweringTest}: three cells were INVERTED by this ruling, and
+     * {@code #snowLayerOverNaturalTerrainStaysFlush} pins the guard that replaces them.
      */
     public static boolean isThinTopLayer(BlockState state) {
         Block block = state.getBlock();
         return block instanceof SnowBlock
                 || block instanceof CarpetBlock
                 || block instanceof PaleMossCarpetBlock;
-    }
-
-    /**
-     * ENVIRONMENT-DEPOSITED SURFACE FILL — the genuine hazard that the old {@link #isThinTopLayer}
-     * lowering exclusion was protecting, restated as a BEHAVIOUR instead of a class list.
-     *
-     * <p><b>What the original guards actually closed.</b> {@code 8d3f105f} (2026-02-10, "prevent
-     * client offset of thin top-layer blocks") and its sibling {@code 135d125f} (powder snow) both
-     * closed the same DODO: <b>snow</b>. Snow is laid down and melted away by WEATHER across whole
-     * biomes. If it lowered wherever a slab happened to lie beneath it, half of a continuous snowy
-     * surface would render at {@code -0.5} and half at {@code 0.0} — a half-block step across
-     * terrain the player never placed, cannot see the cause of, and cannot align. {@code 135d125f}
-     * states the rule outright: <i>"It is natural terrain fill (Terrain Slabs likewise does not
-     * lower it), so never offset it: keep all powder snow flush and consistent."</i>
-     *
-     * <p><b>What it was NOT protecting.</b> Carpet and pale moss carpet are never weather-deposited
-     * — they are player-placed decoration, and the WYSIWYG law owns them: a carpet laid on a
-     * lowered support must lie ON it. They were swept up only because the guard keyed on a shared
-     * CLASSNAME family ("thin top layer"), which is exactly the shape this project's standing law
-     * "exclude by behavior, not classname" outlaws (the powder-snow DODO that first taught it).
-     *
-     * <p><b>The behaviour.</b> {@link Properties#LAYERS} is the accumulate-and-melt-in-layers
-     * behaviour itself — a variable-thickness deposit the environment maintains, not an object
-     * anyone placed at a height. Powder snow carries no such property (it fills a whole cell), so
-     * it is named alongside for the identical reason, exactly as {@code 135d125f} already did in
-     * {@code shouldOffset}. Nothing else in the old family qualifies, so carpet and pale moss
-     * carpet lower like every other placed object while the snow hazard stays closed.
-     *
-     * <p>Pinned by {@code ThinTopLayerLoweringTest#snowLayerOnLoweredSupportStaysFlush} and
-     * {@code #powderSnowOnLoweredSupportStaysFlush} so the protection cannot be lost later.
-     */
-    public static boolean isEnvironmentDepositedSurfaceFill(BlockState state) {
-        return state.contains(Properties.LAYERS)
-                || state.getBlock() instanceof PowderSnowBlock;
     }
 
     /**
@@ -628,16 +629,10 @@ public final class SlabSupport {
             return false;
         }
 
-        // never offset ENVIRONMENT-DEPOSITED SURFACE FILL (snow layers, powder snow) — weather
-        // lays it across whole biomes, so lowering it wherever a slab happens to lie beneath tears
-        // a half-block step across terrain the player never placed (the snowy-terrain DODO).
-        // Deliberately NOT isThinTopLayer: that classname family also swept up carpet and pale
-        // moss carpet, which ARE player-placed and must follow their support down (BUG A, live
-        // 2026-08-06 — Maintainer: "everything should be able to lower; no exceptions").
-        if (isEnvironmentDepositedSurfaceFill(state)) {
-            return false;
-        }
-
+        // NOTE (2026-08-06, second ruling): there is no longer a snow exclusion here. The
+        // environment-deposited-fill guard that stood at this line was removed with its two
+        // siblings — see isThinTopLayer's javadoc for the full history and for what carries the
+        // snowy-terrain hazard now (the opaque-full-cube natural-terrain stop in the column walks).
         if (CompatHooks.shouldSkipOffset(state)) {
             return false;
         }
@@ -757,15 +752,10 @@ public final class SlabSupport {
             return 0.0;
         }
 
-        // Powder snow is a FULL CUBE, so unlike snow layers it matches the "full block on a slab"
-        // lowering branch and Slabbed was dropping it -0.5 onto a slab while neighbouring powder
-        // snow on full ground stayed flush — leaving a half-block step / DODO across snowy terrain.
-        // PowderSnowBlock is NOT a SnowBlock, so isThinTopLayer never excluded it. It is natural
-        // terrain fill (Terrain Slabs likewise does not lower it), so never offset it: keep all
-        // powder snow flush and consistent.
-        if (state.getBlock() instanceof PowderSnowBlock) {
-            return 0.0;
-        }
+        // NOTE (2026-08-06, second ruling): the PowderSnowBlock short-circuit that stood at this
+        // line (135d125f) is gone. Powder snow now resolves like any other full cell of block:
+        // lowered when it rests directly on a slab, flush when it rests on natural terrain (the
+        // column walks' opaque-full-cube stop). See isThinTopLayer's javadoc.
 
         // Recursion guard: isSolidBlock → getCollisionShape → getOutlineShape (mixin) → getYOffset
         if (IN_GET_Y_OFFSET.get()) {
@@ -1561,8 +1551,10 @@ public final class SlabSupport {
      * subject at {@code 0.0} before ever reaching the "object follows its lowered support down"
      * lanes below it. Extracted so {@link #loweredStandingObjectDy} can ask the SAME question the
      * dy path answers, instead of keeping a second copy that would rot out of sync with it (the
-     * shared-predicate half-fix trap). Body is byte-identical to the guard it replaced apart from
-     * {@code isThinTopLayer} → {@link #isEnvironmentDepositedSurfaceFill} (BUG A).
+     * shared-predicate half-fix trap). It no longer carries ANY thin-layer / snow term: the
+     * {@code isThinTopLayer} entry went in BUG A (2026-08-06) and its narrowed successor
+     * {@code isEnvironmentDepositedSurfaceFill} went with the snow ruling the same day. What is
+     * left is pure geometry.
      *
      * <p>Opaque full cubes always stay flush here. {@code state.isSolidBlock(world,pos)} is
      * VIEW-DEPENDENT (it does region-clamped {@code getOutlineShape} reads) and returns FALSE for a
@@ -1585,7 +1577,6 @@ public final class SlabSupport {
                 || blk instanceof FenceBlock
                 || blk instanceof WallBlock
                 || blk instanceof PaneBlock
-                || isEnvironmentDepositedSurfaceFill(state)
                 || state.isAir()
                 || !state.getFluidState().isEmpty()
                 || state.isOpaqueFullCube()
@@ -2225,12 +2216,10 @@ public final class SlabSupport {
         if (state == null
                 || state.isAir()
                 || state.getBlock() instanceof SlabBlock && !isVanillaDirectCustomSlabSubject(state)
-                // Environment-deposited fill only (see isEnvironmentDepositedSurfaceFill). Moved
-                // off isThinTopLayer with the other two SUBJECT-side sites so carpet seats on a
-                // Terrain Slabs half-height surface exactly as it now does on a vanilla one —
-                // leaving one of the three on the old predicate would be the shared-predicate
-                // half-fix trap.
-                || isEnvironmentDepositedSurfaceFill(state)
+                // NOTE (2026-08-06, second ruling): no snow exclusion here either. All three
+                // SUBJECT-side sites dropped it together — leaving one behind would be the
+                // shared-predicate half-fix trap, with snow lowering on a vanilla slab but floating
+                // on a Terrain Slabs surface in Maintainer's own TS-enabled setup.
                 || (!state.getFluidState().isEmpty() && !kelpFamily)
                 || CompatHooks.shouldSkipOffset(state)) {
             return false;

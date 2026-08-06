@@ -1,4 +1,5 @@
 package com.slabbed.client.model;
+
 import com.slabbed.Slabbed;
 import com.slabbed.anchor.SlabAnchorAttachment;
 import com.slabbed.client.ClientDy;
@@ -6,8 +7,6 @@ import com.slabbed.util.SlabSupport;
 import net.fabricmc.fabric.api.renderer.v1.mesh.QuadEmitter;
 import net.fabricmc.fabric.api.renderer.v1.model.FabricBlockStateModel;
 import net.minecraft.block.BlockState;
-import net.minecraft.block.CarpetBlock;
-import net.minecraft.block.PaleMossCarpetBlock;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.render.model.BlockModelPart;
 import net.minecraft.client.render.model.BlockStateModel;
@@ -83,18 +82,20 @@ public final class OffsetBlockStateModel implements BlockStateModel, FabricBlock
     @Override
     public void emitQuads(QuadEmitter emitter, BlockRenderView view, BlockPos pos, BlockState state, Random random,
                           Predicate<Direction> cullTest) {
-        float dy;
-        if (state.getBlock() instanceof CarpetBlock || state.getBlock() instanceof PaleMossCarpetBlock) {
-            dy = (float) ClientDy.dyFor(view, pos, state);
-        } else {
-            dy = (float) SlabSupport.getVisualYOffset(view, pos, state);
-            // Model dy always tracks getVisualYOffset now, matching the outline/raycast —
-            // including fences/walls/panes on a VANILLA slab (previously forced to dy=0 here,
-            // which floated the model above an already-correctly-lowered outline: GH #21).
-            // The resulting height-step connector arm is a separate concern, broken by
-            // FencePaneSlabConnectionMixin / WallSlabConnectionMixin via
-            // SlabSupport.isSteppedConnectingNeighbor — not by suppressing the model dy.
-        }
+        // ONE dy for every block, no per-class branch. This used to fork carpets off to
+        // ClientDy.dyFor's own geometric shortcut, which had no anchor logic and so drew a carpet
+        // flush whenever the common authority said anything other than "the block below is a
+        // half-height slab surface" (BUG A, live 2026-08-06, recorder 0ba17cf0). ClientDy.dyFor is
+        // now a pure delegate to getVisualYOffset, so routing every block through it is identical
+        // to calling getVisualYOffset directly — and the trace below can prove that per frame.
+        //
+        // Model dy tracks getVisualYOffset, matching the outline/raycast — including
+        // fences/walls/panes on a VANILLA slab (previously forced to dy=0 here, which floated the
+        // model above an already-correctly-lowered outline: GH #21). The resulting height-step
+        // connector arm is a separate concern, broken by FencePaneSlabConnectionMixin /
+        // WallSlabConnectionMixin via SlabSupport.isSteppedConnectingNeighbor — not by suppressing
+        // the model dy.
+        float dy = (float) ClientDy.dyFor(view, pos, state);
 
         if (Boolean.getBoolean("slabbed.render.offset.trace")
                 && pos.equals(slabbed$tracePos)) {

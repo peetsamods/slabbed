@@ -174,7 +174,18 @@ public abstract class SlabSupportStateMixin {
                                        CallbackInfoReturnable<VoxelShape> cir) {
         BlockState self = (BlockState) (Object) this;
 
-        // Avoid carpet recursion: carpets have their own outline mixin and should not be offset here.
+        // CARPET IS OWNED BY CarpetDyShapeMixin (client), NOT BY THIS LAYER. Both inject on an
+        // outline path that the other reaches — AbstractBlockState.getOutlineShape calls
+        // block.getOutlineShape — so with this skip removed a carpet on a bottom slab is offset
+        // TWICE and lands at -1.0. SlabbedLabFixtureTest#carpetOutlineNotDoubled pins it.
+        //
+        // The ownership is not arbitrary: AbstractBlock.getCollisionShape is
+        // "collidable ? state.getOutlineShape(world,pos) : empty" and CarpetBlock does not override
+        // getCollisionShape, so a carpet's collision box IS its outline. Offsetting it HERE would
+        // move server-side physics, which is the outline-bleeds-into-collision class this project
+        // already shipped once (26.1.2 ghost). See CarpetDyShapeMixin's javadoc for the full
+        // argument. Both layers read the same number (SlabSupport.getVisualYOffset) either way —
+        // only ONE of them may apply it.
         Block block = self.getBlock();
         if (block instanceof net.minecraft.block.CarpetBlock || block instanceof net.minecraft.block.PaleMossCarpetBlock) {
             return;

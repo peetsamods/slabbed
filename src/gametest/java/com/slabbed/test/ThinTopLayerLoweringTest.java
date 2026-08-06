@@ -30,17 +30,29 @@ import net.minecraft.util.math.BlockPos;
  * shape Maintainer's binding law of 2026-08-06 outlaws: <i>"everything should be able to lower; no
  * exceptions"</i> — eligibility follows GEOMETRY, never a block-class allow-list.
  *
- * <p><b>The genuine hazard the exclusion was protecting, preserved BY BEHAVIOUR.</b> The DODO the
- * original guard (and its {@code PowderSnowBlock} sibling, {@code 135d125f}) actually closed is
- * <b>environment-deposited surface fill</b>: snow that WEATHER lays down across continuous terrain.
- * Half of it would sit at {@code -0.5} (over a slab) and half at {@code 0.0} (over full ground),
- * tearing a half-block step across a surface the player never placed and cannot align. Carpet and
- * pale moss carpet are never weather-deposited — they are player-placed decoration, and the
- * WYSIWYG law owns them. The new predicate {@code isEnvironmentDepositedSurfaceFill} keys on that
- * BEHAVIOUR ({@code Properties.LAYERS} — accumulates and melts in layers — plus powder snow, which
- * fills a whole cell of natural terrain), so the snow hazard stays closed while a carpet resting on
- * a lowered support follows it down. {@link #snowLayerOnLoweredSupportStaysFlush} and
- * {@link #powderSnowOnLoweredSupportStaysFlush} PIN that protection so it cannot be lost later.
+ * <p><b>2026-08-06, second ruling: the snow exclusion is gone too.</b> {@code 112d1449} kept a
+ * narrowed successor, {@code isEnvironmentDepositedSurfaceFill} ({@code Properties.LAYERS} plus
+ * {@code PowderSnowBlock}), to preserve the one hazard the original guards actually closed —
+ * weather laying snow across whole biomes, half of it dropping {@code -0.5} over a buried slab.
+ * Maintainer has since ruled against that exclusion as well ("Snow blocks are not lowering", recorder
+ * {@code 0ba17cf0}: {@code (306,-58,-56) powder_snow dy=0.000} over a {@code -0.5}
+ * {@code stone_slab}). Her law admits no exceptions, so the predicate is removed and snow lowers by
+ * geometry like everything else. <b>Three cells in this class were INVERTED by that ruling</b> —
+ * {@link #snowLayerOnLoweredSupportFollowsItDown},
+ * {@link #powderSnowOnLoweredSupportFollowsItDown} and
+ * {@link #snowLayerOnTerrainSlabsSurfaceSeatsOnItsTopFace} previously asserted the exact opposite.
+ *
+ * <p><b>What now carries the hazard.</b> Not a block list — the bounded column walks' L5
+ * natural-terrain stop ({@code cur.isOpaqueFullCube()} in {@code hasSlabInColumn} /
+ * {@code slabColumnYOffset}, added by {@code 8d1b42ef} AFTER the powder-snow exclusion and closing
+ * the same hazard generally). Snow lying on grass/dirt/stone cannot see a slab buried below that
+ * terrain at all. {@link #snowLayerOverNaturalTerrainStaysFlush} pins it. The residual reachable
+ * case — Terrain Slabs, which makes half-height surfaces out of natural terrain world-wide — is
+ * documented in {@code KNOWN_INCOMPLETE.md} 1k for a live judgement.
+ *
+ * <p>{@code isThinTopLayer} survives, meaning only what its name says — a THICKNESS statement, used
+ * only by the bounded column walks that must not transmit a support's top face up through a
+ * 1/16-tall cell.
  */
 public final class ThinTopLayerLoweringTest {
 
@@ -109,13 +121,16 @@ public final class ThinTopLayerLoweringTest {
     }
 
     /**
-     * HAZARD PIN — <b>the reason the exclusion existed, preserved by BEHAVIOUR.</b> A snow LAYER is
-     * deposited and melted by weather across whole biomes, so lowering it wherever a slab happens
-     * to lie beneath tears a half-block step across a surface the player never placed. It must stay
-     * flush even on a support that is itself lowered. Green before AND after the fix.
+     * RED — <b>Maintainer's 2026-08-06 ruling reverses this cell.</b> It previously asserted the exact
+     * opposite ({@code dy == 0.0}, "a weather-deposited snow LAYER must stay flush"), pinning the
+     * categorical exclusion that {@code 8d3f105f}/{@code 135d125f} installed. She reports "Snow
+     * blocks are not lowering" as a BUG, and her binding law admits no exceptions, so a snow layer
+     * resting on a support that itself renders {@code -0.5} must follow it down like every other
+     * block. The hazard the old exclusion guarded is now carried by
+     * {@link #snowLayerOverNaturalTerrainStaysFlush} instead — geometry, not a block list.
      */
     @GameTest(structure = "fabric-gametest-api-v1:empty")
-    public void snowLayerOnLoweredSupportStaysFlush(TestContext ctx) {
+    public void snowLayerOnLoweredSupportFollowsItDown(TestContext ctx) {
         ServerWorld w = ctx.getWorld();
         BlockPos support = loweredStoneSupport(ctx, 4, 4);
 
@@ -123,33 +138,132 @@ public final class ThinTopLayerLoweringTest {
         BlockState snow = Blocks.SNOW.getDefaultState();
         ctx.assertTrue(snow.contains(Properties.LAYERS),
                 "fixture: minecraft:snow must carry the LAYERS property — that accumulation "
-                        + "BEHAVIOUR is what isEnvironmentDepositedSurfaceFill keys on");
+                        + "BEHAVIOUR is what the removed isEnvironmentDepositedSurfaceFill keyed on");
         place(w, subject, snow);
         double dy = SlabSupport.getYOffset(w, subject, w.getBlockState(subject));
-        ctx.assertTrue(Math.abs(dy) <= EPS,
-                "a weather-deposited snow LAYER must stay flush at 0.0 even over a lowered support, "
-                        + "got " + dy + " — this is the snowy-terrain DODO the original "
-                        + "isThinTopLayer exclusion (8d3f105f) and its powder-snow sibling "
-                        + "(135d125f) closed, and it must stay closed");
+        ctx.assertTrue(Math.abs(dy + 0.5) <= EPS,
+                "a snow LAYER resting on a stone block that renders -0.5 must read -0.5, got " + dy
+                        + " — isEnvironmentDepositedSurfaceFill (LAYERS + PowderSnowBlock) still "
+                        + "hard-excludes snow from lowering on a PROPERTY, so it floats half a block "
+                        + "above the block it lies on (Maintainer 2026-08-06: 'Snow blocks are not "
+                        + "lowering'; 'everything should be able to lower; no exceptions')");
+
+        // Same claim on the other arrangement: a snow layer lying directly on a bottom slab.
+        BlockPos slab = ctx.getAbsolutePos(BlockPos.ORIGIN).add(1, 2, 6);
+        place(w, ctx.getAbsolutePos(BlockPos.ORIGIN).add(1, 1, 6), Blocks.STONE.getDefaultState());
+        place(w, slab, Blocks.STONE_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.BOTTOM));
+        BlockPos onSlab = slab.up();
+        place(w, onSlab, snow);
+        double slabDy = SlabSupport.getYOffset(w, onSlab, w.getBlockState(onSlab));
+        ctx.assertTrue(Math.abs(slabDy + 0.5) <= EPS,
+                "a snow LAYER lying directly on a bottom slab must seat on its top face at -0.5, "
+                        + "got " + slabDy);
         ctx.complete();
     }
 
     /**
-     * HAZARD PIN — powder snow is a full cell of natural terrain fill and keeps its own explicit
-     * guard. Same DODO, same protection. Green before AND after the fix.
+     * RED — <b>Maintainer's ruling reverses this cell too.</b> It previously asserted {@code dy == 0.0}
+     * for powder snow on a lowered support. This is the recorder's own arrangement:
+     * {@code (306,-58,-56) powder_snow dy=0.000} sitting on a {@code stone_slab} — the cell she
+     * flagged. {@code getYOffset} short-circuited {@code PowderSnowBlock} to {@code 0.0} at its
+     * very first line ({@code 135d125f}), before any geometry ran.
      */
     @GameTest(structure = "fabric-gametest-api-v1:empty")
-    public void powderSnowOnLoweredSupportStaysFlush(TestContext ctx) {
+    public void powderSnowOnBottomSlabSeatsOnItsTopFace(TestContext ctx) {
         ServerWorld w = ctx.getWorld();
-        BlockPos support = loweredStoneSupport(ctx, 4, 1);
+        BlockPos ground = ctx.getAbsolutePos(BlockPos.ORIGIN).add(4, 1, 1);
+        place(w, ground, Blocks.STONE.getDefaultState());
+        BlockPos slab = ground.up();
+        place(w, slab, Blocks.STONE_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.BOTTOM));
 
-        BlockPos subject = support.up();
+        BlockPos subject = slab.up();
         place(w, subject, Blocks.POWDER_SNOW.getDefaultState());
         double dy = SlabSupport.getYOffset(w, subject, w.getBlockState(subject));
+        ctx.assertTrue(Math.abs(dy + 0.5) <= EPS,
+                "powder snow resting on a bottom slab must seat on its top face at -0.5, got " + dy
+                        + " — getYOffset still short-circuits PowderSnowBlock to 0.0 (135d125f), "
+                        + "the live (306,-58,-56) dy=0.000 cell Maintainer reported");
+        ctx.complete();
+    }
+
+    /**
+     * {@code minecraft:snow_block} — the THIRD snow id, and the one Maintainer's wording most literally
+     * names. It is a plain opaque full cube with no {@code LAYERS} property, so neither
+     * {@code isThinTopLayer} nor its successor ever touched it: it has always resolved exactly like
+     * stone, and it still does.
+     *
+     * <p>The cell asserts EQUALITY WITH STONE in two arrangements rather than a hardcoded number,
+     * because "like any other full block" is the whole claim — including the arrangement where a
+     * full block stays FLUSH on top of other terrain, which is the opaque-full-cube world-hole
+     * guard and emphatically not a snow rule. Green before AND after.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void snowBlockBehavesExactlyLikeAnyFullBlock(TestContext ctx) {
+        ServerWorld w = ctx.getWorld();
+        BlockState snowBlock = Blocks.SNOW_BLOCK.getDefaultState();
+        ctx.assertTrue(!snowBlock.contains(Properties.LAYERS),
+                "fixture: minecraft:snow_block is the FULL CUBE, not the layered deposit");
+
+        // (a) directly on a bottom slab — a full block seats on the slab's top face.
+        BlockPos slabA = ctx.getAbsolutePos(BlockPos.ORIGIN).add(1, 1, 6);
+        place(w, slabA, Blocks.STONE_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.BOTTOM));
+        BlockPos slabB = ctx.getAbsolutePos(BlockPos.ORIGIN).add(3, 1, 6);
+        place(w, slabB, Blocks.STONE_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.BOTTOM));
+        double snowOnSlab = dyOf(w, slabA.up(), snowBlock);
+        double stoneOnSlab = dyOf(w, slabB.up(), Blocks.STONE.getDefaultState());
+        ctx.assertTrue(Math.abs(snowOnSlab - stoneOnSlab) <= EPS,
+                "snow_block on a bottom slab must resolve exactly like stone: stone=" + stoneOnSlab
+                        + " snow_block=" + snowOnSlab);
+        ctx.assertTrue(Math.abs(snowOnSlab + 0.5) <= EPS,
+                "fixture: a full block directly on a bottom slab seats at -0.5, got " + snowOnSlab);
+
+        // (b) on top of a full block that is itself lowered — terrain stays flush, snow included.
+        BlockPos supportA = loweredStoneSupport(ctx, 5, 6);
+        BlockPos supportB = loweredStoneSupport(ctx, 7, 6);
+        double snowOnTerrain = dyOf(w, supportA.up(), snowBlock);
+        double stoneOnTerrain = dyOf(w, supportB.up(), Blocks.STONE.getDefaultState());
+        ctx.assertTrue(Math.abs(snowOnTerrain - stoneOnTerrain) <= EPS,
+                "snow_block resting on terrain must resolve exactly like stone: stone="
+                        + stoneOnTerrain + " snow_block=" + snowOnTerrain);
+        ctx.complete();
+    }
+
+    /**
+     * HAZARD PIN — <b>the replacement for the categorical exclusion.</b> The DODO the old block-list
+     * guarded is snow that WEATHER lays across continuous terrain: if it lowered wherever a slab
+     * happened to lie somewhere beneath, half a snowy biome would render {@code -0.5} and half
+     * {@code 0.0}, a step through terrain the player never placed.
+     *
+     * <p>That case is closed STRUCTURALLY, not by naming snow: the bounded column walks
+     * ({@code hasSlabInColumn} / {@code slabColumnYOffset}) stop dead on the first
+     * {@code isOpaqueFullCube} below the subject — the L5 world-hole guard, added by
+     * {@code 8d1b42ef} AFTER the powder-snow exclusion and closing the same hazard generally. Snow
+     * lying on grass/dirt/stone therefore cannot see a slab buried under that terrain at all, no
+     * matter how deep the slab is. Only snow resting DIRECTLY on a slab (or on a lowered placed
+     * object) lowers — and there it is geometrically correct, seating on the surface it lies on
+     * instead of floating in vanilla's half-block gap.
+     *
+     * <p>Green before AND after: this is the invariant that lets the exclusion go.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void snowLayerOverNaturalTerrainStaysFlush(TestContext ctx) {
+        ServerWorld w = ctx.getWorld();
+        BlockPos slab = ctx.getAbsolutePos(BlockPos.ORIGIN).add(6, 1, 4);
+        place(w, slab, Blocks.STONE_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.BOTTOM));
+        // Two cells of ordinary opaque terrain over the slab — exactly the shape the natural-terrain
+        // stop exists for.
+        place(w, slab.up(), Blocks.DIRT.getDefaultState());
+        BlockPos ground = slab.up(2);
+        place(w, ground, Blocks.GRASS_BLOCK.getDefaultState());
+
+        BlockPos subject = ground.up();
+        place(w, subject, Blocks.SNOW.getDefaultState());
+        double dy = SlabSupport.getYOffset(w, subject, w.getBlockState(subject));
         ctx.assertTrue(Math.abs(dy) <= EPS,
-                "powder snow must stay flush at 0.0 over a lowered support, got " + dy
-                        + " (135d125f: natural terrain fill — Terrain Slabs does not lower it "
-                        + "either, and a half-block step across snowy terrain is the DODO)");
+                "weather-deposited snow lying on natural terrain must stay flush at 0.0 even with a "
+                        + "slab buried below that terrain, got " + dy + " — the opaque-full-cube "
+                        + "natural-terrain stop (8d1b42ef) is what makes it safe to let snow lower "
+                        + "by geometry; if this ever reads -0.5 the snowy-terrain DODO is back");
         ctx.complete();
     }
 
@@ -176,12 +290,18 @@ public final class ThinTopLayerLoweringTest {
     }
 
     /**
-     * HAZARD PIN on the same TS lane — snow layers stay flush over Terrain Slabs terrain, which is
-     * the exact surface the snowy-terrain DODO was reported against ({@code 135d125f}: "Terrain
-     * Slabs likewise does not lower it").
+     * RED — <b>Maintainer's ruling reverses this cell as well.</b> It previously asserted {@code dy ==
+     * 0.0} for a snow layer on a Terrain Slabs {@code BOTTOM_LIKE} surface. It is the third
+     * SUBJECT-side site ({@code isDirectCustomSlabSupportSubject}); leaving it behind would be the
+     * shared-predicate half-fix trap, with snow lowering on vanilla slabs but floating on TS terrain
+     * in Maintainer's own TS-enabled setup.
+     *
+     * <p>NOTE for the live pass: this is the ONE arrangement where the old DODO argument still has
+     * teeth, because Terrain Slabs makes half-height surfaces out of natural terrain WORLD-WIDE. See
+     * {@code KNOWN_INCOMPLETE.md} entry 1k.
      */
     @GameTest(structure = "fabric-gametest-api-v1:empty")
-    public void snowLayerOnTerrainSlabsSurfaceStaysFlush(TestContext ctx) {
+    public void snowLayerOnTerrainSlabsSurfaceSeatsOnItsTopFace(TestContext ctx) {
         ServerWorld w = ctx.getWorld();
         BlockPos surface = ctx.getAbsolutePos(BlockPos.ORIGIN).add(6, 2, 4);
         place(w, surface, TerrainSlabsTestShim.TEST_TS_SLAB.getDefaultState()
@@ -190,9 +310,9 @@ public final class ThinTopLayerLoweringTest {
         BlockPos subject = surface.up();
         place(w, subject, Blocks.SNOW.getDefaultState());
         double dy = SlabSupport.getYOffset(w, subject, w.getBlockState(subject));
-        ctx.assertTrue(Math.abs(dy) <= EPS,
-                "a weather-deposited snow LAYER must stay flush at 0.0 on a Terrain Slabs surface, "
-                        + "got " + dy);
+        ctx.assertTrue(Math.abs(dy + 0.5) <= EPS,
+                "a snow LAYER on a Terrain Slabs BOTTOM_LIKE surface must seat at -0.5, got " + dy
+                        + " — isDirectCustomSlabSupportSubject still excludes it by property");
         ctx.complete();
     }
 
@@ -213,6 +333,12 @@ public final class ThinTopLayerLoweringTest {
         ctx.assertTrue(Math.abs(supportDy + 0.5) <= EPS,
                 "fixture: the stone support must itself render -0.5, got " + supportDy);
         return support;
+    }
+
+    /** Places {@code state} at {@code pos} and returns its resolved dy. */
+    private static double dyOf(ServerWorld w, BlockPos pos, BlockState state) {
+        place(w, pos, state);
+        return SlabSupport.getYOffset(w, pos, w.getBlockState(pos));
     }
 
     private static void place(ServerWorld w, BlockPos pos, BlockState state) {

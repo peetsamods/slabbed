@@ -1,5 +1,7 @@
 # Slabbed — dy Specification (the correctness oracle)
 
+> **See [`LAW.md`](LAW.md) — this document does not redefine the law.** LAW.md is supreme; where this file conflicts with it, LAW.md wins and this file is wrong.
+
 **What this is.** Slabbed's entire visual behavior reduces to one function: given a block and
 its local neighborhood, what vertical offset (`dy`) does it render / outline / raycast at?
 That function is a **pure function of local geometry** — so it can be *specified as a table* and
@@ -69,6 +71,34 @@ a Terrain Slabs surface (`terrain_slabs:*` / `terrainslabs:*`).
 | `FB-FLUSH` | full block | resting on a flush full block (no slab in column) | **0.0** | — (weak control¹) | `DySpecificationTest` |
 | `FB-TS-TERRAIN` | full block (opaque cube) | resting on a TS bottom slab | **0.0** | TS-not-a-support² | `DySpecificationTest`, `TerrainSlabsHotfixTest` |
 | `FB-TS-CARRIER` | full block | resting on a lowered carrier (log) that sits on a TS slab | **shares carrier dy (−0.5)** | L6 | `TerrainSlabsHotfixTest` (GH #22) |
+
+### Thin surface layers (carpet, pale moss carpet, snow layer, powder snow)
+
+These had a categorical lowering exclusion for most of the project's life — first a CLASSNAME
+family (`isThinTopLayer`, `8d3f105f`), then a narrowed BEHAVIOUR predicate
+(`isEnvironmentDepositedSurfaceFill`, `112d1449`). **Both are gone as of 2026-08-06** (Maintainer's
+binding law: *"everything should be able to lower; no exceptions"*, ruled twice — carpet first,
+then snow). There is no thin-layer term in any dy lane now; these rows are pure geometry, and they
+exist mainly so a future port does not re-derive the exclusion from the old commits.
+
+The snowy-terrain hazard the exclusion protected is carried by **L5** instead: the column walks
+stop on the first opaque full cube below the subject, so weather snow on grass/dirt/stone cannot
+see a slab buried under that terrain at all.
+
+| SPEC-ID | subject | local config | dy | law | test |
+|---|---|---|---|---|---|
+| `TL-SLAB` | carpet / pale moss carpet / snow layer / powder snow | resting directly on a vanilla bottom slab | **−0.5** | geometric slab-in-column | `ThinTopLayerLoweringTest` |
+| `TL-CARRIER` | carpet / pale moss carpet / snow layer | resting on a full block that itself renders lowered | **shares carrier dy** | L6 | `ThinTopLayerLoweringTest` |
+| `TL-TS` | carpet / snow layer | resting on a TS `BOTTOM_LIKE` surface | **−0.5** | seats on the half-height top face | `ThinTopLayerLoweringTest` |
+| `TL-TERRAIN` | snow layer | resting on natural opaque terrain, with a slab buried below it | **0.0** | **L5** | `ThinTopLayerLoweringTest#snowLayerOverNaturalTerrainStaysFlush` |
+| `TL-SNOWBLOCK` | `minecraft:snow_block` | any | **use the full-block rows** — it is an ordinary opaque cube, never in either predicate | L5 / L6 | `ThinTopLayerLoweringTest#snowBlockBehavesExactlyLikeAnyFullBlock` (asserts equality with stone) |
+
+**Client note (not a dy row, but the reason `TL-*` was invisible for a session):** a port must also
+check that the CLIENT consumes these numbers. On this line `ClientDy.dyFor` held a second,
+anchor-blind carpet authority that the chunk model and the outline both read, so carpets rendered
+flush while every row above was already correct. It is now a pure delegate to `getVisualYOffset`,
+pinned by `ClientCarpetDyAuthorityTest`. Exactly ONE layer may offset a carpet's OUTLINE
+(`CarpetDyShapeMixin`, client) — see `RULES.md` §16.
 
 ### Ceiling-attached blocks (the full `isCeilingAttached` family)
 

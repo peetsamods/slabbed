@@ -1,5 +1,7 @@
 # Slabbed — Rules (Development Guardrails)
 
+> **See [`LAW.md`](LAW.md) — this document does not redefine the law.** LAW.md is supreme; where this file conflicts with it, LAW.md wins and this file is wrong.
+
 These rules are intentionally strict. Slabbed must remain predictable, reversible, visually correct, and aligned with the actual product intent. The current canonical intent is global slab support: ordinary full blocks anchoring on slabs is intended product behavior, and past selective-only framing caused regressions and project drift. :contentReference[oaicite:0]{index=0} :contentReference[oaicite:1]{index=1}
 
 ## 1) Global slab support is the product intent
@@ -120,8 +122,20 @@ For any slab-lowered or slab-shifted object, these three must agree:
 ## 16) Protected historical invariant: carpet + global model dy coexistence
 - Do not break the “perfect hotfix.1b” coexistence rule casually.
 - Global model shift remains in the quad pipeline.
-- Carpets are a special model-dy override case inside that same path.
-- Carpet outline recursion protections must remain intact.
+- ~~Carpets are a special model-dy override case inside that same path.~~ **SUPERSEDED
+  2026-08-06 (Maintainer's ruling, L19).** The carpet model-dy override WAS the bug: `ClientDy.dyFor`
+  held its own anchor-blind carpet check, so the model and the outline drew carpets flush while
+  the shared authority said they were lowered. **Carpets now take the same `getVisualYOffset` as
+  every other block, and `ClientDy.dyFor` is a pure delegate to it.** Do not re-introduce a
+  per-class dy opinion on the client — `ClientCarpetDyAuthorityTest` fails immediately if you do.
+  Maintainer's binding law: *"everything should be able to lower; no exceptions."*
+- **Carpet outline recursion / double-offset protections must remain intact — this half is NOT
+  superseded and is the live half of this rule.** Exactly ONE layer may offset a carpet's outline:
+  `CarpetDyShapeMixin` (client). `SlabSupportStateMixin.slabbed$offsetOutline` (common) must keep
+  skipping carpets, or the shape is offset twice. The client owns it because `CarpetBlock` does not
+  override `getCollisionShape`, so a carpet's collision box IS its outline and offsetting it on the
+  common side would move SERVER physics. Guarded by
+  `SlabbedLabFixtureTest#carpetOutlineNotDoubled`.
 - Do not add a second competing global model-translate path without proof.
 - If carpet or global offset regressions return, check this invariant first. 
 
