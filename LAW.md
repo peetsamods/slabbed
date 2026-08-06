@@ -60,10 +60,10 @@ says every block is entitled to the right height in the first place.**
   silence can never be mistaken for a run that did not happen). **S-2 is never skipped and never
   short-circuited; a green-because-skipped law gate would be the worst false green this project
   could ship.**
-- **`-Dslabbed.lawGate=true` makes S-2 blocking** (`./gradlew build runGameTest -Dslabbed.lawGate=true`
-  — see `HANDOFF.md`), throwing the identical violation message. **Flipping that default to ON is
-  Phase 2's exit criterion:** Phase 2 is done when, and only when, this line passes S-2 with the
-  flag removed.
+- **✅ FLIPPED (2026-08-06, Maintainer): S-2 is now blocking BY DEFAULT.** `./gradlew build runGameTest`
+  — no flag — enforces the law directly; `-Dslabbed.lawGate=false` is the escape hatch for a
+  session deliberately introducing a new RED subject and needing the inventory without failing the
+  build while it's fixed forward. Phase 2's exit criterion (below) is met.
 - **The diff tripwire** (`tools/hooks/commit-msg`): an added line in `src/main/**` containing
   `geometric | merge | follow | inherit | cantilever | recompute | isAdjacent.*Lowered` is presumed
   a LAW 1 violation and blocks the commit without a logged `LAW-SIGNOFF:` and a new invariance row.
@@ -81,13 +81,37 @@ says every block is entitled to the right height in the first place.**
 
 ---
 
-## ⚠️ THIS LINE DOES NOT YET OBEY LAW 1 — and that is the point of Phase 2
+## ✅ PHASE 2 EXIT CRITERION MET (2026-08-06) — S-2 passes enforcing, default flipped
 
-Stated plainly so no future reader mistakes aspiration for reality: **on 1.21.11 today, height is
-recomputed live on every read.** Anchors and frozen-flat markers are partial patches over that
-design, not the design itself. S-2 is therefore **RED on this architecture by construction**, and
-lands first as a *characterization* run whose RED inventory goes to Maintainer before any row is
-re-specced.
+**This section's title used to be "THIS LINE DOES NOT YET OBEY LAW 1". Kept below, unedited, as
+the record of the state that title described — not because it is still true.** As of `c51ec869`,
+S-2 passes with 9 of 9 subjects CLEAN under enforcement, and the default flag flip (this commit)
+makes that the standing state of `./gradlew build runGameTest`, not an opt-in check.
+
+**What this claim covers, precisely, so it is not over-read a second time (LAW.md was wrong about
+this once already, in the "8 of 8" revision below):** it covers the 9 subjects and 10 mutations
+this matrix actually builds and applies — measured reachable, per the audit at `49691609`. It does
+**not** cover: any geometry outside those 9 scenes; any lane this matrix's mutations cannot reach
+(6 of 10 mutations still have zero live cells anywhere — see the reachability table below); or
+anything requiring Terrain Slabs, which cannot load in this headless environment at all. **This
+line obeys LAW 1 for what S-2 tests. Whether it obeys LAW 1 everywhere is a live-testing question,
+not a headless one**, and the LIVE_LEDGER entry dated 2026-08-06 (night) records six specific rows
+Maintainer's next pass must cover before this milestone is trusted beyond the gate itself.
+
+The frozen-height architecture is still not the general design — the placement-dy store closes the
+cases this matrix found, not every live-recompute lane in `SlabSupport`. Anchors and frozen-flat
+markers remain what they were: mechanisms layered onto a live-recompute engine, not a replacement
+for one. The original framing below is preserved for that reason.
+
+---
+
+### (historical) THIS LINE DOES NOT YET OBEY LAW 1 — and that was the point of Phase 2
+
+Stated plainly so no future reader mistakes aspiration for reality: **on 1.21.11 [as of
+2026-08-06, before the fixes above], height is recomputed live on every read.** Anchors and
+frozen-flat markers are partial patches over that design, not the design itself. S-2 is therefore
+**RED on this architecture by construction**, and lands first as a *characterization* run whose RED
+inventory goes to Maintainer before any row is re-specced.
 
 **S-2 actually ran (`89792d44`, 2026-08-06): 2 of 8 subjects RED, both on `break_directly_below`
 only.** This is a smaller RED surface than the A–F table below predicted, and it exposed a lane the
@@ -105,10 +129,13 @@ table did not name:
 > a −1.0 neighbour is denied both an anchor and a frozen-flat marker). **Both are genuine open
 > product bugs and the Phase 2 punch-list.**
 >
-> **The default must still not be flipped**, but the reason has changed. It is no longer "the matrix
-> proves nothing" — it now proves plenty. It is simply that **two real violations are open**. Phase
-> 2's exit criterion is unchanged and now actually measurable: this line passes S-2 enforcing, with
-> those two closed, and the default flips. That remains Maintainer's call.
+> **UPDATE 2 (2026-08-06, later still): both violations closed, default flipped.** `7756d152`
+> (candle — `freezeLoweredOnPlace`'s block-type allow-list replaced with a behavioural
+> `hangsFromTheCellAbove` exclusion) and `c51ec869` (lane B — the placement-dy store records a
+> height for lowered placements no anchor lane claims, without granting an anchor; the rejected
+> alternative was measured, not argued, to feed the open `KNOWN_INCOMPLETE` L11-broader
+> anchor-widening leak). S-2 is 9/9 CLEAN enforcing. Maintainer flipped the default the same night. See
+> the section above for what this milestone does and does not cover.
 
 **Lane G — support-removal-driven magnitude re-derivation (confirmed, S-2-proven, and CLOSED
 2026-08-06 by the placement-dy store).** The RED subject `full_block_on_anchored_minus_one_support`

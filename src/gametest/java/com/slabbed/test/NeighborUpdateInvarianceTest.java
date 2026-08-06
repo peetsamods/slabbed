@@ -33,16 +33,14 @@ import java.util.List;
  * <em>without touching the subject's own cell</em> and asserts the height is byte-identical
  * afterward.
  *
- * <p><b>EXPECTED STATE ON THIS LINE: RED, by construction — this is a CHARACTERIZATION run, not a
- * RED-first fix task.</b> Per {@code LAW.md}'s "THIS LINE DOES NOT YET OBEY LAW 1" section, height
- * is recomputed live on every read; no frozen store exists yet. Each failure message enumerates
- * exactly which (subject, mutation) cells move a placed block — the punch-list for Phase 2B (the
- * frozen store). Do NOT attempt to make this class pass by patching {@code SlabSupport}; that is
- * explicitly out of scope for this task (see the handoff package
- * {@code s2-law-gate-characterization.md}). Because that RED is EXPECTED, the verdict defaults to
- * characterization — the matrix runs in full and prints its RED inventory as {@code [LAW-GATE]}
- * lines without failing the build; {@code -Dslabbed.lawGate=true} makes it blocking. See
- * {@link #LAW_GATE_PROPERTY}.
+ * <p><b>STATUS (2026-08-06): PASSING, BLOCKING BY DEFAULT.</b> This class landed as a
+ * characterization run because height was recomputed live on every read and RED was expected by
+ * construction. The placement-dy store ({@code d4f38510}), the ceiling role predicate
+ * ({@code 3a7c17c0}), and the two closing fixes ({@code 7756d152}, {@code c51ec869}) closed every
+ * subject this matrix could reach. The verdict now defaults to blocking — see
+ * {@link #LAW_GATE_PROPERTY} — and any future RED here is a real regression, not an expected
+ * characterization finding. Lanes A–F in {@code LAW.md} beyond this matrix's 9 subjects are not
+ * proven closed by this test passing; see its reachability table before assuming full coverage.
  *
  * <p><b>Port notes (semantic port from the 26.2 donor, not a diff-copy).</b> This line has none of
  * the donor's frozen-store machinery ({@code PLACEMENT_DY}, {@code FROZEN_DY_ENABLED},
@@ -84,30 +82,29 @@ public final class NeighborUpdateInvarianceTest {
      * Enforcement toggle, named for this codebase's existing {@code slabbed.*} sysprop convention
      * ({@code slabbed.disableStepCull}, {@code slabbed.serverHitTolerance},
      * {@code slabbed.targetDyOverlay}). Forwarded into the game JVM by {@code build.gradle}'s
-     * {@code runGameTest} block, so {@code ./gradlew runGameTest -Dslabbed.lawGate=true} works.
+     * {@code runGameTest} block.
      *
-     * <p><b>OFF (default — what CI runs): CHARACTERIZATION.</b> Every subject is still built,
-     * every mutation still applied, every violation still collected — byte-for-byte the same work
-     * as enforcing mode. The only difference is the VERDICT: the violation inventory is PRINTED
-     * (see {@link #logVerdict}) instead of thrown, so CI is green while this line is still in the
-     * state {@code LAW.md} says it is in, and the characterization data — the whole value of this
-     * test — is still produced on every single run.
+     * <p><b>DEFAULT (2026-08-06, flipped by Maintainer): ON — BLOCKING.</b> This line now passes S-2
+     * with all 9 subjects CLEAN ({@code 7756d152}, {@code c51ec869}), so {@code LAW.md}'s Phase 2
+     * exit criterion is met and the default flips. {@code ./gradlew build runGameTest} — no flag —
+     * now enforces the law directly: every subject is built, every mutation applied, and any
+     * violation throws the exact message this class has always thrown.
      *
-     * <p><b>ON: BLOCKING.</b> Identical run, and then the collected violations throw the exact
-     * message this class has always thrown.
+     * <p><b>{@code -Dslabbed.lawGate=false}: CHARACTERIZATION.</b> Identical run — nothing about
+     * the matrix is conditional on this flag, only the verdict — but a violation is PRINTED (see
+     * {@link #logVerdict}) instead of thrown. This is the escape hatch for a session that
+     * deliberately introduces a new RED subject or mutation and needs to see the inventory without
+     * failing the build while it is being fixed forward — not a way to silence a real regression.
      *
-     * <p><b>This is deliberately NOT a skip.</b> A test that returns success without doing its
-     * work is the false-green class this project has been bitten by repeatedly, and it would be
-     * worst here, in the one test that certifies the law. Nothing about the matrix is conditional
-     * on this flag — only the throw is.
-     *
-     * <p><b>Flipping this default to ON is Phase 2's exit criterion</b> ({@code LAW.md}).
+     * <p><b>This was deliberately never a skip, in either direction.</b> A test that returns
+     * success without doing its work is the false-green class this project has been bitten by
+     * repeatedly, and it would be worst here, in the one test that certifies the law.
      */
     private static final String LAW_GATE_PROPERTY = "slabbed.lawGate";
 
-    /** True when S-2 is a blocking gate; false (default) when it is a characterization run. */
+    /** True (default) when S-2 is a blocking gate; false only when explicitly disabled. */
     private static boolean enforcing() {
-        return Boolean.getBoolean(LAW_GATE_PROPERTY);
+        return Boolean.parseBoolean(System.getProperty(LAW_GATE_PROPERTY, "true"));
     }
 
     // ── real-useOn placement (reuses this line's proven headless-useOn harness) ───────────────
