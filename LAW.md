@@ -115,47 +115,62 @@ from a support that `break_directly_below` just destroyed.
 > `chainAnchored=false`. The Y-axis chain is rejected by every anchor lane and explicitly excluded
 > by `isCeilingAttached`. **It is a lane C cell, not lane G.** The RED message corroborates this on
 > its face: it falls to *exactly* `0.0`, which an anchored cell can never produce — an anchored
-> cell floors at `-0.5` once its seat becomes air. Lane G was therefore 1 of 2, not 2 of 2. This is the sharpest demonstration yet
-of the project's own thesis: **an anchor is a boolean fact, not a stored number**, so it cannot
-protect a value that depends on a neighbour which no longer exists. Every lane A–F below is "no
-anchor at all"; lane G is "anchored, and still not enough" — the harder half of the problem, and
-the one only a real stored `dy` (not a marker set) can close.
+> cell floors at `-0.5` once its seat becomes air. Lane G was therefore 1 of 2, not 2 of 2.
 
-### 🚨 S-2's GREEN COLUMN PROVES NOTHING TODAY (audit, 2026-08-06)
+This is the sharpest demonstration yet of the project's own thesis: **an anchor is a boolean fact,
+not a stored number**, so it cannot protect a value that depends on a neighbour which no longer
+exists. Every lane A–F below is "no anchor at all"; lane G is "anchored, and still not enough" —
+the harder half of the problem, and the one only a real stored `dy` (not a marker set) can close.
+
+### 🚨 S-2's GREEN COLUMN PROVED NOTHING (audit, 2026-08-06) — PARTIALLY REPAIRED (`e5704f50`, same day)
 
 **Both "contradictions" resolved as FIXTURE DEFECTS, not behaviour — and the audit that resolved
 them found something worse.** Neither result contradicted a prediction:
 
-- `slab_on_lowered_bottom_slab` never builds its stated geometry. Its `-0.25` NORTH nudge mints a
+- `slab_on_lowered_bottom_slab` never built its stated geometry. Its `-0.25` NORTH nudge minted a
   **TOP** seat via the intent mixin's half-split at `targetPos.getY()` (cross-confirmed by
-  `UseOnCombineVsExtendPlacementTest`, which asserts TOP at `+0.4`), so the subject sits at −0.5,
-  not the −1.0 its own comment claims. Proof independent of any trace: were it at −1.0,
-  `break_directly_below` would resolve NaN → the −0.5 floor and the row would be RED. It is green,
-  therefore it was never at −1.0. Fix: nudge `-0.75`, plus a `SlabType.BOTTOM` premise assert so it
-  cannot silently drift again. Expected to flip **RED at −1.0 → −0.5 — a third lane-G row.**
-- `candle_placed_flat_then_neighbored` is **vacuous**. It has *no* protection at all (no anchor —
-  `isOrdinaryAnchorCandidate` rejects non-solid non-connecting; no FROZEN_FLAT — `freezeLoweredOnPlace`'s
-  structural gate rejects it too), yet **0 of 10 mutations can reach its resolver.** A candle's only
-  live door reads the neighbours of its SUPPORT, and every mutation writes at the subject's own
-  level or above. It asserts "a flat block stayed flat", which `flat_full_block_control` already
-  covers.
+  `UseOnCombineVsExtendPlacementTest`, which asserts TOP at `+0.4`), so the subject sat at −0.5,
+  not the −1.0 its own comment claimed. Proof independent of any trace: were it at −1.0,
+  `break_directly_below` would resolve NaN → the −0.5 floor and the row would be RED. It was green,
+  therefore it was never at −1.0. **Fixed:** nudge `-0.75` + a `SlabType.BOTTOM` premise assert.
+  **Result diverged from the primary prediction, reported rather than smoothed over:** it is now
+  genuinely at −1.0 *and still CLEAN* — the placement-dy store (`d4f38510`) already covers this
+  case, so the subject now tests real geometry and passes for a real reason.
+- `candle_placed_flat_then_neighbored` was **vacuous**. No protection at all (no anchor —
+  `isOrdinaryAnchorCandidate` rejects non-solid non-connecting; no FROZEN_FLAT —
+  `freezeLoweredOnPlace`'s structural gate rejects it too), yet 0 of 10 mutations could reach its
+  resolver. **Fixed:** planted a dormant lowering source so `add_lowered_stack_east` actually bites.
+  **Now genuinely RED:** `0.0 → -0.5`, a real lane E/F instance.
+- **Lane B had no subject at all.** **Fixed:** added `cantilever_full_block_beside_minus_one` —
+  an ordinary full block beside a −1.0 owner, verified empirically (not assumed) to land via plain
+  vanilla side-placement. **RED:** `break_south_neighbor: -0.5 → 0.0`.
 
-**The headline finding: 6 of 8 subjects cannot be moved by ANY mutation.** The only two that can
-are the two that are RED. So "only 2/8 RED" is **not** evidence this architecture is closer to
-LAW 1 than the A–F table claims — it is the signature of a matrix whose subjects mostly sit outside
-the reach of its own mutations. **Planning Phase 2B off that number would be planning off a wrong
-map.** Structural causes:
+**Current state: 4 of 9 subjects genuinely reachable** (up from 2 of 8) — `full_block_on_anchored_
+minus_one_support`, `slab_on_lowered_bottom_slab`, `candle_placed_flat_then_neighbored`,
+`cantilever_full_block_beside_minus_one`. **2 of those 4 are RED** (the candle and the new lane-B
+subject) — genuine, current, open failures, not yet closed. **5 subjects remain unaudited by this
+repair, left alone per its explicit scope**: `flat_full_block_control`, `flat_slab_control`,
+`cantilever_slab_beside_lowered_block`, `carpet_on_minus_one_owner`, `chain_on_lowered_support_
+ceiling_scenery`. Do not assume they are meaningful — `carpet_on_minus_one_owner` is specifically
+flagged below as still vacuous. **"N/9 CLEAN enforcing" is proof only for the 4 named reachable
+subjects until the remaining 5 are audited the same way.**
 
-- **Anchored subjects are structurally unfalsifiable here.** The anchored branches read only the
-  `pos.down()` chain, and no mutation writes below a subject — the only one that touches it
-  *removes* it. For every anchored subject, 9 of 10 rows are provably inert.
-- **Four of ten mutations are literal no-ops on every current fixture** — `break_{north,east,west,south}`
-  all break air, because every builder leaves the subject's horizontal ring empty. The matrix
-  reports 80 cells; ~20 never touch the world at all.
+Residual structural causes, unchanged by this repair:
+
+- **Anchored subjects are structurally unfalsifiable via `break_directly_below` alone once their
+  height is stored** — the store answers correctly regardless of what mutation triggered the read,
+  so a subject reaching CLEAN this way is a *real* pass, not a vacuity artifact. The general claim
+  "9 of 10 rows are provably inert" (from the original audit) needs re-checking per-subject now
+  that the store exists; do not assume it still holds uniformly.
+- **Most `break_{north,east,west,south}` mutations are still no-ops on most fixtures** — measured
+  at repair time: 34 of 36 subject×direction cells are no-ops, 2 are live (one pre-existing on
+  `cantilever_slab_beside_lowered_block`, one new on the lane-B subject). This was not a target of
+  the repair; a fixture that happens to leave its ring empty is not automatically wrong, but it
+  means most of the matrix's nominal 90 cells still do not independently exercise anything.
 - `carpet_on_minus_one_owner` is vacuous too: its only live mutation destroys the carpet and hits
-  the legitimate vanilla carve-out, contributing zero invariance assertions.
+  the legitimate vanilla carve-out, contributing zero invariance assertions. **Not yet repaired.**
 
-**Lane B stands as written, and is untested.** It is real and unfixed (its predicates were last
+**Lane B is now tested and RED** (was: real and unfixed, but untested). Its predicates were last
 touched 2026-06/07; none of today's `9e4dffb5` / `76454c6d` / `182952d7` go near them — those live
 in the support-below resolver). But **no S-2 subject enters it**, because
 `qualifiesForAdjacentLoweredFullBlockAnchor` is gated on `isOrdinaryAnchorCandidate`, which rejects
@@ -172,7 +187,8 @@ counterpart, confirmed live by S-2 itself):**
 | # | Lane | Player likelihood |
 |---|---|---|
 | A | Command / rig / worldgen-authored cells — `onPlaced` never fires, so no lane anchors | Certain (this is what the rig fix addresses) |
-| B | Cantilever adjacency renders on "is lowered" (booleans, no magnitude), but the anchor twin demands `dy == -0.5` **exactly** (`SlabAnchorAttachment.qualifiesForAdjacentLoweredFullBlockAnchor`) — a −1.0 neighbour renders lowered and refuses to anchor, so the block gets neither an anchor nor a frozen-flat marker. **Scope:** reachable only by ordinary full blocks and connecting structurals — the qualifier is gated on `isOrdinaryAnchorCandidate`, which rejects slabs, carpets, block entities and decorations before the equality is evaluated. **UNTESTED: no S-2 subject enters this lane** (audit 2026-08-06). | High (any TS or mixed-slab world) |
+| B | Cantilever adjacency renders on "is lowered" (booleans, no magnitude), but the anchor twin demands `dy == -0.5` **exactly** (`SlabAnchorAttachment.qualifiesForAdjacentLoweredFullBlockAnchor`) — a −1.0 neighbour renders lowered and refuses to anchor, so the block gets neither an anchor nor a frozen-flat marker. **Scope:** reachable only by ordinary full blocks and connecting structurals — the qualifier is gated on `isOrdinaryAnchorCandidate`, which rejects slabs, carpets, block entities and decorations before the equality is evaluated. **TESTED and OPEN**: S-2 subject `cantilever_full_block_beside_minus_one` (`e5704f50`) confirms it live —
+RED at `break_south_neighbor: -0.5 → 0.0`, enforcing mode. | High (any TS or mixed-slab world) |
 | C | ~~Object-follows-support-below, denied an anchor by `isCeilingAttached`'s **classname list** — floor lever/button, Y-chain, **TOP-half trapdoor** (needs no support, so the real-click repro)~~ **CLOSED 2026-08-06** — `isCeilingAttached` now asks the ROLE (does this block, in this state, actually hang from above?) instead of the block TYPE: lever/button by `BLOCK_FACE`, bell by `ATTACHMENT`, dripstone by `VERTICAL_DIRECTION`, and the two families vanilla gives no property (Y-chain, TOP-half trapdoor) by a world query for something above to hang from. Floor-mounted subjects now reach `qualifiesForDecorativeObjectAnchor` and lock. Intrinsic hangers (lantern `HANGING=true`, hanging sign, cave vines, spore blossom, hanging roots) are untouched by construction. | Moderate, real-click reachable |
 | D | Full block on an unanchored adjacency-lowered TOP/DOUBLE slab | Old worlds, authored cells |
 | E | Standing-object probe vs a column walk that stops at air | Low |
