@@ -67,8 +67,30 @@ design, not the design itself. S-2 is therefore **RED on this architecture by co
 lands first as a *characterization* run whose RED inventory goes to Maintainer before any row is
 re-specced.
 
+**S-2 actually ran (`89792d44`, 2026-08-06): 2 of 8 subjects RED, both on `break_directly_below`
+only.** This is a smaller RED surface than the A–F table below predicted, and it exposed a lane the
+table did not name:
+
+**Lane G — support-removal-driven magnitude re-derivation (confirmed, S-2-proven).** Both RED
+subjects (`full_block_on_anchored_minus_one_support`: −1.0→−0.5; `chain_on_lowered_support`:
+−0.5→0.0) WERE anchored — presence protection held — but their height still moved, because the
+anchor records only *that* the cell is lowered, not *how far*, and the magnitude re-derives live
+from a support that `break_directly_below` just destroyed. This is the sharpest demonstration yet
+of the project's own thesis: **an anchor is a boolean fact, not a stored number**, so it cannot
+protect a value that depends on a neighbour which no longer exists. Every lane A–F below is "no
+anchor at all"; lane G is "anchored, and still not enough" — the harder half of the problem, and
+the one only a real stored `dy` (not a marker set) can close.
+
+**Two S-2 results contradict working predictions and are recorded rather than smoothed over:**
+`slab_on_lowered_bottom_slab` held green under all 10 mutations including `break_directly_below` on
+its own seat, where lane B predicted a break. `candle_placed_flat_then_neighbored` also held green,
+where this file and the donor both expected a clean lane-E/F failure. Needs a second look before
+the inventory below is treated as complete — either lane B is narrower than stated, or these two
+subjects don't exercise the geometry they were meant to.
+
 **Known LAW 1 violation lanes (the S-2 RED inventory, 2026-08-06 — each renders lowered with NO
-anchor, so each is a pop waiting for the right neighbour change):**
+anchor, so each is a pop waiting for the right neighbour change; lane G above is the anchored
+counterpart, confirmed live by S-2 itself):**
 
 | # | Lane | Player likelihood |
 |---|---|---|
