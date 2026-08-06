@@ -1123,8 +1123,20 @@ public final class TerrainSlabsCustomSurfaceClientGameTest implements FabricClie
                 MatrixSubjectCase.lowering(10, "COBWEB", Blocks.COBWEB.getDefaultState(), true, true),
                 MatrixSubjectCase.lowProfileLowering(11, "PRESSURE_PLATE",
                         Blocks.OAK_PRESSURE_PLATE.getDefaultState(), true, true),
-                MatrixSubjectCase.thinLayer(12, "CARPET", Blocks.WHITE_CARPET.getDefaultState()),
-                MatrixSubjectCase.thinLayer(13, "PALE_MOSS_CARPET", Blocks.PALE_MOSS_CARPET.getDefaultState()),
+                // BUG A (2026-08-06): carpet and pale moss carpet are PLAYER-PLACED decoration and
+                // now lower onto a BOTTOM_LIKE surface like every other placed object — Maintainer's law
+                // "everything should be able to lower; no exceptions". They were reclassified off
+                // the thinLayer row (which suppressed the dy / direct-custom / target assertions)
+                // to lowProfileLowering, which is the identical row with thinLayer=false. The
+                // remaining thinLayer rows are ENVIRONMENT-DEPOSITED fill only (snow), per
+                // SlabSupport.isEnvironmentDepositedSurfaceFill.
+                // NOT EXECUTED this pass: this is a fabric-client-gametest, outside runGameTest.
+                // The dy half is proven headlessly by
+                // ThinTopLayerLoweringTest#carpetOnTerrainSlabsSurfaceSeatsOnItsTopFace.
+                MatrixSubjectCase.lowProfileLowering(12, "CARPET",
+                        Blocks.WHITE_CARPET.getDefaultState(), true, true),
+                MatrixSubjectCase.lowProfileLowering(13, "PALE_MOSS_CARPET",
+                        Blocks.PALE_MOSS_CARPET.getDefaultState(), true, true),
                 MatrixSubjectCase.lowering(14, "BOOKSHELF", Blocks.BOOKSHELF.getDefaultState(), true, true),
                 MatrixSubjectCase.lowering(15, "CHISELED_BOOKSHELF", Blocks.CHISELED_BOOKSHELF.getDefaultState(), true, true),
                 MatrixSubjectCase.lowering(16, "DRIED_KELP_BLOCK", Blocks.DRIED_KELP_BLOCK.getDefaultState(), true, true),

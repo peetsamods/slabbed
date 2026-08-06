@@ -78,15 +78,60 @@ public final class SlabSupport {
     }
 
     /**
-     * Returns true if the block is a thin top-layer block (snow layers, carpet,
-     * pale moss carpet) that should never be visually offset by slab logic.
-     * These blocks sit flush on the surface and are not structural.
+     * Returns true if the block is a THIN top-layer block (snow layers, carpet, pale moss carpet).
+     *
+     * <p>This is a pure THICKNESS statement and is used only where thickness is the question: a
+     * cell one-sixteenth of a block tall cannot TRANSMIT a support's top face upward, so the
+     * bounded column walks ({@link #hasSlabInColumn}, {@link #slabColumnYOffset},
+     * {@link #hasLoweringSourceInColumnBelow}) terminate on it — whatever rests on a carpet rests
+     * on the carpet, not on the slab underneath it.
+     *
+     * <p><b>It is NOT a lowering-eligibility test.</b> It used to be one, at three SUBJECT-side
+     * sites, and that was BUG A (live 2026-08-06, recorder {@code eeac23d0-…}): a
+     * {@code white_carpet} at {@code (219,-55,-34)} read {@code dy 0.0} while the stone it was
+     * lying on read {@code -0.5}, floating half a block in the air — Maintainer's "placing too high".
+     * Eligibility now follows GEOMETRY via {@link #isEnvironmentDepositedSurfaceFill}, per her
+     * binding law of 2026-08-06: <i>"everything should be able to lower; no exceptions."</i>
      */
     public static boolean isThinTopLayer(BlockState state) {
         Block block = state.getBlock();
         return block instanceof SnowBlock
                 || block instanceof CarpetBlock
                 || block instanceof PaleMossCarpetBlock;
+    }
+
+    /**
+     * ENVIRONMENT-DEPOSITED SURFACE FILL — the genuine hazard that the old {@link #isThinTopLayer}
+     * lowering exclusion was protecting, restated as a BEHAVIOUR instead of a class list.
+     *
+     * <p><b>What the original guards actually closed.</b> {@code 8d3f105f} (2026-02-10, "prevent
+     * client offset of thin top-layer blocks") and its sibling {@code 135d125f} (powder snow) both
+     * closed the same DODO: <b>snow</b>. Snow is laid down and melted away by WEATHER across whole
+     * biomes. If it lowered wherever a slab happened to lie beneath it, half of a continuous snowy
+     * surface would render at {@code -0.5} and half at {@code 0.0} — a half-block step across
+     * terrain the player never placed, cannot see the cause of, and cannot align. {@code 135d125f}
+     * states the rule outright: <i>"It is natural terrain fill (Terrain Slabs likewise does not
+     * lower it), so never offset it: keep all powder snow flush and consistent."</i>
+     *
+     * <p><b>What it was NOT protecting.</b> Carpet and pale moss carpet are never weather-deposited
+     * — they are player-placed decoration, and the WYSIWYG law owns them: a carpet laid on a
+     * lowered support must lie ON it. They were swept up only because the guard keyed on a shared
+     * CLASSNAME family ("thin top layer"), which is exactly the shape this project's standing law
+     * "exclude by behavior, not classname" outlaws (the powder-snow DODO that first taught it).
+     *
+     * <p><b>The behaviour.</b> {@link Properties#LAYERS} is the accumulate-and-melt-in-layers
+     * behaviour itself — a variable-thickness deposit the environment maintains, not an object
+     * anyone placed at a height. Powder snow carries no such property (it fills a whole cell), so
+     * it is named alongside for the identical reason, exactly as {@code 135d125f} already did in
+     * {@code shouldOffset}. Nothing else in the old family qualifies, so carpet and pale moss
+     * carpet lower like every other placed object while the snow hazard stays closed.
+     *
+     * <p>Pinned by {@code ThinTopLayerLoweringTest#snowLayerOnLoweredSupportStaysFlush} and
+     * {@code #powderSnowOnLoweredSupportStaysFlush} so the protection cannot be lost later.
+     */
+    public static boolean isEnvironmentDepositedSurfaceFill(BlockState state) {
+        return state.contains(Properties.LAYERS)
+                || state.getBlock() instanceof PowderSnowBlock;
     }
 
     /**
@@ -583,10 +628,13 @@ public final class SlabSupport {
             return false;
         }
 
-        // never offset thin top-layer blocks (snow layers, carpet) or powder snow — they are
-        // natural surface/terrain fill, not structural objects. Powder snow is a full cube so it
-        // is NOT an isThinTopLayer (which keys on SnowBlock), hence the explicit guard.
-        if (isThinTopLayer(state) || state.getBlock() instanceof PowderSnowBlock) {
+        // never offset ENVIRONMENT-DEPOSITED SURFACE FILL (snow layers, powder snow) — weather
+        // lays it across whole biomes, so lowering it wherever a slab happens to lie beneath tears
+        // a half-block step across terrain the player never placed (the snowy-terrain DODO).
+        // Deliberately NOT isThinTopLayer: that classname family also swept up carpet and pale
+        // moss carpet, which ARE player-placed and must follow their support down (BUG A, live
+        // 2026-08-06 — Maintainer: "everything should be able to lower; no exceptions").
+        if (isEnvironmentDepositedSurfaceFill(state)) {
             return false;
         }
 
@@ -1427,28 +1475,7 @@ public final class SlabSupport {
         // ── ceiling-attached blocks under a top slab: +0.5 UP ────────
         // Only explicit ceiling-mounted cases may float into the slab space.
         // Note: isSolidBlock is safe here because getYOffset has a recursion guard.
-        Block blk = state.getBlock();
-        // Opaque full cubes always stay flush here. state.isSolidBlock(world,pos) is VIEW-DEPENDENT
-        // (it does region-clamped getOutlineShape reads) and returns FALSE for a solid cube under
-        // ChunkRendererRegion on the render thread, letting natural terrain fall through to the
-        // "non-solid object follows a lowered support down" branch below -> -0.5 model shift while
-        // face-culling stays at the grid voxel -> see-through world holes. isOpaqueFullCube() is a
-        // precomputed, view-independent flag, so it pins terrain flush on every thread.
-        // NOTE (audit KNOWN_INCOMPLETE): fence GATE is intentionally NOT folded into this flush
-        // guard yet. The fix is designed (use SlabAnchorAttachment.isConnectingStructural here, as
-        // isSteppedConnectingNeighbor now does) but could NOT be RED-proven headlessly this pass —
-        // the anchor-lowered-support-with-no-slab-in-column fixture did not reproduce — so per
-        // VERIFICATION_PROTOCOL.md G3 it is not shipped. Tracked in KNOWN_INCOMPLETE.md.
-        if (blk instanceof SlabBlock
-                || blk instanceof StairsBlock
-                || blk instanceof FenceBlock
-                || blk instanceof WallBlock
-                || blk instanceof PaneBlock
-                || isThinTopLayer(state)
-                || state.isAir()
-                || !state.getFluidState().isEmpty()
-                || state.isOpaqueFullCube()
-                || state.isSolidBlock(world, pos)) {
+        if (isClassFlushPinnedSubject(world, pos, state)) {
             return 0.0;
         }
 
@@ -1527,6 +1554,101 @@ public final class SlabSupport {
         }
 
         return 0.0;
+    }
+
+    /**
+     * CLASS-BASED FLUSH GUARD, extracted to ONE place: true iff {@link #getYOffsetInner} pins this
+     * subject at {@code 0.0} before ever reaching the "object follows its lowered support down"
+     * lanes below it. Extracted so {@link #loweredStandingObjectDy} can ask the SAME question the
+     * dy path answers, instead of keeping a second copy that would rot out of sync with it (the
+     * shared-predicate half-fix trap). Body is byte-identical to the guard it replaced apart from
+     * {@code isThinTopLayer} → {@link #isEnvironmentDepositedSurfaceFill} (BUG A).
+     *
+     * <p>Opaque full cubes always stay flush here. {@code state.isSolidBlock(world,pos)} is
+     * VIEW-DEPENDENT (it does region-clamped {@code getOutlineShape} reads) and returns FALSE for a
+     * solid cube under {@code ChunkRendererRegion} on the render thread, letting natural terrain
+     * fall through to the object lanes → {@code -0.5} model shift while face-culling stays at the
+     * grid voxel → see-through world holes. {@code isOpaqueFullCube()} is a precomputed,
+     * view-independent flag and is tested FIRST of the two, so it pins terrain flush on every
+     * thread; only non-opaque states can reach the view-dependent term.
+     *
+     * <p>NOTE (audit KNOWN_INCOMPLETE): fence GATE is intentionally NOT folded into this flush
+     * guard yet. The fix is designed (use {@code SlabAnchorAttachment.isConnectingStructural} here,
+     * as {@code isSteppedConnectingNeighbor} now does) but could NOT be RED-proven headlessly —
+     * the anchor-lowered-support-with-no-slab-in-column fixture did not reproduce — so per
+     * VERIFICATION_PROTOCOL.md G3 it is not shipped. Tracked in KNOWN_INCOMPLETE.md.
+     */
+    private static boolean isClassFlushPinnedSubject(BlockView world, BlockPos pos, BlockState state) {
+        Block blk = state.getBlock();
+        return blk instanceof SlabBlock
+                || blk instanceof StairsBlock
+                || blk instanceof FenceBlock
+                || blk instanceof WallBlock
+                || blk instanceof PaneBlock
+                || isEnvironmentDepositedSurfaceFill(state)
+                || state.isAir()
+                || !state.getFluidState().isEmpty()
+                || state.isOpaqueFullCube()
+                || state.isSolidBlock(world, pos);
+    }
+
+    /**
+     * Reentrancy guard for {@link #loweredStandingObjectDy}. The probe resolves the support BELOW
+     * the object it is asked about, which can re-enter {@code shouldOffset → hasSlabInColumn} one
+     * cell lower; the flag caps that at exactly ONE extra level. The real geometry never needs
+     * more (the object's support answers from a bottom slab / anchor / TS surface directly), and a
+     * hard O(1) cap keeps a descending column of alternating objects and solids off the
+     * chunk-render hot path — the lag class this project has already shipped twice.
+     */
+    private static final ThreadLocal<Boolean> IN_STANDING_OBJECT_PROBE =
+            ThreadLocal.withInitial(() -> Boolean.FALSE);
+
+    /**
+     * RESOLVED dy of a STANDING OBJECT cell (flower pot, lantern, candle, torch, …) — a cell whose
+     * own rendered height comes from {@link #getYOffsetInner}'s "non-solid object standing on a
+     * lowered full-block support" lane. Returns {@link Double#NaN} when the cell is not such an
+     * object or is not lowered.
+     *
+     * <p><b>BUG B</b> (live 2026-08-06, recorder {@code eeac23d0-…}). {@code (203,-54,-34)
+     * minecraft:stone} oscillated {@code -0.5 ↔ 0.0} in lockstep with the block below it being
+     * {@code minecraft:flower_pot} vs {@code minecraft:potted_cornflower} — <b>the pot's own dy was
+     * {@code -0.500} in both frames</b>, so the support never moved; only its block IDENTITY
+     * changed. Cause: the bounded column walks scored that cell with
+     * {@code SlabAnchorAttachment.isAnchored(...)}, <b>an anchor boolean standing in for "is this
+     * cell lowered"</b> — the same bug class as L13/L14/L15. Potting a flower is an in-place
+     * block-KIND change, so {@code onStateReplaced} fires and {@code replacementPreservesAnchor}
+     * clears the pot's anchor ({@code KNOWN_INCOMPLETE.md} 1j) while its rendered height, which
+     * comes from a wholly different lane, is untouched. The flag vanished, the geometry did not,
+     * and the placed block above it JUMPED — a never-pop violation.
+     *
+     * <p>Asking for the HEIGHT instead makes the answer independent of which flower is in the pot,
+     * of whether it holds a flower at all, and of whether anything was ever anchored. 1j is
+     * deliberately left open: this makes the recorded sequence impossible regardless of it.
+     *
+     * <p>Recursion-safe: guarded by {@link #IN_STANDING_OBJECT_PROBE} and strictly descending.
+     */
+    private static double loweredStandingObjectDy(BlockView world, BlockPos pos, BlockState state) {
+        if (IN_STANDING_OBJECT_PROBE.get()) {
+            return Double.NaN;
+        }
+        // Only cells whose OWN dy is decided by the object lanes qualify. A class-flush-pinned cell
+        // (glass, a fence, a stair, terrain) renders 0.0 itself, so treating it as a lowering
+        // source would make what stacks on it disagree with it.
+        if (isClassFlushPinnedSubject(world, pos, state)) {
+            return Double.NaN;
+        }
+        BlockPos belowPos = pos.down();
+        BlockState below = getBlockStateOrNull(world, belowPos);
+        if (below == null) {
+            return Double.NaN;
+        }
+        IN_STANDING_OBJECT_PROBE.set(Boolean.TRUE);
+        try {
+            double supportDy = loweredFullBlockUndersideSupportDy(world, belowPos, below);
+            return Double.isFinite(supportDy) && supportDy < -1.0e-6 ? supportDy : Double.NaN;
+        } finally {
+            IN_STANDING_OBJECT_PROBE.set(Boolean.FALSE);
+        }
     }
 
     /**
@@ -2103,7 +2225,12 @@ public final class SlabSupport {
         if (state == null
                 || state.isAir()
                 || state.getBlock() instanceof SlabBlock && !isVanillaDirectCustomSlabSubject(state)
-                || isThinTopLayer(state)
+                // Environment-deposited fill only (see isEnvironmentDepositedSurfaceFill). Moved
+                // off isThinTopLayer with the other two SUBJECT-side sites so carpet seats on a
+                // Terrain Slabs half-height surface exactly as it now does on a vanilla one —
+                // leaving one of the three on the old predicate would be the shared-predicate
+                // half-fix trap.
+                || isEnvironmentDepositedSurfaceFill(state)
                 || (!state.getFluidState().isEmpty() && !kelpFamily)
                 || CompatHooks.shouldSkipOffset(state)) {
             return false;
@@ -2163,8 +2290,16 @@ public final class SlabSupport {
             // Walking through solid terrain lowered natural Stone/Dirt that merely had a Terrain
             // Slabs surface 1-16 blocks beneath it, tearing see-through world holes. A genuine
             // placed tower chains via its per-block anchor (checked above), not this raw walk.
+            // Kept BEFORE the standing-object probe so terrain is excluded view-independently.
             if (cur.isOpaqueFullCube()) {
                 return false;
+            }
+            // BUG B: a STANDING OBJECT cell (flower pot, lantern, …) is a lowering source iff it
+            // RENDERS lowered — asked by height, not by whether it happens to hold an anchor. The
+            // isAnchored test above is the same question asked of a flag, and potting a flower
+            // clears that flag without moving the pot, which made everything stacked above it JUMP.
+            if (Double.isFinite(loweredStandingObjectDy(world, cursor, cur))) {
+                return true;
             }
             cursor = cursor.down();
         }
@@ -2203,6 +2338,13 @@ public final class SlabSupport {
             // a slab deeper in the column — that lowered natural terrain over Terrain Slabs -> holes.
             if (cur.isOpaqueFullCube()) {
                 return 0.0;
+            }
+            // BUG B, magnitude twin of hasSlabInColumn's standing-object lane. MUST move with it or
+            // the boolean and the value disagree (shared-predicate law): hasSlabInColumn would say
+            // "lowered" and this would answer 0.0, collapsing the caller onto its -0.5 default.
+            double standingObjectDy = loweredStandingObjectDy(world, cursor, cur);
+            if (Double.isFinite(standingObjectDy)) {
+                return Math.max(standingObjectDy, MIN_RESOLVED_DY);
             }
             cursor = cursor.down();
         }

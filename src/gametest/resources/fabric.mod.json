@@ -54,6 +54,8 @@
       "com.slabbed.test.BottomSlabSpawnProofTest",
       "com.slabbed.test.ServerHitToleranceShiftTest",
       "com.slabbed.test.SlabRigCatalogSmokeTest",
+      "com.slabbed.test.ThinTopLayerLoweringTest",
+      "com.slabbed.test.PottedTransformNeverPopTest",
       "com.slabbed.client.BetaNoticeDismissedWorldsTest",
       "com.slabbed.client.BetaNoticeSessionGateTest"
     ],
