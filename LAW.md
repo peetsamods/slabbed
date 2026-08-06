@@ -93,15 +93,22 @@ re-specced.
 only.** This is a smaller RED surface than the A–F table below predicted, and it exposed a lane the
 table did not name:
 
-> **UPDATE (2026-08-06, later the same day): S-2 now reports 8 of 8 subjects CLEAN under
-> `-Dslabbed.lawGate=true`** — lane G closed by the placement-dy store (`d4f38510`), lane C closed
-> by the ceiling ROLE predicate (see the lane C row below). **This is NOT a claim that the line
-> obeys LAW 1, and the default must not be flipped on this evidence.** The audit below stands
-> verbatim: 6 of the 8 subjects cannot be moved by ANY mutation, so a clean matrix is a clean
-> reading of two reachable cells plus six that assert nothing. The honest statement is *"both
-> subjects S-2 can actually move now hold their height"*. Flipping the default is Phase 2's exit
-> criterion and Maintainer's call, and it should not be taken until the fixture defects named below are
-> repaired and the matrix has subjects its own mutations can reach.
+> **UPDATE (2026-08-06, end of day — supersedes two earlier revisions of this box).** Lane G was
+> closed by the placement-dy store (`d4f38510`) and lane C by the ceiling ROLE predicate
+> (`3a7c17c0`). The matrix was then repaired (`e5704f50`) and fully audited (`49691609`), so the
+> honest state is now:
+>
+> **9 of 9 subjects are provably reachable — measured, not argued — and 2 are RED.**
+> `candle_placed_flat_then_neighbored` (`0.0 → −0.5` on `add_lowered_stack_east`, a decoration with
+> no protection at all) and `cantilever_full_block_beside_minus_one` (`−0.5 → 0.0` on
+> `break_south_neighbor`, lane B: the adjacent-anchor qualifier demands `dy == -0.5` **exactly**, so
+> a −1.0 neighbour is denied both an anchor and a frozen-flat marker). **Both are genuine open
+> product bugs and the Phase 2 punch-list.**
+>
+> **The default must still not be flipped**, but the reason has changed. It is no longer "the matrix
+> proves nothing" — it now proves plenty. It is simply that **two real violations are open**. Phase
+> 2's exit criterion is unchanged and now actually measurable: this line passes S-2 enforcing, with
+> those two closed, and the default flips. That remains Maintainer's call.
 
 **Lane G — support-removal-driven magnitude re-derivation (confirmed, S-2-proven, and CLOSED
 2026-08-06 by the placement-dy store).** The RED subject `full_block_on_anchored_minus_one_support`
@@ -145,30 +152,46 @@ them found something worse.** Neither result contradicted a prediction:
   an ordinary full block beside a −1.0 owner, verified empirically (not assumed) to land via plain
   vanilla side-placement. **RED:** `break_south_neighbor: -0.5 → 0.0`.
 
-**Current state: 4 of 9 subjects genuinely reachable** (up from 2 of 8) — `full_block_on_anchored_
-minus_one_support`, `slab_on_lowered_bottom_slab`, `candle_placed_flat_then_neighbored`,
-`cantilever_full_block_beside_minus_one`. **2 of those 4 are RED** (the candle and the new lane-B
-subject) — genuine, current, open failures, not yet closed. **5 subjects remain unaudited by this
-repair, left alone per its explicit scope**: `flat_full_block_control`, `flat_slab_control`,
-`cantilever_slab_beside_lowered_block`, `carpet_on_minus_one_owner`, `chain_on_lowered_support_
-ceiling_scenery`. Do not assume they are meaningful — `carpet_on_minus_one_owner` is specifically
-flagged below as still vacuous. **"N/9 CLEAN enforcing" is proof only for the 4 named reachable
-subjects until the remaining 5 are audited the same way.**
+### ✅ AUDIT COMPLETE (`49691609`, 2026-08-06): 9 of 9 subjects provably reachable
 
-Residual structural causes, unchanged by this repair:
+The audit was finished by **measurement, not reasoning**: probe gametests built every subject with
+the real builders, **stripped its protection** (`removeAnchor` clears anchor + frozen-flat + stored
+dy together), applied all ten mutations, and recorded whether the resolver's answer moved — a
+90-cell measured matrix, plus anchor-kept/store-cleared counterfactuals to separate *"the store
+holds this"* from *"the floor happens to equal it"*. Probes were removed afterward.
 
-- **Anchored subjects are structurally unfalsifiable via `break_directly_below` alone once their
-  height is stored** — the store answers correctly regardless of what mutation triggered the read,
-  so a subject reaching CLEAN this way is a *real* pass, not a vacuity artifact. The general claim
-  "9 of 10 rows are provably inert" (from the original audit) needs re-checking per-subject now
-  that the store exists; do not assume it still holds uniformly.
-- **Most `break_{north,east,west,south}` mutations are still no-ops on most fixtures** — measured
-  at repair time: 34 of 36 subject×direction cells are no-ops, 2 are live (one pre-existing on
-  `cantilever_slab_beside_lowered_block`, one new on the lane-B subject). This was not a target of
-  the repair; a fixture that happens to leave its ring empty is not automatically wrong, but it
-  means most of the matrix's nominal 90 cells still do not independently exercise anything.
-- `carpet_on_minus_one_owner` is vacuous too: its only live mutation destroys the carpet and hits
-  the legitimate vanilla carve-out, contributing zero invariance assertions. **Not yet repaired.**
+| # | Subject | Live mutation (measured, bare) | Verdict |
+|---|---|---|---|
+| 1 | `flat_full_block_control` | `add_full_block_north` `0.0→−0.5` | CLEAN — frozen-flat holds |
+| 2 | `flat_slab_control` | `add_lowered_stack_east` `0.0→−0.5` | CLEAN — frozen-flat holds |
+| 3 | `full_block_on_anchored_minus_one_support` | `break_directly_below` `−1.0→0.0` | CLEAN — store, **discriminated** |
+| 4 | `cantilever_slab_beside_lowered_block` | `break_south_neighbor` `−0.5→0.0` | CLEAN — anchor; store NOT discriminated |
+| 5 | `slab_on_lowered_bottom_slab` | `break_directly_below` `−1.0→0.0` | CLEAN — store, **discriminated** |
+| 6 | `carpet_on_laterally_lowered_slab_support` | `add_lowered_stack_east` `−0.5→−1.0` | CLEAN — store, **discriminated** |
+| 7 | `candle_placed_flat_then_neighbored` | `add_lowered_stack_east` `0.0→−0.5` | **RED** — no protection |
+| 8 | `chain_on_lowered_support_ceiling_scenery` | `break_directly_below` `−0.5→0.0` | CLEAN — anchor; store NOT discriminated |
+| 9 | `cantilever_full_block_beside_minus_one` | `break_south_neighbor` `−0.5→0.0` | **RED** — no protection |
+
+Subject #6 was renamed from `carpet_on_minus_one_owner` when it was rebuilt: the old name described
+geometry it no longer has, and a lying subject name is precisely the defect that made #5 test the
+wrong thing for weeks. It is now **the strongest row in the matrix** — anchor kept with the store
+cleared still moves, fully protected holds, so it asserts lane G's thesis (the stored *number*, not
+the anchor boolean, is what holds a cell) rather than arguing it.
+
+**Honest limits of this table, stated rather than smoothed:**
+
+- **#4 and #8 do not discriminate the store.** Their anchors are provably load-bearing (stripping
+  the anchor reproduces the pre-fix RED byte-identically), but with the store cleared and the anchor
+  kept they still read `−0.5`, because the floor equals the stored value there. Those rows cannot
+  tell the two mechanisms apart, and their comments say so.
+- **6 of the 10 mutations still have zero live cells anywhere** (`add_slab_north`, `add_slab_east`,
+  `add_full_block_above`, `break_north/east/west_neighbor`). The nominal 90-cell matrix is carried
+  by 4 mutations. A future pass should either give them reachable geometry or retire them.
+- Two structural facts found while building the controls, worth keeping: **on solid ground NO
+  mutation can reach a full block at all** (gap-fill is gated on air-below, the column walk stops at
+  the opaque support, opaque cubes are pinned flat), and **`add_lowered_stack_east` can never move
+  any full block**, because it plants a *slab* at the subject's level and the adjacency check skips
+  slab neighbours.
 
 **Lane B is now tested and RED** (was: real and unfixed, but untested). Its predicates were last
 touched 2026-06/07; none of today's `9e4dffb5` / `76454c6d` / `182952d7` go near them — those live
