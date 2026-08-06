@@ -92,11 +92,23 @@ makes that the standing state of `./gradlew build runGameTest`, not an opt-in ch
 > neither a slab nor a solid cube. The gate was not wrong about what it tested; it had never been
 > asked. Read the paragraph below with that as the live example of what "precisely" means: a green
 > S-2 certifies its own scenes and nothing outside them.
+>
+> **AMENDED AGAIN 2026-08-06 (night, third): 11 of 11 CLEAN, and the eleventh subject exists for
+> the SAME reason, on the opposite side of the same boundary.** The fence fix taught
+> `supportSeatDy` to ask a top-FACE question instead of a volume question — but its full-height arm
+> still opened with `state.getBlock() instanceof SlabBlock`, so the new predicate was never asked
+> about a TOP or DOUBLE slab, both of which pass it. Recorder run `f37a3b2b` (actions a38/a39): a
+> `smooth_stone_slab[type=double]` support at `−1.0`, a `stripped_jungle_log` placed on it captured
+> `−0.5`, while the same session's fence, chain and BOTTOM-slab supports were all correct. Two
+> consecutive coverage-boundary bugs, both found by a player, both a class test standing in for a
+> shape question. **The lesson is not "add another subject"; it is that a class test inside a
+> geometry predicate is where to look first.**
 
 **What this claim covers, precisely, so it is not over-read a second time (LAW.md was wrong about
-this once already, in the "8 of 8" revision below):** it covers the 9 subjects and 10 mutations
-this matrix actually builds and applies — measured reachable, per the audit at `49691609`. It does
-**not** cover: any geometry outside those 9 scenes; any lane this matrix's mutations cannot reach
+this once already, in the "8 of 8" revision below):** it covers the 11 subjects and 10 mutations
+this matrix actually builds and applies — measured reachable, per the audit at `49691609` and the
+same measurement repeated for subjects #10 and #11. It does
+**not** cover: any geometry outside those 11 scenes; any lane this matrix's mutations cannot reach
 (6 of 10 mutations still have zero live cells anywhere — see the reachability table below); or
 anything requiring Terrain Slabs, which cannot load in this headless environment at all. **This
 line obeys LAW 1 for what S-2 tests. Whether it obeys LAW 1 everywhere is a live-testing question,
@@ -184,7 +196,7 @@ them found something worse.** Neither result contradicted a prediction:
   an ordinary full block beside a −1.0 owner, verified empirically (not assumed) to land via plain
   vanilla side-placement. **RED:** `break_south_neighbor: -0.5 → 0.0`.
 
-### ✅ AUDIT COMPLETE (`49691609`, 2026-08-06): 9 of 9 subjects provably reachable — now 10 of 10
+### ✅ AUDIT COMPLETE (`49691609`, 2026-08-06): 9 of 9 subjects provably reachable — now 11 of 11
 
 The audit was finished by **measurement, not reasoning**: probe gametests built every subject with
 the real builders, **stripped its protection** (`removeAnchor` clears anchor + frozen-flat + stored
@@ -204,6 +216,15 @@ holds this"* from *"the floor happens to equal it"*. Probes were removed afterwa
 | 8 | `chain_on_lowered_support_ceiling_scenery` | `break_directly_below` `−0.5→0.0` | CLEAN — anchor; store NOT discriminated |
 | 9 | `cantilever_full_block_beside_minus_one` | `break_south_neighbor` `−0.5→0.0` | **RED** — no protection |
 | 10 | `full_block_on_minus_one_fence_support` | `break_directly_below` `−1.0→0.0` | CLEAN — store, **discriminated** |
+| 11 | `full_block_on_minus_one_double_slab_support` | `break_directly_below` `−0.5→0.0` | CLEAN — store, **discriminated** |
+
+**Subject #11 added 2026-08-06 (night, third), by the same protection-stripping method.** Measured:
+fully protected `−1.0→−1.0` (subject survives the break); anchor+frozen+store stripped `−0.5→0.0`,
+so the mutation provably reaches the resolver; **store cleared with the anchor kept `−1.0→−0.5`**,
+so like #3, #5, #6 and #10 it discriminates the stored NUMBER from both the anchor boolean and the
+fallback floor. The other nine mutations were measured inert against it (`−1.0→−1.0` in all three
+protection modes), which is why only `break_directly_below` is named on the row. Its support is a
+real vanilla slab-COMBINE (two clicks on one cell), which is how the live double slab arose.
 
 **Subject #10 added 2026-08-06 (night, second) — it exists because this table's coverage boundary
 was found by a player, not by the gate.** Every one of subjects #1–#9 rests on a SLAB or a SOLID
@@ -256,7 +277,7 @@ counterpart, confirmed live by S-2 itself):**
 | B | Cantilever adjacency renders on "is lowered" (booleans, no magnitude), but the anchor twin demands `dy == -0.5` **exactly** (`SlabAnchorAttachment.qualifiesForAdjacentLoweredFullBlockAnchor`) — a −1.0 neighbour renders lowered and refuses to anchor, so the block gets neither an anchor nor a frozen-flat marker. **Scope:** reachable only by ordinary full blocks and connecting structurals — the qualifier is gated on `isOrdinaryAnchorCandidate`, which rejects slabs, carpets, block entities and decorations before the equality is evaluated. **TESTED and OPEN**: S-2 subject `cantilever_full_block_beside_minus_one` (`e5704f50`) confirms it live —
 RED at `break_south_neighbor: -0.5 → 0.0`, enforcing mode. | High (any TS or mixed-slab world) |
 | C | ~~Object-follows-support-below, denied an anchor by `isCeilingAttached`'s **classname list** — floor lever/button, Y-chain, **TOP-half trapdoor** (needs no support, so the real-click repro)~~ **CLOSED 2026-08-06** — `isCeilingAttached` now asks the ROLE (does this block, in this state, actually hang from above?) instead of the block TYPE: lever/button by `BLOCK_FACE`, bell by `ATTACHMENT`, dripstone by `VERTICAL_DIRECTION`, and the two families vanilla gives no property (Y-chain, TOP-half trapdoor) by a world query for something above to hang from. Floor-mounted subjects now reach `qualifiesForDecorativeObjectAnchor` and lock. Intrinsic hangers (lantern `HANGING=true`, hanging sign, cave vines, spore blossom, hanging roots) are untouched by construction. | Moderate, real-click reachable |
-| D | Full block on an unanchored adjacency-lowered TOP/DOUBLE slab | Old worlds, authored cells |
+| D | Full block on an unanchored adjacency-lowered TOP/DOUBLE slab. **Narrowed 2026-08-06 (night, third):** an ANCHORED or STORED lowered TOP/DOUBLE slab support is no longer in this lane — `supportSeatDy` now reads it, S-2 subject #11 pins it. What remains is the genuinely unanchored, unstored case (a pre-store world or an authored cell), which still resolves NaN and takes the floor. | Old worlds, authored cells |
 | E | Standing-object probe vs a column walk that stops at air | Low |
 | F | Gap-fill under an anchored lowered block entity | Low |
 

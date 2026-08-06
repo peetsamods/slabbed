@@ -1985,7 +1985,16 @@ public final class SlabSupport {
         if (!Double.isNaN(bottomSlabDy)) {
             return bottomSlabDy - 0.5;
         }
-        double fullBlockDy = loweredFullHeightSupportDy(world, supportPos, support, depth);
+        // ASKED OF THE SEAT, NOT OF ITS CLASS. cellTopSupportDy is loweredFullHeightSupportDy
+        // without the `instanceof SlabBlock` reject, because a seat is a FACE and a TOP or DOUBLE
+        // slab draws its top face at exactly its own cell top (MEASURED: cullingShape maxY = 1.0
+        // and outline maxY = 1.0 for both; a DOUBLE slab is additionally an opaque full cube).
+        // A BOTTOM slab cannot arrive here at all — the half-height arm above claims every bottom
+        // slab unconditionally — and it would be refused anyway (MEASURED: all four terms of
+        // presentsCellTopAsTopFace are false, cull/outline maxY = 0.5). The reject is kept on the
+        // wrapper for the UNDERSIDE and lowering-source consumers, which ask a different question
+        // about the same block; see loweredFullHeightSupportDy.
+        double fullBlockDy = cellTopSupportDy(world, supportPos, support, depth);
         if (!Double.isNaN(fullBlockDy)) {
             return fullBlockDy;
         }
@@ -2167,8 +2176,10 @@ public final class SlabSupport {
      * </ol>
      *
      * <p>NOT a classname list, and it must never become one: {@code LAW 2} says eligibility follows
-     * geometry, and this campaign has now found exclude-by-classname eight times. If a block type
-     * appears to need adding here, the shape it draws is the thing to ask about instead.
+     * geometry, and this campaign has now found exclude-by-classname NINE times — the ninth was a
+     * {@code instanceof SlabBlock} line in {@link #loweredFullHeightSupportDy} that kept this
+     * predicate from ever being asked about a TOP or DOUBLE slab, which both pass it. If a block
+     * type appears to need adding here, the shape it draws is the thing to ask about instead.
      */
     private static boolean presentsCellTopAsTopFace(BlockView world, BlockPos pos, BlockState state) {
         return state.isOpaqueFullCube()
@@ -2200,9 +2211,55 @@ public final class SlabSupport {
 
     private static double loweredFullHeightSupportDy(BlockView world, BlockPos pos, BlockState state,
                                                      int depth) {
+        // THE SLAB REJECT LIVES HERE, ON THE WRAPPER, AND NOWHERE ELSE. Its four remaining callers
+        // do NOT ask the top-face question this method's body answers:
+        //   * the two hanger lanes (ceilingHungDecorationDy, getYOffsetInner's underside-hanger
+        //     branch) read the support ABOVE, where the relevant surface is the UNDERSIDE. Both
+        //     call loweredSlabUndersideSupportDy first, which carries the TOP slab's +0.5
+        //     underside term; answering a slab from the cell-top body would drop that term and
+        //     misplace the hanger by half a block.
+        //   * getYOffsetInner's object-on-a-support lane has its own TOP/DOUBLE slab branch a few
+        //     lines below, routed through loweredSlabUndersideSupportDy so it honours
+        //     shouldSkipOffset (a Terrain Slabs slab renders flush) and the client visual-dy
+        //     cache. Answering slabs here would preempt that branch and drop both guards — the
+        //     live lantern-under-TS regression.
+        //   * loweredStandingObjectDy is a LOWERING-SOURCE probe for the bounded column walks, and
+        //     slabs already have their own source predicates there (hasLoweredSlabSupport,
+        //     isVerticallyLoweredSlabSource). Admitting them here would widen what counts as a
+        //     source, which is the twice-burned Terrain Slabs over-lowering hazard.
+        // The remaining two call sites (isLoweredSideSlabSource, isFlushSeat) branch on slabs
+        // before they reach this method, so the reject is unreachable for them either way.
+        // supportSeatDy — the SEAT question — deliberately calls the body directly.
+        if (state != null && state.getBlock() instanceof SlabBlock) {
+            return Double.NaN;
+        }
+        return cellTopSupportDy(world, pos, state, depth);
+    }
+
+    /**
+     * The body of {@link #loweredFullHeightSupportDy}, asked of ANY block whose top face is at its
+     * own cell top — including a TOP or DOUBLE slab.
+     *
+     * <p><b>Why the split (live 2026-08-06, recorder run {@code f37a3b2b}, actions a38/a39).</b>
+     * The wrapper's {@code instanceof SlabBlock} line was a CLASS test standing in for the top-face
+     * question, the ninth of that shape found in this campaign, and
+     * {@code SlabAnchorAttachment.recordPlacementDy} already carried a note describing the hole it
+     * left: a lowered TOP or DOUBLE slab support matched none of {@link #supportSeatDy}'s arms, so
+     * anything resting on one took {@link #loweredFollowerDy}'s {@code -0.5} floor — and, because
+     * that read happens at placement time, the floor is the number LAW 1 then froze. Live:
+     * {@code smooth_stone_slab[type=double]} at {@code dy=-1.0000}, a {@code stripped_jungle_log}
+     * placed on it captured {@code -0.5000}. The same session's fence, chain and BOTTOM-slab
+     * supports were all correct, which is what identified the reject rather than the arithmetic.
+     *
+     * <p>{@code shouldOffset} never offsets a slab, so for a slab this body can only answer from
+     * the stored placement height or the anchor lane — the two facts LAW 1 says are authoritative
+     * — and returns {@link Double#NaN} otherwise, leaving pre-store worlds on the path they always
+     * took.
+     */
+    private static double cellTopSupportDy(BlockView world, BlockPos pos, BlockState state,
+                                           int depth) {
         if (world == null || pos == null || state == null
                 || state.isAir()
-                || state.getBlock() instanceof SlabBlock
                 || !state.getFluidState().isEmpty()
                 || !presentsCellTopAsTopFace(world, pos, state)) {
             return Double.NaN;

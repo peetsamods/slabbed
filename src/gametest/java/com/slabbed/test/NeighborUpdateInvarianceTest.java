@@ -39,7 +39,7 @@ import java.util.List;
  * ({@code 3a7c17c0}), and the two closing fixes ({@code 7756d152}, {@code c51ec869}) closed every
  * subject this matrix could reach. The verdict now defaults to blocking — see
  * {@link #LAW_GATE_PROPERTY} — and any future RED here is a real regression, not an expected
- * characterization finding. Lanes A–F in {@code LAW.md} beyond this matrix's 9 subjects are not
+ * characterization finding. Lanes A–F in {@code LAW.md} beyond this matrix's 11 subjects are not
  * proven closed by this test passing; see its reachability table before assuming full coverage.
  *
  * <p><b>Port notes (semantic port from the 26.2 donor, not a diff-copy).</b> This line has none of
@@ -64,7 +64,7 @@ import java.util.List;
  * <p><b>VACUITY RULE ({@code LAW.md}, standing): every subject must name, in a comment, the
  * mutation that would move it.</b> A green row here is proof ONLY if at least one mutation
  * provably reaches the subject's resolver; a row nothing can move reads as coverage while
- * asserting nothing, which is worse than no row at all. All nine subjects below carry that comment
+ * asserting nothing, which is worse than no row at all. All eleven subjects below carry that comment
  * and every claim in one was MEASURED, not reasoned: build the subject, strip its protection
  * ({@code SlabAnchorAttachment.removeAnchor} clears the anchor, the frozen-flat marker and the
  * stored magnitude in one call), apply the mutation, and see whether the resolver's answer moves.
@@ -570,6 +570,61 @@ public final class NeighborUpdateInvarianceTest {
                         "premise: a block resting on a -1.0 fence must be placed at -1.0 (this is "
                                 + "the live bug this subject exists for), got " + d);
                 return subject;
+            }),
+            // #11 — THE COVERAGE BOUNDARY MOVED AGAIN (2026-08-06, live run f37a3b2b, actions
+            // a38/a39). #10 closed "the support is neither a slab nor a solid cube". This closes
+            // the one shape still missing on the other side: the support IS a slab, but a
+            // FULL-HEIGHT one. supportSeatDy's full-height arm rejected
+            // `state.getBlock() instanceof SlabBlock` outright — a CLASS test standing in for the
+            // top-face question the arm asks — so a smooth_stone_slab[type=double] at -1.0, which
+            // is an opaque full cube whose top face is at its own cell top, matched no arm and
+            // everything placed on it took loweredFollowerDy's -0.5 floor. Live: support
+            // 354,-56,-113 double slab dy=-1.0000 anchored, stripped_jungle_log placed above it
+            // captured dyPlaceAfter=-0.5000, while the same session's oak_fence, iron_chain and
+            // BOTTOM-slab supports were all correct at -1.0.
+            //
+            // Geometry: a real-useOn SBSB tower at ground level (subject lands at plot y=6, so
+            // add_full_block_above still writes inside the 8x8x8 plot), then TWO clicks on the
+            // cell above its -1.0 top — the first plants a BOTTOM slab, the second is vanilla's
+            // own slab-combine, which is exactly how the live double slab came to exist — then
+            // the subject placed on that double slab.
+            //
+            // Moving mutation: break_directly_below — it destroys the DOUBLE slab the subject's
+            // magnitude came from. MEASURED by the protection-stripping method the 49691609 audit
+            // established (probe added, run, removed):
+            //   fully protected            : -1.0 -> -1.0, subject still standing (this row, CLEAN)
+            //   anchor+frozen+store stripped: -0.5 ->  0.0   (the mutation provably reaches it)
+            //   store cleared, anchor kept : -1.0 -> -0.5   (the anchor alone gives only the floor)
+            // So this is a STRONG row like #3/#5/#6/#10: it discriminates the stored NUMBER from
+            // both the anchor boolean and the -0.5 fallback. The other nine mutations were all
+            // measured inert here (-1.0 -> -1.0 in every mode), which is why break_directly_below
+            // is the one named.
+            new NamedSubject("full_block_on_minus_one_double_slab_support", (ctx, w) -> {
+                BlockPos owner = minusOneLoweredStoneTowerRigAtGroundLevel(ctx, w, 3, 3);
+                place(ctx, Blocks.SMOOTH_STONE_SLAB.asItem(), owner, Direction.UP, 0.0);
+                BlockPos support = owner.up();
+                place(ctx, Blocks.SMOOTH_STONE_SLAB.asItem(), support, Direction.UP, 0.0);
+                var supportState = w.getBlockState(support);
+                ctx.assertTrue(supportState.getBlock() instanceof SlabBlock
+                                && supportState.get(SlabBlock.TYPE) == SlabType.DOUBLE,
+                        "premise: the two clicks must combine into a DOUBLE slab in ONE cell — a "
+                                + "BOTTOM slab here would test the half-height arm instead, got "
+                                + supportState);
+                double supportDy = dy(w, support);
+                ctx.assertTrue(Math.abs(supportDy + 1.0) <= EPS,
+                        "premise: the DOUBLE slab support must itself render -1.0 — a -0.5 support "
+                                + "would make this row coincide with the fallback floor and prove "
+                                + "nothing, got " + supportDy);
+                place(ctx, Blocks.STONE.asItem(), support, Direction.UP, 0.0);
+                BlockPos subject = support.up();
+                ctx.assertTrue(w.getBlockState(subject).isOf(Blocks.STONE),
+                        "premise: the subject must land on the double slab, got "
+                                + w.getBlockState(subject));
+                double d = dy(w, subject);
+                ctx.assertTrue(Math.abs(d + 1.0) <= EPS,
+                        "premise: a block resting on a -1.0 DOUBLE slab must be placed at -1.0 "
+                                + "(this is the live bug this subject exists for), got " + d);
+                return subject;
             })
     );
 
@@ -645,7 +700,7 @@ public final class NeighborUpdateInvarianceTest {
      * the largest unit that is guaranteed to be emitted for every subject that actually ran, which
      * is exactly the property that makes "the log is quiet" mean "nothing violated" rather than
      * "the test didn't run". It lives here, in the one shared runner, rather than in each of the
-     * eight gametest methods, so a new subject cannot be added without reporting. (Deliberately no
+     * per-subject gametest methods, so a new subject cannot be added without reporting. (Deliberately no
      * literal annotation token in this javadoc — HANDOFF's suite-count script counts occurrences,
      * and a doc mention would inflate the expected total.)
      *
@@ -715,5 +770,10 @@ public final class NeighborUpdateInvarianceTest {
     @GameTest(structure = "fabric-gametest-api-v1:empty")
     public void fullBlockOnMinusOneFenceSupportSurvivesNeighborEdits(TestContext ctx) {
         runSubject(ctx, SUBJECTS.get(9));
+    }
+
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void fullBlockOnMinusOneDoubleSlabSupportSurvivesNeighborEdits(TestContext ctx) {
+        runSubject(ctx, SUBJECTS.get(10));
     }
 }

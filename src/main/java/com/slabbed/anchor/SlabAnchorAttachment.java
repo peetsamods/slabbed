@@ -218,13 +218,19 @@ public final class SlabAnchorAttachment {
      * magnitude — and the flat half of the law already belongs to {@link #FROZEN_FLAT_TYPE}, whose
      * precedence must not change.
      *
-     * <p>KNOWN, AND DELIBERATE: {@code SlabSupport.supportSeatDy} has a hole — a lowered TOP or
+     * <p><b>CLOSED 2026-08-06 — the paragraph that stood here described a hole, and the hole was
+     * this defect.</b> It read: "{@code SlabSupport.supportSeatDy} has a hole — a lowered TOP or
      * DOUBLE slab support matches none of its three arms and reports nothing, so a piece standing
-     * on one settles on the {@code -0.5} floor instead of its true depth. Reading through that path
-     * here therefore captures the floor. That is the correct capture anyway: the number worth
-     * keeping is the height the player SAW when the block appeared, and the floor is what they saw.
-     * Repairing the hole would change where such a piece is drawn, which is a separate question
-     * about placement-time resolution, not about this store; it is reported, not fixed here.
+     * on one settles on the {@code -0.5} floor instead of its true depth… it is reported, not fixed
+     * here." That was an accurate report and the wrong conclusion: because this method reads
+     * {@code getYOffset} to decide the number LAW 1 will freeze, the floor was not merely drawn, it
+     * was STORED. Live (recorder run {@code f37a3b2b}, actions a38/a39): a
+     * {@code smooth_stone_slab[type=double]} support at {@code dy=-1.0000}, and a
+     * {@code stripped_jungle_log} placed on it captured {@code -0.5000} permanently. The cause was
+     * a {@code instanceof SlabBlock} reject in the seat resolver's full-height arm — a class test
+     * where a top-face test belonged; see {@code SlabSupport.cellTopSupportDy}. Nothing in THIS
+     * method changed: it captures what {@code getYOffset} says, and {@code getYOffset} now says the
+     * right thing.
      */
     private static void recordPlacementDy(World world, BlockPos pos, BlockState state) {
         double dy = SlabSupport.getYOffset(world, pos, state);

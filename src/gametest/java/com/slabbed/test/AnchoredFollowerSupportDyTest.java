@@ -9,10 +9,15 @@ import net.minecraft.block.Blocks;
 import net.minecraft.block.SlabBlock;
 import net.minecraft.block.enums.DoubleBlockHalf;
 import net.minecraft.block.enums.SlabType;
+import net.minecraft.entity.player.PlayerEntity;
+import net.minecraft.item.Item;
+import net.minecraft.item.ItemStack;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.state.property.Properties;
 import net.minecraft.test.TestContext;
 import net.minecraft.util.math.BlockPos;
+import net.minecraft.util.math.Direction;
+import net.minecraft.util.math.Vec3d;
 
 /**
  * Live-reported bug (2026-08-05 live pass, {@code docs/process/LIVE_LEDGER.md} symptom 1): a block
@@ -314,6 +319,156 @@ public final class AnchoredFollowerSupportDyTest {
                 "a carpet is a 1/16 seat, not a full-height one: a follower above it must not be "
                         + "given the carpet's own depth, got " + dy);
         ctx.complete();
+    }
+
+    // ── the support is a TOP/DOUBLE SLAB (live 2026-08-06, run f37a3b2b, actions a38/a39) ──────
+
+    /**
+     * THIRD WAVE, and the ninth exclude-by-classname of this campaign. The seat resolver's
+     * full-height arm rejected {@code state.getBlock() instanceof SlabBlock} outright — a CLASS
+     * test standing in for the top-face question the arm exists to ask. A
+     * {@code smooth_stone_slab[type=double]} is an opaque full cube whose top face is at its own
+     * cell top; for seating purposes it is indistinguishable from full stone. It was rejected
+     * anyway, so a block placed on one matched no arm of {@code supportSeatDy} and took
+     * {@code loweredFollowerDy}'s {@code -0.5} floor.
+     *
+     * <p>LIVE EVIDENCE (recorder run {@code f37a3b2b}, actions a38/a39): support
+     * {@code 354,-56,-113 = smooth_stone_slab[type=double]}, {@code dy=-1.0000 anchored=true};
+     * {@code stripped_jungle_log} placed at {@code 354,-55,-113} read {@code dyPlaceAfter=-0.5000}.
+     * The same session's {@code oak_fence} (a27/a30), {@code iron_chain} (a34) and BOTTOM-slab
+     * (a26) supports were all correct at {@code -1.0} — only the DOUBLE slab was wrong.
+     *
+     * <p><b>Built through REAL CLICKS, and that is the point of this row.</b> The value the player
+     * keeps is written by {@code SlabAnchorAttachment.recordPlacementDy}, which reads
+     * {@code getYOffset} at the instant the block appears — i.e. straight through the hole this
+     * test names. A {@code setBlockState} fixture would exercise the resolver but not the capture,
+     * and the capture is what LAW 1 freezes. MEASURED before the fix, exactly here:
+     * {@code tower top = -1.0}, {@code click1 = smooth_stone_slab[type=bottom] dy=-1.0 stored},
+     * {@code click2 = smooth_stone_slab[type=double] dy=-1.0 stored}, {@code follower dy=-0.5}.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void fullBlockOnMinusOneDoubleSlabSupportInheritsMinusOne(TestContext ctx) {
+        ServerWorld w = ctx.getWorld();
+        BlockPos towerTop = buildRealUseOnMinusOneTower(ctx, 3, 3);
+
+        // Two clicks on the same cell: the first plants a BOTTOM slab on the -1.0 tower top, the
+        // second is vanilla's own slab-combine, which turns that cell into a DOUBLE slab in place.
+        // This is precisely how the live smooth_stone_slab[type=double] support came to exist.
+        useOn(ctx, Blocks.SMOOTH_STONE_SLAB.asItem(), towerTop, Direction.UP, 0.0);
+        BlockPos support = towerTop.up();
+        useOn(ctx, Blocks.SMOOTH_STONE_SLAB.asItem(), support, Direction.UP, 0.0);
+        BlockState supportState = w.getBlockState(support);
+        ctx.assertTrue(supportState.getBlock() instanceof SlabBlock
+                        && supportState.get(SlabBlock.TYPE) == SlabType.DOUBLE,
+                "fixture: the two clicks must leave a DOUBLE slab in one cell, got " + supportState);
+        double supportDy = SlabSupport.getYOffset(w, support, supportState);
+        ctx.assertTrue(Math.abs(supportDy + 1.0) <= EPS,
+                "fixture: the DOUBLE slab support must itself render -1.0 — at -0.5 this row would "
+                        + "coincide with the fallback floor and prove nothing, got " + supportDy);
+
+        useOn(ctx, Blocks.STRIPPED_JUNGLE_LOG.asItem(), support, Direction.UP, 0.0);
+        BlockPos follower = support.up();
+        ctx.assertTrue(w.getBlockState(follower).isOf(Blocks.STRIPPED_JUNGLE_LOG),
+                "fixture: the follower must land on the double slab, got " + w.getBlockState(follower));
+        double dy = SlabSupport.getYOffset(w, follower, w.getBlockState(follower));
+        ctx.assertTrue(Math.abs(dy + 1.0) <= EPS,
+                "a full block placed on a -1.0 DOUBLE slab must resolve -1.0, got " + dy
+                        + " (the seat resolver's full-height arm rejected every slab by CLASS, so a "
+                        + "double slab — an opaque full cube — matched no arm and the follower took "
+                        + "the -0.5 floor)");
+        ctx.complete();
+    }
+
+    /**
+     * The TOP-slab half of the same hole, and the one that shows the reject really was about CLASS
+     * rather than volume: a TOP slab is NOT a solid block ({@code isSolidBlock=false}, measured),
+     * yet it draws its top face at exactly its cell top ({@code cullingShape maxY = 1.0},
+     * {@code outline maxY = 1.0}, both measured). It is the fence case one more time, on a slab.
+     *
+     * <p>Built with this class's {@code setBlockState} + {@code addAnchor} idiom rather than real
+     * clicks, deliberately: the two-click combine that mints a DOUBLE slab has no TOP-slab twin
+     * that is stable to write here, and this row's job is the RESOLVER, which the anchored fixture
+     * reaches identically. MEASURED before the fix in this exact scene: support {@code dy=-1.0},
+     * follower {@code dy=-0.5}.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void fullBlockOnMinusOneTopSlabSupportInheritsMinusOne(TestContext ctx) {
+        ServerWorld w = ctx.getWorld();
+        BlockPos subjectSeat = buildAnchoredMinusOneSeat(ctx, 1, 1);
+
+        BlockPos support = subjectSeat;
+        place(w, support, Blocks.SMOOTH_STONE_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.TOP));
+        SlabAnchorAttachment.addAnchor(w, support, w.getBlockState(support));
+        double supportDy = SlabSupport.getYOffset(w, support, w.getBlockState(support));
+        ctx.assertTrue(Math.abs(supportDy + 1.0) <= EPS,
+                "fixture: the TOP slab support must itself render -1.0, got " + supportDy);
+
+        BlockPos follower = support.up();
+        place(w, follower, Blocks.STRIPPED_JUNGLE_LOG.getDefaultState());
+        SlabAnchorAttachment.addAnchor(w, follower, w.getBlockState(follower));
+        double dy = SlabSupport.getYOffset(w, follower, w.getBlockState(follower));
+        ctx.assertTrue(Math.abs(dy + 1.0) <= EPS,
+                "a full block on a -1.0 TOP slab must resolve -1.0, got " + dy
+                        + " (a TOP slab fails isSolidBlock but its top face IS at its cell top)");
+        ctx.complete();
+    }
+
+    /**
+     * Real-useOn SBSB tower (ground stone, then slab/stone alternating x4) whose top stone reads
+     * -1.0 — {@code NeighborUpdateInvarianceTest}'s own rig recipe, built through real clicks.
+     */
+    private BlockPos buildRealUseOnMinusOneTower(TestContext ctx, int x, int z) {
+        ServerWorld w = ctx.getWorld();
+        BlockPos ground = ctx.getAbsolutePos(new BlockPos(x, 0, z));
+        place(w, ground, Blocks.STONE.getDefaultState());
+        Item[] tower = {
+                Blocks.STONE_SLAB.asItem(), Blocks.STONE.asItem(),
+                Blocks.STONE_SLAB.asItem(), Blocks.STONE.asItem()
+        };
+        BlockPos cursor = ground;
+        for (Item item : tower) {
+            useOn(ctx, item, cursor, Direction.UP, 0.0);
+            cursor = cursor.up();
+        }
+        double topDy = SlabSupport.getYOffset(w, cursor, w.getBlockState(cursor));
+        ctx.assertTrue(Math.abs(topDy + 1.0) <= EPS,
+                "fixture: real-useOn SBSB tower top stone must read -1.0, got " + topDy);
+        return cursor;
+    }
+
+    /** This line's real headless placement harness, shared with {@code NeighborUpdateInvarianceTest}. */
+    private static void useOn(TestContext ctx, Item item, BlockPos clicked, Direction face, double yNudge) {
+        ServerWorld world = ctx.getWorld();
+        PlayerEntity player = UseOnCombineVsExtendPlacementTest.mockPlayerHolding(
+                ctx, clicked.up(3), new ItemStack(item));
+        Vec3d hit = Vec3d.ofCenter(clicked)
+                .add(face.getOffsetX() * 0.5, face.getOffsetY() * 0.5 + yNudge, face.getOffsetZ() * 0.5);
+        UseOnCombineVsExtendPlacementTest.useHeldItem(world, player, clicked, face, hit);
+    }
+
+    /**
+     * The {@code follower_on_minus_one} donor scene stopped one cell short of
+     * {@link #buildAnchoredMinusOneSubject}: returns the EMPTY cell above the -0.5 seat slab, so a
+     * caller can put its own support (rather than the usual log) there.
+     */
+    private BlockPos buildAnchoredMinusOneSeat(TestContext ctx, int x, int z) {
+        ServerWorld w = ctx.getWorld();
+        BlockPos base = ctx.getAbsolutePos(BlockPos.ORIGIN).add(x, 1, z);
+        BlockPos source = base.add(0, 0, 1);
+        place(w, source, Blocks.STONE.getDefaultState());
+        place(w, source.up(), bottomSlab(Blocks.STONE_SLAB));
+        BlockPos sourceTop = source.up(2);
+        place(w, sourceTop, Blocks.STONE.getDefaultState());
+        SlabAnchorAttachment.addAnchor(w, sourceTop, w.getBlockState(sourceTop));
+
+        place(w, base, Blocks.STONE.getDefaultState());
+        BlockPos seat = base.up(2);
+        place(w, seat, bottomSlab(Blocks.STONE_SLAB));
+        SlabAnchorAttachment.addAnchor(w, seat, w.getBlockState(seat));
+        double seatDy = SlabSupport.getYOffset(w, seat, w.getBlockState(seat));
+        ctx.assertTrue(Math.abs(seatDy + 0.5) <= EPS,
+                "fixture: the seat slab beside the lowered source must render -0.5, got " + seatDy);
+        return seat.up();
     }
 
     /**
