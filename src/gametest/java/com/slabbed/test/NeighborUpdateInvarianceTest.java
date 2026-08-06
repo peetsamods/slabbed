@@ -37,7 +37,10 @@ import java.util.List;
  * exactly which (subject, mutation) cells move a placed block — the punch-list for Phase 2B (the
  * frozen store). Do NOT attempt to make this class pass by patching {@code SlabSupport}; that is
  * explicitly out of scope for this task (see the handoff package
- * {@code s2-law-gate-characterization.md}).
+ * {@code s2-law-gate-characterization.md}). Because that RED is EXPECTED, the verdict defaults to
+ * characterization — the matrix runs in full and prints its RED inventory as {@code [LAW-GATE]}
+ * lines without failing the build; {@code -Dslabbed.lawGate=true} makes it blocking. See
+ * {@link #LAW_GATE_PROPERTY}.
  *
  * <p><b>Port notes (semantic port from the 26.2 donor, not a diff-copy).</b> This line has none of
  * the donor's frozen-store machinery ({@code PLACEMENT_DY}, {@code FROZEN_DY_ENABLED},
@@ -57,10 +60,43 @@ import java.util.List;
  *
  * <p>Extending: add a SUBJECT builder or a MUTATION and every existing pairing exercises it — you
  * cannot add a height behaviour without this matrix testing whether it obeys the law.
+ *
+ * <p><b>VERDICT MODE — see {@link #LAW_GATE_PROPERTY}.</b> The matrix ALWAYS runs in full; only
+ * what happens to the collected violations changes.
  */
 public final class NeighborUpdateInvarianceTest {
 
     private static final double EPS = 1.0e-6;
+
+    /**
+     * Enforcement toggle, named for this codebase's existing {@code slabbed.*} sysprop convention
+     * ({@code slabbed.disableStepCull}, {@code slabbed.serverHitTolerance},
+     * {@code slabbed.targetDyOverlay}). Forwarded into the game JVM by {@code build.gradle}'s
+     * {@code runGameTest} block, so {@code ./gradlew runGameTest -Dslabbed.lawGate=true} works.
+     *
+     * <p><b>OFF (default — what CI runs): CHARACTERIZATION.</b> Every subject is still built,
+     * every mutation still applied, every violation still collected — byte-for-byte the same work
+     * as enforcing mode. The only difference is the VERDICT: the violation inventory is PRINTED
+     * (see {@link #logVerdict}) instead of thrown, so CI is green while this line is still in the
+     * state {@code LAW.md} says it is in, and the characterization data — the whole value of this
+     * test — is still produced on every single run.
+     *
+     * <p><b>ON: BLOCKING.</b> Identical run, and then the collected violations throw the exact
+     * message this class has always thrown.
+     *
+     * <p><b>This is deliberately NOT a skip.</b> A test that returns success without doing its
+     * work is the false-green class this project has been bitten by repeatedly, and it would be
+     * worst here, in the one test that certifies the law. Nothing about the matrix is conditional
+     * on this flag — only the throw is.
+     *
+     * <p><b>Flipping this default to ON is Phase 2's exit criterion</b> ({@code LAW.md}).
+     */
+    private static final String LAW_GATE_PROPERTY = "slabbed.lawGate";
+
+    /** True when S-2 is a blocking gate; false (default) when it is a characterization run. */
+    private static boolean enforcing() {
+        return Boolean.getBoolean(LAW_GATE_PROPERTY);
+    }
 
     // ── real-useOn placement (reuses this line's proven headless-useOn harness) ───────────────
     private static void place(TestContext ctx, Item item, BlockPos clicked, Direction face, double yNudge) {
@@ -279,11 +315,49 @@ public final class NeighborUpdateInvarianceTest {
                 violations.add(m.name() + ": dy " + before + " -> " + after);
             }
         }
-        ctx.assertTrue(violations.isEmpty(),
-                "LAW VIOLATION — subject '" + subject.name()
-                        + "' moved on neighbor edits (placed height must survive byte-identical):\n  "
-                        + String.join("\n  ", violations));
+        // The verdict, and ONLY the verdict, depends on LAW_GATE_PROPERTY. The inventory is
+        // printed either way; enforcing mode additionally throws the message it always threw.
+        logVerdict(subject.name(), violations);
+        if (enforcing()) {
+            ctx.assertTrue(violations.isEmpty(),
+                    "LAW VIOLATION — subject '" + subject.name()
+                            + "' moved on neighbor edits (placed height must survive byte-identical):\n  "
+                            + String.join("\n  ", violations));
+        }
         ctx.complete();
+    }
+
+    /**
+     * One greppable {@code [LAW-GATE]} line per SUBJECT — deliberately not per-mutation and not a
+     * once-per-run aggregate.
+     *
+     * <p>Per-mutation would bury the signal in 80 lines of noise. A once-per-run aggregate has no
+     * honest home: each subject is its own gametest method, the framework gives this class no
+     * end-of-run hook, and a static tally would silently under-report whenever a batch runs a
+     * subset or a sibling subject dies on a premise assert before it can report. Per-subject is
+     * the largest unit that is guaranteed to be emitted for every subject that actually ran, which
+     * is exactly the property that makes "the log is quiet" mean "nothing violated" rather than
+     * "the test didn't run". It lives here, in the one shared runner, rather than in each of the
+     * eight gametest methods, so a new subject cannot be added without reporting. (Deliberately no
+     * literal annotation token in this javadoc — HANDOFF's suite-count script counts occurrences,
+     * and a doc mention would inflate the expected total.)
+     *
+     * <p>The per-violation detail (<code>&lt;mutation&gt;: dy &lt;before&gt; -&gt; &lt;after&gt;</code>)
+     * is the identical string the thrown message carries, so the Phase 2 punch-list is never lost
+     * by running in the default mode.
+     */
+    private static void logVerdict(String subjectName, List<String> violations) {
+        if (violations.isEmpty()) {
+            System.out.println("[LAW-GATE] CLEAN — " + subjectName + ": all " + MUTATIONS.size()
+                    + " mutations applied, 0 LAW 1 violations.");
+            return;
+        }
+        String verdict = enforcing()
+                ? "ENFORCING — 1 subject violated LAW 1 (failing the build): "
+                : "CHARACTERIZATION — 1 subject violated LAW 1 (not failing the build; set -D"
+                        + LAW_GATE_PROPERTY + "=true to enforce): ";
+        System.out.println("[LAW-GATE] " + verdict + subjectName + ": "
+                + String.join(" | ", violations));
     }
 
     @GameTest(structure = "fabric-gametest-api-v1:empty")

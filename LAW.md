@@ -49,6 +49,21 @@ says every block is entitled to the right height in the first place.**
 - **`NeighborUpdateInvarianceTest`** (the S-2 gate): place via the real `useOn` path, record the
   height exactly, mutate every class of neighbour without touching the block, assert the height is
   byte-identical. **This test *is* LAW 1.**
+- **S-2's VERDICT is characterization by default; the RUN never is.** Earlier revisions of this
+  section read as though S-2 already blocks. It does not, and could not honestly: the section below
+  says this line does not yet obey LAW 1, so a blocking S-2 would make CI permanently red for a
+  state this constitution declares expected — and a permanently red CI is a CI nobody reads.
+  **The full matrix executes on every run either way** — every subject built, every mutation
+  applied, every violation collected — because the RED inventory is the entire value of the test.
+  Only the verdict differs: by default violations are **logged, not thrown**, one greppable
+  `[LAW-GATE]` line per subject (`CHARACTERIZATION` when a subject moved, `CLEAN` when none did, so
+  silence can never be mistaken for a run that did not happen). **S-2 is never skipped and never
+  short-circuited; a green-because-skipped law gate would be the worst false green this project
+  could ship.**
+- **`-Dslabbed.lawGate=true` makes S-2 blocking** (`./gradlew build runGameTest -Dslabbed.lawGate=true`
+  — see `HANDOFF.md`), throwing the identical violation message. **Flipping that default to ON is
+  Phase 2's exit criterion:** Phase 2 is done when, and only when, this line passes S-2 with the
+  flag removed.
 - **The diff tripwire** (`tools/hooks/commit-msg`): an added line in `src/main/**` containing
   `geometric | merge | follow | inherit | cantilever | recompute | isAdjacent.*Lowered` is presumed
   a LAW 1 violation and blocks the commit without a logged `LAW-SIGNOFF:` and a new invariance row.

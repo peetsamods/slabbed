@@ -24,6 +24,24 @@ fabricApi {
     }
 }
 
+// ── S-2 law-gate verdict toggle ───────────────────────────────────────────────────────────────
+// NeighborUpdateInvarianceTest (the S-2 law gate) ALWAYS runs its full matrix. By default it
+// reports LAW 1 violations as "[LAW-GATE] CHARACTERIZATION" lines instead of throwing, because
+// LAW.md states this line does not yet obey LAW 1 (that is Phase 2's job) and a red CI on an
+// expected state teaches everyone to ignore CI. `-Dslabbed.lawGate=true` makes it blocking again;
+// flipping that default to ON is Phase 2's exit criterion.
+//
+// Gradle keeps `-D` on the daemon JVM, and Loom's run tasks are forked JavaExecs, so the property
+// has to be forwarded explicitly. Loom appends its own args via getJvmArguments().addAll(...), so
+// adding here is additive, not clobbering.
+tasks.matching { it.name == "runGameTest" }.configureEach {
+    jvmArguments.addAll(
+            providers.systemProperty("slabbed.lawGate")
+                    .map { v -> ["-Dslabbed.lawGate=" + v] }
+                    .orElse([])
+    )
+}
+
 version = project.mod_version
 group = project.maven_group
 
