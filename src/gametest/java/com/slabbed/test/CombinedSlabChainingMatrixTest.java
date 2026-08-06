@@ -291,27 +291,31 @@ public final class CombinedSlabChainingMatrixTest {
         place(world, upperPos, vanillaBottom());
 
         record(cfg, "lowerSlab", world, lowerPos, 0.0, Kind.STRICT);
-        // Upper vanilla bottom slab on a NON-lowered vanilla bottom slab. Production lowers a
-        // slab only when its support is itself lowered, so the upper slab stays at 0.0 — both
-        // slabs render at their natural vanilla heights (a normal half-block gap, no artifact).
-        // The naive "flush onto the lower slab top" law (-0.5) does NOT apply here. BY_DESIGN.
-        record(cfg, "upperSlab", world, upperPos, -0.5, Kind.BY_DESIGN);
+        // Upper vanilla bottom slab on a NON-lowered vanilla bottom slab. RULED 2026-08-06
+        // (Maintainer, exclusion #13 — "it should lower, no? WYSIWYG law"): the lower slab's top face
+        // is half a block below the grid, so the upper slab SEATS on it at -0.5 instead of
+        // floating with vanilla's half-block gap. This row previously recorded Kind.BY_DESIGN
+        // against an actual 0.0; the ruling reverses it, so the flush law now applies and the
+        // row is STRICT. See SlabOnLoweredBottomSlabTest#slabOnFlatBottomSlabSeatsOnItsTopFace.
+        record(cfg, "upperSlab", world, upperPos, -0.5, Kind.STRICT);
 
-        // lantern / full block on the upper (un-lowered) slab. Since the upper slab is at 0.0,
-        // an object sitting directly on it is flush at -0.5 (its own sit-on-bottom-slab drop).
-        // That IS the correct flush value → STRICT, and it matches.
+        // lantern / full block on the upper slab. RULED 2026-08-06 (exclusion #13): the upper slab
+        // now seats on the lower one at -0.5, so its own top face is a full block below the cap's
+        // grid bottom and the cap seats at -1.0. Expected values raised from -0.5 to -1.0 in step
+        // with the ruling; both rows MATCH. (These sub-lanes sit side by side in +Z, so the caps'
+        // supports also see each other through isAdjacentSideSlabLowered — same -1.0 either way.)
         BlockPos capL = lowerPos.south();
         place(world, capL, vanillaBottom());
         place(world, capL.up(), vanillaBottom());
         place(world, capL.up(2), Blocks.LANTERN.getDefaultState());
-        record(cfg, "cap=lantern", world, capL.up(2), -0.5, Kind.STRICT);
+        record(cfg, "cap=lantern", world, capL.up(2), -1.0, Kind.STRICT);
 
         BlockPos capB = lowerPos.south(2);
         place(world, capB, vanillaBottom());
         place(world, capB.up(), vanillaBottom());
         place(world, capB.up(2), Blocks.STONE.getDefaultState());
         double fbAnchored = anchoredReread(world, capB.up(2));
-        record(cfg, "cap=fullBlock", world, capB.up(2), -0.5, Kind.STRICT, fbAnchored);
+        record(cfg, "cap=fullBlock", world, capB.up(2), -1.0, Kind.STRICT, fbAnchored);
     }
 
     // ── 4. two terrain bottom slabs ───────────────────────────────────────
@@ -427,9 +431,15 @@ public final class CombinedSlabChainingMatrixTest {
         place(world, l2, vanillaBottom());
 
         record(cfg, "L0(vanillaBOTTOM)", world, l0, 0.0, Kind.STRICT);
-        // No lowered source at the base of a pure-vanilla stack, so nothing lowers — all slabs
-        // sit at their natural vanilla heights. The accumulate law (-0.5 / -1.0) does not apply.
-        record(cfg, "L1(vanillaBOTTOM)", world, l1, -0.5, Kind.BY_DESIGN);
+        // RULED 2026-08-06 (Maintainer, exclusion #13): a bottom slab's top face is half a block below
+        // the grid, so L1 SEATS on L0 at -0.5 even though L0 is not itself sunk. STRICT, and it
+        // now matches. L2 keeps its mismatch annotation for a DIFFERENT reason than before: these
+        // slabs are written with setBlockState only, so they carry no anchors, and
+        // loweredBottomSlabSupportDy has no vertical-support arm — the GEOMETRIC ladder saturates
+        // at -0.5 instead of compounding to -1.0. The real-placement (anchored) ladder does reach
+        // -1.0; see SlabOnLoweredBottomSlabTest#slabTowerLaddersToTheClampThenGaps and
+        // #geometricSlabTowerPinsTheUnanchoredSaturation.
+        record(cfg, "L1(vanillaBOTTOM)", world, l1, -0.5, Kind.STRICT);
         record(cfg, "L2(vanillaBOTTOM)", world, l2, -1.0, Kind.BY_DESIGN);
 
         BlockPos capBase = l0.south();
@@ -437,8 +447,9 @@ public final class CombinedSlabChainingMatrixTest {
         place(world, capBase.up(), vanillaBottom());
         place(world, capBase.up(2), vanillaBottom());
         place(world, capBase.up(3), Blocks.LANTERN.getDefaultState());
-        // Lantern sits on the top (un-lowered) bottom slab → flush -0.5; the accumulate law wants
-        // -1.5. Record vs -1.5, BY_DESIGN.
+        // Lantern on the top slab of a 3-high vanilla stack. Post-ruling it reads -1.0 (its support
+        // is lowered now); the accumulate law wants -1.5, which MIN_RESOLVED_DY (-1.0, DY_SPEC.md
+        // CS-CAP) forbids on this line by design. Record vs -1.5, BY_DESIGN.
         record(cfg, "L3=lantern", world, capBase.up(3), -1.5, Kind.BY_DESIGN);
     }
 

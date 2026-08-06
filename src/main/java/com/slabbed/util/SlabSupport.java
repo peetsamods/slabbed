@@ -1085,28 +1085,40 @@ public final class SlabSupport {
      * neither asking whether the support was actually sunk — and, since {@code shouldOffset} never
      * offsets slabs, landed on the class-based flush guard's hardcoded {@code 0.0} (live:
      * {@code (157,-58,-10) oak_slab dy=0.000} on {@code (157,-59,-10) stone_slab dy=-0.500
-     * ANCHORED}, whose correct value is {@code -1.0}). A BOTTOM slab now qualifies on the same
-     * terms as every other support: iff it is ACTUALLY SUNK. That is Maintainer's ruling of 2026-08-06,
+     * ANCHORED}, whose correct value is {@code -1.0}). That is Maintainer's ruling of 2026-08-06,
      * "everything should be able to lower; no exceptions" — eligibility follows GEOMETRY, never
      * block type. It is the same bug class as {@code b89c1f38}: a type/membership test standing in
      * for a magnitude.
      *
-     * <p>No new depth math: {@link #loweredBottomSlabSupportDy} is the existing recursion-safe
-     * mirror for exactly this question, and the callers' resolver ({@link #loweredFollowerDy} →
-     * {@link #supportSeatDy}) already derives the right value from it. The gate was broken, not the
-     * arithmetic. Deliberately ONE edit in this shared helper so the render lane
+     * <p><b>EXCLUSION #13 (Maintainer, 2026-08-06)</b>. The first pass of the rename above qualified a
+     * BOTTOM-slab support only when it was itself ALREADY SUNK. Asked whether a slab resting on a
+     * PLAIN bottom slab should stay flat at 0.0 — vanilla's half-block gap — Maintainer ruled: "it
+     * should lower, no? WYSIWYG law." A bottom slab's top face sits half a block below the grid
+     * <em>whether or not the slab itself is sunk</em>, so ANY block resting on it — including
+     * another slab — must seat there. The "must already be sunk" condition is therefore gone: a
+     * BOTTOM slab is unconditionally a lowering support, exactly as a Terrain Slabs BOTTOM_LIKE
+     * surface already was.
+     *
+     * <p>No new depth math, and no new call: the answer comes from the existing resolver.
+     * {@link #supportSeatDy} classifies a bottom slab as a HALF-HEIGHT seat (its own dy − 0.5), so
+     * a plain bottom slab at {@code 0.0} yields {@code -0.5} — precisely the ruling's value — and
+     * a sunk one still compounds. This arm is now strictly CHEAPER than before: it no longer calls
+     * {@link #loweredBottomSlabSupportDy} at all, which matters because bottom slabs are the most
+     * common support in the game and this predicate is reached from the render path.
+     *
+     * <p>Deliberately ONE edit in this shared helper so the render lane
      * ({@link #getYOffsetInner}'s slab branch) and the persistence qualifier
      * ({@link #isVerticallyLoweredSlabSource} → {@link #isLoweredSideSlabVisual} →
-     * {@code qualifiesForLoweredSideSlabAnchor}) can never drift apart (shared-predicate law).
+     * {@code qualifiesForLoweredSideSlabAnchor}) can never drift apart (shared-predicate law). Both
+     * must move together here: a slab that RENDERS lowered on a plain bottom slab but records no
+     * anchor would pop flush the moment its support is broken (never-pop law).
      *
-     * <p>A FLAT bottom slab still returns false ({@code loweredBottomSlabSupportDy} reports
-     * {@code 0.0} there), so the non-lowered guards stay byte-identical.
+     * <p>The FLUSH-SEAT guard is untouched and does not reopen: a BOTTOM slab is a half-height
+     * seat, which {@link #isFlushSeat} has always excluded by construction ("A BOTTOM slab is never
+     * a flush seat"). The guard's subject is a FLUSH FULL-BLOCK seat — flush stone, or a flush
+     * TOP/DOUBLE slab — and none of those reach this arm.
      *
-     * <p>Recursion-safe: never calls {@link #getYOffset}. The new arm descends strictly
-     * ({@code loweredBottomSlabSupportDy} → {@link #loweredFollowerDy} → {@link #supportSeatDy} at
-     * {@code pos.down()}, bounded by {@link #MAX_SUPPORT_RESOLVE_DEPTH}), and its sideways
-     * {@link #isAdjacentSideSlabLowered} walk is the same bounded BFS the TOP/DOUBLE arm below has
-     * always run.
+     * <p>Recursion-safe: never calls {@link #getYOffset}, and this arm now recurses not at all.
      */
     private static boolean hasLoweredSlabSupport(BlockView world, BlockPos pos, BlockState state) {
         if (world == null
@@ -1118,8 +1130,9 @@ public final class SlabSupport {
             return false;
         }
         if (isBottomSlab(state)) {
-            double supportDy = loweredBottomSlabSupportDy(world, pos, 0);
-            return Double.isFinite(supportDy) && supportDy < -1.0e-6;
+            // EXCLUSION #13: a bottom slab's top face is half a block below the grid, always.
+            // supportSeatDy turns that into the follower's actual dy (support dy - 0.5).
+            return true;
         }
         BlockPos belowPos = pos.down();
         BlockState below = world.getBlockState(belowPos);

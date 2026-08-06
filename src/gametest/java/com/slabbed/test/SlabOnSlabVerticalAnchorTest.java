@@ -107,16 +107,24 @@ public final class SlabOnSlabVerticalAnchorTest {
         ctx.complete();
     }
 
-    // REGRESSION GUARD: a slab resting on a NON-LOWERED BOTTOM-type support must not anchor from
-    // the vertical lane. NOTE (2026-08-06, Maintainer's law item #1): this cell's support is a PLAIN
-    // birch bottom slab, so it defends only the not-sunk half. The predicate it mirrors —
-    // hasLoweredTopLikeSlabSupport, since renamed hasLoweredSlabSupport — used to reject EVERY
-    // bottom slab unconditionally on type, which left "a slab on a LOWERED bottom slab" with no
-    // lane at all (live (157,-58,-10) oak_slab 0.0 on a -0.5 stone_slab; correct is -1.0). It now
-    // qualifies a bottom slab iff it is ACTUALLY SUNK, so this cell is unchanged — see
-    // SlabOnLoweredBottomSlabTest for the sunk half.
+    // REVERSED 2026-08-06 — this cell used to assert that a slab on a PLAIN (non-sunk) BOTTOM-type
+    // support must NOT anchor, mirroring hasLoweredSlabSupport's old "qualifies only if the support
+    // is ACTUALLY SUNK" condition. It now asserts the opposite. This is NOT a new product decision;
+    // it is FORCED by two things already settled:
+    //   (1) Maintainer's ruling of 2026-08-06 (exclusion #13, WYSIWYG law) — a slab resting on a plain
+    //       bottom slab LOWERS, because that support's top face is half a block below the grid
+    //       whether or not the support is itself sunk. See
+    //       SlabOnLoweredBottomSlabTest#slabOnFlatBottomSlabSeatsOnItsTopFace.
+    //   (2) the standing NEVER-POP law — a slab that RENDERS at -0.5 but records no anchor pops
+    //       flush the instant its support is broken, even though it was never re-placed. Never-pop
+    //       forbids exactly that.
+    // Rendering and persistence therefore have to share the predicate, which is the whole reason
+    // the shared-predicate law exists at this call site: the render lane (getYOffsetInner's slab
+    // branch) and the persistence qualifier (isVerticallyLoweredSlabSource ->
+    // isLoweredSideSlabVisual -> qualifiesForLoweredSideSlabAnchor) both read hasLoweredSlabSupport.
+    // The never-pop consequence is PROVEN, not merely asserted here — see the cell below.
     @GameTest(structure = "fabric-gametest-api-v1:empty")
-    public void slabOnBottomTypeSupportNeverAnchorsVertically(TestContext ctx) {
+    public void slabOnBottomTypeSupportAnchorsVertically(TestContext ctx) {
         ServerWorld w = ctx.getWorld();
         BlockPos support = ctx.getAbsolutePos(BlockPos.ORIGIN).add(3, 3, 5);
         BlockPos upper = support.up();
@@ -125,8 +133,55 @@ public final class SlabOnSlabVerticalAnchorTest {
         w.setBlockState(upper, Blocks.BIRCH_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.TOP),
                 Block.NOTIFY_LISTENERS);
         SlabAnchorAttachment.addAnchor(w, upper, w.getBlockState(upper));
-        ctx.assertTrue(!SlabAnchorAttachment.isAnchored(w, upper),
-                "regression: a slab resting on a BOTTOM-type (non-sunk) support must not anchor vertically");
+        ctx.assertTrue(SlabAnchorAttachment.isAnchored(w, upper),
+                "a slab resting on a PLAIN BOTTOM-type support must anchor vertically: under Maintainer's "
+                        + "2026-08-06 ruling it renders lowered, and never-pop then requires the "
+                        + "anchor that keeps it there when the support is broken");
+        ctx.complete();
+    }
+
+    // THE PROOF for the flip above. Places a slab on a PLAIN (never-sunk) bottom slab through the
+    // real placement sequence, asserts it renders lowered, then BREAKS the support and asserts it
+    // KEEPS that height. Without the anchor the live derivation is the only path to -0.5, so
+    // removing the support would drop this slab straight back to 0.0 — the exact "pop upon breaking
+    // at the end" this class was opened for, reproduced on the plain-support shape the ruling just
+    // brought into scope. Every premise is hard-asserted so the cell cannot pass vacuously.
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void breakingPlainBottomSlabSupportDoesNotPopTheSlabAboveIt(TestContext ctx) {
+        ServerWorld w = ctx.getWorld();
+        BlockPos ground = ctx.getAbsolutePos(BlockPos.ORIGIN).add(3, 1, 7);
+        BlockPos support = ground.up();
+        BlockPos subject = support.up();
+
+        w.setBlockState(ground, Blocks.STONE.getDefaultState(), Block.NOTIFY_LISTENERS);
+        w.setBlockState(support, Blocks.BIRCH_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.BOTTOM),
+                Block.NOTIFY_LISTENERS);
+        double supportDy = SlabSupport.getYOffset(w, support, w.getBlockState(support));
+        ctx.assertTrue(Math.abs(supportDy) <= EPS,
+                "fixture: the support must be a PLAIN (never-sunk) bottom slab rendering 0.0, got "
+                        + supportDy);
+        ctx.assertTrue(!SlabAnchorAttachment.isAnchored(w, support),
+                "fixture: the plain support must carry no anchor of its own");
+
+        // The real placement sequence: Block.onPlaced -> SlabAnchorAttachment.addAnchor.
+        w.setBlockState(subject, Blocks.BIRCH_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.BOTTOM),
+                Block.NOTIFY_LISTENERS);
+        SlabAnchorAttachment.addAnchor(w, subject, w.getBlockState(subject));
+        ctx.assertTrue(SlabAnchorAttachment.isAnchored(w, subject),
+                "premise: the slab must record an anchor at placement — that anchor IS the never-pop "
+                        + "guarantee this cell exists to prove");
+        double before = SlabSupport.getYOffset(w, subject, w.getBlockState(subject));
+        ctx.assertTrue(Math.abs(before + 0.5) <= EPS,
+                "premise: a slab on a plain bottom slab must render -0.5 (Maintainer's ruling 2026-08-06), "
+                        + "got " + before);
+
+        // Break the support out from under it.
+        w.setBlockState(support, Blocks.AIR.getDefaultState(), Block.NOTIFY_LISTENERS);
+        double after = SlabSupport.getYOffset(w, subject, w.getBlockState(subject));
+        ctx.assertTrue(Math.abs(after + 0.5) <= EPS,
+                "NEVER-POP: the slab popped from -0.5 to " + after + " after its plain bottom-slab "
+                        + "support was broken, even though it was never re-placed. This is exactly "
+                        + "why the anchor lane had to widen alongside the render lane");
         ctx.complete();
     }
 

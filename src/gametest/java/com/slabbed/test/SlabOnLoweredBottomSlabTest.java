@@ -40,9 +40,11 @@ import net.minecraft.util.math.BlockPos;
  * {@code SlabOnSlabVerticalAnchorTest#slabOnBottomTypeSupportNeverAnchorsVertically} builds a
  * <b>non-lowered</b> birch bottom slab as its support, so it only ever defended the plain case.
  * Its premise ({@code KNOWN_INCOMPLETE.md} L8 — "a BOTTOM slab isn't itself 'sunk', so nothing
- * should propagate upward from it") is true of a plain bottom slab and <b>false of an anchored one
- * rendering -0.5</b>. {@link #slabOnFlatBottomSlabStaysFlat} pins that plain case here so the two
- * halves of the distinction are asserted side by side.
+ * should propagate upward from it") was <b>overruled entirely</b> on 2026-08-06 (exclusion #13):
+ * a bottom slab's top face IS half a block below the grid, so a slab resting on it seats there
+ * whether or not the support is itself sunk. {@link #slabOnFlatBottomSlabSeatsOnItsTopFace} pins
+ * that plain case here, and {@link #slabTowerLaddersToTheClampThenGaps} pins the stacked ladder
+ * including where the {@code MIN_RESOLVED_DY} clamp bites.
  *
  * <p><b>The scene</b> is the {@code /slabrig} {@code seatMinusOne} shape: a source column beside
  * the seat (stone / bottom slab / stone) whose top stone renders {@code -0.5}, making the bottom
@@ -116,16 +118,24 @@ public final class SlabOnLoweredBottomSlabTest {
     }
 
     /**
-     * REGRESSION GUARD — the twin of {@code SlabOnSlabVerticalAnchorTest:113}: a slab on a
-     * <b>non</b>-lowered bottom slab keeps 0.0. The predicate must qualify on the support's actual
-     * depth, never on its type, in BOTH directions.
+     * EXCLUSION #13 — <b>Maintainer's ruling, 2026-08-06</b>. Asked whether a slab resting on a PLAIN
+     * (un-lowered) bottom slab should stay flat at 0.0 — vanilla's half-block gap — she answered
+     * "it should lower, no? WYSIWYG law." <b>Ruling: it lowers.</b> This is exclusion #13 under her
+     * standing law "everything should be able to lower; no exceptions".
      *
-     * <p>NOTE (product call for Maintainer, deliberately NOT actioned here):
-     * {@code CombinedSlabChainingMatrixTest} records this as {@code Kind.BY_DESIGN}. Under Maintainer's
-     * law it is itself a candidate exclusion — the law value would be -0.5.
+     * <p>A bottom slab's top face sits half a block below the grid, so ANY block resting on it —
+     * <b>including another slab</b> — must seat there. The value is the resolver's own answer:
+     * {@code supportSeatDy} gives a bottom slab a HALF-HEIGHT seat (support dy − 0.5), so a plain
+     * bottom slab at dy 0.0 yields <b>−0.5</b>. No new arithmetic; the gate simply no longer
+     * demands that the bottom-slab support be <i>already sunk</i>.
+     *
+     * <p>SUPERSEDES the former {@code slabOnFlatBottomSlabStaysFlat}, which asserted 0.0 here and
+     * whose own note flagged this as "a candidate exclusion — the law value would be -0.5".
+     * {@code CombinedSlabChainingMatrixTest}'s {@code 3.vanillaBOTTOM/vanillaBOTTOM :: upperSlab}
+     * row is updated in step (was {@code Kind.BY_DESIGN}, now {@code Kind.STRICT}).
      */
     @GameTest(structure = "fabric-gametest-api-v1:empty")
-    public void slabOnFlatBottomSlabStaysFlat(TestContext ctx) {
+    public void slabOnFlatBottomSlabSeatsOnItsTopFace(TestContext ctx) {
         ServerWorld w = ctx.getWorld();
         BlockPos ground = ctx.getAbsolutePos(BlockPos.ORIGIN).add(1, 1, 5);
         place(w, ground, Blocks.STONE.getDefaultState());
@@ -133,15 +143,138 @@ public final class SlabOnLoweredBottomSlabTest {
         place(w, support, bottomSlab(Blocks.STONE_SLAB));
         double supportDy = SlabSupport.getYOffset(w, support, w.getBlockState(support));
         ctx.assertTrue(Math.abs(supportDy) <= EPS,
-                "fixture: this guard needs a FLAT support — the bottom slab must render 0.0, got "
+                "fixture: this cell needs a PLAIN support — the bottom slab must render 0.0, got "
                         + supportDy);
 
         BlockPos subject = support.up();
         place(w, subject, bottomSlab(Blocks.OAK_SLAB));
         double dy = SlabSupport.getYOffset(w, subject, w.getBlockState(subject));
-        ctx.assertTrue(Math.abs(dy) <= EPS,
-                "regression: a slab on a NON-lowered bottom slab must stay 0.0 — the new predicate "
-                        + "must qualify on the support's actual depth, not its type — got " + dy);
+        ctx.assertTrue(Math.abs(dy + 0.5) <= EPS,
+                "a slab on a plain bottom slab must read -0.5 (Maintainer's ruling 2026-08-06, "
+                        + "exclusion #13: 'it should lower, no? WYSIWYG law' — the support's top "
+                        + "face is half a block below the grid, so the slab seats there instead of "
+                        + "floating with vanilla's 0.5 gap), got " + dy);
+        ctx.complete();
+    }
+
+    /**
+     * TOWER PIN (Maintainer's ruling 2026-08-06, interaction 3) — a stack of four bottom slabs, each
+     * placed on the one below through the REAL placement sequence ({@code setBlockState} +
+     * {@code SlabAnchorAttachment.addAnchor}, exactly what {@code BlockOnPlacedAnchorMixin.onPlaced}
+     * fires for a player click). ASSERTS the resolved dy at every level, <b>including where the
+     * {@code MIN_RESOLVED_DY} (−1.0) clamp bites and vanilla's half-block gap reappears</b>.
+     *
+     * <p>This is a PIN, not an endorsement: the clamp is deliberately NOT "fixed" here. It exists
+     * because {@code DY_SPEC.md:115} CS-CAP caps the whole offset set at {@code {-1.0, -0.5, 0.0}} —
+     * −1.0 is the deepest cell the offset-aware pick raycast window {@code {C, C.up, C.down}} can
+     * target, so a deeper tower settles at −1.0 rather than rendering somewhere unclickable.
+     *
+     * <p>MEASURED LADDER (world-space spans, ground stone top at {@code Y}):
+     * <ul>
+     *   <li>L0 on stone — dy {@code 0.0}, span {@code [Y, Y+0.5]} — flush, no anchor;</li>
+     *   <li>L1 on L0 — dy {@code -0.5}, span {@code [Y+0.5, Y+1.0]} — FLUSH on L0's top face;</li>
+     *   <li>L2 on L1 — dy {@code -1.0}, span {@code [Y+1.0, Y+1.5]} — FLUSH on L1's top face;</li>
+     *   <li>L3 on L2 — dy {@code -1.0} (raw seat −1.5, <b>CLAMPED</b>), span {@code [Y+2.0, Y+2.5]}
+     *       — a 0.5 GAP reopens above L2's top face at {@code Y+1.5}.</li>
+     * </ul>
+     * So the tower is flush for three courses and reverts to the vanilla stagger from the fourth
+     * course upward. Maintainer rules on the appearance from these numbers.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void slabTowerLaddersToTheClampThenGaps(TestContext ctx) {
+        ServerWorld w = ctx.getWorld();
+        BlockPos ground = ctx.getAbsolutePos(BlockPos.ORIGIN).add(2, 1, 2);
+        place(w, ground, Blocks.STONE.getDefaultState());
+
+        BlockPos[] level = new BlockPos[4];
+        for (int i = 0; i < 4; i++) {
+            level[i] = ground.up(i + 1);
+            place(w, level[i], bottomSlab(Blocks.OAK_SLAB));
+            // The real placement sequence: onPlaced -> addAnchor fires for every player click.
+            SlabAnchorAttachment.addAnchor(w, level[i], w.getBlockState(level[i]));
+        }
+
+        double[] dy = new double[4];
+        for (int i = 0; i < 4; i++) {
+            dy[i] = SlabSupport.getYOffset(w, level[i], w.getBlockState(level[i]));
+        }
+        String ladder = "L0=" + dy[0] + " L1=" + dy[1] + " L2=" + dy[2] + " L3=" + dy[3];
+
+        ctx.assertTrue(Math.abs(dy[0]) <= EPS,
+                "tower L0 (bottom slab on plain stone) must stay flush at 0.0 — " + ladder);
+        ctx.assertTrue(!SlabAnchorAttachment.isAnchored(w, level[0]),
+                "tower L0 rests on a flat non-slab support and must NOT anchor");
+
+        ctx.assertTrue(Math.abs(dy[1] + 0.5) <= EPS,
+                "tower L1 must seat on L0's top face at -0.5 (Maintainer's ruling 2026-08-06) — " + ladder);
+        ctx.assertTrue(Math.abs(dy[2] + 1.0) <= EPS,
+                "tower L2 must seat on L1's top face at -1.0 (compounded through the resolver) — "
+                        + ladder);
+        ctx.assertTrue(Math.abs(dy[3] + 1.0) <= EPS,
+                "tower L3 PINS THE CLAMP: its raw seat is -1.5 but MIN_RESOLVED_DY caps it at -1.0, "
+                        + "so a 0.5 vanilla gap reopens above L2 from the fourth course upward. This "
+                        + "is pinned, NOT fixed — Maintainer rules on the tower's appearance from these "
+                        + "values — " + ladder);
+
+        for (int i = 1; i < 4; i++) {
+            ctx.assertTrue(SlabAnchorAttachment.isAnchored(w, level[i]),
+                    "tower L" + i + " renders lowered, so it must RECORD an anchor or breaking the "
+                            + "course below pops it (never-pop law) — " + ladder);
+        }
+        ctx.complete();
+    }
+
+    /**
+     * TOWER PIN, GEOMETRIC (no anchors anywhere) — the same stack written with {@code setBlockState}
+     * only, so no {@code onPlaced}/{@code addAnchor} ever fires. PINS CURRENT BEHAVIOUR, and it
+     * DIVERGES from the anchored ladder above at L2.
+     *
+     * <p>Cause: {@code loweredBottomSlabSupportDy} — the recursion-safe mirror {@code supportSeatDy}
+     * consults for a bottom-slab seat — reproduces only the ANCHORED / direct-custom / side-adjacency
+     * arms of {@code getYOffsetInner}'s slab branch. It has no arm for the vertical
+     * "rests on a lowered support below" lane, so an unanchored lowered bottom slab still reports its
+     * own dy as {@code 0.0} and the ladder saturates at −0.5 instead of compounding.
+     *
+     * <p>Not repaired here, deliberately: adding that arm makes {@code hasLoweredSlabSupport} →
+     * {@code loweredBottomSlabSupportDy} → {@code hasLoweredSlabSupport} re-enter with the depth
+     * counter RESET to 0, i.e. an unbounded descending walk with branching on the chunk-render hot
+     * path — the lag class this project has already shipped twice. Every real player placement takes
+     * the anchored ladder above (the anchor qualifier accepts a bottom-slab support through the same
+     * widened predicate), so this divergence is reachable only by synthetic writes and pre-existing
+     * worlds. Reported to Maintainer as known-incomplete.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void geometricSlabTowerPinsTheUnanchoredSaturation(TestContext ctx) {
+        ServerWorld w = ctx.getWorld();
+        BlockPos ground = ctx.getAbsolutePos(BlockPos.ORIGIN).add(5, 1, 2);
+        place(w, ground, Blocks.STONE.getDefaultState());
+
+        BlockPos[] level = new BlockPos[4];
+        for (int i = 0; i < 4; i++) {
+            level[i] = ground.up(i + 1);
+            place(w, level[i], bottomSlab(Blocks.OAK_SLAB));   // setBlockState ONLY — no anchor
+        }
+        for (int i = 0; i < 4; i++) {
+            ctx.assertTrue(!SlabAnchorAttachment.isAnchored(w, level[i]),
+                    "fixture: L" + i + " must carry no anchor — this cell exercises the GEOMETRIC lane");
+        }
+
+        double[] dy = new double[4];
+        for (int i = 0; i < 4; i++) {
+            dy[i] = SlabSupport.getYOffset(w, level[i], w.getBlockState(level[i]));
+        }
+        String ladder = "L0=" + dy[0] + " L1=" + dy[1] + " L2=" + dy[2] + " L3=" + dy[3];
+
+        ctx.assertTrue(Math.abs(dy[0]) <= EPS, "geometric tower L0 must be 0.0 — " + ladder);
+        ctx.assertTrue(Math.abs(dy[1] + 0.5) <= EPS,
+                "geometric tower L1 must seat on L0's top face at -0.5 — " + ladder);
+        ctx.assertTrue(Math.abs(dy[2] + 0.5) <= EPS,
+                "PINS CURRENT BEHAVIOUR (not desired): the geometric ladder SATURATES at -0.5 from "
+                        + "L2 up, because loweredBottomSlabSupportDy has no vertical-support arm and "
+                        + "reports an unanchored lowered bottom slab as 0.0. The anchored ladder "
+                        + "(slabTowerLaddersToTheClampThenGaps) compounds to -1.0 here — " + ladder);
+        ctx.assertTrue(Math.abs(dy[3] + 0.5) <= EPS,
+                "PINS CURRENT BEHAVIOUR: same saturation at L3 — " + ladder);
         ctx.complete();
     }
 
