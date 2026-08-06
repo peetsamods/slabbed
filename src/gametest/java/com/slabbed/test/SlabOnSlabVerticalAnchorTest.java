@@ -19,8 +19,9 @@ import net.minecraft.util.math.BlockPos;
  * Recorder confirmed the upper slab was {@code anchor=none} for its entire lifetime.
  *
  * <p>Root cause: {@code getYOffsetInner}'s slab branch LIVE-derives -0.5 for a slab resting on a
- * lowered support below via {@code hasLoweredNonSlabTopSupport}/{@code hasLoweredTopLikeSlabSupport}
- * (SlabSupport.java:918-919) — but the persistent anchor qualifier for slabs,
+ * lowered support below via {@code hasLoweredNonSlabTopSupport}/{@code hasLoweredSlabSupport}
+ * (the latter named {@code hasLoweredTopLikeSlabSupport} at the time of this fix) — but the
+ * persistent anchor qualifier for slabs,
  * {@code qualifiesForLoweredSideSlabAnchor}, is backed solely by {@code isLoweredSideSlabVisual},
  * which only recognised {@code isAnchored(self) || isAdjacentSideSlabLowered} (HORIZONTAL
  * neighbours). It never recognised the identical VERTICAL relationship the live read already
@@ -106,9 +107,14 @@ public final class SlabOnSlabVerticalAnchorTest {
         ctx.complete();
     }
 
-    // REGRESSION GUARD: a slab resting on a BOTTOM-type support (which is not itself "sunk") must
-    // not anchor from the vertical lane either — only TOP/DOUBLE supports propagate their own
-    // lowering upward (matches hasLoweredTopLikeSlabSupport's isBottomSlab exclusion).
+    // REGRESSION GUARD: a slab resting on a NON-LOWERED BOTTOM-type support must not anchor from
+    // the vertical lane. NOTE (2026-08-06, Maintainer's law item #1): this cell's support is a PLAIN
+    // birch bottom slab, so it defends only the not-sunk half. The predicate it mirrors —
+    // hasLoweredTopLikeSlabSupport, since renamed hasLoweredSlabSupport — used to reject EVERY
+    // bottom slab unconditionally on type, which left "a slab on a LOWERED bottom slab" with no
+    // lane at all (live (157,-58,-10) oak_slab 0.0 on a -0.5 stone_slab; correct is -1.0). It now
+    // qualifies a bottom slab iff it is ACTUALLY SUNK, so this cell is unchanged — see
+    // SlabOnLoweredBottomSlabTest for the sunk half.
     @GameTest(structure = "fabric-gametest-api-v1:empty")
     public void slabOnBottomTypeSupportNeverAnchorsVertically(TestContext ctx) {
         ServerWorld w = ctx.getWorld();

@@ -1052,7 +1052,7 @@ public final class SlabSupport {
         BlockState below = getBlockStateOrNull(world, belowPos);
         return below != null
                 && (hasLoweredNonSlabTopSupport(world, belowPos, below)
-                || hasLoweredTopLikeSlabSupport(world, belowPos, below));
+                || hasLoweredSlabSupport(world, belowPos, below));
     }
 
     private static boolean hasLoweredNonSlabTopSupport(BlockView world, BlockPos pos, BlockState state) {
@@ -1074,15 +1074,52 @@ public final class SlabSupport {
         return shouldOffset(world, pos, state) && slabColumnYOffset(world, pos) < -1.0e-6;
     }
 
-    private static boolean hasLoweredTopLikeSlabSupport(BlockView world, BlockPos pos, BlockState state) {
+    /**
+     * True iff the SLAB at {@code pos} is a support that is itself rendering LOWERED, so a block
+     * resting on it must follow it down.
+     *
+     * <p>Renamed from {@code hasLoweredTopLikeSlabSupport} — it no longer means "top-like". The old
+     * name encoded the old bug: a BOTTOM slab was rejected UNCONDITIONALLY, on type, so "a vanilla
+     * slab resting on a LOWERED vanilla BOTTOM slab" had no lane anywhere. That case fell between
+     * this reject and {@link #hasLoweredNonSlabTopSupport}'s {@code instanceof SlabBlock} reject —
+     * neither asking whether the support was actually sunk — and, since {@code shouldOffset} never
+     * offsets slabs, landed on the class-based flush guard's hardcoded {@code 0.0} (live:
+     * {@code (157,-58,-10) oak_slab dy=0.000} on {@code (157,-59,-10) stone_slab dy=-0.500
+     * ANCHORED}, whose correct value is {@code -1.0}). A BOTTOM slab now qualifies on the same
+     * terms as every other support: iff it is ACTUALLY SUNK. That is Maintainer's ruling of 2026-08-06,
+     * "everything should be able to lower; no exceptions" — eligibility follows GEOMETRY, never
+     * block type. It is the same bug class as {@code b89c1f38}: a type/membership test standing in
+     * for a magnitude.
+     *
+     * <p>No new depth math: {@link #loweredBottomSlabSupportDy} is the existing recursion-safe
+     * mirror for exactly this question, and the callers' resolver ({@link #loweredFollowerDy} →
+     * {@link #supportSeatDy}) already derives the right value from it. The gate was broken, not the
+     * arithmetic. Deliberately ONE edit in this shared helper so the render lane
+     * ({@link #getYOffsetInner}'s slab branch) and the persistence qualifier
+     * ({@link #isVerticallyLoweredSlabSource} → {@link #isLoweredSideSlabVisual} →
+     * {@code qualifiesForLoweredSideSlabAnchor}) can never drift apart (shared-predicate law).
+     *
+     * <p>A FLAT bottom slab still returns false ({@code loweredBottomSlabSupportDy} reports
+     * {@code 0.0} there), so the non-lowered guards stay byte-identical.
+     *
+     * <p>Recursion-safe: never calls {@link #getYOffset}. The new arm descends strictly
+     * ({@code loweredBottomSlabSupportDy} → {@link #loweredFollowerDy} → {@link #supportSeatDy} at
+     * {@code pos.down()}, bounded by {@link #MAX_SUPPORT_RESOLVE_DEPTH}), and its sideways
+     * {@link #isAdjacentSideSlabLowered} walk is the same bounded BFS the TOP/DOUBLE arm below has
+     * always run.
+     */
+    private static boolean hasLoweredSlabSupport(BlockView world, BlockPos pos, BlockState state) {
         if (world == null
                 || pos == null
                 || state == null
                 || !(state.getBlock() instanceof SlabBlock)
                 || !state.contains(SlabBlock.TYPE)
-                || !state.getFluidState().isEmpty()
-                || isBottomSlab(state)) {
+                || !state.getFluidState().isEmpty()) {
             return false;
+        }
+        if (isBottomSlab(state)) {
+            double supportDy = loweredBottomSlabSupportDy(world, pos, 0);
+            return Double.isFinite(supportDy) && supportDy < -1.0e-6;
         }
         BlockPos belowPos = pos.down();
         BlockState below = world.getBlockState(belowPos);
@@ -1196,7 +1233,7 @@ public final class SlabSupport {
             BlockPos belowPos = pos.down();
             BlockState below = world.getBlockState(belowPos);
             if (hasLoweredNonSlabTopSupport(world, belowPos, below)
-                    || hasLoweredTopLikeSlabSupport(world, belowPos, below)) {
+                    || hasLoweredSlabSupport(world, belowPos, below)) {
                 // GEOMETRIC MIRROR of the anchored slab branch above — same flat-constant defect,
                 // folded into the same resolver so the two lanes can never disagree again (the
                 // rig's follower_on_minus_one read birch_slab=-0.5 here with no anchor at all).
@@ -1549,7 +1586,7 @@ public final class SlabSupport {
         BlockPos belowPos = pos.down();
         BlockState below = world.getBlockState(belowPos);
         if (hasLoweredNonSlabTopSupport(world, belowPos, below)
-                || hasLoweredTopLikeSlabSupport(world, belowPos, below)) {
+                || hasLoweredSlabSupport(world, belowPos, below)) {
             return loweredFollowerDy(world, pos, 0);
         }
         if (isAdjacentSideSlabLowered(world, pos, state)) {
