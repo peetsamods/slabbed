@@ -16,7 +16,6 @@
     "ItemStackUseCreatedContactMixin",
     "LeverParticleMixin",
     "LivingEntityLoweredScaffoldingMixin",
-    "PaintingRigDropCaptureMixin",
     "RedstoneTorchParticleMixin",
     "RedstoneWireBlockMixin",
     "ServerInteractBlockHitToleranceMixin",
