@@ -1,9 +1,10 @@
 package com.slabbed.test;
 
+import com.slabbed.anchor.SlabAnchorAttachment;
 import com.slabbed.dev.SlabdyRowFormatter;
+import com.slabbed.util.SlabSupport;
 import net.fabricmc.fabric.api.gametest.v1.GameTest;
 import net.minecraft.block.Block;
-import net.minecraft.block.BlockState;
 import net.minecraft.block.Blocks;
 import net.minecraft.block.SlabBlock;
 import net.minecraft.block.enums.SlabType;
@@ -17,14 +18,19 @@ import net.minecraft.util.math.Vec3d;
 import java.util.List;
 
 /**
- * Headless proof for {@code /slabdy row}'s field computation ({@link SlabdyRowFormatter}),
- * re-derived from Forge 1.20.1's {@code TargetDyOverlay.targetLines}. The live wiring
- * (reading the real crosshair target, arming the render-thread model trace, printing to
- * chat/HUD) is client-only and therefore live-only — this only proves the formatter
- * produces the right multi-line dump for a given world/pos/state, which is exactly what
- * a tester would be reading off it.
+ * The /slabdy debug-overlay tooling suite: headless proof of {@link SlabdyRowFormatter}'s row
+ * output (re-derived from Forge 1.20.1's TargetDyOverlay.targetLines), including two regressions
+ * the tool itself shipped — the outline double-offset (the overlay applied dy a second time on an
+ * already-mixin-shifted shape, making the diagnostic lie) and the cache-vs-fresh diagnostic line
+ * (proving the cache MISS path renders real values). The live wiring (crosshair read, HUD print)
+ * is client-only and live-only; this suite proves the field computation a tester reads.
+ *
+ * <p>Merged 2026-08-07 from {@code SlabdyRowFormatterTest}, {@code SlabdyCacheVsFreshDiagnosticTest},
+ * {@code SlabdyOutlineDoubleOffsetTest} — every test preserved verbatim.
  */
-public final class SlabdyRowFormatterTest {
+public final class SlabdyToolingSuite {
+
+    // ── row formatter fields (SlabdyRowFormatterTest) ────────────────────────────────────────
 
     private static String join(List<String> lines) {
         return String.join(" || ", lines);
@@ -133,6 +139,66 @@ public final class SlabdyRowFormatterTest {
         ctx.assertTrue(row.contains("held=empty"), "a null held item must degrade to held=empty, not crash: " + row);
         ctx.assertTrue(row.contains("face=none"), "a null face must degrade to face=none, not crash: " + row);
         ctx.assertTrue(row.contains("expectedPlace=none"), "a null face means no expectedPlace: " + row);
+        ctx.complete();
+    }
+
+    // ── cache-vs-fresh diagnostic line (SlabdyCacheVsFreshDiagnosticTest) ────────────────────
+    // The "cache is genuinely stale" branch cannot be exercised headlessly (the cache is only
+    // written by getVisualYOffset's real-ClientWorld branch); this proves the MISS path renders
+    // real values, so the line is provably wired, not placeholder text.
+
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void cacheLineShowsMissAndMatchingFreshValueOnAServerWorld(TestContext ctx) {
+        ServerWorld w = ctx.getWorld();
+        BlockPos slabPos = ctx.getAbsolutePos(BlockPos.ORIGIN).add(3, 3, 3);
+        BlockPos dirtPos = slabPos.up();
+
+        w.setBlockState(slabPos, Blocks.SMOOTH_STONE_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.BOTTOM),
+                Block.NOTIFY_LISTENERS);
+        w.setBlockState(dirtPos, Blocks.DIRT.getDefaultState(), Block.NOTIFY_LISTENERS);
+        SlabAnchorAttachment.addAnchor(w, dirtPos, w.getBlockState(dirtPos));
+
+        ctx.assertTrue(SlabSupport.peekCachedClientVisualYOffset(dirtPos) == null,
+                "setup: a fresh gametest ServerWorld must never have populated the client cache");
+
+        List<String> lines = SlabdyRowFormatter.formatRow(w, dirtPos, w.getBlockState(dirtPos),
+                Direction.UP, new Vec3d(dirtPos.getX() + 0.5, dirtPos.getY() + 0.5, dirtPos.getZ() + 0.5),
+                ItemStack.EMPTY, "missing", null);
+
+        String cacheLine = lines.stream().filter(l -> l.startsWith("  cache:")).findFirst().orElse("");
+        ctx.assertTrue(cacheLine.contains("target=" + dirtPos.toShortString() + "(minecraft:dirt) cache=MISS fresh=-0.500"),
+                "cache line must show MISS for an unpopulated cache and the correct fresh value; got: " + cacheLine);
+        ctx.assertTrue(!cacheLine.contains("STALE"),
+                "a cache MISS must never be reported as STALE (nothing to compare against); got: " + cacheLine);
+        ctx.complete();
+    }
+
+    // ── outline double-offset regression (SlabdyOutlineDoubleOffsetTest) ─────────────────────
+    // Live-reported 2026-07-04: overlay showed dy=-0.500 but a -1.0 outline shift — the tool
+    // applied dy on top of SlabSupportStateMixin's already-shifted getOutlineShape. The real
+    // render path was unaffected; only the diagnostic lied.
+
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void overlayOutlineMatchesSingleDyShiftNotDouble(TestContext ctx) {
+        ServerWorld w = ctx.getWorld();
+        BlockPos slabPos = ctx.getAbsolutePos(BlockPos.ORIGIN).add(3, 3, 3);
+        BlockPos dirtPos = slabPos.up();
+
+        w.setBlockState(slabPos, Blocks.SMOOTH_STONE_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.BOTTOM),
+                Block.NOTIFY_LISTENERS);
+        w.setBlockState(dirtPos, Blocks.DIRT.getDefaultState(), Block.NOTIFY_LISTENERS);
+        SlabAnchorAttachment.addAnchor(w, dirtPos, w.getBlockState(dirtPos));
+        ctx.assertTrue(SlabAnchorAttachment.isAnchored(w, dirtPos), "setup: dirt must anchor on the bottom slab");
+
+        List<String> lines = SlabdyRowFormatter.formatRow(w, dirtPos, w.getBlockState(dirtPos),
+                Direction.UP, new Vec3d(dirtPos.getX() + 0.5, dirtPos.getY() + 0.5, dirtPos.getZ() + 0.5),
+                ItemStack.EMPTY, "missing", null);
+
+        String outlineLine = lines.stream().filter(l -> l.contains("outlineMinY=")).findFirst().orElse("");
+        ctx.assertTrue(outlineLine.contains("outlineMinY=-0.500"),
+                "THE FIX: an anchored dirt at dy=-0.500 must show outlineMinY=-0.500 (a SINGLE "
+                        + "offset, matching the native full-cube shape [0,0,0]->[1,1,1] shifted "
+                        + "once) -- not -1.000 (a double-applied offset). Got: " + outlineLine);
         ctx.complete();
     }
 }
