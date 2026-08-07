@@ -18,6 +18,7 @@
       "com.slabbed.test.OffsetRaycastTargetingTest",
       "com.slabbed.test.CombinedSlabChainingMatrixTest",
       "com.slabbed.test.TerrainSlabsHotfixTest",
+      "com.slabbed.test.TerrainSlabsGuardSweepTest",
       "com.slabbed.test.UseOnPlacementSuite",
       "com.slabbed.test.SlabConnectionSteppedTest",
       "com.slabbed.test.SlabdyRecorderToggleTest",
