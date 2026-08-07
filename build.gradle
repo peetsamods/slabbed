@@ -183,6 +183,7 @@ def slabbedHygieneExcludes = { String ext ->
             "com/slabbed/client/ScreenshotCaptureService*.${ext}",
             "com/slabbed/client/CaptureProfile.${ext}",
             "**/BlockStateCanPlaceAtChainDebugMixin.${ext}",
+            "**/.gitkeep",
             "slabbed.debug.mixins.json",
             "slabbed.recorder.mixins.json",
             "slabbed.recorder.client.mixins.json",
