@@ -181,7 +181,7 @@ public final class CombinedSlabChainingMatrixTest {
         // 1. vanilla BOTTOM on terrain BOTTOM ("mixed slab"; recently-fixed, baseline-correct).
         mixedSlabColumn(ctx, world, origin, lane++);
 
-        // 2. terrain BOTTOM on vanilla BOTTOM (Maintainer's failing case — custom slab on vanilla).
+        // 2. terrain BOTTOM on vanilla BOTTOM (the maintainer's failing case — custom slab on vanilla).
         terrainOnVanillaColumn(ctx, world, origin, lane++);
 
         // 3. vanilla BOTTOM on vanilla BOTTOM (two stacked vanilla bottom slabs).
@@ -257,7 +257,7 @@ public final class CombinedSlabChainingMatrixTest {
         }
     }
 
-    // ── 2. terrain bottom on vanilla bottom (Maintainer's case) ────────────────
+    // ── 2. terrain bottom on vanilla bottom (the maintainer's case) ────────────────
     private void terrainOnVanillaColumn(TestContext ctx, ServerWorld world, BlockPos origin, int lane) {
         String cfg = "2.terrainBOTTOM/vanillaBOTTOM";
         int x = lane * 3;
@@ -292,7 +292,7 @@ public final class CombinedSlabChainingMatrixTest {
 
         record(cfg, "lowerSlab", world, lowerPos, 0.0, Kind.STRICT);
         // Upper vanilla bottom slab on a NON-lowered vanilla bottom slab. RULED 2026-08-06
-        // (Maintainer, exclusion #13 — "it should lower, no? WYSIWYG law"): the lower slab's top face
+        // (the maintainer, exclusion #13 — "it should lower, no? WYSIWYG law"): the lower slab's top face
         // is half a block below the grid, so the upper slab SEATS on it at -0.5 instead of
         // floating with vanilla's half-block gap. This row previously recorded Kind.BY_DESIGN
         // against an actual 0.0; the ruling reverses it, so the flush law now applies and the
@@ -431,7 +431,7 @@ public final class CombinedSlabChainingMatrixTest {
         place(world, l2, vanillaBottom());
 
         record(cfg, "L0(vanillaBOTTOM)", world, l0, 0.0, Kind.STRICT);
-        // RULED 2026-08-06 (Maintainer, exclusion #13): a bottom slab's top face is half a block below
+        // RULED 2026-08-06 (the maintainer, exclusion #13): a bottom slab's top face is half a block below
         // the grid, so L1 SEATS on L0 at -0.5 even though L0 is not itself sunk. STRICT, and it
         // now matches. L2 keeps its mismatch annotation for a DIFFERENT reason than before: these
         // slabs are written with setBlockState only, so they carry no anchors, and
@@ -477,7 +477,7 @@ public final class CombinedSlabChainingMatrixTest {
         record(cfgA, "mixedSlab", world, aSlab, -0.5, Kind.STRICT);
         double aFenceDy = record(cfgA, "fence", world, aFence, -1.0, Kind.STRICT);
         // HARD-ASSERT: fence on a mixed slab must follow the compound drop to -1.0 (the "fence
-        // not chaining" symptom Maintainer reported — pinned green).
+        // not chaining" symptom the maintainer reported — pinned green).
         ctx.assertTrue(approx(aFenceDy, -1.0),
                 cfgA + " fence on mixed slab should be -1.0, got " + aFenceDy);
 

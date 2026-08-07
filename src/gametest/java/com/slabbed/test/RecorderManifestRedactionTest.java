@@ -21,7 +21,7 @@ public final class RecorderManifestRedactionTest {
 
     @GameTest(structure = "fabric-gametest-api-v1:empty")
     public void redactsAccessTokenUuidAndXuid(TestContext ctx) {
-        String command = "net.minecraft.client.main.Main --username Maintainer --version 1.21.11 "
+        String command = "net.minecraft.client.main.Main --username TestPlayer --version 1.21.11 "
                 + "--accessToken eyJhbGciOiJSUzI1NiJ9.super-secret-jwt-token "
                 + "--uuid 11112222333344445555666677778888 "
                 + "--xuid 9999888877776666 "
@@ -38,7 +38,7 @@ public final class RecorderManifestRedactionTest {
         ctx.assertTrue(!redacted.contains("abcdef-0123-4567-89ab-cdef01234567"),
                 "clientId value must be redacted, got: " + redacted);
         ctx.assertTrue(redacted.contains("--accessToken [REDACTED]"), "accessToken flag itself should remain, value replaced");
-        ctx.assertTrue(redacted.contains("--username Maintainer"), "non-sensitive args must be preserved");
+        ctx.assertTrue(redacted.contains("--username TestPlayer"), "non-sensitive args must be preserved");
         ctx.assertTrue(redacted.contains("--userType msa"), "non-sensitive args must be preserved");
         ctx.complete();
     }

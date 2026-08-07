@@ -13,7 +13,7 @@ import net.minecraft.test.TestContext;
 import net.minecraft.util.math.BlockPos;
 
 /**
- * Maintainer's law item #1 ("everything should be able to lower; no exceptions", 2026-08-06):
+ * LAW 1 (LAW.md) item #1 ("everything should be able to lower; no exceptions", 2026-08-06):
  * <b>a slab resting on a LOWERED bottom slab had no lane at all.</b>
  *
  * <p><b>Live evidence.</b> {@code (157,-58,-10) oak_slab dy=0.000 src=FROZEN-FLAT} sitting on
@@ -118,7 +118,7 @@ public final class SlabOnLoweredBottomSlabTest {
     }
 
     /**
-     * EXCLUSION #13 — <b>Maintainer's ruling, 2026-08-06</b>. Asked whether a slab resting on a PLAIN
+     * EXCLUSION #13 — <b>maintainer ruling, 2026-08-06</b>. Asked whether a slab resting on a PLAIN
      * (un-lowered) bottom slab should stay flat at 0.0 — vanilla's half-block gap — she answered
      * "it should lower, no? WYSIWYG law." <b>Ruling: it lowers.</b> This is exclusion #13 under her
      * standing law "everything should be able to lower; no exceptions".
@@ -150,7 +150,7 @@ public final class SlabOnLoweredBottomSlabTest {
         place(w, subject, bottomSlab(Blocks.OAK_SLAB));
         double dy = SlabSupport.getYOffset(w, subject, w.getBlockState(subject));
         ctx.assertTrue(Math.abs(dy + 0.5) <= EPS,
-                "a slab on a plain bottom slab must read -0.5 (Maintainer's ruling 2026-08-06, "
+                "a slab on a plain bottom slab must read -0.5 (maintainer ruling 2026-08-06, "
                         + "exclusion #13: 'it should lower, no? WYSIWYG law' — the support's top "
                         + "face is half a block below the grid, so the slab seats there instead of "
                         + "floating with vanilla's 0.5 gap), got " + dy);
@@ -158,7 +158,7 @@ public final class SlabOnLoweredBottomSlabTest {
     }
 
     /**
-     * TOWER PIN (Maintainer's ruling 2026-08-06, interaction 3) — a stack of four bottom slabs, each
+     * TOWER PIN (maintainer ruling 2026-08-06, interaction 3) — a stack of four bottom slabs, each
      * placed on the one below through the REAL placement sequence ({@code setBlockState} +
      * {@code SlabAnchorAttachment.addAnchor}, exactly what {@code BlockOnPlacedAnchorMixin.onPlaced}
      * fires for a player click). ASSERTS the resolved dy at every level, <b>including where the
@@ -185,7 +185,7 @@ public final class SlabOnLoweredBottomSlabTest {
      *       — a 0.5 GAP reopens above L2's top face at {@code Y+1.5}.</li>
      * </ul>
      * So the tower is flush for three courses and reverts to the vanilla stagger from the fourth
-     * course upward. Maintainer rules on the appearance from these numbers.
+     * course upward. The maintainer rules on the appearance from these numbers.
      *
      * <p><b>EXTENDED to L4/L5 (Stage 0 measurement B, 2026-08-07).</b> The tower now runs six
      * courses so the ladder past the clamp is measured rather than assumed. Every original
@@ -250,7 +250,7 @@ public final class SlabOnLoweredBottomSlabTest {
                 "tower L0 rests on a flat non-slab support and must NOT anchor");
 
         ctx.assertTrue(Math.abs(dy[1] + 0.5) <= EPS,
-                "tower L1 must seat on L0's top face at -0.5 (Maintainer's ruling 2026-08-06) — " + ladder);
+                "tower L1 must seat on L0's top face at -0.5 (maintainer ruling 2026-08-06) — " + ladder);
         ctx.assertTrue(Math.abs(dy[2] + 1.0) <= EPS,
                 "tower L2 must seat on L1's top face at -1.0 (compounded through the resolver) — "
                         + ladder);
@@ -258,7 +258,7 @@ public final class SlabOnLoweredBottomSlabTest {
                 "tower L3 PINS THE CLAMP: its raw seat is -1.5, and MIN_RESOLVED_DY ("
                         + SlabSupport.MIN_RESOLVED_DY + ") either refuses it — reopening a 0.5 "
                         + "vanilla gap above L2 from the fourth course upward — or lets it stand. "
-                        + "This is pinned, NOT fixed — Maintainer rules on the tower's appearance from "
+                        + "This is pinned, NOT fixed — the maintainer rules on the tower's appearance from "
                         + "these values — " + ladder);
 
         for (int i = 1; i < 4; i++) {
@@ -312,7 +312,7 @@ public final class SlabOnLoweredBottomSlabTest {
      * path — the lag class this project has already shipped twice. Every real player placement takes
      * the anchored ladder above (the anchor qualifier accepts a bottom-slab support through the same
      * widened predicate), so this divergence is reachable only by synthetic writes and pre-existing
-     * worlds. Reported to Maintainer as known-incomplete.
+     * worlds. Reported to the maintainer as known-incomplete.
      */
     @GameTest(structure = "fabric-gametest-api-v1:empty")
     public void geometricSlabTowerPinsTheUnanchoredSaturation(TestContext ctx) {

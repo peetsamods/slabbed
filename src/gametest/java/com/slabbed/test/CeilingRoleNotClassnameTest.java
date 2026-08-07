@@ -247,7 +247,7 @@ public final class CeilingRoleNotClassnameTest {
      * the trapdoor immediately above it).
      *
      * <p>It pins the ROLE and the live consumer, not the old +0.5 magnitude: the reach-up itself is
-     * DEPRECATED by Maintainer's 2026-07-03 live ruling (everything hangs flush now —
+     * DEPRECATED by the maintainer's 2026-07-03 live ruling (everything hangs flush now —
      * {@code isLoweringTopLikeCeiling} returns false unconditionally), so the dy here is 0.0 today
      * and c611b60f's cascade is dormant by that ruling, not by this change. The consumer still
      * live for a ceiling role is {@code shouldOffset}'s guard: a ceiling-attached subject under a

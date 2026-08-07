@@ -32,7 +32,7 @@ import java.util.List;
  *
  * <p>This means the "internally inconsistent anchor" findings from this session's lantern-gap
  * investigation were reading a broken diagnostic display, not a real dy inconsistency — corrected
- * in KNOWN_INCOMPLETE.md. The underlying visible gap Maintainer reported remains real and unexplained
+ * in KNOWN_INCOMPLETE.md. The underlying visible gap the maintainer reported remains real and unexplained
  * by this fix; this fix only stops the debug tool from lying about it.
  */
 public final class SlabdyOutlineDoubleOffsetTest {

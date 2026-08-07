@@ -59,7 +59,7 @@ import net.minecraft.world.GameMode;
  * {@code OffsetRaycastTargetingTest#vanillaTopSlabOnTerrainLowersFull}) is intentionally NOT
  * here: the intent-mixin gate is {@code getVisualYOffset == -0.5d} exactly, so the raw-fraction
  * misdecision persists there and the cell is RED on HEAD. It lives UNREGISTERED in
- * {@link UseOnMinusOneLoweredCombineVsExtendRedTest} until Maintainer rules on the -1.0 gate fix.
+ * {@link UseOnMinusOneLoweredCombineVsExtendRedTest} until the maintainer rules on the -1.0 gate fix.
  */
 public final class UseOnCombineVsExtendPlacementTest {
 
@@ -372,7 +372,7 @@ public final class UseOnCombineVsExtendPlacementTest {
         // shape so a future fix (or a future regression) shows up as a diff against this pin,
         // rather than silently. If either assertion below starts failing, that is NOT necessarily
         // this test regressing — read it as the underlying lane having changed, and update or
-        // delete this pin to match, per Maintainer's #57 report.
+        // delete this pin to match, per the maintainer's #57 report.
         double dy = SlabSupport.getYOffset(world, above, placed);
         boolean anchored = SlabAnchorAttachment.isAnchored(world, above);
         ctx.assertTrue(dy == -0.5,

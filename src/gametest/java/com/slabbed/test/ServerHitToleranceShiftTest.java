@@ -26,7 +26,7 @@ import net.minecraft.util.math.Vec3d;
  * owner (center shifted {@code -0.5}), and a {@code -1.0} compound owner (center
  * shifted {@code -1.0}). These tests prove the HELPER seam only — the full
  * end-to-end packet-path proof (real client use packet through
- * {@code onPlayerInteractBlock}) is Maintainer's live matrix, deliberately NOT faked
+ * {@code onPlayerInteractBlock}) is the maintainer's live matrix, deliberately NOT faked
  * here.
  */
 public final class ServerHitToleranceShiftTest {

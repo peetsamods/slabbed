@@ -90,7 +90,7 @@ public final class SmooshUnderTerrainSlabsTest {
         ctx.complete();
     }
 
-    // DEPRECATED-REACH ruling (2026-07-03, Maintainer live): the +0.5 reach-up is deprecated —
+    // DEPRECATED-REACH ruling (2026-07-03, the maintainer live): the +0.5 reach-up is deprecated —
     // ceiling-attached things hang FLUSH (0.0) under a vanilla top slab too, not raised. (Was +0.5.)
     @GameTest(structure = "fabric-gametest-api-v1:empty")
     public void hangingRootsUnderVanillaTopSlabHangFlush(TestContext ctx) {
@@ -148,7 +148,7 @@ public final class SmooshUnderTerrainSlabsTest {
     }
 
     // DEPRECATED-REACH ruling: objects hang FLUSH (0.0) under a vanilla top slab too — this is the
-    // live bug Maintainer reported (lantern/dripstone/chain smooshed +0.5 up into the slab). Was +0.5.
+    // live bug the maintainer reported (lantern/dripstone/chain smooshed +0.5 up into the slab). Was +0.5.
     @GameTest(structure = "fabric-gametest-api-v1:empty")
     public void hangingLanternUnderVanillaTopSlabHangFlush(TestContext ctx) {
         double dy = ceilingBlockDyUnder(ctx, hangingLantern(), vanillaSlab(SlabType.TOP));

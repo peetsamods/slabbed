@@ -274,7 +274,7 @@ public final class ClampUnificationTest {
      * <p>MEASURED at Stage 4 (2026-08-07): the 196-column battery above is <b>cap-invariant</b>. It
      * produces a byte-identical 588-token string with the flag on and with it off, because its
      * tallest column is three courses and nothing in it ever resolves past {@code -1.0} — the cap
-     * has nothing to refuse. That is worth knowing (it is the blast radius of Maintainer's ruling stated
+     * has nothing to refuse. That is worth knowing (it is the blast radius of maintainer ruling stated
      * as data: ordinary shallow scenes do not move at all), but it also means that battery cannot
      * tell the two legs apart, so on its own it could not distinguish "the OFF leg is clean" from
      * "the flag never reached the resolver".

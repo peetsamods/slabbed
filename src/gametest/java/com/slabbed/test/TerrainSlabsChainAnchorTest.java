@@ -72,7 +72,7 @@ public final class TerrainSlabsChainAnchorTest {
         ctx.assertTrue(SlabAnchorAttachment.isAnchored(w, bPos),
                 "setup: TS slab B must qualify for the lowered-side-slab anchor at placement time");
 
-        // Break the chain's MIDDLE link (slab A) — Maintainer's exact repro.
+        // Break the chain's MIDDLE link (slab A) — the maintainer's exact repro.
         w.breakBlock(a, false);
         ctx.assertTrue(w.getBlockState(a).isAir(), "setup: slab A must actually be broken");
 

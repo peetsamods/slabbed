@@ -129,7 +129,7 @@ public final class SlabbedDiagnosticsTest {
         double floor = SlabSupport.MIN_RESOLVED_DY;
         ctx.assertTrue(!SlabbedDiagnostics.smooshRisk(Blocks.AIR.getDefaultState(), floor),
                 "an air cell has no geometry to smoosh — it must NOT flag (4 of 6 SMOOSH rows in "
-                        + "recorder run 9e925ab0 were air)");
+                        + "a recorded live run were air)");
         ctx.assertTrue(!SlabbedDiagnostics.smooshRisk(Blocks.CAVE_AIR.getDefaultState(), floor),
                 "cave air is air too — the gate is isAir(), not an id comparison");
         ctx.assertTrue(SlabbedDiagnostics.smooshRisk(Blocks.LANTERN.getDefaultState(), floor),
@@ -251,7 +251,7 @@ public final class SlabbedDiagnosticsTest {
                         + SlabbedDiagnostics.format(s.raycastMinY()));
         ctx.assertTrue(!Double.isNaN(s.raycastMinY()),
                 "an empty raycast shape must NOT share the unsampled sentinel — that conflation is "
-                        + "exactly what made recorder run 9e925ab0 unreadable");
+                        + "exactly what made a recorded live run unreadable");
         ctx.assertTrue(SlabbedDiagnostics.isMeasured(s.outlineMinY()),
                 "the outline leg must still carry a real number, got "
                         + SlabbedDiagnostics.format(s.outlineMinY()));
@@ -418,7 +418,7 @@ public final class SlabbedDiagnosticsTest {
     /**
      * <b>THE DODO NARROWING, measured in-world in both directions.</b>
      *
-     * <p>Over recorder run {@code 9e925ab0} the old predicate selected exactly
+     * <p>Over a recorded live run the old predicate selected exactly
      * {@code {opaqueFullCube && |visualDy| > EPS}} — <b>36 of 55 rows</b> ({@code stone} x17,
      * {@code stripped_jungle_log} x10, {@code smooth_stone_slab} x9) — the mod's entire normal
      * operating envelope, and this campaign read signal into it. It was blind to

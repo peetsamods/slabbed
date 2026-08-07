@@ -111,7 +111,7 @@ public final class SlabOnSlabVerticalAnchorTest {
     // support must NOT anchor, mirroring hasLoweredSlabSupport's old "qualifies only if the support
     // is ACTUALLY SUNK" condition. It now asserts the opposite. This is NOT a new product decision;
     // it is FORCED by two things already settled:
-    //   (1) Maintainer's ruling of 2026-08-06 (exclusion #13, WYSIWYG law) — a slab resting on a plain
+    //   (1) maintainer ruling of 2026-08-06 (exclusion #13, WYSIWYG law) — a slab resting on a plain
     //       bottom slab LOWERS, because that support's top face is half a block below the grid
     //       whether or not the support is itself sunk. See
     //       SlabOnLoweredBottomSlabTest#slabOnFlatBottomSlabSeatsOnItsTopFace.
@@ -134,7 +134,7 @@ public final class SlabOnSlabVerticalAnchorTest {
                 Block.NOTIFY_LISTENERS);
         SlabAnchorAttachment.addAnchor(w, upper, w.getBlockState(upper));
         ctx.assertTrue(SlabAnchorAttachment.isAnchored(w, upper),
-                "a slab resting on a PLAIN BOTTOM-type support must anchor vertically: under Maintainer's "
+                "a slab resting on a PLAIN BOTTOM-type support must anchor vertically: under the maintainer's "
                         + "2026-08-06 ruling it renders lowered, and never-pop then requires the "
                         + "anchor that keeps it there when the support is broken");
         ctx.complete();
@@ -172,7 +172,7 @@ public final class SlabOnSlabVerticalAnchorTest {
                         + "guarantee this cell exists to prove");
         double before = SlabSupport.getYOffset(w, subject, w.getBlockState(subject));
         ctx.assertTrue(Math.abs(before + 0.5) <= EPS,
-                "premise: a slab on a plain bottom slab must render -0.5 (Maintainer's ruling 2026-08-06), "
+                "premise: a slab on a plain bottom slab must render -0.5 (maintainer ruling 2026-08-06), "
                         + "got " + before);
 
         // Break the support out from under it.

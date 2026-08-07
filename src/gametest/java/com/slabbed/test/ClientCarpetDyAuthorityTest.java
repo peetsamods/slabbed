@@ -14,13 +14,13 @@ import net.minecraft.test.TestContext;
 import net.minecraft.util.math.BlockPos;
 
 /**
- * BUG A, CLIENT HALF (live 2026-08-06, recorder {@code 0ba17cf0-ddb6-45f6-b4b9-921d50c9d2d8}):
+ * BUG A, CLIENT HALF (live 2026-08-06):
  * <b>carpets still render flush after the common-side dy was fixed, because the CLIENT kept a
  * second, independent dy authority.</b>
  *
  * <p><b>Live evidence.</b> {@code 112d1449} fixed the COMMON dy and the recorder proves it landed:
  * {@code (270,-58,-56) white_carpet dy=-1.000 ANCHORED} over a {@code -0.5} {@code stone_slab}, and
- * {@code (270,-58,-54) white_carpet dy=-0.500 ANCHORED}. Maintainer still saw both lying flush, because
+ * {@code (270,-58,-54) white_carpet dy=-0.500 ANCHORED}. The maintainer still saw both lying flush, because
  * every CLIENT consumer of a carpet's dy — the chunk model ({@code OffsetBlockStateModel.emitQuads})
  * and the outline ({@code CarpetDyShapeMixin}) — routed carpets through
  * {@code ClientDy.dyFor}, which carried its own carpet special case: a "simple geometric check
@@ -46,7 +46,7 @@ public final class ClientCarpetDyAuthorityTest {
     private static final double EPS = 1.0e-6;
 
     /**
-     * RED — Maintainer's reported cell. A carpet lying on a stone block that itself renders {@code -0.5}:
+     * RED — the maintainer's reported cell. A carpet lying on a stone block that itself renders {@code -0.5}:
      * the common authority says {@code -0.5}, {@code ClientDy} said {@code 0.0} because stone is not
      * a half-height slab surface, so the carpet was drawn floating half a block above the block it
      * lies on.
@@ -145,7 +145,7 @@ public final class ClientCarpetDyAuthorityTest {
                         + "entirely (a geometric support check with no anchor logic), so the model "
                         + "and outline draw the carpet flush while the common dy says it is lowered "
                         + "(live 2026-08-06 recorder 0ba17cf0: white_carpet dy=-1.000 ANCHORED and "
-                        + "dy=-0.500 ANCHORED, both still rendering flush). Maintainer: 'everything "
+                        + "dy=-0.500 ANCHORED, both still rendering flush). maintainer ruling: 'everything "
                         + "should be able to lower; no exceptions'");
     }
 

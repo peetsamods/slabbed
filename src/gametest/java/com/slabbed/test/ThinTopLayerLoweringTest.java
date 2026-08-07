@@ -13,8 +13,8 @@ import net.minecraft.test.TestContext;
 import net.minecraft.util.math.BlockPos;
 
 /**
- * BUG A (live 2026-08-06, recorder {@code eeac23d0-d632-4985-b540-5611d8a1fc4f}):
- * <b>thin top-layer blocks never lower — Maintainer's "placing too high".</b>
+ * BUG A (live 2026-08-06):
+ * <b>thin top-layer blocks never lower — the maintainer's "placing too high".</b>
  *
  * <p><b>Live evidence.</b> {@code (219,-55,-34) minecraft:white_carpet visualDy=0.000} resting on
  * {@code (219,-56,-34) minecraft:stone visualDy=-0.500} — the carpet floats half a block above the
@@ -27,14 +27,14 @@ import net.minecraft.util.math.BlockPos;
  * ({@code SnowBlock || CarpetBlock || PaleMossCarpetBlock}, added 2026-02-10 by {@code 8d3f105f})
  * — hard-excluded the whole family from lowering at three SUBJECT-side sites: {@code shouldOffset},
  * {@code getYOffsetInner}'s flush guard, and {@code isDirectCustomSlabSupportSubject}. That is the
- * shape Maintainer's binding law of 2026-08-06 outlaws: <i>"everything should be able to lower; no
+ * shape the maintainer's binding law of 2026-08-06 outlaws: <i>"everything should be able to lower; no
  * exceptions"</i> — eligibility follows GEOMETRY, never a block-class allow-list.
  *
  * <p><b>2026-08-06, second ruling: the snow exclusion is gone too.</b> {@code 112d1449} kept a
  * narrowed successor, {@code isEnvironmentDepositedSurfaceFill} ({@code Properties.LAYERS} plus
  * {@code PowderSnowBlock}), to preserve the one hazard the original guards actually closed —
  * weather laying snow across whole biomes, half of it dropping {@code -0.5} over a buried slab.
- * Maintainer has since ruled against that exclusion as well ("Snow blocks are not lowering", recorder
+ * the maintainer has since ruled against that exclusion as well ("Snow blocks are not lowering", recorder
  * {@code 0ba17cf0}: {@code (306,-58,-56) powder_snow dy=0.000} over a {@code -0.5}
  * {@code stone_slab}). Her law admits no exceptions, so the predicate is removed and snow lowers by
  * geometry like everything else. <b>Three cells in this class were INVERTED by that ruling</b> —
@@ -76,7 +76,7 @@ public final class ThinTopLayerLoweringTest {
                         + " (live (219,-55,-34) visualDy=0.000 over (219,-56,-34) visualDy=-0.500: "
                         + "isThinTopLayer excludes the whole carpet/snow family from lowering on "
                         + "CLASSNAME, so the carpet floats half a block above the block it lies on "
-                        + "— Maintainer: 'everything should be able to lower; no exceptions')");
+                        + "— maintainer ruling: 'everything should be able to lower; no exceptions')");
         ctx.complete();
     }
 
@@ -121,7 +121,7 @@ public final class ThinTopLayerLoweringTest {
     }
 
     /**
-     * RED — <b>Maintainer's 2026-08-06 ruling reverses this cell.</b> It previously asserted the exact
+     * RED — <b>the maintainer's 2026-08-06 ruling reverses this cell.</b> It previously asserted the exact
      * opposite ({@code dy == 0.0}, "a weather-deposited snow LAYER must stay flush"), pinning the
      * categorical exclusion that {@code 8d3f105f}/{@code 135d125f} installed. She reports "Snow
      * blocks are not lowering" as a BUG, and her binding law admits no exceptions, so a snow layer
@@ -145,7 +145,7 @@ public final class ThinTopLayerLoweringTest {
                 "a snow LAYER resting on a stone block that renders -0.5 must read -0.5, got " + dy
                         + " — isEnvironmentDepositedSurfaceFill (LAYERS + PowderSnowBlock) still "
                         + "hard-excludes snow from lowering on a PROPERTY, so it floats half a block "
-                        + "above the block it lies on (Maintainer 2026-08-06: 'Snow blocks are not "
+                        + "above the block it lies on (the maintainer 2026-08-06: 'Snow blocks are not "
                         + "lowering'; 'everything should be able to lower; no exceptions')");
 
         // Same claim on the other arrangement: a snow layer lying directly on a bottom slab.
@@ -162,7 +162,7 @@ public final class ThinTopLayerLoweringTest {
     }
 
     /**
-     * RED — <b>Maintainer's ruling reverses this cell too.</b> It previously asserted {@code dy == 0.0}
+     * RED — <b>maintainer ruling reverses this cell too.</b> It previously asserted {@code dy == 0.0}
      * for powder snow on a lowered support. This is the recorder's own arrangement:
      * {@code (306,-58,-56) powder_snow dy=0.000} sitting on a {@code stone_slab} — the cell she
      * flagged. {@code getYOffset} short-circuited {@code PowderSnowBlock} to {@code 0.0} at its
@@ -182,12 +182,12 @@ public final class ThinTopLayerLoweringTest {
         ctx.assertTrue(Math.abs(dy + 0.5) <= EPS,
                 "powder snow resting on a bottom slab must seat on its top face at -0.5, got " + dy
                         + " — getYOffset still short-circuits PowderSnowBlock to 0.0 (135d125f), "
-                        + "the live (306,-58,-56) dy=0.000 cell Maintainer reported");
+                        + "the live (306,-58,-56) dy=0.000 cell the maintainer reported");
         ctx.complete();
     }
 
     /**
-     * {@code minecraft:snow_block} — the THIRD snow id, and the one Maintainer's wording most literally
+     * {@code minecraft:snow_block} — the THIRD snow id, and the one the maintainer's wording most literally
      * names. It is a plain opaque full cube with no {@code LAYERS} property, so neither
      * {@code isThinTopLayer} nor its successor ever touched it: it has always resolved exactly like
      * stone, and it still does.
@@ -272,7 +272,7 @@ public final class ThinTopLayerLoweringTest {
      * Slabs {@code BOTTOM_LIKE} surface seats on its half-height top face exactly as it now does on
      * a vanilla bottom slab. Moved off {@code isThinTopLayer} together with the other two sites —
      * leaving one behind would be the shared-predicate half-fix trap (carpet lowering on vanilla
-     * slabs but floating on TS terrain, in Maintainer's own TS-enabled live setup).
+     * slabs but floating on TS terrain, in the maintainer's own TS-enabled live setup).
      */
     @GameTest(structure = "fabric-gametest-api-v1:empty")
     public void carpetOnTerrainSlabsSurfaceSeatsOnItsTopFace(TestContext ctx) {
@@ -290,11 +290,11 @@ public final class ThinTopLayerLoweringTest {
     }
 
     /**
-     * RED — <b>Maintainer's ruling reverses this cell as well.</b> It previously asserted {@code dy ==
+     * RED — <b>maintainer ruling reverses this cell as well.</b> It previously asserted {@code dy ==
      * 0.0} for a snow layer on a Terrain Slabs {@code BOTTOM_LIKE} surface. It is the third
      * SUBJECT-side site ({@code isDirectCustomSlabSupportSubject}); leaving it behind would be the
      * shared-predicate half-fix trap, with snow lowering on vanilla slabs but floating on TS terrain
-     * in Maintainer's own TS-enabled setup.
+     * in the maintainer's own TS-enabled setup.
      *
      * <p>NOTE for the live pass: this is the ONE arrangement where the old DODO argument still has
      * teeth, because Terrain Slabs makes half-height surfaces out of natural terrain WORLD-WIDE. See

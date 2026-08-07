@@ -448,7 +448,7 @@ public final class SlabbedLabFixtureTest {
     }
 
     /**
-     * Maintainer's NEVER-POP law (freeze-flat): a structural block <em>placed</em> flat (dy=0) must STAY
+     * the maintainer's NEVER-POP law (freeze-flat): a structural block <em>placed</em> flat (dy=0) must STAY
      * at dy=0 even after a bottom slab is later placed directly under it — no autonomous down-pop,
      * no retroactively-inherited lowering. Exercises the REAL onPlaced path via
      * {@link #placeWithOnPlaced}, which {@code BlockOnPlacedAnchorMixin} intercepts to call

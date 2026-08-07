@@ -14,7 +14,7 @@ import net.minecraft.test.TestContext;
 import net.minecraft.util.math.BlockPos;
 
 /**
- * BUG B (live 2026-08-06, recorder {@code eeac23d0-d632-4985-b540-5611d8a1fc4f}):
+ * BUG B (live 2026-08-06):
  * <b>a placed block JUMPS when the pot beneath it is potted/unpotted</b> — a never-pop violation.
  *
  * <p><b>Live evidence, one position, repeatedly.</b> {@code (203,-54,-34) minecraft:stone} went

@@ -21,7 +21,7 @@ import net.minecraft.util.math.Direction;
 import net.minecraft.util.math.Vec3d;
 
 /**
- * Live-reported bug (2026-08-05 live pass, {@code docs/process/LIVE_LEDGER.md} symptom 1): a block
+ * Live-reported bug (2026-08-05 live pass, {@code the live ledger} symptom 1): a block
  * PLACED on a support that is already lowered to -1.0 renders at -0.5, leaving a 0.5 floating gap.
  * Reproduced live across four families with identical numbers — birch_slab, birch_fence, lantern,
  * oak_sign.
@@ -48,7 +48,7 @@ import net.minecraft.util.math.Vec3d;
  * {@code addAnchor} rejects slabs on the direct/column lanes, so such a column silently reads -0.5
  * and builds the wrong scene.)
  *
- * <p><b>SECOND WAVE (2026-08-06, Maintainer's live pass, recorder {@code 339a58aa}): the same symptom
+ * <p><b>SECOND WAVE (2026-08-06, the maintainer's live pass): the same symptom
  * one level up — the SUPPORT is not a cube.</b> Everything above fixed "the support's dy was read
  * as a constant". What remained was "the support was not recognised as a support at all":
  * {@code supportSeatDy} classified a seat with {@code isSolidBlock}, a VOLUME test, when a seat
@@ -269,7 +269,7 @@ public final class AnchoredFollowerSupportDyTest {
      * a support that is not a slab and not a solid cube.
      *
      * <p>MEASURED before the fix: {@code lowerDy=-1.0 upperDy=0.0} — the two halves a full block
-     * apart. (Maintainer's live scene put the upper half on the {@code -0.5} floor rather than at
+     * apart. (the maintainer's live scene put the upper half on the {@code -0.5} floor rather than at
      * {@code 0.0} because its {@code shouldOffset} double-block branch found a bottom slab two
      * cells down; same defect, different fallback.)
      *
@@ -369,7 +369,7 @@ public final class AnchoredFollowerSupportDyTest {
      * anyway, so a block placed on one matched no arm of {@code supportSeatDy} and took
      * {@code loweredFollowerDy}'s {@code -0.5} floor.
      *
-     * <p>LIVE EVIDENCE (recorder run {@code f37a3b2b}, actions a38/a39): support
+     * <p>LIVE EVIDENCE (a recorded live run): support
      * {@code 354,-56,-113 = smooth_stone_slab[type=double]}, {@code dy=-1.0000 anchored=true};
      * {@code stripped_jungle_log} placed at {@code 354,-55,-113} read {@code dyPlaceAfter=-0.5000}.
      * The same session's {@code oak_fence} (a27/a30), {@code iron_chain} (a34) and BOTTOM-slab
@@ -456,7 +456,7 @@ public final class AnchoredFollowerSupportDyTest {
      * FOURTH WAVE — the visible SNAP-DOWN, and the same defect one lane over.
      *
      * <p>{@link #fullBlockOnMinusOneDoubleSlabSupportInheritsMinusOne} fixed the STORED answer, and
-     * Maintainer's live pass confirms it: the server writes {@code -1.0}. But the block is briefly drawn
+     * the maintainer's live pass confirms it: the server writes {@code -1.0}. But the block is briefly drawn
      * at {@code -0.5} and then drops. Recorder run {@code e9eb0932}, actions a8/a10/a15 —
      * {@code stripped_jungle_log} on {@code smooth_stone_slab[type=double]} at {@code dy=-1.0000}:
      *

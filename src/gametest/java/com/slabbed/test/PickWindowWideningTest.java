@@ -34,7 +34,7 @@ import java.util.List;
  *   <li><b>A permanent perf gate on the pick path.</b> The cost being accepted is real and
  *       forever: the crosshair raycast now probes five cells per marched DDA cell instead of three,
  *       +66%. The gate is not here to say that cost is acceptable — that is a
- *       frame-time question and only Maintainer's client can answer it. It is here so that a later
+ *       frame-time question and only the maintainer's client can answer it. It is here so that a later
  *       change cannot quietly make it <em>worse</em> than what was signed off. This project has
  *       shipped a perf regression twice; the documented instrument for it is a counting gametest,
  *       never a wall clock.</li>
@@ -258,7 +258,7 @@ public final class PickWindowWideningTest {
      * of the widening is on an axis the plan did not name. That number is reported, not smoothed.
      *
      * <p><b>This cell does not certify that the cost is acceptable.</b> It certifies what the cost
-     * IS, in operations. Frame time is a live question and Maintainer's gate alone.
+     * IS, in operations. Frame time is a live question and the maintainer's gate alone.
      */
     @GameTest(structure = "fabric-gametest-api-v1:empty")
     public void pickWindowCostIsPinnedRelativeToTheWindowItReplaced(TestContext ctx) {

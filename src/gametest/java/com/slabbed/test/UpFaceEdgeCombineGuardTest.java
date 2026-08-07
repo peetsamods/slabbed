@@ -38,7 +38,7 @@ import net.minecraft.util.math.Vec3d;
  *       {@code SlabBlock.getPlacementState}'s {@code blockState.isOf(this)} branch combines
  *       UNCONDITIONALLY, with no half/Y check at all).</li>
  *   <li>Result: an unrelated pre-existing slab silently becomes a DOUBLE — the "gap + ghost-face
- *       DODO" Maintainer saw, and the {@code same_cell_double_combine} mismatch the recorder flagged.</li>
+ *       DODO" the maintainer saw, and the {@code same_cell_double_combine} mismatch the recorder flagged.</li>
  * </ul>
  *
  * <p>Fix: {@code BlockItemPlacementIntentMixin} now skips the up-face-edge remap specifically

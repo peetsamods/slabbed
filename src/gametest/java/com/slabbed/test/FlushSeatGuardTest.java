@@ -15,7 +15,7 @@ import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.chunk.WorldChunk;
 
 /**
- * FLUSH-SEAT GUARD ({@code docs/process/LIVE_LEDGER.md} second pass, 2026-08-05 evening —
+ * FLUSH-SEAT GUARD ({@code the live ledger} second pass, 2026-08-05 evening —
  * "interpenetration row"): the mega board's z=14 compound row showed anchored {@code stone_slab}
  * at -0.5 rendered fully INSIDE its own direct support, a FLUSH stone (dy 0.0) — z-fighting.
  *

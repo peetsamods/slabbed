@@ -24,7 +24,7 @@ import net.minecraft.util.shape.VoxelShape;
 
 /**
  * STAGE 0 — RED-first characterisation for the dy-alphabet growth ruling
- * ({@code docs/process/LIVE_LEDGER.md}, "RULING (Maintainer, 2026-08-06): the dy alphabet grows —
+ * (the live ledger, "RULING (the maintainer, 2026-08-06): the dy alphabet grows —
  * GATED, cap -2.0"). <b>TESTS ONLY. No production behaviour is changed by this file, and nothing
  * here endorses a deeper alphabet — it MEASURES the three claims the ruling rests on so the later
  * stages argue from numbers instead of from reading.</b>
@@ -210,7 +210,7 @@ public final class DeepDyWindowCharacterisationTest {
     }
 
     /**
-     * A-3 — <b>the ruling's derivation, turned into a measurement.</b> Maintainer ruled the cap at
+     * A-3 — <b>the ruling's derivation, turned into a measurement.</b> The maintainer ruled the cap at
      * {@code -2.0} rather than {@code -1.5} so that {@code MIN_RESOLVED_DY == -(window radius)}
      * stays derivable. This cell measures the required radius for every subject shape at each
      * candidate cap and pins the identity, so the constant is never magic again.

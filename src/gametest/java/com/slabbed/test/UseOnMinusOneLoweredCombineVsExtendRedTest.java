@@ -42,7 +42,7 @@ import net.minecraft.util.math.Vec3d;
  * {@code canReplace}/{@code canBeReplaced} mixin at all — the intent remap is the only
  * combine-vs-extend machinery and it is hard-gated to -0.5.
  *
- * <p><b>Production fix = Maintainer's decision (NOT made here):</b> either widen the intent-mixin
+ * <p><b>Production fix = the maintainer's decision (NOT made here):</b> either widen the intent-mixin
  * gate from {@code == -0.5d} to "any lowered dy" (remap Y against the actual visual offset,
  * not the hardcoded half), or port the forge1201 dy-corrected-fraction {@code canReplace}
  * behavior idiomatically. Both must keep the -0.5 lane

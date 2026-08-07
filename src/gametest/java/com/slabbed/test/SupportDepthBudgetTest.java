@@ -52,7 +52,7 @@ import net.minecraft.util.math.BlockPos;
  * </ul>
  *
  * <p><b>So Stage 0's "provably invisible" finding was true of the shape it measured and not of the
- * defect.</b> Recorded here rather than smoothed over, and reported to Maintainer as a correction to
+ * defect.</b> Recorded here rather than smoothed over, and reported to the maintainer as a correction to
  * MEASUREMENT B rather than a quiet fix.
  *
  * <h2>⚠️ AND STAGE 3'S OWN FIX TURNS OUT TO HAVE BEEN VALUE-COINCIDENTAL (Stage 4, 2026-08-07)</h2>

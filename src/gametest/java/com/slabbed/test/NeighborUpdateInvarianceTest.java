@@ -84,7 +84,7 @@ public final class NeighborUpdateInvarianceTest {
      * {@code slabbed.targetDyOverlay}). Forwarded into the game JVM by {@code build.gradle}'s
      * {@code runGameTest} block.
      *
-     * <p><b>DEFAULT (2026-08-06, flipped by Maintainer): ON — BLOCKING.</b> This line now passes S-2
+     * <p><b>DEFAULT (2026-08-06, flipped by the maintainer): ON — BLOCKING.</b> This line now passes S-2
      * with all 9 subjects CLEAN ({@code 7756d152}, {@code c51ec869}), so {@code LAW.md}'s Phase 2
      * exit criterion is met and the default flips. {@code ./gradlew build runGameTest} — no flag —
      * now enforces the law directly: every subject is built, every mutation applied, and any
@@ -523,7 +523,7 @@ public final class NeighborUpdateInvarianceTest {
                 place(ctx, Blocks.STONE.asItem(), owner, Direction.NORTH, -0.25);
                 return owner.north();
             }),
-            // #10 — THE MATRIX'S COVERAGE BOUNDARY, closed (2026-08-06, Maintainer's live pass): every
+            // #10 — THE MATRIX'S COVERAGE BOUNDARY, closed (2026-08-06, the maintainer's live pass): every
             // subject above rests on a SLAB or a SOLID CUBE. Nothing in this matrix has ever rested
             // a block on a support that is neither, which is exactly why S-2 stayed 9/9 CLEAN
             // through a live bug in which a sign, a lantern and a log all sat half a block above a

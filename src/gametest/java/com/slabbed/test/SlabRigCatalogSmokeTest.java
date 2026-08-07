@@ -30,7 +30,7 @@ import java.util.Map;
  *       with every cell inside the 8x8x8 plot — the rig is useless if a case half-lands;
  *   <li>the rig refuses to overwrite anything it did not place, in both directions: it will not
  *       build into an occupied footprint, and {@code clear} leaves player-edited cells alone;
- *   <li>the four LIVE_LEDGER symptom cases are present by name — those are the scenes Maintainer
+ *   <li>the four LIVE_LEDGER symptom cases are present by name — those are the scenes the maintainer
  *       re-tests after the -1.0 boundary fix, so losing one silently would be a real regression;
  *   <li>{@code mega} / {@code rows} build, clear, and — the Stage 2 proof — SELF-VERIFY: every
  *       support variant's reference marker measures the dy that variant's sign claims;
@@ -114,7 +114,7 @@ public final class SlabRigCatalogSmokeTest {
     }
 
     /**
-     * The four live-confirmed symptom families from {@code docs/process/LIVE_LEDGER.md} each have a
+     * The four live-confirmed symptom families from {@code the live ledger} each have a
      * named case. These are the scenes the -1.0 boundary fix will be re-tested against.
      */
     @GameTest(structure = "fabric-gametest-api-v1:empty")
@@ -270,7 +270,7 @@ public final class SlabRigCatalogSmokeTest {
     }
 
     /**
-     * LIVE_LEDGER (2026-08-06, Maintainer's chain/ceiling pop): {@code mega} row 3
+     * LIVE_LEDGER (2026-08-06, the maintainer's chain/ceiling pop): {@code mega} row 3
      * ({@code overhang_and_ceiling}) writes its CEILING as plain scenery (a stone block one cell
      * above the subject), authored via a bare {@code plan.put} with no anchor and no freeze
      * marker. It rendered lowered purely from a LIVE geometric derivation (the subject beneath it
@@ -360,7 +360,7 @@ public final class SlabRigCatalogSmokeTest {
 
     /**
      * Census of the whole test kit against all four support variants: exactly which objects the rig
-     * can seat on each variant, and which it refuses. Maintainer's original complaint was that the rig
+     * can seat on each variant, and which it refuses. The maintainer's original complaint was that the rig
      * placed almost nothing, so this pins the coverage instead of leaving it to a live eyeball.
      *
      * <p>Runs against {@code mega}'s own reference column, one item at a time, so the whole 40-item

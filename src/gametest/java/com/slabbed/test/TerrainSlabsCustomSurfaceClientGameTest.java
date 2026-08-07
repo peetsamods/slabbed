@@ -1137,7 +1137,7 @@ public final class TerrainSlabsCustomSurfaceClientGameTest implements FabricClie
                 MatrixSubjectCase.lowProfileLowering(11, "PRESSURE_PLATE",
                         Blocks.OAK_PRESSURE_PLATE.getDefaultState(), true, true),
                 // BUG A (2026-08-06): carpet and pale moss carpet are PLAYER-PLACED decoration and
-                // now lower onto a BOTTOM_LIKE surface like every other placed object — Maintainer's law
+                // now lower onto a BOTTOM_LIKE surface like every other placed object — LAW 1 (LAW.md)
                 // "everything should be able to lower; no exceptions". They were reclassified off
                 // the thinLayer row (which suppressed the dy / direct-custom / target assertions)
                 // to lowProfileLowering, which is the identical row with thinLayer=false.
@@ -1146,7 +1146,7 @@ public final class TerrainSlabsCustomSurfaceClientGameTest implements FabricClie
                 // is a thinLayer row any more and the MatrixSubjectCase.thinLayer factory is now
                 // unused. Left in place deliberately — this is a fabric-client-gametest that does
                 // not run in this pass, so gutting its row vocabulary here would be an unverified
-                // edit. Maintainer: "everything should be able to lower; no exceptions".
+                // edit. maintainer ruling: "everything should be able to lower; no exceptions".
                 // NOT EXECUTED this pass: this is a fabric-client-gametest, outside runGameTest.
                 // The dy half is proven headlessly by
                 // ThinTopLayerLoweringTest#carpetOnTerrainSlabsSurfaceSeatsOnItsTopFace.

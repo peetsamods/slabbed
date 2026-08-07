@@ -207,7 +207,7 @@ public final class SlabHeightStepCullTest {
     }
 
     // ------------------------------------------------------------------------
-    // MAGNITUDE BLINDNESS (Maintainer, 2026-08-06, live on the /slabrig mega board: "back row has
+    // MAGNITUDE BLINDNESS (the maintainer, 2026-08-06, live on the /slabrig mega board: "back row has
     // DODOs still" — REAL see-through holes). The recorder board (session cc01ab17) shows five
     // laterally-adjacent pairs of ANCHORED stone at alternating -1.0 / -0.5 along the back row,
     // e.g. (104,-57,1)=-1.0 beside (105,-57,1)=-0.5. Each pair exposes a 0.5-block seam.
@@ -236,7 +236,7 @@ public final class SlabHeightStepCullTest {
         ctx.assertTrue(deepFace,
                 "an anchored -1.0 cube beside an anchored -0.5 cube exposes a real 0.5 seam and must "
                         + "redraw its stepped face — both sides are 'lowered', so the boolean "
-                        + "lowered/not-lowered form is magnitude-blind and culls it (Maintainer's live "
+                        + "lowered/not-lowered form is magnitude-blind and culls it (the maintainer's live "
                         + "back-row DODOs); got " + deepFace);
 
         // The GH#24 lesson: BOTH sides of the seam must be redrawn, not just one.
@@ -268,7 +268,7 @@ public final class SlabHeightStepCullTest {
     }
 
     // ------------------------------------------------------------------------
-    // ANCHOR-BOOLEAN ELIGIBILITY (Maintainer, live re-test 2026-08-06: the back-row see-through holes
+    // ANCHOR-BOOLEAN ELIGIBILITY (the maintainer, live re-test 2026-08-06: the back-row see-through holes
     // SURVIVED the magnitude fix). Recorder session 8248751f pins the surviving pair:
     //
     //     dy -0.5 (anchor=none)  |  dy -1.0 (anchor=none)     -> both UNANCHORED
@@ -286,7 +286,7 @@ public final class SlabHeightStepCullTest {
     // step test must key on RESOLVED HEIGHT, not on anchor status.
     // ------------------------------------------------------------------------
 
-    // THE RED: Maintainer's exact live pair, rebuilt with NO anchors anywhere in the scene. Both cubes
+    // THE RED: the maintainer's exact live pair, rebuilt with NO anchors anywhere in the scene. Both cubes
     // are lowered by pure column geometry (-0.5 and -1.0), and both assert !isAnchored so the test
     // cannot silently pass through the anchored (tier 3) lane that already worked.
     @GameTest(structure = "fabric-gametest-api-v1:empty")
@@ -297,7 +297,7 @@ public final class SlabHeightStepCullTest {
         boolean shallowFace = SlabSupport.isSlabHeightStepFace(
                 w, pair.shallow(), w.getBlockState(pair.shallow()), Direction.WEST);
         ctx.assertTrue(shallowFace,
-                "THE RED (Maintainer live 2026-08-06, recorder 8248751f): a GEOMETRICALLY lowered -0.5 "
+                "THE RED (the maintainer live 2026-08-06, recorder 8248751f): a GEOMETRICALLY lowered -0.5 "
                         + "cube with anchor=none beside a GEOMETRICALLY lowered -1.0 cube with "
                         + "anchor=none exposes a real 0.5 seam and must redraw its stepped face. "
                         + "Step-cull eligibility keyed on an ANCHOR BOOLEAN, so neither side counted "
@@ -467,11 +467,11 @@ public final class SlabHeightStepCullTest {
 
     // ------------------------------------------------------------------------
 
-    /** The two laterally-adjacent, ANCHOR-FREE cubes of Maintainer's live pair. */
+    /** The two laterally-adjacent, ANCHOR-FREE cubes of the maintainer's live pair. */
     private record GeometricStepPair(BlockPos shallow, BlockPos deep) { }
 
     /**
-     * Builds Maintainer's live failing pair with ZERO anchors anywhere, at plot-relative {@code (x, z)}
+     * Builds the maintainer's live failing pair with ZERO anchors anywhere, at plot-relative {@code (x, z)}
      * and {@code (x + 1, z)}:
      *
      * <pre>

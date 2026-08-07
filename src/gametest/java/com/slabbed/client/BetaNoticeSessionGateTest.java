@@ -57,7 +57,7 @@ public final class BetaNoticeSessionGateTest {
         ctx.complete();
     }
 
-    // THE SECOND BUG (Maintainer, 2026-08-07): mod_version reached 0.5.1 — no beta qualifier at all —
+    // THE SECOND BUG (the maintainer, 2026-08-07): mod_version reached 0.5.1 — no beta qualifier at all —
     // and "Slabbed is in beta" still fired on every world join. The fix is a predicate over the
     // version string rather than a hand-maintained switch, so it cannot drift again in EITHER
     // direction: a future 0.6.0-alpha.1 must still show the notice.
