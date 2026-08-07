@@ -199,13 +199,13 @@ public final class SlabAnchorAttachment {
     }
 
     /**
-     * FREEZE-ON-PLACE (Maintainer's law — "a placed block must stay in that spot and not autonomously
+     * FREEZE-ON-PLACE (LAW 1 (the placement law) — "a placed block must stay in that spot and not autonomously
      * pop"): locks the FLAT half of a placement's height at the moment it is placed. Server-side
      * only; called from {@code BlockOnPlacedAnchorMixin.onPlaced} after {@link #addAnchor}.
      *
      * <p>If a STRUCTURAL piece (ordinary full block or slab) is placed FLAT (dy ≈ 0) it records a
      * {@link #FROZEN_FLAT_TYPE} marker, so a slab / lowered carrier placed under or beside it later
-     * can no longer pull it down (the exact live down-pop Maintainer reported: "I placed the slab, the
+     * can no longer pull it down (the exact live down-pop the maintainer reported: "I placed the slab, the
      * spruce log popped down"). No-op for decorative followers (lanterns / torches / hangers /
      * signs) so they keep tracking their supports, and for pieces already anchored or frozen.
      * Natural / setBlockState blocks never call onPlaced, so terrain stays fully geometric.

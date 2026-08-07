@@ -8,7 +8,7 @@ import java.util.Set;
  * {@link BetaNoticeClient} so it's testable without a client/world instance.
  *
  * <p>Tracks "shown this session" PER WORLD KEY, not as a single global flag — a single flag
- * was the bug (live-reported by Maintainer): once ANY world showed the notice, a single boolean
+ * was the bug (live-reported by the maintainer): once ANY world showed the notice, a single boolean
  * blocked every other world for the rest of the session, including a brand-new world that was
  * never dismissed. The whole point of per-world dismissal is defeated if a session-wide cap
  * suppresses it anyway.

@@ -13,7 +13,7 @@ import net.minecraft.test.TestContext;
 import net.minecraft.util.math.BlockPos;
 
 /**
- * State-change jitter (Maintainer's grass-tower report): a grass block anchored/lowered on a slab
+ * State-change jitter (the maintainer's grass-tower report): a grass block anchored/lowered on a slab
  * converts to DIRT in place (a block-KIND change firing onStateReplaced). The anchor must
  * SURVIVE an in-place transform to another anchor-eligible block, or the dirt un-lowers and
  * jitters/merges/jumps. A genuine break (-> air) must still clear the anchor.

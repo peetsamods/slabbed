@@ -19,7 +19,7 @@ import java.util.Locale;
 /**
  * Re-derived (not ported — Forge 1.20.1 vs Fabric 1.21.11 have nothing in common at the
  * API level) from {@code TargetDyOverlay.targetLines} on
- * codex/forge-1.20.1-backport-from-neoforge-042-beta2, which Maintainer pointed at as "the
+ * codex/forge-1.20.1-backport-from-neoforge-042-beta2, which the maintainer pointed at as "the
  * slabdy debug info that is helpful" after main's terser first cut fell short.
  *
  * <p>Kept free of any client-only type (no {@code MinecraftClient}) so the field

@@ -18,7 +18,7 @@ import net.minecraft.util.math.Vec3d;
 import java.util.List;
 
 /**
- * New diagnostic (2026-07-04, built at Maintainer's request while investigating the hanging-lantern
+ * New diagnostic (2026-07-04, built at the maintainer's request while investigating the hanging-lantern
  * gap): {@code /slabdy}'s row output now shows the client-side visual-dy cache's contents next
  * to a fresh recompute, for both the targeted block and the block above it (the common
  * "hanger reads its support" relationship). This lets a live tester point at a support that a

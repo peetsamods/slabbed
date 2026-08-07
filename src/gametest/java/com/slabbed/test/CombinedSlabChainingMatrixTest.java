@@ -181,7 +181,7 @@ public final class CombinedSlabChainingMatrixTest {
         // 1. vanilla BOTTOM on terrain BOTTOM ("mixed slab"; recently-fixed, baseline-correct).
         mixedSlabColumn(ctx, world, origin, lane++);
 
-        // 2. terrain BOTTOM on vanilla BOTTOM (Maintainer's failing case — custom slab on vanilla).
+        // 2. terrain BOTTOM on vanilla BOTTOM (the maintainer's failing case — custom slab on vanilla).
         terrainOnVanillaColumn(ctx, world, origin, lane++);
 
         // 3. vanilla BOTTOM on vanilla BOTTOM (two stacked vanilla bottom slabs).
@@ -257,7 +257,7 @@ public final class CombinedSlabChainingMatrixTest {
         }
     }
 
-    // ── 2. terrain bottom on vanilla bottom (Maintainer's case) ────────────────
+    // ── 2. terrain bottom on vanilla bottom (the maintainer's case) ────────────────
     private void terrainOnVanillaColumn(TestContext ctx, ServerWorld world, BlockPos origin, int lane) {
         String cfg = "2.terrainBOTTOM/vanillaBOTTOM";
         int x = lane * 3;
@@ -458,7 +458,7 @@ public final class CombinedSlabChainingMatrixTest {
         record(cfgA, "mixedSlab", world, aSlab, -0.5, Kind.STRICT);
         double aFenceDy = record(cfgA, "fence", world, aFence, -1.0, Kind.STRICT);
         // HARD-ASSERT: fence on a mixed slab must follow the compound drop to -1.0 (the "fence
-        // not chaining" symptom Maintainer reported — pinned green).
+        // not chaining" symptom the maintainer reported — pinned green).
         ctx.assertTrue(approx(aFenceDy, -1.0),
                 cfgA + " fence on mixed slab should be -1.0, got " + aFenceDy);
 

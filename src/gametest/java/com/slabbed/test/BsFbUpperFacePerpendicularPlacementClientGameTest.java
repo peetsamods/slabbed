@@ -34,7 +34,7 @@ import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * Property-gated client GameTest for the BS-FB upper-face perpendicular
- * placement blocker from Maintainer's live screenshots.
+ * placement blocker from the maintainer's live screenshots.
  */
 public final class BsFbUpperFacePerpendicularPlacementClientGameTest implements FabricClientGameTest {
     private static final String ENABLED_PROPERTY = "slabbed.bsfbUpperFacePerpendicularProof";

@@ -58,7 +58,7 @@ import net.minecraft.world.GameMode;
  * {@code OffsetRaycastTargetingTest#vanillaTopSlabOnTerrainLowersFull}) is intentionally NOT
  * here: the intent-mixin gate is {@code getVisualYOffset == -0.5d} exactly, so the raw-fraction
  * misdecision persists there and the cell is RED on HEAD. It lives UNREGISTERED in
- * {@link UseOnMinusOneLoweredCombineVsExtendRedTest} until Maintainer rules on the -1.0 gate fix.
+ * {@link UseOnMinusOneLoweredCombineVsExtendRedTest} until the maintainer rules on the -1.0 gate fix.
  */
 public final class UseOnCombineVsExtendPlacementTest {
 

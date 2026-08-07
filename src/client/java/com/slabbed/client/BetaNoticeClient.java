@@ -19,7 +19,7 @@ import net.minecraft.util.WorldSavePath;
  * sitting doesn't repeat it — see {@link BetaNoticeSessionGate}), AND permanently skipped for
  * any specific world/server the player has clicked "don't show this again" for — but a brand
  * new world/server the player hasn't dismissed will still show it, even if they've dismissed it
- * elsewhere. That's a deliberate choice (Maintainer's explicit request): this is a per-world
+ * elsewhere. That's a deliberate choice (the maintainer's explicit request): this is a per-world
  * preference, not a single global switch.
  */
 public final class BetaNoticeClient {

@@ -800,13 +800,13 @@ public final class SlabbedLabClientGameTest implements FabricClientGameTest {
         // bundle count and verifier stay green until product-decision fixes land).
         runBsFb05sInteractionIntegrityProof(ctx, singleplayer, screenshotDir, knownScreenshotFiles, artifacts);
 
-        // BS-FB-0.5S live placement intent (RED PROOF — captures Maintainer's live
+        // BS-FB-0.5S live placement intent (RED PROOF — captures the maintainer's live
         // path where an intended 0.5S side slab ray hits vanilla block space
         // and places TOP instead of BOTTOM).
         // Side-channel notes only.
         runBsFb05sLivePlacementIntentProof(ctx, singleplayer, screenshotDir, knownScreenshotFiles, artifacts);
 
-        // BS-FB upper-face perpendicular placement (RED PROOF — captures Maintainer's
+        // BS-FB upper-face perpendicular placement (RED PROOF — captures the maintainer's
         // live path where an upper/top hit on a lowered FB routes placement to
         // vanilla height instead of the perpendicular lowered side position).
         // Side-channel notes only.
@@ -817,7 +817,7 @@ public final class SlabbedLabClientGameTest implements FabricClientGameTest {
         runBsFb1sTopHalfPlacementLawProof(ctx, singleplayer, screenshotDir, knownScreenshotFiles, artifacts);
 
         // BS-FB-1S live regression after BS break (RED PROOF candidate — captures
-        // Maintainer's live observation that breaking the original support causes the
+        // the maintainer's live observation that breaking the original support causes the
         // BS-FB system to rise and fresh 0.5S placements to jump into 1S).
         // Side-channel notes only.
         runBsFb1sLiveRegressionProof(ctx, singleplayer, screenshotDir, knownScreenshotFiles, artifacts);
@@ -2068,7 +2068,7 @@ public final class SlabbedLabClientGameTest implements FabricClientGameTest {
      * <p>Fixture: bottom slab (BS), anchored lowered full block (FB) directly
      * above it, player standing on the east side. The simulated hit is the
      * player-facing central {@code UP} hit at the lowered FB's visible upper
-     * boundary ({@code fullPos.y + 0.5}). Product law from Maintainer's live report:
+     * boundary ({@code fullPos.y + 0.5}). Product law from the maintainer's live report:
      * when that hit is made from the side as a perpendicular placement intent,
      * placement should resolve to the side position and inherit the lowered
      * visual height instead of climbing to {@code fullPos.up()}.
@@ -2368,7 +2368,7 @@ public final class SlabbedLabClientGameTest implements FabricClientGameTest {
     /**
      * Terrain Slabs item variant of the lowered side-slab placement law.
      *
-     * <p>Live authority: Maintainer reproduced this with {@code terrainslabs:grass_slab}
+     * <p>Live authority: the maintainer reproduced this with {@code terrainslabs:grass_slab}
      * against a lowered log/full block. The placement resolves to the side cell, but
      * the Terrain Slabs slab itself keeps dy=0.0, so a lower-half click visually
      * lands in the target's top half and an upper-half click remains too high.
@@ -2624,7 +2624,7 @@ public final class SlabbedLabClientGameTest implements FabricClientGameTest {
      * BS-FB-1S live-regression proof: post-support-removal stability + fresh
      * 0.5S placement after the original BS support has been broken.
      *
-     * <p>Captures Maintainer's live observation after b72629c
+     * <p>Captures the maintainer's live observation after b72629c
      * (save/bs-fb-1s-top-half-placement):
      * <ol>
      *   <li>Existing BS-FB-0.5S systems should remain visually stable when the
@@ -2641,7 +2641,7 @@ public final class SlabbedLabClientGameTest implements FabricClientGameTest {
      * register manifest artifacts.
      *
      * <p>Stops the gametest suite (RED) if the regression is reproduced — that
-     * is the captured proof of Maintainer's live failure.
+     * is the captured proof of the maintainer's live failure.
      */
     static void runBsFb1sLiveRegressionProof(
             ClientGameTestContext ctx,
@@ -3556,7 +3556,7 @@ public final class SlabbedLabClientGameTest implements FabricClientGameTest {
      * BS-FB-1S top-support law proof (RED PROOF — captures missing top-face
      * support on the lowered full-height side slab).
      *
-     * <p>Fixture geometry (Maintainer shorthand: BS-FB-1S+):
+     * <p>Fixture geometry (the maintainer shorthand: BS-FB-1S+):
      * <ul>
      *   <li>{@code bsPos}   — bottom slab (BS) at FIXTURE_ORIGIN+(72,0,0).</li>
      *   <li>{@code fbPos}   — stone full block (FB) at bsPos.up(), anchored

@@ -29,7 +29,7 @@ import static net.fabricmc.fabric.api.client.command.v2.ClientCommandManager.lit
 
 /**
  * {@code /slabdy} — re-derived from Forge 1.20.1's {@code TargetDyOverlay} (the branch
- * Maintainer pointed at as "the slabdy debug info that is helpful"), not ported: Forge's
+ * the maintainer pointed at as "the slabdy debug info that is helpful"), not ported: Forge's
  * event bus / GuiGraphics / KeyMapping.click() have no Fabric equivalent, so this is a
  * fresh implementation of the same behavior using Fabric's client-command and
  * HudRenderCallback APIs.

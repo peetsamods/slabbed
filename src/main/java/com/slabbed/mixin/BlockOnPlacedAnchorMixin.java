@@ -25,7 +25,7 @@ public abstract class BlockOnPlacedAnchorMixin {
                                           LivingEntity placer, ItemStack stack,
                                           CallbackInfo ci) {
         SlabAnchorAttachment.addAnchor(world, pos, state);
-        // FREEZE-ON-PLACE (Maintainer's law): lock this placement's height so it never autonomously
+        // FREEZE-ON-PLACE (LAW 1 (the placement law)): lock this placement's height so it never autonomously
         // pops afterwards — a flat structural piece records FROZEN_FLAT (a slab placed
         // under/beside it later can't pull it down); lowered placements are locked by the
         // qualifier-lane anchors above. No-op for decorative followers and non-structural blocks.

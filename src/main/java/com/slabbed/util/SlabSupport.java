@@ -236,7 +236,7 @@ public final class SlabSupport {
      * resting directly on a Terrain-Slabs-owned custom surface) OR a persistently-{@link
      * SlabAnchorAttachment#isAnchored anchored} opaque full cube — the ordinary "full block
      * placed on a slab" case that is this mod's own core, documented product intent
-     * (RULES.md §1), which the original direct-custom-support-only check did not cover (a
+     * (the internal rules), which the original direct-custom-support-only check did not cover (a
      * live goblin-test session found ~80 see-through-hole diagnostic hits on plain anchored
      * dirt, none of them Terrain-Slabs-related). {@code isAnchored} is a cheap O(1) chunk-
      * attachment set lookup — NOT the deep column walk in {@link #getYOffset} — and already
@@ -868,7 +868,7 @@ public final class SlabSupport {
      * pale hanging moss. These attach to the block ABOVE and have no floor variant, so their dy
      * must be a pure function of that support and must never be lowered by a block below them in
      * the column. Chains and pointed dripstone are deliberately NOT here: chains extend to reach
-     * their support (Maintainer's ruling), and the speleothem family keeps its own merge grammar.
+     * their support (maintainer ruling), and the speleothem family keeps its own merge grammar.
      * Lanterns are NOT here either: a standing lantern legitimately rests on a support, so it
      * keeps the normal path (HANGING lanterns are already excluded from the below-walk).
      */
@@ -949,7 +949,7 @@ public final class SlabSupport {
             }
             // FREEZE-ON-PLACE: a slab locked FLAT at placement stays at 0 — a lowered carrier
             // placed beside/under it later can no longer make it inherit a lowered position
-            // (Maintainer's law: a placed block must not autonomously move / type-inherit on
+            // (LAW 1 (the placement law): a placed block must not autonomously move / type-inherit on
             // neighbor change). Read before every geometric inheritance walk below.
             if (SlabAnchorAttachment.isFrozenFlat(world, pos)) {
                 return 0.0;
@@ -1000,7 +1000,7 @@ public final class SlabSupport {
         }
 
         // FREEZE-ON-PLACE: a structural full block locked FLAT at placement stays at 0 — a slab
-        // or lowered carrier added under/beside it later can no longer pull it down (Maintainer's law:
+        // or lowered carrier added under/beside it later can no longer pull it down (LAW 1 (the placement law):
         // a placed block must not autonomously move). Read before every geometric lowering lane
         // below (gap-fill, cantilever-adjacency, Terrain-Slabs combining, column walk).
         // Decorative followers are never frozen-flat, so they keep tracking their supports.
@@ -1143,11 +1143,11 @@ public final class SlabSupport {
         // "non-solid object follows a lowered support down" branch below -> -0.5 model shift while
         // face-culling stays at the grid voxel -> see-through world holes. isOpaqueFullCube() is a
         // precomputed, view-independent flag, so it pins terrain flush on every thread.
-        // NOTE (audit KNOWN_INCOMPLETE): fence GATE is intentionally NOT folded into this flush
+        // NOTE (audit the internal notes): fence GATE is intentionally NOT folded into this flush
         // guard yet. The fix is designed (use SlabAnchorAttachment.isConnectingStructural here, as
         // isSteppedConnectingNeighbor now does) but could NOT be RED-proven headlessly this pass —
         // the anchor-lowered-support-with-no-slab-in-column fixture did not reproduce — so per
-        // VERIFICATION_PROTOCOL.md G3 it is not shipped. Tracked in KNOWN_INCOMPLETE.md.
+        // VERIFICATION_PROTOCOL.md G3 it is not shipped. Tracked in the internal notes.
         if (blk instanceof SlabBlock
                 || blk instanceof StairsBlock
                 || blk instanceof FenceBlock
@@ -1526,7 +1526,7 @@ public final class SlabSupport {
         // directCustomSlabSupportDy < 0 guard below fires ONLY for a carrier actually lowered onto
         // a TS/bottom-slab surface, so a plain carrier on solid ground still returns NaN (flush).
         // KNOWN-PARTIAL: this shares the carrier's DIRECT -0.5; a carrier itself lowered -1.0 on a
-        // compound (mixed) slab is NOT yet followed to -1.0 (tracked in KNOWN_INCOMPLETE.md).
+        // compound (mixed) slab is NOT yet followed to -1.0 (tracked in the internal notes).
         if (below == null || !isSlabSitCandidate(world, belowPos, below)) {
             return Double.NaN;
         }
@@ -1550,12 +1550,12 @@ public final class SlabSupport {
      * lantern may still ATTACH to a TS underside; only its rendered dy must stay flush.
      */
     private static boolean isLoweringTopLikeCeiling(BlockState state) {
-        // DEPRECATED (2026-07-03, Maintainer live ruling): the +0.5 "reach-up" for ceiling-attached
+        // DEPRECATED (2026-07-03, the maintainer live ruling): the +0.5 "reach-up" for ceiling-attached
         // objects (lantern / dripstone / chain / …) under a top slab is deprecated — everything
         // hangs FLUSH now. In live testing the reach-up smooshed those objects UP into the slab;
         // flush looked better. Returning false disables the +0.5 at ALL three ceiling walks (the
         // ceilingHungDecorationDy cursor loop + the two getYOffsetInner walks) from ONE place, so
-        // the ruling is trivially reversible if it regresses (Maintainer: "subject to further review").
+        // the ruling is trivially reversible if it regresses (maintainer ruling: "subject to further review").
         // The `slabSupportDy + 0.5` flush-COMPENSATION for a LOWERED top slab (SlabSupport.java:817
         // and :1012) is a DIFFERENT path — it nets 0.0 (flush against the lowered underside), not a
         // reach-up — and deliberately stays. Prior body: !shouldSkipOffset && isTopLikeCeilingSurface.
