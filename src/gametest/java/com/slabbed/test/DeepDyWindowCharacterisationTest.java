@@ -293,7 +293,11 @@ public final class DeepDyWindowCharacterisationTest {
         BlockPos ground = ctx.getAbsolutePos(BlockPos.ORIGIN).add(2, 1, 2);
         w.setBlockState(ground, Blocks.STONE.getDefaultState(), Block.NOTIFY_LISTENERS);
 
-        BlockPos[] level = new BlockPos[6];
+        // Six courses as measured for Stage 0; DEEPENED at Stage 4 so there are still courses past
+        // saturation once the cap can be -2.0 (saturation moves from index 2 to index 4). The
+        // historical six is a floor, so no course this row ever measured is removed.
+        BlockPos[] level =
+                new BlockPos[Math.max(6, (int) Math.ceil(-SlabSupport.MIN_RESOLVED_DY / 0.5) + 3)];
         for (int i = 0; i < level.length; i++) {
             level[i] = ground.up(i + 1);
             w.setBlockState(level[i], bottomSlab(Blocks.OAK_SLAB), Block.NOTIFY_LISTENERS);
@@ -317,11 +321,22 @@ public final class DeepDyWindowCharacterisationTest {
 
         ctx.assertTrue(Math.abs(dy[0]) <= EPS, "pre-store L0 must be 0.0 —" + ladder);
         ctx.assertTrue(Math.abs(dy[1] + 0.5) <= EPS, "pre-store L1 must be -0.5 —" + ladder);
+        // STATED AGAINST THE CAP (Stage 4, 2026-08-07): each course deepens half a block until the
+        // clamp refuses, so course i reads max(-0.5*i, cap) and saturation lands at index
+        // ceil(-cap / 0.5). At the shipped -1.0 cap that is index 2 and every course from L2 up
+        // reads -1.0 — the exact assertion this loop has always made. At the ruled -2.0 cap the
+        // ladder runs 0.0 / -0.5 / -1.0 / -1.5 / -2.0 / -2.0, which is what MEASUREMENT B becomes.
         for (int i = 2; i < level.length; i++) {
-            ctx.assertTrue(Math.abs(dy[i] + 1.0) <= EPS,
-                    "MEASUREMENT B: pre-store L" + i + " must saturate at the MIN_RESOLVED_DY clamp "
-                            + "(-1.0) —" + ladder);
+            double expected = Math.max(-0.5 * i, SlabSupport.MIN_RESOLVED_DY);
+            ctx.assertTrue(Math.abs(dy[i] - expected) <= EPS,
+                    "MEASUREMENT B: pre-store L" + i + " must read max(-0.5*" + i + ", cap) = "
+                            + expected + " (cap " + SlabSupport.MIN_RESOLVED_DY + ") —" + ladder);
         }
+        int saturatedIndex = (int) Math.ceil(-SlabSupport.MIN_RESOLVED_DY / 0.5);
+        ctx.assertTrue(saturatedIndex < level.length,
+                "fixture: the ladder must be tall enough to SATURATE, or 'pre-store saturates at "
+                        + "the clamp' is untested — saturation needs index " + saturatedIndex
+                        + " and the tower is " + level.length + " courses —" + ladder);
 
         // THE MEASURED ANSWER TO "WHAT DOES EXHAUSTION RETURN", AS MEASURED FOR STAGE 0: it
         // returned a bare -0.5, and IN THIS TOWER SHAPE that was PROVABLY INVISIBLE. Every course
@@ -340,11 +355,13 @@ public final class DeepDyWindowCharacterisationTest {
         // exhaustion value straight to the top of the stack unmodified. Measured there, the bare
         // -0.5 popped a course UP half a block at TODAY's -1.0 cap; see SupportDepthBudgetTest,
         // which builds both shapes side by side.
-        ctx.assertTrue(Math.abs(dy[5] - dy[2]) <= EPS,
+        int top = level.length - 1;
+        ctx.assertTrue(Math.abs(dy[top] - dy[saturatedIndex]) <= EPS,
                 "MEASUREMENT B: in a DROPPING tower the exhaustion path is unobservable at this "
-                        + "clamp — L5 must read exactly what the saturated L2 reads. This shape "
-                        + "washes the exhaustion value out whatever it is; the PASS-THROUGH shape "
-                        + "in SupportDepthBudgetTest is the one that does not —" + ladder);
+                        + "clamp — the top course L" + top + " must read exactly what the first "
+                        + "saturated course L" + saturatedIndex + " reads. This shape washes the "
+                        + "exhaustion value out whatever it is; the PASS-THROUGH shape in "
+                        + "SupportDepthBudgetTest is the one that does not —" + ladder);
         ctx.complete();
     }
 
@@ -376,13 +393,17 @@ public final class DeepDyWindowCharacterisationTest {
         }
         System.out.println("[STAGE0-B] stored-lane ladder:" + facts);
 
+        // The stored fact IS the resolved height at placement time, so it follows the same
+        // max(-0.5*i, cap) ladder as the live read. Written that way at Stage 4 rather than as a
+        // literal -1.0; the values at the shipped cap are unchanged.
         for (int i = 2; i < level.length; i++) {
+            double expected = Math.max(-0.5 * i, SlabSupport.MIN_RESOLVED_DY);
             double stored = SlabPlacementDyAttachment.storedDy(w, level[i]);
-            ctx.assertTrue(Math.abs(stored + 1.0) <= EPS,
-                    "MEASUREMENT B: L" + i + " must carry a STORED height of -1.0 — the walk that "
-                            + "produced it terminated at depth 1 on L" + (i - 1) + "'s stored fact, "
-                            + "so no course of a post-store tower ever spends the depth budget —"
-                            + facts);
+            ctx.assertTrue(Math.abs(stored - expected) <= EPS,
+                    "MEASUREMENT B: L" + i + " must carry a STORED height of " + expected
+                            + " — the walk that produced it terminated at depth 1 on L" + (i - 1)
+                            + "'s stored fact, so no course of a post-store tower ever spends the "
+                            + "depth budget —" + facts);
         }
         ctx.complete();
     }
@@ -441,14 +462,31 @@ public final class DeepDyWindowCharacterisationTest {
                 + " supportTopY=" + supportTopY + " followerBottomY=" + followerBottomY
                 + " gap=" + gap);
 
-        ctx.assertTrue(Math.abs(followerDy + 1.0) <= EPS,
-                "MEASUREMENT B: the follower's raw seat is -2.5 and MIN_RESOLVED_DY flattens it to "
-                        + "-1.0, got " + followerDy + ". The depth budget is not involved: the walk "
+        // THE MEASUREMENT, STATED AGAINST THE CAP (Stage 4, 2026-08-07). The raw seat is fixed by
+        // the fixture at -2.5 (a stored -2.0 support, half-height arm); what the cap does with it
+        // is the variable. At the shipped -1.0 cap the follower is flattened to -1.0 and the
+        // measured hole is 1.5 blocks — the number Stage 0 reported and the reason the ruling
+        // exists. With DEEP_DY_ALPHABET armed the cap refuses at -2.0 instead and the SAME fixture
+        // measures a 0.5 hole: that shrinkage is exactly what Stage 4 buys, and it is measured here
+        // rather than claimed.
+        double rawSeat = supportDy - 0.5;
+        double expectedFollower = Math.max(rawSeat, SlabSupport.MIN_RESOLVED_DY);
+        double expectedGap = expectedFollower - rawSeat;
+        ctx.assertTrue(rawSeat < SlabSupport.MIN_RESOLVED_DY - EPS,
+                "FIXTURE IS NO LONGER LOAD-BEARING: the raw seat " + rawSeat + " is not past the "
+                        + "cap (" + SlabSupport.MIN_RESOLVED_DY + "), so this cell would measure no "
+                        + "clamp at all. Deepen the stored support — do not relax the row.");
+        ctx.assertTrue(Math.abs(followerDy - expectedFollower) <= EPS,
+                "MEASUREMENT B: the follower's raw seat is " + rawSeat + " and MIN_RESOLVED_DY ("
+                        + SlabSupport.MIN_RESOLVED_DY + ") flattens it to " + expectedFollower
+                        + ", got " + followerDy + ". The depth budget is not involved: the walk "
                         + "terminated at depth 1 on the support's stored fact.");
-        ctx.assertTrue(Math.abs(gap - 1.5) <= EPS,
+        ctx.assertTrue(Math.abs(gap - expectedGap) <= EPS,
                 "MEASUREMENT B: the clamp opens a measured " + gap + "-block hole between a -2.0 "
-                        + "support's top face and the block resting on it. Stage 4 cannot ship the "
-                        + "deeper alphabet without moving MIN_RESOLVED_DY in the same change.");
+                        + "support's top face and the block resting on it; at cap "
+                        + SlabSupport.MIN_RESOLVED_DY + " that hole must be " + expectedGap
+                        + ". Stage 4 cannot ship the deeper alphabet without moving "
+                        + "MIN_RESOLVED_DY in the same change.");
         ctx.complete();
     }
 

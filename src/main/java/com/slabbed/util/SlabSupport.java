@@ -1849,6 +1849,50 @@ public final class SlabSupport {
     }
 
     /**
+     * The system property that arms the deeper offset alphabet. {@code slabbed.deepDyAlphabet}.
+     *
+     * <p>Named on the same pattern as this line's other switches ({@code slabbed.lawGate},
+     * {@code slabbed.offsetRaycast}, {@code slabbed.serverHitTolerance}), read ONCE at class init
+     * into a static final so nothing on the resolver path pays a {@code System.getProperty} per
+     * call. A Gradle daemon {@code -D} does NOT reach a forked JavaExec, so {@code build.gradle}
+     * forwards this name into {@code runGameTest} explicitly, exactly as it already does for
+     * {@code slabbed.lawGate}.
+     */
+    public static final String DEEP_DY_ALPHABET_PROPERTY = "slabbed.deepDyAlphabet";
+
+    /**
+     * THE STAGE 4 GATE — is the deeper offset alphabet armed? <b>Default {@code false}: OFF.</b>
+     *
+     * <p><b>Why a flag at all, given LAW 1.</b> A cell WITH a stored placement height never moves
+     * when this flips — {@code storedDy} is returned verbatim by {@link #anchoredCellDy} and no
+     * cap is consulted on that path. But every cell WITHOUT one takes the LIVE resolver: worlds
+     * saved before the placement store landed ({@code d4f38510}, this dev cycle), worldgen,
+     * {@code /setblock}, {@code /slabrig}, and {@code LAW.md} lanes A and C-F. Those cells would
+     * visibly drop half a block the first time they re-rendered after an update. Maintainer's ruling of
+     * 2026-08-06 explicitly DECLINED to call that "acceptable as a repair": no existing build
+     * shifts under anyone without warning. It stays off until there is a migration or backfill
+     * story.
+     *
+     * <p><b>What OFF guarantees.</b> {@link #MIN_RESOLVED_DY} reads {@link #SHIPPED_MIN_RESOLVED_DY}
+     * and every other constant on this line was already derived from the window contract rather
+     * than from the cap (Stages 1-3), so no other value moves. That the OFF leg is unchanged is not
+     * asserted, it is MEASURED: {@code ClampUnificationTest}'s 196-column, 588-reading battery must
+     * reproduce the fingerprint pinned before Stage 2, token for token.
+     */
+    public static final boolean DEEP_DY_ALPHABET =
+            Boolean.parseBoolean(System.getProperty(DEEP_DY_ALPHABET_PROPERTY, "false"));
+
+    /**
+     * The cap every build has shipped to date, and the value {@link #MIN_RESOLVED_DY} keeps while
+     * {@link #DEEP_DY_ALPHABET} is off.
+     *
+     * <p>Kept as a NAMED constant rather than inlined into the conditional so the OFF leg has
+     * something to be identical TO: the tests that pin unchanged behaviour compare against this
+     * name, not against a literal they would have to keep in step by hand.
+     */
+    public static final double SHIPPED_MIN_RESOLVED_DY = -1.0;
+
+    /**
      * THE CAP — the deepest dy this line will ever RESOLVE, and the one constant every clamp site
      * in this file reads.
      *
@@ -1868,11 +1912,21 @@ public final class SlabSupport {
      * without reading the other: {@code ClampUnificationTest} asserts the identity, and
      * {@code DeepDyWindowCharacterisationTest} asserts the radius derivation.
      *
-     * <p><b>The identity is an INEQUALITY today, deliberately.</b> The window already stands at the
-     * ruled {@code -2.0} (Stage 1, 2026-08-07) while this cap is still {@code -1.0}, so the pick
-     * path leads the alphabet and its permanent cost ships and live-tests on its own. The
-     * inequality closes to EQUALITY when the ruled cap lands here (Stage 4). On that day this is a
-     * one-constant edit, because every site that refuses to go deeper reads this name.
+     * <p><b>The identity closes to EQUALITY exactly when {@link #DEEP_DY_ALPHABET} is on.</b> With
+     * the flag OFF — the shipped default — this cap is {@code -1.0} against a window built for
+     * {@code -2.0}, so the pick path leads the alphabet and its permanent cost ships and live-tests
+     * on its own: the identity is an INEQUALITY and the slack is deliberate. With the flag ON this
+     * constant IS {@link SlabbedOffsetRaycast#DEEPEST_TARGETABLE_DY} — not a second copy of
+     * {@code -2.0} but the same field read — so the cap and the window cannot be given different
+     * values, and {@code MIN_RESOLVED_DY == -(window radius)} is a DERIVABLE invariant rather than a
+     * magic number. That is Maintainer's ruling of 2026-08-06 and the whole reason the ruled cap is
+     * {@code -2.0} instead of the {@code -1.5} originally asked for: Stage 0 MEASURED the required
+     * radius as 1 at {@code -1.0} and 2 at BOTH {@code -1.5} and {@code -2.0}, so stopping at
+     * {@code -1.5} would pay the entire radius-2 cost and leave the constant magic anyway.
+     *
+     * <p>Stages 1-3 exist so that this is a ONE-CONSTANT change: the pick window derives its radius
+     * from the window contract, the depth budget derives from the same contract, and every site
+     * that refuses to go deeper reads this name. Nothing else moves when the flag flips.
      *
      * <p><b>What "every site" means, and why it is now enforced.</b> Two independent lanes can
      * saturate the same tower: the support resolver ({@link #loweredFollowerDy} and the column
@@ -1889,7 +1943,8 @@ public final class SlabSupport {
      * column walk's historical seat constant. Only a site whose job is to REFUSE TO GO DEEPER
      * reads this name.
      */
-    public static final double MIN_RESOLVED_DY = -1.0;
+    public static final double MIN_RESOLVED_DY =
+            DEEP_DY_ALPHABET ? SlabbedOffsetRaycast.DEEPEST_TARGETABLE_DY : SHIPPED_MIN_RESOLVED_DY;
 
     /**
      * THE DEEPEST ONE COURSE CAN ADD — the worst-case seat drop a single level of the walk can

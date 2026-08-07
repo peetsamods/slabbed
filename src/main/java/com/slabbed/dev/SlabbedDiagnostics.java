@@ -10,6 +10,7 @@ import net.minecraft.block.ShapeContext;
 import net.minecraft.block.SlabBlock;
 import net.minecraft.registry.Registries;
 import net.minecraft.util.math.BlockPos;
+import net.minecraft.util.math.Direction;
 import net.minecraft.util.shape.VoxelShape;
 import net.minecraft.world.BlockView;
 
@@ -41,24 +42,59 @@ import java.util.Locale;
  *       section-bake time rather than per frame.</li>
  * </ul>
  *
+ * <p><b>THE TRIAD FLAG COVERS THREE LEGS, AND SAYS WHICH ONES IT ACTUALLY CHECKED.</b> Until
+ * {@code 21ceeb68} the flag named {@code triadMismatch} compared the OUTLINE against
+ * {@code visualDy} and nothing else: the raycast leg had no flag at all, and the model leg's
+ * separate flag could never fire because {@link #analyze(BlockView, BlockPos, BlockState)}
+ * supplies no model sample. So {@code TRIAD_MISMATCH: 0} certified one leg out of three on a
+ * line whose documented failure mode is exactly one leg moving while the others do not, and this
+ * campaign read it as coverage. It is now three per-leg predicates plus an explicit per-leg
+ * COVERAGE state ({@link LegCheck}), and {@link Sample#triadMismatch()} is the OR of the three.
+ * A leg that could not be checked reports {@link LegCheck#NOT_SAMPLED} / {@link
+ * LegCheck#EMPTY_BY_DESIGN} / {@link LegCheck#NOT_DECIDABLE} in {@link Sample#triadCoverage()},
+ * and {@link Sample#triadLegsVerified()} counts only the legs that a disagreement WOULD have
+ * fired on — so a green counter can never again be mistaken for coverage it does not have.
+ *
+ * <p><b>What still cannot be checked from {@code analyze} alone, stated plainly:</b>
+ * <ul>
+ *   <li><b>the model leg, headlessly</b> — the only INDEPENDENT model sample is the one
+ *       {@code OffsetBlockStateModel.emitQuads} captures against the mesher's own
+ *       {@code BlockRenderView} (a {@code ChunkRendererRegion}, which historically answered
+ *       {@code isAnchored} differently from the server world — that view difference is the whole
+ *       reason the leg is worth checking). Re-evaluating {@code ClientDy.dyFor} against the
+ *       caller's world here would be a TAUTOLOGY, because that method is a pure delegate to
+ *       {@link SlabSupport#getVisualYOffset} — the same call {@code visualDy} already makes — so
+ *       the flag would be green by construction. That is the defect being fixed, not a fix for
+ *       it. Headless callers therefore get {@link LegCheck#NOT_SAMPLED}, visibly.</li>
+ *   <li><b>the EFFECTIVE hit</b> — the leg that actually decides targeting is where a real
+ *       {@code SlabbedOffsetRaycast} lands, and that needs a ray, which a per-cell probe has no
+ *       business inventing. {@code getRaycastShape} is only a side REFINEMENT layered on the
+ *       outline hit, so it is a weaker proxy. The effective hit is pinned by gametest instead
+ *       ({@code SlabbedDiagnosticsTest#effectiveHitLegTracksTheVisualDy}).</li>
+ * </ul>
+ *
  * <p>Detection heuristics (each a small, unit-tested predicate):
  * <ul>
- *   <li><b>triadMismatch</b> — the outline/raycast shape did NOT get offset by the same dy
- *       as the visual/model. Robust signal: collision is never offset on main, so
- *       {@code outlineMinY - collisionMinY} is the offset actually applied to the outline;
- *       if it disagrees with {@code visualDy}, the wireframe/raycast is a phantom (the exact
- *       "vanilla slabs fence raycast broken" class of bug).</li>
- *   <li><b>dodoRisk</b> — an opaque full cube rendered at a nonzero dy. The chunk mesher
- *       culls its faces at the grid voxel while it renders lowered → see-through hole
- *       ("doom infinity window").</li>
- *   <li><b>smooshRisk</b> — a decoration (not a slab, not a full cube) lowered a FULL block
- *       or more; the classic double-offset "smoosh" where two systems (e.g. Terrain Slabs'
- *       own offset + Slabbed's) both fire.</li>
+ *   <li><b>outlineMismatch</b> — the outline shape did NOT get offset by the same dy as the
+ *       visual/model, i.e. the wireframe/hitbox is a phantom (the exact "vanilla slabs fence
+ *       raycast broken" class of bug).</li>
+ *   <li><b>raycastMismatch</b> — the block HAS its own targeting shape and that shape disagrees
+ *       with the offset outline. Silent when the shape is empty, which is the correct answer for
+ *       almost every block.</li>
+ *   <li><b>modelMismatch</b> — client-only: the rendered model dy disagrees with the
+ *       authoritative visual dy.</li>
+ *   <li><b>dodoRisk</b> — an opaque full cube rendered at a nonzero dy <b>with at least one
+ *       face where a real height step is exposed and {@code BlockRenderInfoCullMixin} does NOT
+ *       redraw it</b>. The bare shape condition is only the precondition (see
+ *       {@link #dodoShapePrecondition}); on its own it marked 36 of 55 rows of recorder run
+ *       {@code 9e925ab0} — the mod's entire normal operating envelope — and carried no signal.</li>
+ *   <li><b>smooshRisk</b> — a non-air decoration (not a slab, not a full cube) sitting AT the
+ *       resolver's floor {@link SlabSupport#MIN_RESOLVED_DY}; the classic double-offset "smoosh"
+ *       where two systems (e.g. Terrain Slabs' own offset + Slabbed's) both fire and the sum
+ *       saturates the clamp. The threshold is READ from the cap, never restated.</li>
  *   <li><b>dyDiscontinuity{Above,Below}</b> — two vertically-adjacent connectable
  *       decorations (chain/lantern) at different dy, i.e. a visible gap in a hanging stack
  *       (chain-to-lantern gap).</li>
- *   <li><b>modelMismatch</b> — client-only: the rendered model dy disagrees with the
- *       authoritative visual dy.</li>
  * </ul>
  */
 public final class SlabbedDiagnostics {
@@ -99,6 +135,37 @@ public final class SlabbedDiagnostics {
         return !Double.isNaN(v) && !Double.isInfinite(v);
     }
 
+    /**
+     * Whether a dy leg was actually COMPARED against the resolver, and if not, why not.
+     *
+     * <p>This exists because "the flag did not fire" and "the flag could not fire" are different
+     * facts that a boolean cannot tell apart, and conflating them is what let
+     * {@code TRIAD_MISMATCH: 0} read as three-leg coverage for an entire campaign. Only
+     * {@link #CHECKED} means a disagreement WOULD have been caught.
+     */
+    public enum LegCheck {
+        /** Compared against the resolver. A disagreement on this leg would have fired. */
+        CHECKED,
+        /** No value was obtained for this leg here — conclude nothing from its silence. */
+        NOT_SAMPLED,
+        /**
+         * Sampled, and the answer was an empty shape. A real measurement and the CORRECT answer
+         * (vanilla's default {@code getRaycastShape} is empty), but an empty shape constrains no
+         * dy, so it verifies nothing either.
+         */
+        EMPTY_BY_DESIGN,
+        /**
+         * A value exists but cannot be turned into a dy comparison for this block — e.g. a
+         * hanging lantern's nonzero base outline makes {@code minY}-vs-dy meaningless (see
+         * {@link #hasGridBasedOutline}), or the leg has no baseline to compare against.
+         */
+        NOT_DECIDABLE
+    }
+
+    private static final Direction[] HORIZONTAL = {
+            Direction.NORTH, Direction.SOUTH, Direction.EAST, Direction.WEST
+    };
+
     private SlabbedDiagnostics() {
     }
 
@@ -114,29 +181,62 @@ public final class SlabbedDiagnostics {
             String anchorState,
             String aboveId, double aboveDy,
             String belowId, double belowDy,
-            boolean triadMismatch,
+            boolean outlineMismatch,
             boolean dodoRisk,
             boolean smooshRisk,
             boolean dyDiscontinuityAbove,
             boolean dyDiscontinuityBelow,
             boolean collisionFollowsVisual,
-            boolean modelMismatch) {
+            boolean modelMismatch,
+            boolean raycastMismatch,
+            LegCheck outlineLeg,
+            LegCheck raycastLeg,
+            LegCheck modelLeg) {
+
+        /**
+         * <b>The triad flag, and now it means its name:</b> any of the three dy legs disagreed.
+         * Read it TOGETHER with {@link #triadLegsVerified()} — this being false means "no CHECKED
+         * leg disagreed", which is only three-leg coverage when three legs were checked.
+         */
+        public boolean triadMismatch() {
+            return outlineMismatch || raycastMismatch || modelMismatch;
+        }
+
+        /** How many of the three legs were actually compared against the resolver (0..3). */
+        public int triadLegsVerified() {
+            int n = 0;
+            if (outlineLeg == LegCheck.CHECKED) n++;
+            if (raycastLeg == LegCheck.CHECKED) n++;
+            if (modelLeg == LegCheck.CHECKED) n++;
+            return n;
+        }
+
+        /** Per-leg coverage, e.g. {@code outline=CHECKED raycast=EMPTY_BY_DESIGN model=NOT_SAMPLED}. */
+        public String triadCoverage() {
+            return "outline=" + outlineLeg + " raycast=" + raycastLeg + " model=" + modelLeg;
+        }
 
         /** True if any red flag fired — the rows a tester most wants to see. */
         public boolean anySuspect() {
-            return triadMismatch || dodoRisk || smooshRisk
-                    || dyDiscontinuityAbove || dyDiscontinuityBelow || modelMismatch;
+            return triadMismatch() || dodoRisk || smooshRisk
+                    || dyDiscontinuityAbove || dyDiscontinuityBelow;
         }
 
-        /** Compact space-separated list of the flags that fired (empty string if clean). */
+        /**
+         * Compact list of the flags that fired (empty string if clean). {@code TRIAD_MISMATCH} is
+         * the umbrella — kept as a token so every historic grep for it still finds the outline
+         * failures it used to name — and the leg that actually disagreed is named beside it.
+         */
         public String flagSummary() {
             List<String> f = new ArrayList<>();
-            if (triadMismatch) f.add("TRIAD_MISMATCH");
+            if (triadMismatch()) f.add("TRIAD_MISMATCH");
+            if (outlineMismatch) f.add("OUTLINE_MISMATCH");
+            if (raycastMismatch) f.add("RAYCAST_MISMATCH");
+            if (modelMismatch) f.add("MODEL_MISMATCH");
             if (dodoRisk) f.add("DODO");
             if (smooshRisk) f.add("SMOOSH");
             if (dyDiscontinuityAbove) f.add("GAP_ABOVE");
             if (dyDiscontinuityBelow) f.add("GAP_BELOW");
-            if (modelMismatch) f.add("MODEL_MISMATCH");
             return String.join(",", f);
         }
     }
@@ -167,13 +267,17 @@ public final class SlabbedDiagnostics {
                 opaque, slab, anchor,
                 blockId(above), aboveDy,
                 blockId(below), belowDy,
-                triadMismatch(state, visualDy, outlineMinY),
-                dodoRisk(opaque, visualDy),
+                outlineMismatch(state, visualDy, outlineMinY),
+                dodoRisk(world, pos, state, visualDy),
                 smooshRisk(state, visualDy),
                 dyDiscontinuity(state, above, visualDy, aboveDy),
                 dyDiscontinuity(state, below, visualDy, belowDy),
                 collisionFollowsVisual(visualDy, outlineMinY, collisionMinY),
-                modelMismatch(visualDy, modelDy));
+                modelMismatch(visualDy, modelDy),
+                raycastMismatch(raycastMinY, outlineMinY),
+                outlineLeg(state, outlineMinY),
+                raycastLeg(raycastMinY, outlineMinY),
+                modelLeg(modelDy));
     }
 
     // ── pure predicates (unit-testable) ───────────────────────────────
@@ -191,11 +295,58 @@ public final class SlabbedDiagnostics {
      * That exact false positive is what the first recorder pass over beds/lanterns/chains
      * exposed; the gap/DODO/smoosh checks cover those block families instead.
      */
-    public static boolean triadMismatch(BlockState state, double visualDy, double outlineMinY) {
-        if (!isMeasured(outlineMinY) || !hasGridBasedOutline(state)) {
-            return false;
+    public static boolean outlineMismatch(BlockState state, double visualDy, double outlineMinY) {
+        return outlineLeg(state, outlineMinY) == LegCheck.CHECKED
+                && Math.abs(outlineMinY - visualDy) > EPS;
+    }
+
+    /** Coverage of the outline leg — see {@link #outlineMismatch} for what makes it decidable. */
+    public static LegCheck outlineLeg(BlockState state, double outlineMinY) {
+        if (outlineMinY == MEASURED_EMPTY) {
+            return LegCheck.EMPTY_BY_DESIGN;
         }
-        return Math.abs(outlineMinY - visualDy) > EPS;
+        if (!isMeasured(outlineMinY)) {
+            return LegCheck.NOT_SAMPLED;
+        }
+        return hasGridBasedOutline(state) ? LegCheck.CHECKED : LegCheck.NOT_DECIDABLE;
+    }
+
+    /**
+     * The block has its OWN targeting shape and that shape disagrees with the offset outline.
+     *
+     * <p>Compared against the OUTLINE rather than against {@code visualDy} on purpose:
+     * {@code getRaycastShape} is a side REFINEMENT layered on top of the outline hit in
+     * {@code BlockView.raycastBlock}, so "tracks the outline" is the property that matters and it
+     * is decidable for blocks whose base is not 0 (a chain, a lantern) where a dy comparison is
+     * not. Silent when either shape is empty — {@link LegCheck#EMPTY_BY_DESIGN} is the correct
+     * answer for stone, slabs and chains, and inventing a mismatch there would be a phantom.
+     */
+    public static boolean raycastMismatch(double raycastMinY, double outlineMinY) {
+        return raycastLeg(raycastMinY, outlineMinY) == LegCheck.CHECKED
+                && Math.abs(raycastMinY - outlineMinY) > EPS;
+    }
+
+    /** Coverage of the raycast leg. {@code EMPTY} is a measurement, but it verifies no dy. */
+    public static LegCheck raycastLeg(double raycastMinY, double outlineMinY) {
+        if (raycastMinY == MEASURED_EMPTY) {
+            return LegCheck.EMPTY_BY_DESIGN;
+        }
+        if (!isMeasured(raycastMinY)) {
+            return LegCheck.NOT_SAMPLED;
+        }
+        return isMeasured(outlineMinY) ? LegCheck.CHECKED : LegCheck.NOT_DECIDABLE;
+    }
+
+    /**
+     * Coverage of the model leg. {@link LegCheck#NOT_SAMPLED} is the honest answer for every
+     * headless caller, and it is now VISIBLE rather than a silent {@code false} — see the class
+     * javadoc for why re-deriving the sample from the caller's own world would be a tautology.
+     */
+    public static LegCheck modelLeg(double modelDy) {
+        if (modelDy == MEASURED_EMPTY) {
+            return LegCheck.EMPTY_BY_DESIGN;
+        }
+        return isMeasured(modelDy) ? LegCheck.CHECKED : LegCheck.NOT_SAMPLED;
     }
 
     /**
@@ -225,15 +376,103 @@ public final class SlabbedDiagnostics {
                 || b instanceof net.minecraft.block.BedBlock;
     }
 
-    /** Opaque full cube rendered at a nonzero dy → face-cull-vs-render see-through hole. */
-    public static boolean dodoRisk(boolean opaqueFullCube, double visualDy) {
+    /**
+     * NECESSARY, NOT SUFFICIENT: an opaque full cube rendered at a nonzero dy — the SHAPE that can
+     * expose a face-cull-vs-render see-through hole.
+     *
+     * <p>This was the whole of {@code dodoRisk} until {@code 21ceeb68}, and on its own it is
+     * measured noise: over recorder run {@code 9e925ab0} it selected exactly
+     * {@code {opaqueFullCube && |visualDy| > EPS}} — <b>36 of 55 rows</b>, i.e. the mod's entire
+     * normal operating envelope, with no reference to whether any hole is actually exposed or
+     * whether {@code BlockRenderInfoCullMixin} already redraws it. Kept as a named precondition
+     * because it IS the correct first gate; the flag is {@link #dodoRisk(BlockView, BlockPos,
+     * BlockState, double)}.
+     */
+    public static boolean dodoShapePrecondition(boolean opaqueFullCube, double visualDy) {
         return opaqueFullCube && Math.abs(visualDy) > EPS;
     }
 
-    /** A decoration (not slab, not full cube) lowered a full block or more = double offset. */
+    /**
+     * An opaque full cube at a nonzero dy with at least one face where a height step really is
+     * exposed and the per-face mitigation does NOT cover it.
+     *
+     * <p><b>Horizontal faces.</b> {@code BlockRenderInfoCullMixin} redraws exactly the faces
+     * {@link SlabSupport#isSlabHeightStepFace} claims, so a step that predicate answers for is
+     * MITIGATED and must not be flagged. This probe therefore establishes the hole independently —
+     * the neighbour is an opaque full cube (so the mesher culls the shared face at the grid voxel)
+     * AND the two resolved heights differ (so the step exposes part of it) — and then flags only
+     * when the mitigation declines the face. If the mitigation is switched off, or misses a case,
+     * the flag comes back on its own.
+     *
+     * <p><b>Vertical faces are NOT mitigated at all</b> — the mixin is horizontal-only
+     * ({@code direction.getAxis().isHorizontal()}) — so a genuine vertical step always flags. A dy
+     * DIFFERENCE alone is not a vertical hole, though: a cube at {@code -0.5} standing on a flush
+     * bottom slab meets its support exactly, which is the mod's ordinary geometry. Between two
+     * full cubes the gap is the signed difference, so only {@code aboveDy > dy} (a gap under the
+     * block above) and {@code dy > belowDy} (a gap over the block below) are holes. Measured
+     * against the three recorder runs this vertical arm adds ZERO rows, so it is not what made the
+     * old flag noisy — it is kept because leaving it out would make the flag falsely quiet on a
+     * hole class nothing else covers.
+     */
+    public static boolean dodoRisk(BlockView world, BlockPos pos, BlockState state, double visualDy) {
+        if (world == null || pos == null || state == null
+                || !dodoShapePrecondition(state.isOpaqueFullCube(), visualDy)) {
+            return false;
+        }
+        for (Direction d : HORIZONTAL) {
+            BlockPos np = pos.offset(d);
+            if (occludingStepNeighbor(world, np, visualDy) != 0
+                    && !SlabSupport.isSlabHeightStepFace(world, pos, state, d)) {
+                return true;
+            }
+        }
+        // Vertical: sign matters. +1 = the neighbour sits higher than this block by its dy.
+        return occludingStepNeighbor(world, pos.up(), visualDy) > 0
+                || occludingStepNeighbor(world, pos.down(), visualDy) < 0;
+    }
+
+    /**
+     * {@code 0} when the cell at {@code np} cannot expose a step against a block at
+     * {@code visualDy} — it is not an opaque full cube (nothing culls the shared face), or the two
+     * resolved heights agree. Otherwise the SIGN of {@code neighborDy - visualDy}, which the
+     * vertical arm needs and the horizontal arm ignores.
+     */
+    private static int occludingStepNeighbor(BlockView world, BlockPos np, double visualDy) {
+        BlockState n = world.getBlockState(np);
+        if (n == null || !n.isOpaqueFullCube()) {
+            return 0;
+        }
+        double delta = SlabSupport.getVisualYOffset(world, np, n) - visualDy;
+        if (Math.abs(delta) <= EPS) {
+            return 0;
+        }
+        return delta > 0 ? 1 : -1;
+    }
+
+    /**
+     * A non-air decoration (not slab, not full cube) sitting AT the resolver's floor = the
+     * double-offset "smoosh".
+     *
+     * <p><b>The threshold is READ from {@link SlabSupport#MIN_RESOLVED_DY}, not written down.</b>
+     * It used to be the literal {@code -1.0}, which happened to equal the shipped cap; the moment
+     * the cap moves to {@code -2.0} a hard {@code -1.0} would fire on every decoration merely
+     * lowered past one block — the mod's new normal envelope — and repeat the DODO mistake one
+     * cap later. Derived, it keeps meaning "this decoration has saturated the clamp", which is
+     * what a double offset looks like AFTER clamping and is the only part of it still observable
+     * through {@code getVisualYOffset}. At today's cap this is bit-for-bit the old threshold, so
+     * the recorder's measured SMOOSH behaviour is unchanged by the derivation.
+     *
+     * <p><b>Air gate.</b> An air cell's {@code visualDy} reads the pre-placement lane's value and
+     * has no geometry to smoosh, yet air satisfied "not a slab, not an opaque cube" and so
+     * classified as a decoration: 4 of 6 SMOOSH rows in run {@code 9e925ab0}, 7 of 13 in
+     * {@code b5d717d9}.
+     */
     public static boolean smooshRisk(BlockState state, double visualDy) {
+        if (state.isAir()) {
+            return false;
+        }
         boolean decoration = !(state.getBlock() instanceof SlabBlock) && !state.isOpaqueFullCube();
-        return decoration && visualDy <= -1.0 + EPS;
+        return decoration && visualDy <= SlabSupport.MIN_RESOLVED_DY + EPS;
     }
 
     /** Two vertically-adjacent connectable decorations (chain/lantern) at different dy = gap. */
@@ -246,6 +485,9 @@ public final class SlabbedDiagnostics {
      * Client-only: rendered model dy disagrees with the authoritative visual dy.
      *
      * <p>Silent on either sentinel — an unsampled or empty leg is not evidence of disagreement.
+     * That silence is no longer invisible: {@link #modelLeg} reports it as
+     * {@link LegCheck#NOT_SAMPLED} and {@link Sample#triadLegsVerified()} does not count it, so
+     * "this flag cannot fire here" can no longer be read as "this flag fired and found nothing".
      */
     public static boolean modelMismatch(double visualDy, double modelDy) {
         return isMeasured(modelDy) && Math.abs(modelDy - visualDy) > EPS;

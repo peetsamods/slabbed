@@ -150,13 +150,33 @@ across `birch_slab` / `birch_fence` / `lantern` / `oak_sign`); see `docs/process
 | `AF-HALF-SEAT` | anchored follower | on a vanilla bottom slab that is itself flush | **−0.5** | half-height seat | `AnchoredFollowerSupportDyTest` |
 | `AF-FULL-SEAT` | anchored follower (slab / fence / lantern / sign) | on a solid non-slab support already at −1.0 | **−1.0** (inherits the support's dy) | full-height seat | `AnchoredFollowerSupportDyTest` |
 | `AF-GEOMETRIC` | un-anchored follower | same scene, no anchor anywhere | **−1.0** (identical to `AF-FULL-SEAT`) | anchor lane == geometric lane | `AnchoredFollowerSupportDyTest`, `OffsetRaycastTargetingTest` |
-| `AF-CLAMP` | anchored follower | on a bottom slab that is itself already at −1.0 (raw seat −1.5) | **−1.0** | `CS-CAP` | `AnchoredFollowerSupportDyTest` |
+| `AF-CLAMP` | anchored follower | on a bottom slab that is itself already **at the cap** (raw seat `cap − 0.5`) | **`MIN_RESOLVED_DY`** | `CS-CAP` | `AnchoredFollowerSupportDyTest` |
 
 ### Combined-slab stacks
 
 | SPEC-ID | subject | local config | dy | law | test |
 |---|---|---|---|---|---|
-| `CS-CAP` | deep 3+ combined-slab tower | stacked lowered | **capped at −1.0** | load-bearing w/ ±1 pick window | `CombinedSlabChainingMatrixTest`, `AnchoredFollowerSupportDyTest` (`AF-CLAMP`) |
+| `CS-CAP` | deep 3+ combined-slab tower | stacked lowered | **capped at `MIN_RESOLVED_DY`** — −1.0 shipped, −2.0 with `slabbed.deepDyAlphabet` | cap == −(pick window radius) | `CombinedSlabChainingMatrixTest`, `ClampUnificationTest`, `AnchoredFollowerSupportDyTest` (`AF-CLAMP`) |
+
+**`CS-CAP` is a NAME, not a number (Stage 4, 2026-08-07).** The cap is
+`SlabSupport.MIN_RESOLVED_DY`, and it is derived rather than chosen: a block drawn at `dy` is
+clickable only if the offset-aware pick window tests the cell layers its shape occupies, and
+`SlabbedOffsetRaycast` derives `WINDOW_RADIUS = ceil(-DEEPEST_TARGETABLE_DY)`. The standing identity
+is `MIN_RESOLVED_DY >= DEEPEST_TARGETABLE_DY`; it is an INEQUALITY with the flag off (cap −1.0
+against a window built for −2.0, deliberate slack so the pick-path cost ships alone) and closes to
+EQUALITY with the flag on, where `MIN_RESOLVED_DY` literally READS `DEEPEST_TARGETABLE_DY`. So
+`MIN_RESOLVED_DY == -(window radius)` is derivable, which is Maintainer's stated reason (2026-08-06) for
+ruling the cap −2.0 rather than the −1.5 originally asked for: Stage 0 MEASURED the required radius
+as 1 at −1.0 and 2 at BOTH −1.5 and −2.0, so −1.5 would pay the whole radius-2 cost and leave the
+constant magic anyway.
+
+**The flag defaults OFF and is not a user setting.** Cells holding a stored placement height never
+move when it flips (LAW 1 — `storedDy` is returned verbatim); cells without one take the live
+resolver and would drop half a block on first re-render. Measured blast radius: the 196-column
+shallow battery in `ClampUnificationTest` is byte-identical in both legs, and so is
+`CombinedSlabChainingMatrixTest`'s 38-row combined-slab matrix. Only columns deep enough to
+saturate move — `ClampUnificationTest#deepColumnsAreTheOnlyShapesTheDeeperAlphabetMoves` pins both
+legs of that.
 
 **Footnotes — honest test caveats (surfaced by adversarial review):**
 

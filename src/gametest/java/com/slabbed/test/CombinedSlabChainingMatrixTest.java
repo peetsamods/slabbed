@@ -448,8 +448,16 @@ public final class CombinedSlabChainingMatrixTest {
         place(world, capBase.up(2), vanillaBottom());
         place(world, capBase.up(3), Blocks.LANTERN.getDefaultState());
         // Lantern on the top slab of a 3-high vanilla stack. Post-ruling it reads -1.0 (its support
-        // is lowered now); the accumulate law wants -1.5, which MIN_RESOLVED_DY (-1.0, DY_SPEC.md
-        // CS-CAP) forbids on this line by design. Record vs -1.5, BY_DESIGN.
+        // is lowered now) while the accumulate law wants -1.5. Recorded vs -1.5, BY_DESIGN.
+        //
+        // ⚠️ THE STATED CAUSE WAS WRONG, AND STAGE 4 IS WHAT SHOWED IT (2026-08-07). This comment
+        // used to read "which MIN_RESOLVED_DY (-1.0, DY_SPEC.md CS-CAP) forbids on this line by
+        // design". Running the whole matrix with slabbed.deepDyAlphabet=true — cap -2.0, which
+        // refuses nothing at -1.5 — leaves this row BYTE-IDENTICAL at -1.0. So the cap is not what
+        // holds it: the column is built with setBlockState and takes the GEOMETRIC lane, whose
+        // no-vertical-accumulate behaviour is the actual constraint, exactly as the BY_DESIGN kind
+        // label (not the comment) already said. Root-causing it further is not this row's job; the
+        // false attribution is removed rather than replaced with a second guess.
         record(cfg, "L3=lantern", world, capBase.up(3), -1.5, Kind.BY_DESIGN);
     }
 

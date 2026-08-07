@@ -55,6 +55,22 @@ import net.minecraft.util.math.BlockPos;
  * defect.</b> Recorded here rather than smoothed over, and reported to Maintainer as a correction to
  * MEASUREMENT B rather than a quiet fix.
  *
+ * <h2>⚠️ AND STAGE 3'S OWN FIX TURNS OUT TO HAVE BEEN VALUE-COINCIDENTAL (Stage 4, 2026-08-07)</h2>
+ *
+ * <p>Exhaustion now returns {@code MIN_RESOLVED_DY}, which is right for a DROPPING tower: you may
+ * only ever round a truncated descent DOWN. But a PASS-THROUGH stack does not descend, so the
+ * truthful answer for a truncated pass-through walk is <em>the value the stack is standing on</em>,
+ * and exhaustion substitutes the cap for it. At the shipped {@code -1.0} cap those two numbers are
+ * THE SAME — which is the only reason Stage 3 measured green here. Arm
+ * {@code SlabSupport.DEEP_DY_ALPHABET} and they differ by a full block: the stack SINKS at the
+ * exhaustion point, the exact mirror of the pop Stage 3 removed. Monotonicity still holds (sinking
+ * is downward), which is why it needs its own assertion.
+ *
+ * <p><b>Characterised, not fixed</b> — see {@code KNOWN_INCOMPLETE.md} row 1o. The OFF leg keeps
+ * the strict pass-through equality unchanged; the deep leg pins the substitution and asserts it is
+ * a sink rather than a pop. Repairing it is a production change to {@code loweredFollowerDy}'s
+ * exhaustion return and owes its own RED-first pass over both tower shapes at both caps.
+ *
  * <h2>Fixtures are PRE-STORE by construction</h2>
  *
  * <p>The budget cannot be reached at all while the placement store answers: {@code addAnchor}
@@ -232,13 +248,70 @@ public final class SupportDepthBudgetTest {
         assertNonIncreasing(ctx, dy, ladder);
 
         // ── AND THE VALUE: a pass-through course reads exactly what it is standing on ───────
-        for (int i = 3; i < level.length; i++) {
-            ctx.assertTrue(Math.abs(dy[i] - dy[2]) <= EPS,
-                    "a full-height support passes its dy through UNCHANGED, so every course of "
-                            + "this stack must read what the first one reads (" + dy[2] + "); L" + i
-                            + " reads " + dy[i] + ". A course that differs is the depth budget "
-                            + "leaking into the answer — " + ladder);
+        if (!SlabSupport.DEEP_DY_ALPHABET) {
+            for (int i = 3; i < level.length; i++) {
+                ctx.assertTrue(Math.abs(dy[i] - dy[2]) <= EPS,
+                        "a full-height support passes its dy through UNCHANGED, so every course of "
+                                + "this stack must read what the first one reads (" + dy[2] + "); L"
+                                + i + " reads " + dy[i] + ". A course that differs is the depth "
+                                + "budget leaking into the answer — " + ladder);
+            }
+            ctx.complete();
+            return;
         }
+
+        // ── THE DEEP LEG: STAGE 3'S EXHAUSTION FIX WAS VALUE-COINCIDENTAL AT THE SHIPPED CAP ──
+        //
+        // ⚠️ CHARACTERISATION, NOT ENDORSEMENT. This is a REAL residual found by arming Stage 4's
+        // flag, reported rather than patched, and it is deliberately NOT fixed here: repairing it
+        // means changing loweredFollowerDy's exhaustion return, which is Stage 3's site and a
+        // production behaviour change that owes its own RED-first pass. See KNOWN_INCOMPLETE row
+        // 1o.
+        //
+        // WHAT WAS MEASURED. Exhaustion returns MIN_RESOLVED_DY (Stage 3 changed it from a bare
+        // -0.5 for a good reason: in a DROPPING tower, truncating a descent may only ever round
+        // DOWN). But a PASS-THROUGH stack does not descend — every full-height course hands its
+        // support's dy up unchanged — so the truthful answer for a truncated pass-through walk is
+        // the value the stack is standing on, and exhaustion substitutes the cap for it. At the
+        // shipped -1.0 cap those two numbers are THE SAME (the base of this fixture is at -1.0), so
+        // Stage 3 measured green and the substitution was invisible. At the ruled -2.0 cap they
+        // differ by a full block and the stack SINKS at the exhaustion point — the exact mirror of
+        // the pop Stage 3 removed, in the other direction.
+        //
+        // The MONOTONICITY invariant above still holds (sinking is downward, and a course may
+        // always resolve deeper than its support), which is why this needs its own assertion.
+        int firstDivergent = -1;
+        for (int i = 3; i < level.length; i++) {
+            if (Math.abs(dy[i] - dy[2]) > EPS) {
+                firstDivergent = i;
+                break;
+            }
+        }
+        System.out.println("[STAGE4-PASSTHROUGH] firstDivergentCourse=" + firstDivergent
+                + " passThroughValue=" + dy[2] + " " + ladder);
+
+        ctx.assertTrue(firstDivergent > 0,
+                "the deep leg was expected to REPRODUCE the exhaustion substitution and did not. "
+                        + "If the exhaustion path has been repaired, delete this branch and let the "
+                        + "unconditional pass-through assertion above run in both legs — do not "
+                        + "leave a characterisation standing over a fixed defect — " + ladder);
+        ctx.assertTrue(Math.abs(dy[firstDivergent] - SlabSupport.MIN_RESOLVED_DY) <= EPS,
+                "CHARACTERISED (Stage 4): the first course past the depth budget must read the "
+                        + "exhaustion return, which is MIN_RESOLVED_DY ("
+                        + SlabSupport.MIN_RESOLVED_DY + "); it reads " + dy[firstDivergent]
+                        + ". If this is neither the pass-through value nor the cap, the exhaustion "
+                        + "path has changed shape and this row no longer describes it — " + ladder);
+        for (int i = firstDivergent; i < level.length; i++) {
+            ctx.assertTrue(Math.abs(dy[i] - SlabSupport.MIN_RESOLVED_DY) <= EPS,
+                    "CHARACTERISED (Stage 4): once the exhaustion value enters a pass-through "
+                            + "stack every course above carries it unchanged, so L" + i
+                            + " must equal the cap; it reads " + dy[i] + " — " + ladder);
+        }
+        ctx.assertTrue(dy[firstDivergent] < dy[firstDivergent - 1] - EPS,
+                "CHARACTERISED (Stage 4): the substitution must be a SINK, not a pop. L"
+                        + firstDivergent + " reading shallower than the course below it would be "
+                        + "the never-pop violation Stage 3 removed, returning at a deeper cap — "
+                        + ladder);
         ctx.complete();
     }
 

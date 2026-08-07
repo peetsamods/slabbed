@@ -70,10 +70,13 @@ import net.minecraft.world.BlockView;
  * both {@code -1.5} and {@code -2.0}, which is why the ruled cap is {@code -2.0} — the
  * largest magnitude a radius-2 window pays for.)
  *
- * <p><b>Slack is deliberate right now.</b> {@code SlabSupport.MIN_RESOLVED_DY} is still
- * {@code -1.0} while this window is built for {@code -2.0}: the window lands ahead of the
- * alphabet on purpose, so the permanent pick-path cost ships and live-tests by itself
- * rather than entangled with a geometry change. While that slack exists the extra probes
+ * <p><b>Slack is deliberate, and it is exactly what the Stage 4 flag closes.</b> With
+ * {@code SlabSupport.DEEP_DY_ALPHABET} off — the shipped default —
+ * {@code SlabSupport.MIN_RESOLVED_DY} is {@code -1.0} while this window is built for
+ * {@code -2.0}: the window lands ahead of the alphabet on purpose, so the permanent
+ * pick-path cost ships and live-tests by itself rather than entangled with a geometry
+ * change. With the flag on, {@code MIN_RESOLVED_DY} IS this field and the two are the same
+ * number by construction. While that slack exists the extra probes
  * are <em>provably inert</em>: with every offset the build can mint confined to
  * {@code [-1.0, 0.0]}, a shape never reaches further than one cell from its owner, so the
  * outer ring of the window can only reach positions whose shape the ray does not intersect
@@ -118,9 +121,11 @@ public final class SlabbedOffsetRaycast {
      * is the thing anyone has a reason to change.
      *
      * <p>Ruled {@code -2.0} by Maintainer on 2026-08-06. {@link SlabSupport#MIN_RESOLVED_DY}, the
-     * deepest offset the resolver will ever PRODUCE, must never be deeper than this value; today
-     * it is shallower ({@code -1.0}), which is the deliberate slack described in the class doc.
-     * The two constants cross-reference each other on purpose — {@code ClampUnificationTest} pins
+     * deepest offset the resolver will ever PRODUCE, must never be deeper than this value. With
+     * {@link SlabSupport#DEEP_DY_ALPHABET} off (the shipped default) it is shallower
+     * ({@code -1.0}), which is the deliberate slack described in the class doc; with the flag on it
+     * READS THIS FIELD, so the identity is an equality that cannot be written wrong. The two
+     * constants cross-reference each other on purpose — {@code ClampUnificationTest} pins
      * the identity so neither can drift alone.
      */
     public static final double DEEPEST_TARGETABLE_DY = -2.0;

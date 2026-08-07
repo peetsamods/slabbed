@@ -74,12 +74,31 @@ public final class ClampUnificationTest {
 
     private static final double EPS = 1.0e-6;
 
+    /** The half-block a bottom-slab course adds. A SHAPE, and it does not move with the cap. */
+    private static final double SEAT_DROP_PER_COURSE = 0.5;
+
+    /**
+     * How many oak-slab courses the tower needs to LADDER DOWN TO THE CAP before the subject is
+     * placed. Derived, never written: each course deepens by {@link #SEAT_DROP_PER_COURSE} until
+     * the clamp refuses, so {@code ceil(-cap / drop)} courses saturate. Evaluated at the shipped
+     * {@code -1.0} cap this is 2 — exactly the two courses this fixture has always built — and at
+     * the ruled {@code -2.0} cap it is 4.
+     *
+     * <p>Deepening the fixture is not optional at Stage 4: the previous fixed pair of courses left
+     * the pre-clamp value at {@code -1.5}, which a {@code -2.0} cap does not refuse, and the cell's
+     * own non-vacuity guard said so in as many words when the flag was first armed.
+     */
+    private static final int SATURATING_OAK_COURSES =
+            (int) Math.ceil(-SlabSupport.MIN_RESOLVED_DY / SEAT_DROP_PER_COURSE);
+
     /**
      * The pre-clamp value both lanes are handed by the tower below. Written down because both
      * assertions and the saturation premise depend on it, and because it is the deepest value this
-     * build can produce (see the class doc).
+     * build can produce (see the class doc): every course is itself clamped as it resolves, so the
+     * deepest number any support can hand its follower is exactly one course past the cap.
      */
-    private static final double RAW_TOWER_DY = -1.5;
+    private static final double RAW_TOWER_DY =
+            SlabSupport.MIN_RESOLVED_DY - SEAT_DROP_PER_COURSE;
 
     // ─────────────────────────────────────────────────────────────────────────────
     // THE STAGE 2 CELL
@@ -111,19 +130,21 @@ public final class ClampUnificationTest {
         // ── PREMISES: the two columns really are the same tower, and it really sank ──────────
         assertCoursesMatch(ctx, w, slabGround, tableGround);
 
-        double supportDy = dy(w, slabGround.up(3));
-        double storedSupportDy = SlabPlacementDyAttachment.storedDy(w, slabGround.up(3));
+        BlockPos support = supportCourse(slabGround);
+        double supportDy = dy(w, support);
+        double storedSupportDy = SlabPlacementDyAttachment.storedDy(w, support);
         ctx.assertTrue(Math.abs(dy(w, slabGround.up(2)) + 0.5) <= EPS,
                 "premise: the tower's third course must sit at -0.5 on the Terrain Slabs surface, "
                         + "got " + dy(w, slabGround.up(2)));
-        ctx.assertTrue(Math.abs(supportDy + 1.0) <= EPS,
-                "premise: the course both subjects rest on must resolve to -1.0 — that is the "
-                        + "number that makes BOTH pre-clamp values " + RAW_TOWER_DY + ", got "
-                        + supportDy);
-        ctx.assertTrue(Math.abs(storedSupportDy + 1.0) <= EPS,
-                "premise: that course must carry a STORED placement height of -1.0, or the "
-                        + "direct-custom lane reads its support through a different arm and the "
-                        + "two pre-clamp values stop matching, got " + storedSupportDy);
+        ctx.assertTrue(Math.abs(supportDy - SlabSupport.MIN_RESOLVED_DY) <= EPS,
+                "premise: the course both subjects rest on must resolve to the cap ("
+                        + SlabSupport.MIN_RESOLVED_DY + ") — that is the number that makes BOTH "
+                        + "pre-clamp values " + RAW_TOWER_DY + ", got " + supportDy);
+        ctx.assertTrue(Math.abs(storedSupportDy - SlabSupport.MIN_RESOLVED_DY) <= EPS,
+                "premise: that course must carry a STORED placement height of "
+                        + SlabSupport.MIN_RESOLVED_DY + ", or the direct-custom lane reads its "
+                        + "support through a different arm and the two pre-clamp values stop "
+                        + "matching, got " + storedSupportDy);
 
         // ── PREMISE: each subject is claimed by the lane this cell means to test ─────────────
         BlockState slabState = w.getBlockState(slabSubject);
@@ -229,15 +250,72 @@ public final class ClampUnificationTest {
     @GameTest(structure = "fabric-gametest-api-v1:empty")
     public void resolverAnswersAreUnchangedAcrossTheUnification(TestContext ctx) {
         String fingerprint = battery(ctx);
-        System.out.println("[STAGE2-FINGERPRINT] len=" + fingerprint.length());
+        System.out.println("[STAGE2-FINGERPRINT] len=" + fingerprint.length()
+                + " deepDyAlphabet=" + SlabSupport.DEEP_DY_ALPHABET
+                + " cap=" + SlabSupport.MIN_RESOLVED_DY);
         System.out.println("[STAGE2-FINGERPRINT] " + fingerprint);
 
         ctx.assertTrue(fingerprint.equals(PINNED_FINGERPRINT),
-                "STAGE 2 WAS NOT INERT. The resolver's answers over the 196-column battery differ "
-                        + "from the values measured before the clamp sites were unified. First "
-                        + "difference at index " + firstDifference(fingerprint, PINNED_FINGERPRINT)
+                "STAGE 2 WAS NOT INERT, or the Stage 4 flag has leaked into a shape it must not "
+                        + "reach. The resolver's answers over the 196-column battery differ from "
+                        + "the values measured before the clamp sites were unified. Running cap is "
+                        + SlabSupport.MIN_RESOLVED_DY + " (deepDyAlphabet="
+                        + SlabSupport.DEEP_DY_ALPHABET + "). First difference at index "
+                        + firstDifference(fingerprint, PINNED_FINGERPRINT)
                         + ".\n  pinned   = " + PINNED_FINGERPRINT
                         + "\n  measured = " + fingerprint);
+        ctx.complete();
+    }
+
+    /**
+     * <b>WHICH SHAPES THE RULING ACTUALLY MOVES — the same instrument, aimed at columns deep enough
+     * for the cap to bite.</b>
+     *
+     * <p>MEASURED at Stage 4 (2026-08-07): the 196-column battery above is <b>cap-invariant</b>. It
+     * produces a byte-identical 588-token string with the flag on and with it off, because its
+     * tallest column is three courses and nothing in it ever resolves past {@code -1.0} — the cap
+     * has nothing to refuse. That is worth knowing (it is the blast radius of Maintainer's ruling stated
+     * as data: ordinary shallow scenes do not move at all), but it also means that battery cannot
+     * tell the two legs apart, so on its own it could not distinguish "the OFF leg is clean" from
+     * "the flag never reached the resolver".
+     *
+     * <p>This cell closes that gap. Same construction, same tokens, same one-column-at-a-time
+     * clearing — but every column stands on a {@link #DEEP_LADDER_COURSES}-course anchored slab
+     * ladder, which saturates at either cap. So the fingerprint is REQUIRED to differ between the
+     * legs, and each leg is pinned:
+     *
+     * <ul>
+     *   <li>the OFF-leg pin is the byte-identity evidence a deep column can actually carry — if
+     *       arming the alphabet ever leaked into the shipped default, this string moves;</li>
+     *   <li>the deep-leg pin characterises exactly what the ruling buys, index by index.</li>
+     * </ul>
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void deepColumnsAreTheOnlyShapesTheDeeperAlphabetMoves(TestContext ctx) {
+        String fingerprint = deepBattery(ctx);
+        boolean deep = SlabSupport.DEEP_DY_ALPHABET;
+        String pinned = deep ? PINNED_DEEP_BATTERY_ON : PINNED_DEEP_BATTERY_OFF;
+        System.out.println("[STAGE4-DEEPBATTERY] len=" + fingerprint.length()
+                + " deepDyAlphabet=" + deep + " cap=" + SlabSupport.MIN_RESOLVED_DY);
+        System.out.println("[STAGE4-DEEPBATTERY] " + fingerprint);
+
+        ctx.assertTrue(fingerprint.equals(pinned),
+                (deep
+                        ? "THE DEEP LEG MOVED since the flag was first armed. "
+                        : "THE SHIPPED DEFAULT MOVED. A column deep enough for the cap to bite "
+                                + "answers differently than it did before the Stage 4 flag "
+                                + "existed, which is the leak this flag exists to prevent. ")
+                        + "cap=" + SlabSupport.MIN_RESOLVED_DY + ", first difference at index "
+                        + firstDifference(fingerprint, pinned)
+                        + ".\n  pinned   = " + pinned
+                        + "\n  measured = " + fingerprint);
+
+        // NON-VACUITY: if the two pins were equal this cell could not tell the legs apart, and a
+        // deep leg silently running the shipped cap would pass it.
+        ctx.assertTrue(!PINNED_DEEP_BATTERY_OFF.equals(PINNED_DEEP_BATTERY_ON),
+                "the two pinned deep-battery fingerprints are identical, so this cell can no "
+                        + "longer distinguish the legs and the deep leg could be running the "
+                        + "shipped cap unnoticed");
         ctx.complete();
     }
 
@@ -258,6 +336,37 @@ public final class ClampUnificationTest {
             + "00H00F00H00H00000H00H0HF0HF0HF0HF0HH0HF0HF0FH0FF0FH0FH0FH0FH0FH0HH0HF0HH0HH0H00HH0HH"
             + "0HH0HH0HH0HH0HH0HH0HH0HH0HH0HH0HH0HH0HH0HH0HH0HH0HH0HH0HH0HH0HH00H00F00H00H00000H00H";
 
+    /**
+     * Courses of anchored bottom slab under every deep-battery column. Four is enough to saturate
+     * at the ruled {@code -2.0} cap ({@code ceil(2.0 / 0.5)}) and more than enough at the shipped
+     * {@code -1.0} one, so the SAME scene is built in both legs and only the resolver's answers
+     * differ. Written as a fixed number rather than derived from the cap on purpose: a fixture
+     * whose GEOMETRY moved with the flag would not be comparing like with like.
+     */
+    private static final int DEEP_LADDER_COURSES = 4;
+
+    /**
+     * The deep battery with the flag OFF. Measured 2026-08-07; this is the byte-identity evidence
+     * for the shipped default on shapes the shallow battery cannot reach.
+     */
+    private static final String PINNED_DEEP_BATTERY_OFF =
+            "FFHFFHFFHFFHFFHFFHFFHFF0FF0FF0FFFFF0FFFFF0FF0FF0FF0FFFFF0FFFFF0FFFFFFFF0FFFFF0FFFFF0FF"
+            + "FFFFFF0FFFFF0FFFFF0FFFFFFFFFFFFFFFFFFFFFF0HF0FF0HF0HF00F0HF0HFFFFFFFFFFFFFFFFFFFFFFFFF"
+            + "FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF"
+            + "FFFFFFFFFFFFFFFFFHFFHFFHFFHFFHFFHFFH";
+
+    /**
+     * The deep battery with {@code slabbed.deepDyAlphabet=true}. Measured 2026-08-07 on the tree
+     * that first armed the flag; a characterisation of the deep leg, not an endorsement of any
+     * cell in it. Every index where this differs from {@link #PINNED_DEEP_BATTERY_OFF} is a shape
+     * whose rendered height the ruling moves in a world holding no stored placement fact.
+     */
+    private static final String PINNED_DEEP_BATTERY_ON =
+            "DTHDTHDTHDTHDTHDTHDTHDT0DT0DT0DTTDT0DTTDT0DT0DT0DT0DTTDT0DTTDT0DTTDTTDT0DTTDT0DTTDT0DT"
+            + "TDTTDT0DTTDT0DTTDT0DTTDTTDTTDTTDTTDTTDTTD0HD0FD0HD0HD00D0HD0HDTTDTTDTTDTTDTTDTTDTTDTTD"
+            + "TTDTTDTTDTTDTTDTTDTTDTTDTTDTTDTTDTTDTTDTTDTTDTTDTTDTTDTTDTTDTTDTTDTTDTTDTTDTTDTTDTTDTT"
+            + "DTTDTTDTTDTTDTTDTHDTHDTHDTHDTHDTHDTH";
+
     private static int firstDifference(String a, String b) {
         int n = Math.min(a.length(), b.length());
         for (int i = 0; i < n; i++) {
@@ -273,23 +382,35 @@ public final class ClampUnificationTest {
     // ─────────────────────────────────────────────────────────────────────────────
 
     /**
-     * stone / TS BOTTOM slab / oak slab / oak slab (anchored, -1.0) / {@code subject}.
-     * Returns the subject's position.
+     * stone / TS BOTTOM slab / {@link #SATURATING_OAK_COURSES} oak slabs, the topmost anchored and
+     * sitting AT the cap / {@code subject}. Returns the subject's position.
+     *
+     * <p>Every oak course is anchored, which is what a player click does and what records each
+     * course's height as a stored fact. At the shipped cap this builds exactly the four courses it
+     * always did.
      */
     private static BlockPos buildTower(ServerWorld w, BlockPos ground, BlockState subject) {
         place(w, ground, Blocks.STONE.getDefaultState());
         place(w, ground.up(1), tsBottomSlab());
-        place(w, ground.up(2), bottomSlab(Blocks.OAK_SLAB));
-        place(w, ground.up(3), bottomSlab(Blocks.OAK_SLAB));
-        // The real placement sequence: onPlaced -> addAnchor fires for every player click, and it
-        // is what records this course's height as a stored fact.
-        SlabAnchorAttachment.addAnchor(w, ground.up(3), w.getBlockState(ground.up(3)));
-        place(w, ground.up(4), subject);
-        return ground.up(4);
+        for (int i = 0; i < SATURATING_OAK_COURSES; i++) {
+            BlockPos course = ground.up(2 + i);
+            place(w, course, bottomSlab(Blocks.OAK_SLAB));
+            // The real placement sequence: onPlaced -> addAnchor fires for every player click, and
+            // it is what records this course's height as a stored fact.
+            SlabAnchorAttachment.addAnchor(w, course, w.getBlockState(course));
+        }
+        BlockPos subjectPos = ground.up(2 + SATURATING_OAK_COURSES);
+        place(w, subjectPos, subject);
+        return subjectPos;
+    }
+
+    /** The course both subjects rest on: the last oak slab, which sits AT the cap. */
+    private static BlockPos supportCourse(BlockPos ground) {
+        return ground.up(1 + SATURATING_OAK_COURSES);
     }
 
     private static void assertCoursesMatch(TestContext ctx, ServerWorld w, BlockPos a, BlockPos b) {
-        for (int i = 0; i <= 3; i++) {
+        for (int i = 0; i <= 1 + SATURATING_OAK_COURSES; i++) {
             BlockState sa = w.getBlockState(a.up(i));
             BlockState sb = w.getBlockState(b.up(i));
             ctx.assertTrue(sa.equals(sb),
@@ -355,6 +476,76 @@ public final class ClampUnificationTest {
         return out.toString();
     }
 
+    /**
+     * The shallow battery's supports and subjects, over a {@link #DEEP_LADDER_COURSES}-course
+     * anchored slab ladder instead of a single base course. Three readings per column: the top of
+     * the ladder, the support, the subject.
+     */
+    private static String deepBattery(TestContext ctx) {
+        ServerWorld w = ctx.getWorld();
+        BlockPos ground = ctx.getAbsolutePos(BlockPos.ORIGIN).add(6, 1, 6);
+
+        BlockState[] supports = {
+                bottomSlab(Blocks.OAK_SLAB),
+                topSlab(Blocks.OAK_SLAB),
+                doubleSlab(Blocks.OAK_SLAB),
+                Blocks.STONE.getDefaultState(),
+                Blocks.STRIPPED_JUNGLE_LOG.getDefaultState(),
+                Blocks.OAK_FENCE.getDefaultState(),
+                tsBottomSlab(),
+        };
+        BlockState[] subjects = {
+                bottomSlab(Blocks.OAK_SLAB),
+                topSlab(Blocks.OAK_SLAB),
+                Blocks.CRAFTING_TABLE.getDefaultState(),
+                Blocks.LANTERN.getDefaultState(),
+                Blocks.STONE.getDefaultState(),
+                Blocks.WHITE_CARPET.getDefaultState(),
+                Blocks.OAK_FENCE.getDefaultState(),
+        };
+
+        int ladderTop = DEEP_LADDER_COURSES;          // ground.up(1..DEEP_LADDER_COURSES)
+        int supportLevel = ladderTop + 1;
+        int subjectLevel = supportLevel + 1;
+
+        StringBuilder out = new StringBuilder();
+        for (int anchored = 0; anchored <= 1; anchored++) {
+            for (BlockState support : supports) {
+                for (BlockState subject : subjects) {
+                    clearDeepColumn(w, ground, subjectLevel + 1);
+                    place(w, ground, Blocks.STONE.getDefaultState());
+                    for (int i = 1; i <= DEEP_LADDER_COURSES; i++) {
+                        BlockPos course = ground.up(i);
+                        place(w, course, bottomSlab(Blocks.OAK_SLAB));
+                        SlabAnchorAttachment.addAnchor(w, course, w.getBlockState(course));
+                    }
+                    place(w, ground.up(supportLevel), support);
+                    if (anchored == 1) {
+                        SlabAnchorAttachment.addAnchor(w, ground.up(supportLevel),
+                                w.getBlockState(ground.up(supportLevel)));
+                    }
+                    place(w, ground.up(subjectLevel), subject);
+                    out.append(token(dy(w, ground.up(ladderTop))));
+                    out.append(token(dy(w, ground.up(supportLevel))));
+                    out.append(token(dy(w, ground.up(subjectLevel))));
+                }
+            }
+        }
+        clearDeepColumn(w, ground, subjectLevel + 1);
+        return out.toString();
+    }
+
+    private static void clearDeepColumn(ServerWorld w, BlockPos ground, int height) {
+        for (int i = 0; i <= height; i++) {
+            BlockPos p = ground.up(i);
+            SlabAnchorAttachment.removeAnchor(w, p);
+            SlabPlacementDyAttachment.clear(w, p);
+            w.setBlockState(p, Blocks.AIR.getDefaultState(), Block.NOTIFY_LISTENERS);
+            SlabAnchorAttachment.removeAnchor(w, p);
+            SlabPlacementDyAttachment.clear(w, p);
+        }
+    }
+
     private static void clearColumn(ServerWorld w, BlockPos ground) {
         for (int i = 0; i <= 5; i++) {
             BlockPos p = ground.up(i);
@@ -376,6 +567,15 @@ public final class ClampUnificationTest {
         }
         if (Math.abs(dy + 1.5) <= EPS) {
             return "D";
+        }
+        // The two magnitudes only the deeper alphabet can mint. Named so the deep battery reads as
+        // a string rather than as a list of angle-bracketed numbers; anything outside the set is
+        // still written out in full, so an unexpected value can never hide inside a token.
+        if (Math.abs(dy + 2.0) <= EPS) {
+            return "T";
+        }
+        if (Math.abs(dy + 2.5) <= EPS) {
+            return "X";
         }
         if (Math.abs(dy - 0.5) <= EPS) {
             return "U";

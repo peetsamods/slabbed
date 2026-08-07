@@ -22,7 +22,9 @@ import net.minecraft.world.chunk.WorldChunk;
  *   <li>the realistic dense shape — a whole built-in-height chunk of cells placed on ONE lowered
  *       surface — still fits, because a uniform section costs a single palette byte;</li>
  *   <li>where the boundary actually sits for the expensive shape (dense AND mixed-height), stated
- *       as a number rather than a hope;</li>
+ *       as a number rather than a hope — RE-MEASURED at Stage 4 (2026-08-07), because the stored
+ *       alphabet grew from two values to three and a mixed section's palette went from 1 bit to
+ *       2 bits per entry;</li>
  *   <li>that crossing that boundary makes {@code record} decline the fact and leave the cell on its
  *       pre-existing live behaviour — it never throws, which is precisely the #38 failure.</li>
  * </ol>
@@ -35,9 +37,19 @@ import net.minecraft.world.chunk.WorldChunk;
 public final class PlacementDyAttachmentCapacityTest {
     private static final int FABRIC_ATTACHMENT_MAX_DATA_BYTES = 32_502;
 
-    /** dy = -0.5 and dy = -1.0 in the stored sixteenths-of-a-block grid. */
+    /**
+     * dy = -0.5, -1.0 and -2.0 in the stored sixteenths-of-a-block grid.
+     *
+     * <p>{@code DOUBLE_DOWN} is the cap {@code SlabSupport.DEEP_DY_ALPHABET} arms (Stage 4,
+     * 2026-08-07). It needs NO format change — {@code -2.0} is 32 sixteenths and the signed-byte
+     * range is {@code [-8.0, +7.9375]} — but it does grow the stored ALPHABET from two values to
+     * three, which pushes a mixed section's palette from 1 bit per entry to 2. That is a capacity
+     * change, and it is the reason the boundary row below had to be re-measured rather than
+     * inherited.
+     */
     private static final byte HALF_DOWN = -8;
     private static final byte FULL_DOWN = -16;
+    private static final byte DOUBLE_DOWN = -32;
 
     /**
      * The realistic dense shape: every cell of a full built-in-height chunk carrying the SAME
@@ -132,20 +144,40 @@ public final class PlacementDyAttachmentCapacityTest {
         String boundary = "mixed-height boundary: " + fits + " facts fit in one chunk ("
                 + SlabPlacementDyAttachment.encodedByteLengthForTesting(
                         mixedFacts(chunkX, chunkZ, bottomY, fits))
-                + " bytes), " + (fits + 1) + " does not";
+                + " bytes) over a " + STORED_ALPHABET.length + "-value alphabet, " + (fits + 1)
+                + " does not";
+        System.out.println("[STAGE4-CAPACITY] " + boundary);
 
         ctx.assertTrue(fits < totalPositions,
                 "a fully dense MIXED chunk was expected to exceed the sync budget; if it now fits, "
                         + "this characterization is stale and the guard below is untested. "
                         + boundary);
-        // MEASURED 2026-08-06 on the built-in Overworld (98,304 positions per chunk column):
-        // 64,136 two-height facts fit in 16,340 bytes, so two thirds of a fully dense chunk is
-        // already covered. The floor below is deliberately half of that: a codec change that gave
-        // up the packed palette and spent a byte per position would drop the boundary to roughly
-        // 14,500 and this row would catch it, while ordinary drift will not trip it.
+        // RE-MEASURED 2026-08-07 (Stage 4) on the built-in Overworld, 98,304 positions per chunk
+        // column. The alphabet grew from two stored values to three, so a mixed section spends 2
+        // bits per occupied position where it used to spend 1, and the boundary moved:
+        //
+        //     2-value alphabet (1 bit/entry), measured 2026-08-06:  64,136 facts in 16,340 bytes
+        //     3-value alphabet (2 bits/entry), measured 2026-08-07: 42,944-43,008 in ~16,380 bytes
+        //
+        // A 33% reduction — the staged plan's "dense-chunk headroom drops ~a third" was right — and
+        // still 44% of a completely full chunk column, far past anything a real build reaches. Past
+        // the boundary the store declines new facts rather than failing (the row below).
+        //
+        // THE BOUNDARY IS A RANGE, NOT A POINT, AND THAT IS WHY IT IS NOT PINNED EXACTLY. Each
+        // section header carries three VarInts of chunk coordinate, and the gametest plot lands at
+        // randomized world coordinates, so the same alphabet measures a few dozen facts either side
+        // of the figure above from run to run. Observed across consecutive runs: 42,944 and 43,008.
+        // An equality pin here would be flaky by construction; a floor is the honest gate.
+        //
+        // THE FLOOR IS DELIBERATELY KEPT AT 32,768. It was chosen as roughly half the ORIGINAL
+        // measured boundary so that a codec change abandoning the packed palette — one byte per
+        // position, which would drop the boundary to about 14,500 — trips this row while ordinary
+        // drift does not. The re-measured figure still clears it, so the guard keeps exactly the
+        // force it was given rather than being re-floated up to the new measurement.
         ctx.assertTrue(fits >= 32_768,
                 "the placement-height store must hold at least 32,768 mixed-height facts per chunk "
-                        + "(measured 64,136 when this row was written). " + boundary);
+                        + "(measured 42,944-43,008 over the 3-value alphabet when this row was "
+                        + "re-measured; 64,136 over the 2-value one before it). " + boundary);
         ctx.complete();
     }
 
@@ -206,6 +238,11 @@ public final class PlacementDyAttachmentCapacityTest {
         expected.put(BlockPos.asLong(0, 0, 0), HALF_DOWN);
         expected.put(BlockPos.asLong(15, 15, 15), FULL_DOWN);
         expected.put(BlockPos.asLong(16, 16, 16), (byte) 0);
+        // THE DEEPER CAP (Stage 4). Placed in the SAME section as the two 15/15/15-adjacent cells
+        // above so the section carries a three-value palette and the encoder takes its 2-bit
+        // packed-index path, not the 1-bit one every other section here exercises.
+        expected.put(BlockPos.asLong(14, 15, 15), DOUBLE_DOWN);
+        expected.put(BlockPos.asLong(-2, -1, -1), DOUBLE_DOWN);
 
         RegistryByteBuf buf = new RegistryByteBuf(PacketByteBufs.create(), world.getRegistryManager());
         SlabPlacementDyAttachment.packetCodecForTesting().encode(buf, expected);
@@ -226,12 +263,22 @@ public final class PlacementDyAttachmentCapacityTest {
                 (chunkZ << 4) + ((index >>> 4) & 15));
     }
 
-    /** {@code count} facts in the fill order above, alternating between two heights. */
+    /**
+     * {@code count} facts in the fill order above, cycling THE WHOLE STORED ALPHABET.
+     *
+     * <p>Two heights until 2026-08-07; three since Stage 4 armed {@code -2.0}. This is what makes
+     * the boundary row expensive-shape-correct: three distinct values force
+     * {@code ceil(log2(3)) -> 2} bits per occupied position instead of 1, so a dense mixed chunk
+     * now spends twice the packed-index budget it used to and the boundary moves. Re-measured
+     * rather than inherited.
+     */
+    private static final byte[] STORED_ALPHABET = {HALF_DOWN, FULL_DOWN, DOUBLE_DOWN};
+
     private static Long2ByteOpenHashMap mixedFacts(int chunkX, int chunkZ, int bottomY, int count) {
         Long2ByteOpenHashMap facts = new Long2ByteOpenHashMap(Math.max(1, count));
         for (int index = 0; index < count; index++) {
             facts.put(positionAt(chunkX, chunkZ, bottomY, index),
-                    (index & 1) == 0 ? HALF_DOWN : FULL_DOWN);
+                    STORED_ALPHABET[index % STORED_ALPHABET.length]);
         }
         return facts;
     }

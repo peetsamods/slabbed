@@ -34,10 +34,22 @@ fabricApi {
 // Gradle keeps `-D` on the daemon JVM, and Loom's run tasks are forked JavaExecs, so the property
 // has to be forwarded explicitly. Loom appends its own args via getJvmArguments().addAll(...), so
 // adding here is additive, not clobbering.
+// ── Stage 4 deep-dy-alphabet toggle ───────────────────────────────────────────────────────────
+// `slabbed.deepDyAlphabet` arms SlabSupport.MIN_RESOLVED_DY = -2.0. Default OFF (Maintainer's ruling,
+// 2026-08-06): cells with a stored placement height never move, but every cell without one takes
+// the live resolver and would drop half a block on first re-render. Same forwarding problem as the
+// law gate — Gradle keeps `-D` on the daemon JVM and Loom's run tasks are forked JavaExecs — so it
+// is passed through by name here. Run the deep leg with:
+//     ./gradlew runGameTest -Dslabbed.deepDyAlphabet=true
 tasks.matching { it.name == "runGameTest" }.configureEach {
     jvmArguments.addAll(
             providers.systemProperty("slabbed.lawGate")
                     .map { v -> ["-Dslabbed.lawGate=" + v] }
+                    .orElse([])
+    )
+    jvmArguments.addAll(
+            providers.systemProperty("slabbed.deepDyAlphabet")
+                    .map { v -> ["-Dslabbed.deepDyAlphabet=" + v] }
                     .orElse([])
     )
 }

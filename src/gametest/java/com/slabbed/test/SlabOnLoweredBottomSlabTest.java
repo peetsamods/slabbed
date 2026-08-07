@@ -165,9 +165,16 @@ public final class SlabOnLoweredBottomSlabTest {
      * {@code MIN_RESOLVED_DY} (−1.0) clamp bites and vanilla's half-block gap reappears</b>.
      *
      * <p>This is a PIN, not an endorsement: the clamp is deliberately NOT "fixed" here. It exists
-     * because {@code DY_SPEC.md:115} CS-CAP caps the whole offset set at {@code {-1.0, -0.5, 0.0}} —
-     * −1.0 is the deepest cell the offset-aware pick raycast window {@code {C, C.up, C.down}} can
-     * target, so a deeper tower settles at −1.0 rather than rendering somewhere unclickable.
+     * because {@code DY_SPEC.md} CS-CAP caps the whole offset set at {@code MIN_RESOLVED_DY} — the
+     * deepest cell the offset-aware pick raycast window can target — so a deeper tower settles at
+     * the cap rather than rendering somewhere unclickable.
+     *
+     * <p><b>Written against the cap, not against {@code -1.0} (Stage 4, 2026-08-07).</b> Every
+     * course of this ladder is {@code max(-0.5 * i, cap)}: half a block per course until the clamp
+     * refuses. At the shipped cap that is the identical list of numbers this row has asserted since
+     * it was written; with {@code SlabSupport.DEEP_DY_ALPHABET} armed the ladder simply runs two
+     * courses further before it flattens. The tower's HEIGHT is derived from the cap too, so there
+     * are always post-clamp courses left to measure.
      *
      * <p>MEASURED LADDER (world-space spans, ground stone top at {@code Y}):
      * <ul>
@@ -197,8 +204,14 @@ public final class SlabOnLoweredBottomSlabTest {
         BlockPos ground = ctx.getAbsolutePos(BlockPos.ORIGIN).add(2, 1, 2);
         place(w, ground, Blocks.STONE.getDefaultState());
 
-        // SIX courses since Stage 0 measurement B; L0-L3 below are unchanged.
-        BlockPos[] level = new BlockPos[6];
+        // SIX courses since Stage 0 measurement B. DEEPENED at Stage 4 (2026-08-07): this ladder
+        // saturates at course index ceil(-cap / 0.5), so a fixed six left no post-clamp course at
+        // all once the cap could be -2.0 (saturation lands at L4, and L5 was the only witness). The
+        // height is now derived — saturation index plus three — and taken as the LARGER of that and
+        // the historical six, so no course this row has ever built is removed and the deep leg
+        // gains the ones it needs.
+        int saturatedIndex = (int) Math.ceil(-SlabSupport.MIN_RESOLVED_DY / 0.5);
+        BlockPos[] level = new BlockPos[Math.max(6, saturatedIndex + 3)];
         for (int i = 0; i < level.length; i++) {
             level[i] = ground.up(i + 1);
             place(w, level[i], bottomSlab(Blocks.OAK_SLAB));
@@ -211,8 +224,25 @@ public final class SlabOnLoweredBottomSlabTest {
             dy[i] = SlabSupport.getYOffset(w, level[i], w.getBlockState(level[i]));
         }
         String ladder = "L0=" + dy[0] + " L1=" + dy[1] + " L2=" + dy[2] + " L3=" + dy[3];
-        String ladderDeep = ladder + " L4=" + dy[4] + " L5=" + dy[5];
+        StringBuilder deep = new StringBuilder(ladder);
+        for (int i = 4; i < level.length; i++) {
+            deep.append(" L").append(i).append('=').append(dy[i]);
+        }
+        String ladderDeep = deep + " (cap=" + SlabSupport.MIN_RESOLVED_DY + ")";
         System.out.println("[STAGE0-B] anchored tower ladder (store live): " + ladderDeep);
+
+        // THE LADDER IS AN ARITHMETIC CONSEQUENCE OF THE CAP, not a list of numbers. Course i seats
+        // half a block below course i-1 until the clamp refuses, so dy[i] = max(-0.5*i, cap). At
+        // the shipped -1.0 cap that is exactly 0.0 / -0.5 / -1.0 / -1.0 / ... — every value this
+        // row has asserted since it was written. The individual assertions below are KEPT as they
+        // were, because they carry the reasons; this one states the shape they share and is what
+        // makes the row hold at a deeper cap without being rewritten again.
+        for (int i = 0; i < level.length; i++) {
+            double expected = Math.max(-0.5 * i, SlabSupport.MIN_RESOLVED_DY);
+            ctx.assertTrue(Math.abs(dy[i] - expected) <= EPS,
+                    "tower L" + i + " must read max(-0.5*" + i + ", cap) = " + expected + ", got "
+                            + dy[i] + " — " + ladderDeep);
+        }
 
         ctx.assertTrue(Math.abs(dy[0]) <= EPS,
                 "tower L0 (bottom slab on plain stone) must stay flush at 0.0 — " + ladder);
@@ -224,11 +254,12 @@ public final class SlabOnLoweredBottomSlabTest {
         ctx.assertTrue(Math.abs(dy[2] + 1.0) <= EPS,
                 "tower L2 must seat on L1's top face at -1.0 (compounded through the resolver) — "
                         + ladder);
-        ctx.assertTrue(Math.abs(dy[3] + 1.0) <= EPS,
-                "tower L3 PINS THE CLAMP: its raw seat is -1.5 but MIN_RESOLVED_DY caps it at -1.0, "
-                        + "so a 0.5 vanilla gap reopens above L2 from the fourth course upward. This "
-                        + "is pinned, NOT fixed — Maintainer rules on the tower's appearance from these "
-                        + "values — " + ladder);
+        ctx.assertTrue(Math.abs(dy[3] - Math.max(-1.5, SlabSupport.MIN_RESOLVED_DY)) <= EPS,
+                "tower L3 PINS THE CLAMP: its raw seat is -1.5, and MIN_RESOLVED_DY ("
+                        + SlabSupport.MIN_RESOLVED_DY + ") either refuses it — reopening a 0.5 "
+                        + "vanilla gap above L2 from the fourth course upward — or lets it stand. "
+                        + "This is pinned, NOT fixed — Maintainer rules on the tower's appearance from "
+                        + "these values — " + ladder);
 
         for (int i = 1; i < 4; i++) {
             ctx.assertTrue(SlabAnchorAttachment.isAnchored(w, level[i]),
@@ -242,17 +273,22 @@ public final class SlabOnLoweredBottomSlabTest {
         // addAnchor and the seat walk terminates on that stored number at depth 1. The depth budget
         // is not reached, so a post-store tower has no "one course past the budget" behaviour at
         // all.
-        for (int i = 4; i < level.length; i++) {
-            ctx.assertTrue(Math.abs(dy[i] + 1.0) <= EPS,
-                    "tower L" + i + " must stay at the MIN_RESOLVED_DY clamp (-1.0), NOT fall to "
-                            + "the -0.5 depth-exhaustion floor — " + ladderDeep);
+        // Course indices at or past saturation: the ones whose raw seat the cap actually refuses.
+        // saturatedIndex is 2 at the shipped -1.0 cap, so this loop still starts at L2's successor
+        // — the same courses it has always covered — and follows the cap when the cap moves.
+        for (int i = saturatedIndex; i < level.length; i++) {
+            ctx.assertTrue(Math.abs(dy[i] - SlabSupport.MIN_RESOLVED_DY) <= EPS,
+                    "tower L" + i + " must stay at the MIN_RESOLVED_DY clamp ("
+                            + SlabSupport.MIN_RESOLVED_DY + "), NOT fall to the -0.5 "
+                            + "depth-exhaustion floor — " + ladderDeep);
             ctx.assertTrue(SlabAnchorAttachment.isAnchored(w, level[i]),
                     "tower L" + i + " renders lowered, so it must RECORD an anchor (never-pop "
                             + "law) — " + ladderDeep);
             double stored = com.slabbed.anchor.SlabPlacementDyAttachment.storedDy(w, level[i]);
-            ctx.assertTrue(Math.abs(stored + 1.0) <= EPS,
-                    "tower L" + i + " must carry a STORED placement height of -1.0 — that stored "
-                            + "fact is exactly what terminates the seat walk at depth 1 and keeps "
+            ctx.assertTrue(Math.abs(stored - SlabSupport.MIN_RESOLVED_DY) <= EPS,
+                    "tower L" + i + " must carry a STORED placement height of "
+                            + SlabSupport.MIN_RESOLVED_DY + " — that stored fact is exactly what "
+                            + "terminates the seat walk at depth 1 and keeps "
                             + "MAX_SUPPORT_RESOLVE_DEPTH out of reach, got " + stored + " — "
                             + ladderDeep);
         }

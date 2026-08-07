@@ -21,7 +21,15 @@ import net.minecraft.util.math.BlockPos;
  * This codec therefore stores the OCCUPANCY exactly the way the set codec does (a 64-bit
  * non-empty-word mask per 16-cubed section, then only the non-empty words) and stores the VALUES
  * as a per-section palette, because the height alphabet on this line is tiny
- * ({@code DY_SPEC.md} CS-CAP: {@code {-1.0, -0.5, 0.0}}).
+ * ({@code DY_SPEC.md} CS-CAP: {@code {-1.0, -0.5, 0.0}}, or {@code {-2.0, -1.5, -1.0, -0.5, 0.0}}
+ * with {@code SlabSupport.DEEP_DY_ALPHABET} armed).
+ *
+ * <p><b>The deeper alphabet needs NO format change here</b> (Stage 4, 2026-08-07). {@code -2.0} is
+ * 32 sixteenths and the signed-byte value range is {@code [-8.0, +7.9375]}, so the wire shape is
+ * untouched. What it does change is the palette WIDTH a mixed section pays: three or more distinct
+ * stored heights in one section push {@code bitsPerIndex} from 1 to 2, halving the dense-mixed
+ * capacity. That is measured, not assumed — see {@code PlacementDyAttachmentCapacityTest}'s
+ * re-measured boundary row.
  *
  * <p>A section whose facts all share one height costs a single extra palette byte for the whole
  * section, so the realistic dense shape — a whole chunk built on one lowered surface — encodes in
@@ -31,10 +39,12 @@ import net.minecraft.util.math.BlockPos;
  *
  * <p>MEASURED on the built-in Overworld (a chunk column holds 98,304 positions), by
  * {@code PlacementDyAttachmentCapacityTest}: every one of those positions at ONE height encodes in
- * 12,766 bytes, well inside the budget; at two mixed heights, 64,136 of them fit in 16,340 bytes,
- * which is where the boundary sits. Two thirds of a completely full chunk column is far past
- * anything a real build reaches, and past the boundary the store declines new facts rather than
- * failing.
+ * 12,766 bytes, well inside the budget. The mixed-height boundary depends on how many distinct
+ * heights share a section — 64,136 positions at TWO heights (1 bit per entry, measured
+ * 2026-08-06), about 43,000 at THREE (2 bits per entry, re-measured 2026-08-07 for the deeper
+ * alphabet; the exact figure moves with the chunk's coordinate VarInt widths).
+ * Even the smaller figure is 44% of a completely full chunk column, far past anything a real build
+ * reaches, and past the boundary the store declines new facts rather than failing.
  *
  * <p>{@link #encodedByteLength} computes the exact size this codec will write WITHOUT allocating a
  * buffer, sharing the section grouping and palette construction with {@link #encode} so the two can

@@ -130,10 +130,19 @@ public final class AnchoredFollowerSupportDyTest {
     }
 
     /**
-     * CS-CAP guard ({@code DY_SPEC.md:115}): a follower standing on a bottom slab that is ITSELF
-     * already at -1.0 resolves a raw seat of -1.5, which is outside this line's offset set
-     * {@code {-1.0, -0.5, 0.0}} AND outside the +/-1 offset-aware pick-raycast window. It must
-     * clamp at -1.0, not render somewhere unclickable.
+     * CS-CAP guard: a follower standing on a bottom slab that is ITSELF already <b>at the cap</b>
+     * resolves a raw seat of {@code cap - 0.5}, which is outside this line's offset set AND outside
+     * the offset-aware pick-raycast window. It must clamp at {@link SlabSupport#MIN_RESOLVED_DY},
+     * not render somewhere unclickable.
+     *
+     * <p><b>The fixture is DEEPENED to the cap rather than written against {@code -1.0}</b> (Stage
+     * 4, 2026-08-07). The intermediate slab used to be a single course, which happened to reach the
+     * cap because the cap was {@code -1.0} and the anchored subject below it already read
+     * {@code -1.0}. At the ruled {@code -2.0} cap one course is no longer enough and the row would
+     * have measured an unclamped {@code -1.5} while still calling itself a clamp test. It now
+     * LADDERS bottom-slab courses until the intermediate support saturates, asserts that it did,
+     * and only then asks the follower. At the shipped cap the loop adds zero courses, so the
+     * OFF-leg scene is the one that has always been built here.
      */
     @GameTest(structure = "fabric-gametest-api-v1:empty")
     public void deeperThanMinusOneClampsAtMinusOne(TestContext ctx) {
@@ -147,13 +156,40 @@ public final class AnchoredFollowerSupportDyTest {
         ctx.assertTrue(Math.abs(slabDy + 1.0) <= EPS,
                 "fixture: the intermediate slab must itself be at -1.0, got " + slabDy);
 
+        // LADDER TO THE CAP. Each further bottom-slab course deepens by half a block until the
+        // clamp refuses; the count is a consequence of the cap, never written down.
+        StringBuilder ladder = new StringBuilder("intermediate ladder: -1.0");
+        while (slabDy > SlabSupport.MIN_RESOLVED_DY + EPS) {
+            slab = slab.up();
+            place(w, slab, bottomSlab(Blocks.BIRCH_SLAB));
+            SlabAnchorAttachment.addAnchor(w, slab, w.getBlockState(slab));
+            double next = SlabSupport.getYOffset(w, slab, w.getBlockState(slab));
+            ladder.append(' ').append(next);
+            ctx.assertTrue(next < slabDy - EPS,
+                    "fixture: each added course must actually deepen, or the ladder cannot reach "
+                            + "the cap and this row would spin — " + ladder);
+            slabDy = next;
+        }
+        ctx.assertTrue(Math.abs(slabDy - SlabSupport.MIN_RESOLVED_DY) <= EPS,
+                "fixture: the intermediate support must SATURATE at the cap ("
+                        + SlabSupport.MIN_RESOLVED_DY + "), or the follower above it is not handed "
+                        + "a past-the-cap raw seat and this row proves nothing — " + ladder);
+
+        double rawSeat = slabDy - 0.5;
         BlockPos top = slab.up();
         place(w, top, Blocks.STRIPPED_JUNGLE_LOG.getDefaultState());
         SlabAnchorAttachment.addAnchor(w, top, w.getBlockState(top));
         double topDy = SlabSupport.getYOffset(w, top, w.getBlockState(top));
-        ctx.assertTrue(Math.abs(topDy + 1.0) <= EPS,
-                "CS-CAP: a block on a bottom slab already at -1.0 resolves a raw -1.5 seat and must "
-                        + "clamp to -1.0, got " + topDy);
+        // NON-VACUITY, asserted before the property: a raw seat that is not past the cap would let
+        // the clamp assertion below pass without the clamp ever running.
+        ctx.assertTrue(rawSeat < SlabSupport.MIN_RESOLVED_DY - EPS,
+                "FIXTURE IS NO LONGER LOAD-BEARING: the raw seat handed to the follower is "
+                        + rawSeat + ", which the cap (" + SlabSupport.MIN_RESOLVED_DY + ") does not "
+                        + "refuse. Deepen the ladder — do NOT relax the assertion. " + ladder);
+        ctx.assertTrue(Math.abs(topDy - SlabSupport.MIN_RESOLVED_DY) <= EPS,
+                "CS-CAP: a block on a bottom slab already at the cap resolves a raw " + rawSeat
+                        + " seat and must clamp to " + SlabSupport.MIN_RESOLVED_DY + ", got "
+                        + topDy + " — " + ladder);
         ctx.complete();
     }
 
@@ -505,10 +541,20 @@ public final class AnchoredFollowerSupportDyTest {
         place(w, subject, Blocks.STRIPPED_JUNGLE_LOG.getDefaultState());
         assertUnstoredAndUnanchored(ctx, subject, "the BOTTOM-slab control subject");
 
+        // THE HALF-HEIGHT SEAT, CLAMPED — stated as the law rather than as the number it happens
+        // to produce (Stage 4, 2026-08-07). A BOTTOM slab's top face is half a block below its own
+        // grid line, so a block resting on one seats at `supportDy - 0.5`; the cap is the only
+        // thing that ever stops it. At the shipped cap that arithmetic is -1.5 refused down to
+        // -1.0, which is the number this control has always asserted and still asserts. At the
+        // ruled -2.0 cap the same law lets the -1.5 stand, which is the WYSIWYG-correct height:
+        // the support's top face is at Y-0.5 and the block above it now genuinely rests there.
+        double expected = Math.max(supportDy - 0.5, SlabSupport.MIN_RESOLVED_DY);
         double dy = SlabSupport.getYOffset(w, subject, w.getBlockState(subject));
-        ctx.assertTrue(Math.abs(dy + 1.0) <= EPS,
-                "control (recorder a13): an unstored full block on a -1.0 BOTTOM slab must stay at "
-                        + "-1.0, got " + dy);
+        ctx.assertTrue(Math.abs(dy - expected) <= EPS,
+                "control (recorder a13): an unstored full block on a " + supportDy + " BOTTOM slab "
+                        + "seats half a block below it and is refused no deeper than "
+                        + SlabSupport.MIN_RESOLVED_DY + ", so it must read " + expected + ", got "
+                        + dy);
         ctx.complete();
     }
 

@@ -111,7 +111,11 @@ public final class SlabdyRecorderToggleTest {
         com.slabbed.dev.SlabbedDiagnostics.Sample suspect = new com.slabbed.dev.SlabbedDiagnostics.Sample(
                 "minecraft:stone", -0.5, 0.0, 0.0, 0.0, 0.0,
                 true, false, "none", "minecraft:air", 0.0, "minecraft:oak_slab", 0.0,
-                true, true, false, false, false, false, false);
+                true, true, false, false, false, false, false,
+                false,
+                com.slabbed.dev.SlabbedDiagnostics.LegCheck.CHECKED,
+                com.slabbed.dev.SlabbedDiagnostics.LegCheck.EMPTY_BY_DESIGN,
+                com.slabbed.dev.SlabbedDiagnostics.LegCheck.CHECKED);
         net.minecraft.util.math.BlockPos p = new net.minecraft.util.math.BlockPos(1, 2, 3);
         long before = countVisualDiagnosticSuspects(sessionPath);
         LiveCursorIntentRecorder.recordVisualDiagnostic(p, suspect);

@@ -234,6 +234,10 @@ public final class LiveCursorIntentRecorder {
                     "belowDy", com.slabbed.dev.SlabbedDiagnostics.format(s.belowDy()),
                     "collisionFollowsVisual", Boolean.toString(s.collisionFollowsVisual()),
                     "flags", s.flagSummary(),
+                    // Written on EVERY row, beside the flags, so that counting TRIAD_MISMATCH out
+                    // of the flags column can never again be mistaken for three-leg coverage.
+                    "triadLegsVerified", Integer.toString(s.triadLegsVerified()),
+                    "triadCoverage", s.triadCoverage(),
                     "suspect", Boolean.toString(s.anySuspect())));
         }
     }

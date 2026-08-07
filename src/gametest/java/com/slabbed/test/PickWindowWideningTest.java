@@ -119,6 +119,7 @@ public final class PickWindowWideningTest {
         int hitsOnHalfLowered = 0;
         int hitsOnFullLowered = 0;
         int mismatches = 0;
+        int recoveries = 0;
         String firstMismatch = null;
 
         for (Ray r : rays) {
@@ -134,9 +135,20 @@ public final class PickWindowWideningTest {
                     && before.isInsideBlock() == after.isInsideBlock();
             if (!same) {
                 mismatches++;
+                // A mismatch is a RECOVERY when the wider window found a block the narrow one lost,
+                // or found one strictly nearer the eye. That is the only direction the widening is
+                // ever allowed to move an answer, at any cap.
+                boolean recovered = after.getType() == HitResult.Type.BLOCK
+                        && (before.getType() != HitResult.Type.BLOCK
+                                || after.getPos().squaredDistanceTo(r.start())
+                                        < before.getPos().squaredDistanceTo(r.start()) + EPS);
+                if (recovered) {
+                    recoveries++;
+                }
                 if (firstMismatch == null) {
                     firstMismatch = r + " radius" + PREVIOUS_WINDOW_RADIUS + "=" + describe(before)
-                            + " radius" + SlabbedOffsetRaycast.WINDOW_RADIUS + "=" + describe(after);
+                            + " radius" + SlabbedOffsetRaycast.WINDOW_RADIUS + "=" + describe(after)
+                            + " recovered=" + recovered;
                 }
                 continue;
             }
@@ -146,7 +158,11 @@ public final class PickWindowWideningTest {
                 double dy = SlabSupport.getYOffset(w, owner, w.getBlockState(owner));
                 if (Math.abs(dy + 0.5) <= EPS) {
                     hitsOnHalfLowered++;
-                } else if (Math.abs(dy + 1.0) <= EPS) {
+                } else if (dy <= -1.0 + EPS) {
+                    // -1.0 OR DEEPER. At the shipped cap that is exactly the old `dy == -1.0`
+                    // test, since nothing deeper exists; with the deeper alphabet armed it also
+                    // counts the -1.5 and -2.0 owners, which are the ones whose shape leaves the
+                    // owner's cell by two.
                     hitsOnFullLowered++;
                 }
             }
@@ -154,14 +170,40 @@ public final class PickWindowWideningTest {
 
         System.out.println("[STAGE1-NEUTRALITY] scene=" + scene + " rays=" + rays.size()
                 + " blockHits=" + blockHits + " hitsOn-0.5=" + hitsOnHalfLowered
-                + " hitsOn-1.0=" + hitsOnFullLowered + " mismatches=" + mismatches);
+                + " hitsOnCapOrDeeper=" + hitsOnFullLowered + " mismatches=" + mismatches
+                + " recoveries=" + recoveries
+                + " deepDyAlphabet=" + SlabSupport.DEEP_DY_ALPHABET
+                + " cap=" + SlabSupport.MIN_RESOLVED_DY);
 
-        ctx.assertTrue(mismatches == 0,
-                "STAGE 1 NEUTRALITY: widening the pick window from radius "
-                        + PREVIOUS_WINDOW_RADIUS + " to " + SlabbedOffsetRaycast.WINDOW_RADIUS
-                        + " must change NO answer while every offset the build can mint stays "
-                        + "within one cell of its owner. " + mismatches + " of " + rays.size()
-                        + " rays disagree; first: " + firstMismatch);
+        if (SlabSupport.DEEP_DY_ALPHABET) {
+            // THE NEUTRALITY PREMISE IS FALSE AT THE DEEP CAP, AND THAT IS THE POINT (Stage 4,
+            // 2026-08-07). Stage 1's claim was explicitly conditional — "while every offset the
+            // build can mint stays within one cell of its owner". Arming the deeper alphabet is
+            // exactly the change that makes it false: a shape at -1.5 or -2.0 occupies a layer TWO
+            // cells from its owner, which is the reason the window was widened in the first place.
+            // So in this leg the wider window MUST change answers, and every answer it changes must
+            // be a RECOVERY — a block found where the narrow window lost it, or a nearer one. A
+            // mismatch in the other direction would mean the widening had taken a target AWAY.
+            ctx.assertTrue(mismatches > 0,
+                    "THE WIDENING IS DOING NOTHING AT THE DEEP CAP. With the deeper alphabet armed "
+                            + "the radius-1 window is supposed to lose targets the radius-"
+                            + SlabbedOffsetRaycast.WINDOW_RADIUS + " window keeps, and none of the "
+                            + rays.size() + " rays disagreed at all — so either the flag is not "
+                            + "reaching the resolver or the scene grew no deep geometry, and this "
+                            + "leg proves nothing about the window.");
+            ctx.assertTrue(recoveries == mismatches,
+                    "THE WIDENING LOST A TARGET. " + (mismatches - recoveries) + " of " + mismatches
+                            + " disagreements are not recoveries: the wider window returned a MISS "
+                            + "or a FARTHER hit than the narrow one. Widening may only ever add or "
+                            + "improve a hit. first: " + firstMismatch);
+        } else {
+            ctx.assertTrue(mismatches == 0,
+                    "STAGE 1 NEUTRALITY: widening the pick window from radius "
+                            + PREVIOUS_WINDOW_RADIUS + " to " + SlabbedOffsetRaycast.WINDOW_RADIUS
+                            + " must change NO answer while every offset the build can mint stays "
+                            + "within one cell of its owner. " + mismatches + " of " + rays.size()
+                            + " rays disagree; first: " + firstMismatch);
+        }
 
         // Vacuity: the battery has to be aimed at the geometry under test.
         ctx.assertTrue(blockHits >= rays.size() / 4,
@@ -171,9 +213,9 @@ public final class PickWindowWideningTest {
                 "vacuity guard: no ray in the battery hit an owner resolved to -0.5, so the "
                         + "comparison never exercised an offset shape at all");
         ctx.assertTrue(hitsOnFullLowered > 0,
-                "vacuity guard: no ray hit an owner resolved to the -1.0 clamp — that is the ONLY "
-                        + "magnitude whose shape leaves its owner's cell, so without it the "
-                        + "neutrality comparison proves nothing about the window at all");
+                "vacuity guard: no ray hit an owner resolved to -1.0 or deeper — those are the "
+                        + "ONLY magnitudes whose shape leaves its owner's cell, so without one the "
+                        + "comparison proves nothing about the window at all");
         ctx.complete();
     }
 

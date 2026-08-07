@@ -223,9 +223,16 @@ public final class SlabdyClientCommands {
         // Surface the SlabbedDiagnostics red flags live: a bright warning line under the row
         // whenever the current target trips a DODO / smoosh / gap / triad-mismatch check.
         SlabbedDiagnostics.Sample s = SlabbedDiagnostics.analyze(client.world, pos, state, modelDyFor(pos));
+        int row = lines.size();
         if (s.anySuspect()) {
-            drawLine(context, client, "[slabdy] FLAGS: " + s.flagSummary(), 8, 8 + (lines.size() * 12), 0xffff4d4d);
+            drawLine(context, client, "[slabdy] FLAGS: " + s.flagSummary(), 8, 8 + (row++ * 12), 0xffff4d4d);
         }
+        // ALWAYS drawn, suspect or not. A clean triad line is only reassuring if the tester can
+        // see how many legs it actually covered — "no flag" over one verified leg is the exact
+        // misreading this line exists to prevent.
+        drawLine(context, client, "[slabdy] triad: " + s.triadLegsVerified() + "/3 verified * "
+                        + s.triadCoverage(),
+                8, 8 + (row * 12), s.triadLegsVerified() == 3 ? 0xff8fd694 : 0xffd7a15a);
     }
 
     private static List<String> buildRow(MinecraftClient client, BlockHitResult blockHit, boolean armModelTrace) {
