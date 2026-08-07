@@ -112,15 +112,31 @@ public final class SlabdyClientCommands {
         lastRecordedSignature = sig;
         SlabbedDiagnostics.Sample sample = SlabbedDiagnostics.analyze(client.world, pos, state, modelDy);
         SlabbedAuditBridge.recordVisualDiagnostic(pos, sample);
+
+        // The model leg is the only one that cannot be read on demand: quads are emitted when a
+        // chunk section is meshed, not per frame, so a static cell holds no sample. Arm the capture
+        // for this cell and ask for a re-mesh; the value lands on a later tick, and because the
+        // dedupe signature above includes the model dy, that tick emits a SECOND row for the same
+        // cell carrying the real number. Only arm when we still have nothing — once the number is
+        // in hand the signature stops changing and no further re-mesh is requested.
+        if (!SlabbedDiagnostics.isMeasured(modelDy)) {
+            OffsetBlockStateModel.resetRenderOffsetTrace(pos);
+            client.worldRenderer.scheduleBlockRenders(pos.getX(), pos.getY(), pos.getZ(),
+                    pos.getX(), pos.getY(), pos.getZ());
+        }
     }
 
-    /** The render-thread model dy for pos if the trace happens to hold it, else NaN. */
+    /**
+     * The render-path model dy for pos if a capture was armed for it and a chunk-section mesh has
+     * happened since, else {@link SlabbedDiagnostics#NOT_SAMPLED} — which is a DIFFERENT token from
+     * the {@code EMPTY} a shape leg reports, so a reader can tell the two apart.
+     */
     private static double modelDyFor(BlockPos pos) {
         OffsetBlockStateModel.RenderOffsetTrace trace = OffsetBlockStateModel.snapshotRenderOffsetTrace();
         if (trace != null && trace.seen() && pos.toShortString().equals(trace.pos())) {
             return trace.modelDy();
         }
-        return Double.NaN;
+        return SlabbedDiagnostics.NOT_SAMPLED;
     }
 
     private static int toggleOverlay(CommandContext<FabricClientCommandSource> ctx) {

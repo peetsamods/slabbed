@@ -27,6 +27,20 @@ import java.util.Locale;
  * a gametest with a synthetic world. The one client-only input is the render {@code modelDy}
  * (from {@code OffsetBlockStateModel}'s trace), which callers pass in optionally.
  *
+ * <p><b>Reading the three dy legs.</b> Every leg reports either a number or one of two sentinels
+ * ({@link #NOT_SAMPLED}, {@link #MEASURED_EMPTY}) that say which kind of nothing was seen — never
+ * a single shared blank. Concretely, on a live client:
+ * <ul>
+ *   <li><b>outline</b> — a number for any block with geometry; {@code EMPTY} for an air cell.</li>
+ *   <li><b>raycast</b> — {@code EMPTY} for almost every block, and that is CORRECT: vanilla's
+ *       default {@code getRaycastShape} is empty and only a block that overrides it (composter)
+ *       refines the reported side on top of the outline hit. A number here means the block has its
+ *       own targeting shape, and that number must track the outline.</li>
+ *   <li><b>model</b> — a number only when a render-path capture was armed AND the block's chunk
+ *       section was meshed since; {@code NOT_SAMPLED} otherwise, because quads are emitted at
+ *       section-bake time rather than per frame.</li>
+ * </ul>
+ *
  * <p>Detection heuristics (each a small, unit-tested predicate):
  * <ul>
  *   <li><b>triadMismatch</b> — the outline/raycast shape did NOT get offset by the same dy
@@ -50,6 +64,40 @@ import java.util.Locale;
 public final class SlabbedDiagnostics {
 
     public static final double EPS = 1.0e-6;
+
+    /**
+     * Sentinel: <b>the probe never obtained a value here.</b> Nothing was measured, so nothing
+     * may be concluded — in particular this is NOT evidence that a leg is at 0, nor that it is
+     * empty. Printed as {@code NOT_SAMPLED}.
+     *
+     * <p>Live sources: {@code modelDy} when no render-path capture is armed or the block's chunk
+     * section has not been meshed since it was armed (the mesher emits quads at bake time, not
+     * per frame, so a static cell holds no fresh sample); and any leg handed a null shape.
+     */
+    public static final double NOT_SAMPLED = Double.NaN;
+
+    /**
+     * Sentinel: <b>the API was asked and answered with an EMPTY shape.</b> This IS a measurement —
+     * there is genuinely no geometry to take a {@code minY} from. Printed as {@code EMPTY}.
+     *
+     * <p>Live sources: an air cell's outline/collision, and — for essentially every block —
+     * {@code raycastMinY}. {@code AbstractBlock.getRaycastShape} returns {@code VoxelShapes.empty()}
+     * unless a block overrides it (composter, and a handful of others), because that shape is only
+     * a <i>side refinement</i> layered on top of the outline hit in
+     * {@code BlockView.raycastBlock}: an empty raycast shape means the outline alone decides where
+     * the crosshair lands. So {@code EMPTY} on this leg is the correct, expected answer for stone,
+     * logs, slabs and chains — not a gap in the triad.
+     *
+     * <p>Kept distinct from {@link #NOT_SAMPLED} on purpose: sharing one value between "not
+     * measurable here" and "measured, and it is empty" is what made a whole recorder run read as
+     * coverage it did not have.
+     */
+    public static final double MEASURED_EMPTY = Double.NEGATIVE_INFINITY;
+
+    /** True only for an actual measured number — neither sentinel above. */
+    public static boolean isMeasured(double v) {
+        return !Double.isNaN(v) && !Double.isInfinite(v);
+    }
 
     private SlabbedDiagnostics() {
     }
@@ -94,7 +142,7 @@ public final class SlabbedDiagnostics {
     }
 
     public static Sample analyze(BlockView world, BlockPos pos, BlockState state) {
-        return analyze(world, pos, state, Double.NaN);
+        return analyze(world, pos, state, NOT_SAMPLED);
     }
 
     public static Sample analyze(BlockView world, BlockPos pos, BlockState state, double modelDy) {
@@ -144,7 +192,7 @@ public final class SlabbedDiagnostics {
      * exposed; the gap/DODO/smoosh checks cover those block families instead.
      */
     public static boolean triadMismatch(BlockState state, double visualDy, double outlineMinY) {
-        if (Double.isNaN(outlineMinY) || !hasGridBasedOutline(state)) {
+        if (!isMeasured(outlineMinY) || !hasGridBasedOutline(state)) {
             return false;
         }
         return Math.abs(outlineMinY - visualDy) > EPS;
@@ -194,14 +242,18 @@ public final class SlabbedDiagnostics {
                 && Math.abs(dyA - dyB) > EPS;
     }
 
-    /** Client-only: rendered model dy disagrees with the authoritative visual dy. */
+    /**
+     * Client-only: rendered model dy disagrees with the authoritative visual dy.
+     *
+     * <p>Silent on either sentinel — an unsampled or empty leg is not evidence of disagreement.
+     */
     public static boolean modelMismatch(double visualDy, double modelDy) {
-        return !Double.isNaN(modelDy) && Math.abs(modelDy - visualDy) > EPS;
+        return isMeasured(modelDy) && Math.abs(modelDy - visualDy) > EPS;
     }
 
     /** Informational: does the collision box track the visual offset (false = vanilla, main's design)? */
     public static boolean collisionFollowsVisual(double visualDy, double outlineMinY, double collisionMinY) {
-        if (Double.isNaN(outlineMinY) || Double.isNaN(collisionMinY)) {
+        if (!isMeasured(outlineMinY) || !isMeasured(collisionMinY)) {
             return false;
         }
         // Collision "follows" if it sits at the same offset as the (correctly-offset) outline.
@@ -223,8 +275,17 @@ public final class SlabbedDiagnostics {
         return "none";
     }
 
+    /**
+     * {@code minY} of a shape, or a sentinel that says WHICH kind of nothing was seen:
+     * {@link #MEASURED_EMPTY} when the API answered with an empty shape (the normal, correct
+     * answer for {@code getRaycastShape} on any block that does not override it), and
+     * {@link #NOT_SAMPLED} when there was no shape object to ask at all.
+     */
     private static double minY(VoxelShape shape) {
-        return shape == null || shape.isEmpty() ? Double.NaN : shape.getBoundingBox().minY;
+        if (shape == null) {
+            return NOT_SAMPLED;
+        }
+        return shape.isEmpty() ? MEASURED_EMPTY : shape.getBoundingBox().minY;
     }
 
     private static String blockId(BlockState state) {
@@ -232,7 +293,18 @@ public final class SlabbedDiagnostics {
         return id == null ? "?" : id.toString();
     }
 
+    /**
+     * Renders a leg for a human or for the append-only recorder log. The two sentinels print as
+     * DIFFERENT tokens on purpose, so a future reader of a session file can tell "this leg was
+     * never sampled" from "this leg was sampled and is empty" without re-deriving either.
+     */
     public static String format(double v) {
-        return Double.isNaN(v) ? "NaN" : String.format(Locale.ROOT, "%.3f", v);
+        if (Double.isNaN(v)) {
+            return "NOT_SAMPLED";
+        }
+        if (v == MEASURED_EMPTY) {
+            return "EMPTY";
+        }
+        return String.format(Locale.ROOT, "%.3f", v);
     }
 }

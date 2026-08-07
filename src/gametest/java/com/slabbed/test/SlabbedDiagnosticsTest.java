@@ -1,6 +1,8 @@
 package com.slabbed.test;
 
 import com.slabbed.dev.SlabbedDiagnostics;
+import com.slabbed.dev.SlabbedLabFixtures;
+import com.slabbed.dev.SlabbedLabFixtures.PlaceResult;
 import net.fabricmc.fabric.api.gametest.v1.GameTest;
 import net.minecraft.block.Block;
 import net.minecraft.block.BlockState;
@@ -108,6 +110,101 @@ public final class SlabbedDiagnosticsTest {
                 "model tracking visual is clean");
         ctx.assertTrue(!SlabbedDiagnostics.modelMismatch(-0.5, Double.NaN),
                 "an unknown (server-side) model dy must not flag");
+        ctx.complete();
+    }
+
+    /**
+     * The two "no number" answers must never be the same token.
+     *
+     * <p>Recorder run {@code 9e925ab0} reported the model and raycast legs blank on every single
+     * sampled row while outline and collision carried real values, and the blank was one shared
+     * NaN — so a reader could not tell "this leg cannot be read in this context" from "this leg was
+     * read and is empty". Two of the three dy legs were therefore unreadable in a diagnostic whose
+     * entire purpose is to prove the three move together.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void unsampledAndEmptyLegsAreDistinguishableSentinels(TestContext ctx) {
+        BlockState fence = Blocks.OAK_FENCE.getDefaultState();
+
+        ctx.assertTrue(!SlabbedDiagnostics.isMeasured(SlabbedDiagnostics.NOT_SAMPLED),
+                "NOT_SAMPLED must not count as a measurement");
+        ctx.assertTrue(!SlabbedDiagnostics.isMeasured(SlabbedDiagnostics.MEASURED_EMPTY),
+                "MEASURED_EMPTY has no minY, so it must not count as a measurement either");
+        ctx.assertTrue(SlabbedDiagnostics.isMeasured(-0.5),
+                "a real number must count as a measurement");
+
+        String unsampled = SlabbedDiagnostics.format(SlabbedDiagnostics.NOT_SAMPLED);
+        String empty = SlabbedDiagnostics.format(SlabbedDiagnostics.MEASURED_EMPTY);
+        ctx.assertTrue(!unsampled.equals(empty),
+                "THE FIX: 'not measurable here' and 'measured, and empty' must print as DIFFERENT "
+                        + "tokens — both read '" + unsampled + "'");
+        ctx.assertTrue(!unsampled.equals(SlabbedDiagnostics.format(-0.5))
+                        && !empty.equals(SlabbedDiagnostics.format(-0.5)),
+                "neither sentinel may be mistaken for a number");
+
+        // Every predicate stays silent on BOTH sentinels: an unread leg is not evidence of a bug.
+        ctx.assertTrue(!SlabbedDiagnostics.modelMismatch(-0.5, SlabbedDiagnostics.MEASURED_EMPTY),
+                "an empty model leg must not flag a mismatch");
+        ctx.assertTrue(!SlabbedDiagnostics.modelMismatch(-0.5, SlabbedDiagnostics.NOT_SAMPLED),
+                "an unsampled model leg must not flag a mismatch");
+        ctx.assertTrue(!SlabbedDiagnostics.triadMismatch(fence, -0.5, SlabbedDiagnostics.MEASURED_EMPTY),
+                "an empty outline must not flag a triad mismatch");
+        ctx.assertTrue(!SlabbedDiagnostics.collisionFollowsVisual(
+                        -0.5, SlabbedDiagnostics.MEASURED_EMPTY, -0.5),
+                "an empty outline leg cannot support a collision-tracking claim");
+        ctx.complete();
+    }
+
+    /**
+     * The raycast leg reports a REAL NUMBER wherever one exists, and the EMPTY sentinel — never the
+     * unsampled one — wherever vanilla genuinely has no targeting shape.
+     *
+     * <p>{@code AbstractBlock.getRaycastShape} returns {@code VoxelShapes.empty()} unless a block
+     * overrides it, because that shape only refines the reported SIDE on top of the outline hit in
+     * {@code BlockView.raycastBlock}. Composter is one of the few that overrides it, so it is the
+     * subject that proves the leg is wired at all; stone is the subject that proves an empty answer
+     * is reported as a measurement rather than as a blank.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void raycastLegReportsANumberWhereverVanillaHasATargetingShape(TestContext ctx) {
+        ServerWorld w = ctx.getWorld();
+        BlockPos origin = ctx.getAbsolutePos(BlockPos.ORIGIN);
+
+        PlaceResult placed = SlabbedLabFixtures.placeBasicFixture(w, origin);
+        ctx.assertTrue(placed.ok(), "placeBasicFixture failed: " + placed.error());
+
+        // Same geometry SlabbedLabFixtureTest#outlineRaycastParity uses: the BOTTOM_SLAB lane
+        // support, whose occupant is proven to be offset (so this is not vacuous at dy 0).
+        BlockPos composter = origin.add(2, 1, 0);
+        w.setBlockState(composter, Blocks.COMPOSTER.getDefaultState(), Block.NOTIFY_LISTENERS);
+        SlabbedDiagnostics.Sample c = SlabbedDiagnostics.analyze(w, composter, w.getBlockState(composter));
+
+        ctx.assertTrue(SlabbedDiagnostics.isMeasured(c.raycastMinY()),
+                "a composter overrides getRaycastShape, so the raycast leg MUST report a number, got "
+                        + SlabbedDiagnostics.format(c.raycastMinY()));
+        ctx.assertTrue(c.raycastMinY() < -1.0e-6,
+                "the offset must be visible on the raycast leg (else this assertion is vacuous at 0), got "
+                        + SlabbedDiagnostics.format(c.raycastMinY()));
+        ctx.assertTrue(Math.abs(c.raycastMinY() - c.outlineMinY()) < SlabbedDiagnostics.EPS,
+                "outline and raycast legs disagree: outline=" + SlabbedDiagnostics.format(c.outlineMinY())
+                        + " raycast=" + SlabbedDiagnostics.format(c.raycastMinY()));
+
+        // Stone: vanilla's default empty raycast shape. Reported as a measurement, not as a blank.
+        BlockPos stone = origin.add(0, 1, 0);
+        w.setBlockState(stone, Blocks.STONE.getDefaultState(), Block.NOTIFY_LISTENERS);
+        SlabbedDiagnostics.Sample s = SlabbedDiagnostics.analyze(w, stone, w.getBlockState(stone));
+
+        ctx.assertTrue(s.raycastMinY() == SlabbedDiagnostics.MEASURED_EMPTY,
+                "stone has no targeting shape of its own, so the raycast leg must read EMPTY, got "
+                        + SlabbedDiagnostics.format(s.raycastMinY()));
+        ctx.assertTrue(!Double.isNaN(s.raycastMinY()),
+                "an empty raycast shape must NOT share the unsampled sentinel — that conflation is "
+                        + "exactly what made recorder run 9e925ab0 unreadable");
+        ctx.assertTrue(SlabbedDiagnostics.isMeasured(s.outlineMinY()),
+                "the outline leg must still carry a real number, got "
+                        + SlabbedDiagnostics.format(s.outlineMinY()));
+        ctx.assertTrue(Double.isNaN(s.modelDy()),
+                "a server-side analyze has no render sample, so the model leg must read NOT_SAMPLED");
         ctx.complete();
     }
 

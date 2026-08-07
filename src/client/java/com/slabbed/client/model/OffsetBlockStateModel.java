@@ -67,6 +67,13 @@ public final class OffsetBlockStateModel implements BlockStateModel, FabricBlock
         }
     }
 
+    /**
+     * Arm the render-path capture for {@code pos} (or disarm with {@code null}) and clear any
+     * previous sample. The value lands the next time this cell's chunk section is meshed —
+     * {@link #emitQuads} runs at bake time, not per frame — so an armed cell reads
+     * {@code NOT_SAMPLED} until a re-mesh happens. Callers that need it promptly should schedule
+     * a block re-render for the same position.
+     */
     public static void resetRenderOffsetTrace(BlockPos pos) {
         slabbed$tracePos = pos;
         slabbed$lastTrace = RenderOffsetTrace.missing();
@@ -97,8 +104,15 @@ public final class OffsetBlockStateModel implements BlockStateModel, FabricBlock
         // the model dy.
         float dy = (float) ClientDy.dyFor(view, pos, state);
 
-        if (Boolean.getBoolean("slabbed.render.offset.trace")
-                && pos.equals(slabbed$tracePos)) {
+        // Armed-position check ONLY. This used to also demand the JVM system property
+        // -Dslabbed.render.offset.trace=true, which no live client session sets — so the model leg
+        // of the dy triad was structurally unreadable in the game, and every /slabdy and recorder
+        // row reported it blank while the outline and collision legs reported real numbers. That is
+        // the worst shape a diagnostic can have: it reads as coverage. The arm/disarm call is the
+        // gate now (slabbed$tracePos is null in normal play, so this is one volatile read and a
+        // null-rejecting equals — strictly cheaper on the mesher path than the System.getProperty
+        // hashtable lookup it replaces).
+        if (pos.equals(slabbed$tracePos)) {
             // Nothing is dy-excluded by the wrapper any more — fences/walls/panes now
             // track getVisualYOffset like every other block (GH #21). Keep the field so
             // the RenderOffsetTrace record shape and the /slabdy readout stay stable, but

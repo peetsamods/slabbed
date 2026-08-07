@@ -82,9 +82,12 @@ public final class SlabdyRowFormatter {
                 + " * half=" + half
                 + " * hit=" + formatVec(hit)
                 + " * local=" + formatVec(local));
+        // A null box here means the outline shape was asked and answered EMPTY — a measurement,
+        // not a missing reading. Printed with the same word SlabbedDiagnostics uses so the two
+        // readouts cannot be confused with each other or with an unsampled leg.
         lines.add("  outline=" + formatBox(outlineBox)
-                + " * outlineMinY=" + (outlineBox == null ? "NaN" : format(outlineBox.minY))
-                + " * outlineMaxY=" + (outlineBox == null ? "NaN" : format(outlineBox.maxY)));
+                + " * outlineMinY=" + (outlineBox == null ? "EMPTY" : format(outlineBox.minY))
+                + " * outlineMaxY=" + (outlineBox == null ? "EMPTY" : format(outlineBox.maxY)));
         lines.add("  modelTrace=" + modelTraceLine
                 + " * modelTraceArmed=" + (modelTraceArmedPos == null ? "-" : modelTraceArmedPos.toShortString()));
         lines.add("  held=" + itemId(held)
@@ -187,7 +190,7 @@ public final class SlabdyRowFormatter {
 
     private static String format(double value) {
         if (!Double.isFinite(value)) {
-            return "NaN";
+            return SlabbedDiagnostics.format(value);
         }
         return String.format(Locale.ROOT, "%.3f", value);
     }
