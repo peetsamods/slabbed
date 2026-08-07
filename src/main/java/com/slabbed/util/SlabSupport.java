@@ -1892,12 +1892,64 @@ public final class SlabSupport {
     public static final double MIN_RESOLVED_DY = -1.0;
 
     /**
-     * Bound on the support-of-a-support resolver walk ({@link #loweredFollowerDy} →
-     * {@link #supportSeatDy} → the recursion-safe support mirrors → possibly another anchored
-     * support). The clamp at {@link #MIN_RESOLVED_DY} means two levels already saturate; the
-     * bound is the hard stop that keeps a pathological column from walking forever.
+     * THE DEEPEST ONE COURSE CAN ADD — the worst-case seat drop a single level of the walk can
+     * contribute, and the divisor the depth budget below is sized by.
+     *
+     * <p>{@link #supportSeatDy} has exactly three arms. The HALF-HEIGHT arm (a bottom-slab
+     * support, whose top face renders half a block below its own grid line) hands its follower
+     * {@code supportDy - 0.5}; the FULL-HEIGHT arm passes the support's dy through unchanged; the
+     * FLUSH arm answers {@code 0.0}. So {@code 0.5} is the largest step any one course can take,
+     * and a budget of {@code ceil(-cap / 0.5)} courses is exactly enough to reach {@code cap}
+     * from {@code 0.0}.
+     *
+     * <p><b>This is a SHAPE, not a refusal — do NOT move it with {@link #MIN_RESOLVED_DY}</b>,
+     * for the reason the column walk's own {@code -1.0} records at length: "half a block of slab
+     * top face" is a fact about geometry and stays {@code 0.5} at any cap. It is written in one
+     * other place, the half-height arm itself, and the two are pinned together by measurement
+     * rather than by hope: {@code SupportDepthBudgetTest} builds a real ladder, measures the drop
+     * one course actually takes, and asserts it equals this number.
      */
-    private static final int MAX_SUPPORT_RESOLVE_DEPTH = 4;
+    private static final double DEEPEST_SEAT_DROP_PER_COURSE = 0.5;
+
+    /**
+     * THE DEPTH BUDGET — how many courses of support-of-a-support {@link #loweredFollowerDy} will
+     * follow before it gives up. Bound on the walk {@link #loweredFollowerDy} →
+     * {@link #supportSeatDy} → the recursion-safe support mirrors → possibly another anchored
+     * support; one unit is spent per course, so a budget of {@code N} walks {@code N} courses
+     * down before {@link #loweredFollowerDy} refuses.
+     *
+     * <p><b>DERIVED FROM THE CAP, not chosen (Stage 3, 2026-08-07).</b> It used to be a bare
+     * {@code 4} justified by a sentence — "the clamp at {@code MIN_RESOLVED_DY} means two levels
+     * already saturate" — which is a sizing ASSUMPTION about a constant living in another
+     * paragraph, and the single most reliable way for the two to drift apart. The budget is now
+     * computed the way {@link SlabbedOffsetRaycast#WINDOW_RADIUS} is computed from
+     * {@link SlabbedOffsetRaycast#DEEPEST_TARGETABLE_DY} (Stage 1) and the way every clamp site
+     * now reads {@link #MIN_RESOLVED_DY} (Stage 2), so all three move together:
+     *
+     * <blockquote>{@code ceil(-cap / DEEPEST_SEAT_DROP_PER_COURSE)} courses to SATURATE, {@code + 2}
+     * headroom</blockquote>
+     *
+     * <p><b>Which cap.</b> {@link SlabbedOffsetRaycast#DEEPEST_TARGETABLE_DY}, the deepest height
+     * this build undertakes to make clickable — NOT {@link #MIN_RESOLVED_DY}, the deepest height
+     * it will currently resolve. The two are an inequality today by design
+     * ({@code MIN_RESOLVED_DY >= DEEPEST_TARGETABLE_DY}); sizing the budget from the deeper of the
+     * pair means the walk already carries the ruled {@code -2.0} cap before the cap arrives, which
+     * is the same "lead the alphabet, ship the cost alone" shape Stage 1 used for the pick window.
+     * When Stage 4 closes the inequality this constant does not move — it is already right.
+     *
+     * <p><b>What the {@code + 2} buys.</b> Saturation needs {@code ceil(-cap / 0.5)} courses:
+     * 2 at {@code -1.0}, 4 at {@code -2.0}. One further course is needed to CONFIRM the course
+     * below is itself saturated rather than merely to reach the value, and one more is slack for
+     * a lane that spends a unit without descending a course. At today's {@code -2.0} window that
+     * is {@code 4 + 2 = 6}; evaluated at the OLD {@code -1.0} it reproduces the historical
+     * {@code 2 + 2 = 4} exactly, which is why this is a re-derivation of the existing number and
+     * not a new one.
+     *
+     * <p>Still the hard stop that keeps a pathological column from walking forever — the budget is
+     * larger, never absent.
+     */
+    public static final int MAX_SUPPORT_RESOLVE_DEPTH =
+            (int) Math.ceil(-SlabbedOffsetRaycast.DEEPEST_TARGETABLE_DY / DEEPEST_SEAT_DROP_PER_COURSE) + 2;
 
     /**
      * THE SUPPORT-DY RESOLVER — the single source of truth for "how far down does a block sit
@@ -1948,8 +2000,28 @@ public final class SlabSupport {
     }
 
     private static double loweredFollowerDy(BlockView world, BlockPos pos, int depth) {
-        if (world == null || pos == null || depth >= MAX_SUPPORT_RESOLVE_DEPTH) {
+        // NO FACTS AT ALL keeps the historical -0.5 floor. A null world or pos is not "the tower
+        // is deeper than I looked" — it is "there is nothing here to look at", the same condition
+        // as the NaN seat at the bottom of this method, and it must answer the same way.
+        if (world == null || pos == null) {
             return -0.5;
+        }
+        // BUDGET EXHAUSTED — CLAMP DOWN, NEVER UP (Stage 3, 2026-08-07). This used to return the
+        // bare -0.5 floor above, which says "I found nothing" about a walk that in fact found
+        // MAX_SUPPORT_RESOLVE_DEPTH consecutive lowered courses and ran out of budget mid-descent.
+        // The floor is SHALLOWER than the cap, so the first course past the budget read HIGHER
+        // than the course beneath it: a tower that steps down, down, down and then pops back up a
+        // full block. Exhaustion means "at least this deep, and I stopped counting", so the honest
+        // answer is the deepest value this line will resolve.
+        //
+        // Invisible at today's cap and provably so — MEASURED, not argued, by Stage 0's B-1 and
+        // re-measured by SupportDepthBudgetTest: every consumer of this value either clamps it to
+        // MIN_RESOLVED_DY after subtracting one course's drop, or compares it against a threshold
+        // that -0.5 and MIN_RESOLVED_DY are on the same side of, for as long as
+        // MIN_RESOLVED_DY == -(one course's drop) * 2. It stops being invisible the instant the
+        // cap moves, which is exactly why it is repaired BEFORE Stage 4 rather than with it.
+        if (depth >= MAX_SUPPORT_RESOLVE_DEPTH) {
+            return MIN_RESOLVED_DY;
         }
         double seat = supportSeatDy(world, pos.down(), depth + 1);
         if (Double.isFinite(seat)) {

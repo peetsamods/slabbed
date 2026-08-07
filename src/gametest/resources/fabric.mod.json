@@ -55,6 +55,7 @@
       "com.slabbed.test.DeepDyWindowCharacterisationTest",
       "com.slabbed.test.PickWindowWideningTest",
       "com.slabbed.test.ClampUnificationTest",
+      "com.slabbed.test.SupportDepthBudgetTest",
       "com.slabbed.test.RendererRegionBoundsGuardTest",
       "com.slabbed.test.BottomSlabSpawnProofTest",
       "com.slabbed.test.ServerHitToleranceShiftTest",

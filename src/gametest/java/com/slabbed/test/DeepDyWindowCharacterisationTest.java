@@ -323,17 +323,28 @@ public final class DeepDyWindowCharacterisationTest {
                             + "(-1.0) —" + ladder);
         }
 
-        // THE MEASURED ANSWER TO "WHAT DOES EXHAUSTION RETURN": it returns a bare -0.5, and under
-        // MIN_RESOLVED_DY = -1.0 that is PROVABLY INVISIBLE. Each course computes
-        // max(childValue - 0.5, -1.0); the exhaustion floor -0.5 is exactly the largest child value
-        // for which the parent still reads -1.0, so substituting it for any true child value
-        // <= -0.5 cannot change any parent. L5's read is the first that reaches depth 4 (one depth
-        // per course, entered at 0) and its value is byte-identical to L2's, L3's and L4's.
+        // THE MEASURED ANSWER TO "WHAT DOES EXHAUSTION RETURN", AS MEASURED FOR STAGE 0: it
+        // returned a bare -0.5, and IN THIS TOWER SHAPE that was PROVABLY INVISIBLE. Every course
+        // here is a bottom slab, so every course computes max(childValue - 0.5, -1.0), and the
+        // exhaustion floor -0.5 is exactly the largest child value for which the parent still
+        // reads -1.0 — substituting it for any true child value <= -0.5 cannot change any parent.
+        // At the depth budget of 4 this file was written against, L5's read was the first to reach
+        // exhaustion (one depth per course, entered at 0); Stage 3 raised the budget, so no course
+        // of a tower this height reaches it any more. The assertion is unchanged and still passes,
+        // because what it pins is that the top of this ladder equals its saturated middle.
+        //
+        // ⚠️ THE FINDING WAS TRUE OF THIS SHAPE, NOT OF THE DEFECT (corrected by Stage 3,
+        // 2026-08-07). A DROPPING tower deepens half a block per course, so it re-saturates on the
+        // way back up and washes the exhaustion value out. A PASS-THROUGH tower — anchored
+        // full-height courses over a lowered base — spends budget WITHOUT deepening and hands the
+        // exhaustion value straight to the top of the stack unmodified. Measured there, the bare
+        // -0.5 popped a course UP half a block at TODAY's -1.0 cap; see SupportDepthBudgetTest,
+        // which builds both shapes side by side.
         ctx.assertTrue(Math.abs(dy[5] - dy[2]) <= EPS,
-                "MEASUREMENT B: the exhaustion path is unobservable at this clamp — L5 (whose walk "
-                        + "reaches depth 4 and takes the bare -0.5 floor) must read exactly what L2 "
-                        + "(whose walk does not) reads. It stops being unobservable the moment "
-                        + "MIN_RESOLVED_DY goes past -1.0, which is Stage 3's whole point —" + ladder);
+                "MEASUREMENT B: in a DROPPING tower the exhaustion path is unobservable at this "
+                        + "clamp — L5 must read exactly what the saturated L2 reads. This shape "
+                        + "washes the exhaustion value out whatever it is; the PASS-THROUGH shape "
+                        + "in SupportDepthBudgetTest is the one that does not —" + ladder);
         ctx.complete();
     }
 
