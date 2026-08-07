@@ -4,7 +4,6 @@ import java.lang.reflect.Method;
 
 import com.slabbed.dev.SlabbedDiagnostics;
 import net.minecraft.util.math.BlockPos;
-import net.minecraft.world.World;
 
 /**
  * Reflection bridge to dev/test-only audit classes under {@code com.slabbed.dev.audit.**}
@@ -19,21 +18,18 @@ import net.minecraft.world.World;
  * ONCE (a cached {@code Class<?>}, not a per-call {@code Class.forName}) — a per-tick
  * reflection-lookup-by-string-name would reintroduce the same class of per-frame
  * reflection cost that has already shipped as a real lag bug twice on this project (see
- * the PERF hygiene gate memory). {@link #invoke} and {@link #captureLiveTrace} stay
- * Class.forName-per-call since they only fire on block-placement events, not every tick.
+ * the PERF hygiene gate memory). {@link #invoke} stays
+ * Class.forName-per-call since it only fires on block-placement events, not every tick.
  */
 public final class SlabbedAuditBridge {
 
     private static final String AUDIT_CLASS_NAME =
             "com.slabbed.dev.audit.LoweredSideLiveHitRemapRuntimeAudit";
-    private static final String LIVE_TRACE_CLASS_NAME =
-            "com.slabbed.debug.BsFbLiveTrace";
     private static final String RECORDER_CLASS_NAME =
             "com.slabbed.dev.audit.LiveCursorIntentRecorder";
 
     /** Enable with JVM arg: {@code -Dslabbed.debug.sbsb=true}. */
     private static final boolean ENABLED = Boolean.getBoolean("slabbed.debug.sbsb");
-    private static final boolean LIVE_TRACE_ENABLED = Boolean.getBoolean("slabbed.bsfb.live.trace");
 
     private static final Class<?> RECORDER_CLASS = resolveRecorderClass();
 
@@ -63,10 +59,6 @@ public final class SlabbedAuditBridge {
         } catch (ReflectiveOperationException ignored) {
             return false;
         }
-    }
-
-    public static boolean isLiveTraceEnabled() {
-        return LIVE_TRACE_ENABLED;
     }
 
     public static void bootstrapLiveRecorder() {
@@ -143,21 +135,4 @@ public final class SlabbedAuditBridge {
         }
     }
 
-    public static void captureLiveTrace(World world, BlockPos supportPos, BlockPos fullPos, String label) {
-        if (!LIVE_TRACE_ENABLED) {
-            return;
-        }
-        try {
-            Class<?> traceClass = Class.forName(LIVE_TRACE_CLASS_NAME);
-            Method method = traceClass.getMethod(
-                    "capture",
-                    World.class,
-                    BlockPos.class,
-                    BlockPos.class,
-                    String.class);
-            method.invoke(null, world, supportPos, fullPos, label);
-        } catch (ReflectiveOperationException | LinkageError ignored) {
-            // Live trace is dev-only and excluded from the release jar.
-        }
-    }
 }

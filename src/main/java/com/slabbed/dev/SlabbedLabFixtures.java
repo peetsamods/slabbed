@@ -1,6 +1,5 @@
 package com.slabbed.dev;
 
-import com.slabbed.debug.BsFbLiveTrace;
 import net.minecraft.block.Block;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.Blocks;
@@ -223,51 +222,12 @@ public final class SlabbedLabFixtures {
             }
         }
 
-        // BS-FB Live Trace: capture before breaking support (Moment A)
-        for (String name : targetLanes.keySet()) {
-            BlockPos supportPos = allPositions.get(name);
-            BlockPos fullPos = supportPos.up();
-            BsFbLiveTrace.capture(world, supportPos, fullPos, "BEFORE_BREAK_" + name);
-            BsFbLiveTrace.captureClient(supportPos, fullPos, "BEFORE_BREAK_" + name);
-        }
-
         // Remove support blocks with full neighbor notification — reproduces real support loss.
         LinkedHashMap<String, BlockPos> affected = new LinkedHashMap<>();
         for (String name : targetLanes.keySet()) {
             BlockPos pos = allPositions.get(name);
             world.setBlockState(pos, Blocks.AIR.getDefaultState(), Block.NOTIFY_ALL);
             affected.put(name, pos);
-        }
-
-        // BS-FB Live Trace: capture immediately after breaking support (Moment B)
-        for (String name : targetLanes.keySet()) {
-            BlockPos supportPos = allPositions.get(name);
-            BlockPos fullPos = supportPos.up();
-            BsFbLiveTrace.capture(world, supportPos, fullPos, "AFTER_BREAK_" + name);
-            BsFbLiveTrace.captureClient(supportPos, fullPos, "AFTER_BREAK_" + name);
-        }
-
-        // BS-FB Live Trace: schedule delayed captures (Moments C: 1, 2, 5 ticks after break)
-        if (BsFbLiveTrace.ENABLED) {
-            long currentTick = world.getServer().getTicks();
-            int[] delays = new int[] {1, 2, 5};
-            for (int d : delays) {
-                final int finalDelay = d;
-                world.getServer().execute(new Runnable() {
-                    @Override
-                    public void run() {
-                        if (world.getServer().getTicks() >= currentTick + finalDelay) {
-                            for (String name : targetLanes.keySet()) {
-                                BlockPos supportPos = allPositions.get(name);
-                                BlockPos fullPos = supportPos.up();
-                                String label = "DELAY_" + finalDelay + "TICKS_AFTER_BREAK_" + name;
-                                BsFbLiveTrace.capture(world, supportPos, fullPos, label);
-                                BsFbLiveTrace.captureClient(supportPos, fullPos, label);
-                            }
-                        }
-                    }
-                });
-            }
         }
 
         return PlaceResult.success(origin, affected);
@@ -310,33 +270,6 @@ public final class SlabbedLabFixtures {
             BlockPos pos = allPositions.get(entry.getKey());
             world.setBlockState(pos, entry.getValue(), Block.NOTIFY_ALL);
             affected.put(entry.getKey(), pos);
-        }
-
-        // BS-FB Live Trace: capture immediately after placement (Moment D)
-        for (String name : targetLanes.keySet()) {
-            BlockPos supportPos = allPositions.get(name);
-            BlockPos fullPos = supportPos.up();
-            BsFbLiveTrace.capture(world, supportPos, fullPos, "AFTER_PLACEMENT_" + name);
-        }
-
-        // BS-FB Live Trace: schedule delayed captures (Moments E: 2-10 ticks after placement)
-        if (BsFbLiveTrace.ENABLED) {
-            long currentTick = world.getServer().getTicks();
-            for (int delay = 2; delay <= 10; delay++) {
-                final int finalDelay = delay;
-                world.getServer().execute(new Runnable() {
-                    @Override
-                    public void run() {
-                        if (world.getServer().getTicks() >= currentTick + finalDelay) {
-                            for (String name : targetLanes.keySet()) {
-                                BlockPos supportPos = allPositions.get(name);
-                                BlockPos fullPos = supportPos.up();
-                                BsFbLiveTrace.capture(world, supportPos, fullPos, "DELAY_" + finalDelay + "TICKS_AFTER_PLACE_" + name);
-                            }
-                        }
-                    }
-                });
-            }
         }
 
         return PlaceResult.success(origin, affected);

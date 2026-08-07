@@ -16,18 +16,8 @@ public final class SlabbedClient implements ClientModInitializer {
         SlabAnchorClientSync.init();
         SlabdyClientCommands.register();
         BetaNoticeClient.init();
-        initBsFbLiveTraceClient();
         initGapFillerOverlay();
         initScreenshotCaptureService();
-    }
-
-    private static void initBsFbLiveTraceClient() {
-        if (!Boolean.getBoolean("slabbed.bsfb.live.trace")) {
-            return;
-        }
-        invokeStaticInit(
-                "com.slabbed.client.debug.BsFbLiveTraceClient",
-                "BS-FB live trace client");
     }
 
     private static void initGapFillerOverlay() {

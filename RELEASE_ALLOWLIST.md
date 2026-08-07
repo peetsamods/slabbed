@@ -103,7 +103,7 @@ jar that lies about its own contents is a release defect even when every entry i
 | Entry | Reason |
 | --- | --- |
 | `com/slabbed/Slabbed` | Mod entrypoint (`fabric.mod.json` `main`). |
-| `com/slabbed/client/SlabbedClient` | Client entrypoint (`fabric.mod.json` `client`). Its three reflective hooks (`BsFbLiveTraceClient`, `GapFillerOverlay`, `ScreenshotCaptureService`) all target excluded classes and all resolve by `Class.forName` behind a flag or an `isDevelopmentEnvironment()` check, so the release class holds no hard link to anything absent — see the port-debt note below. |
+| `com/slabbed/client/SlabbedClient` | Client entrypoint (`fabric.mod.json` `client`). Its two reflective hooks (`GapFillerOverlay`, `ScreenshotCaptureService`) both target excluded classes and both resolve by `Class.forName` behind a flag or an `isDevelopmentEnvironment()` check, so the release class holds no hard link to anything absent — see the port-debt note below. (A third hook, the BS-FB live trace, was deleted 2026-08-07 with its target classes — a closed investigation's TEMPORARY tooling.) |
 | `com/slabbed/SlabbedDevMixinBootstrap` | `preLaunch` entrypoint named in the shipped `fabric.mod.json`, so the loader requires it to be present. Its whole body returns immediately unless `isDevelopmentEnvironment()`, and even then it only arms the two excluded recorder mixin configs after a classpath-presence check. Removing it from the jar would mean removing it from the descriptor, which is a functional change, not hygiene. It is what keeps the five recorder mixins out of `"required": true` release wiring. |
 
 ### Core feature code
@@ -213,11 +213,11 @@ prose. Nothing was deleted to install this allowlist.
 
 It was not invented here either, because on this line a naive port would be RED on day one for
 reasons that need a ruling rather than a build file: the shipped **sources** jar legitimately
-contains the strings `GapFillerOverlay`, `ScreenshotCaptureService` and `BsFbLiveTraceClient` (the
-three reflective hooks in `SlabbedClient`, all pointing at classes this build deliberately excludes)
+contains the strings `GapFillerOverlay` and `ScreenshotCaptureService` (the
+reflective hooks in `SlabbedClient`, pointing at classes this build deliberately excludes)
 and `TargetDyOverlay`, `SlabbedLab` and `SlabRigCommand` (prose in shipped javadoc). A content
 denylist that fires on a javadoc sentence teaches people to widen it. Porting it wants a token set
-Maintainer signs off on, plus a decision on whether those three dangling hooks should remain. Recorded
+with a maintainer sign-off, plus a decision on whether the dangling hooks should remain. Recorded
 here as port debt, not silently improvised.
 
 ## Maintenance

@@ -195,10 +195,6 @@ public final class SlabAnchorAttachment {
                         pos.toShortString(), chunk.getPos(), set.size());
             }
             recordPlacementDy(world, pos, state);
-            if (SlabbedAuditBridge.isLiveTraceEnabled()) {
-                BlockPos supportPos = sideSlabAnchor ? pos : pos.down();
-                SlabbedAuditBridge.captureLiveTrace(world, supportPos, pos, "ANCHOR_ADDED");
-            }
         }
     }
 
@@ -423,10 +419,6 @@ public final class SlabAnchorAttachment {
                 chunk.removeAttached(ANCHOR_TYPE);
             } else {
                 chunk.setAttached(ANCHOR_TYPE, set);
-            }
-            if (SlabbedAuditBridge.isLiveTraceEnabled()) {
-                BlockPos supportPos = pos.down();
-                SlabbedAuditBridge.captureLiveTrace(world, supportPos, pos, "ANCHOR_REMOVED");
             }
         }
     }
