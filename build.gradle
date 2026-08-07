@@ -58,7 +58,74 @@ tasks.matching { it.name == "runGameTest" }.configureEach {
                     .map { v -> ["-Dslabbed.deepDyAlphabet=" + v] }
                     .orElse([])
     )
+    finalizedBy("verifyGameTestCount")
 }
+
+// ── Suite-count gate ─────────────────────────────────────────────────────────────────────────
+// A stale persisted world in build/run/gameTest can silently drop tests while still reporting
+// BUILD SUCCESSFUL (observed live: 166 reported, ~65 lost, no warning). A green run is therefore
+// NOT proof on its own: the reported count must equal the expected total computed from the
+// registered classes. This task turns that manual check (tools/expected-gametest-count.py) into
+// a machine gate: it runs after every runGameTest and FAILS the build on any mismatch.
+tasks.register("verifyGameTestCount") {
+    doLast {
+        File log = file("build/run/gameTest/logs/latest.log")
+        if (!log.exists()) {
+            throw new GradleException("verifyGameTestCount: ${log} not found — runGameTest did not produce a log; cannot certify the suite count.")
+        }
+        def matches = log.readLines().findAll { it.contains("required tests passed") }
+        if (matches.isEmpty()) {
+            throw new GradleException("verifyGameTestCount: no 'required tests passed' line in ${log} — the suite did not complete.")
+        }
+        def m = (matches.last() =~ /All (\d+) required tests passed/)
+        if (!m.find()) {
+            throw new GradleException("verifyGameTestCount: could not parse the count from: ${matches.last()}")
+        }
+        int reported = m.group(1).toInteger()
+        def proc = new ProcessBuilder("python3", "tools/expected-gametest-count.py")
+                .directory(projectDir).redirectErrorStream(true).start()
+        def out = proc.inputStream.text
+        if (proc.waitFor() != 0) {
+            throw new GradleException("verifyGameTestCount: tools/expected-gametest-count.py failed:\n${out}")
+        }
+        def em = (out =~ /expected suite count (\d+)/)
+        if (!em.find()) {
+            throw new GradleException("verifyGameTestCount: could not parse tools/expected-gametest-count.py output: ${out}")
+        }
+        int expected = em.group(1).toInteger()
+        if (reported != expected) {
+            throw new GradleException("verifyGameTestCount: FALSE GREEN — run reported ${reported} tests but ${expected} are registered. A stale run dir silently drops tests; rm -rf build/run/gameTest and re-run.")
+        }
+        logger.lifecycle("verifyGameTestCount: OK — ${reported}/${expected} (reported == expected).")
+    }
+}
+
+// ── Hook auto-install ────────────────────────────────────────────────────────────────────────
+// tools/hooks/commit-msg carries the S-1/S-4/S-5/S-6 gates, but git only runs it if
+// core.hooksPath is set — and a fresh clone silently commits ungated. This wires the one-time
+// `git config core.hooksPath tools/hooks` into the build so no checkout can forget it.
+// Idempotent; warns instead of failing when git is unavailable (e.g. a source tarball).
+tasks.register("prepareGitHooks") {
+    doLast {
+        if (!file(".git").exists()) {
+            logger.lifecycle("prepareGitHooks: no .git here — skipped.")
+            return
+        }
+        try {
+            def proc = new ProcessBuilder("git", "config", "core.hooksPath", "tools/hooks")
+                    .directory(projectDir).redirectErrorStream(true).start()
+            def out = proc.inputStream.text
+            if (proc.waitFor() == 0) {
+                logger.lifecycle("prepareGitHooks: core.hooksPath = tools/hooks")
+            } else {
+                logger.warn("prepareGitHooks: git config failed (${out.trim()}) — commits are UNGATED until core.hooksPath is set manually.")
+            }
+        } catch (Exception e) {
+            logger.warn("prepareGitHooks: could not set core.hooksPath (${e.message}) — commits are UNGATED until it is set manually.")
+        }
+    }
+}
+tasks.matching { it.name == "build" }.configureEach { dependsOn("prepareGitHooks") }
 
 version = project.mod_version
 group = project.maven_group
