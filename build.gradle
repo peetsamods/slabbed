@@ -64,9 +64,6 @@ dependencies {
     implementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
     implementation "net.fabricmc.fabric-api:fabric-renderer-api-v1:${project.fabric_version}"
     implementation "net.fabricmc.fabric-api:fabric-model-loading-api-v1:${project.fabric_version}"
-    // The key-mapping module publishes under its own version, not the bundle version, so resolve it
-    // through the bundle POM (fabricApi.module) rather than a hard-coded coordinate.
-    implementation fabricApi.module("fabric-key-mapping-api-v1", project.fabric_version)
 
     // fabric-gametest-api-v1 is included in fabric-api bundle (already on main classpath,
     // extended to the gametest source set by configureTests { createSourceSet = true })

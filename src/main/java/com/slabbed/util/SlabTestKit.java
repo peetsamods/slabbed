@@ -13,20 +13,18 @@ import java.util.List;
  * that matters when live-testing Slabbed placement/height behaviour (slabs, blocks, decorations,
  * redstone, hanging things, block-entities, buckets, …).
  *
- * <p>Single source of truth read by BOTH the client palette overlay (the 5x9 grid) and the
- * server-side test-kit commands. It deliberately lives in {@code src/main} so the client sources
- * (which are on the same compile classpath) and the command sources share the exact same list — no
- * copy that can drift.
+ * <p>Single source of truth read by the server-side test-kit commands ({@code /slabkit} and
+ * {@code /slabrig mega}), so there is no second copy that can drift.
  *
  * <p>The list is padded with {@code minecraft:air} to exactly {@link #COLUMNS} x {@link #ROWS} = 45
- * cells so the overlay grid is always full; consumers that place/give items skip the air padding.
+ * cells so the grid is always full; consumers that place/give items skip the air padding.
  */
 public final class SlabTestKit {
 
-    /** Columns in the palette grid (matches the vanilla hotbar width). */
+    /** Columns in the kit grid (matches the vanilla hotbar width). */
     public static final int COLUMNS = 9;
 
-    /** Rows in the palette grid (five stacked hotbars). */
+    /** Rows in the kit grid (five stacked hotbars). */
     public static final int ROWS = 5;
 
     /** Total palette cells; {@link #PALETTE} is padded to exactly this many entries. */
@@ -36,8 +34,8 @@ public final class SlabTestKit {
 
     /**
      * The curated ids, one representative per Slabbed-relevant category, in a stable display order,
-     * then padded with {@code minecraft:air} up to {@link #SIZE}. Never reorder casually — the
-     * overlay and the config file address cells positionally.
+     * then padded with {@code minecraft:air} up to {@link #SIZE}. Never reorder casually — consumers
+     * address cells positionally.
      */
     public static final List<Identifier> PALETTE = buildPalette();
 
@@ -99,7 +97,7 @@ public final class SlabTestKit {
         add(ids, "minecraft:birch_door");
         add(ids, "minecraft:candle");
 
-        // Pad to a full grid so the overlay never renders a ragged last row.
+        // Pad to a full grid so positional consumers never see a ragged last row.
         while (ids.size() < SIZE) {
             ids.add(AIR);
         }
@@ -135,8 +133,8 @@ public final class SlabTestKit {
     /**
      * The palette resolved to {@link Item}s with the {@code minecraft:air} padding removed, in palette
      * order. This is the list the server-side commands hand out ({@code /slabkit}) and iterate over when
-     * auto-placing one representative per category ({@code /slabrig mega}). Additive to the palette that
-     * the client overlay reads — it never reorders or mutates {@link #PALETTE}.
+     * auto-placing one representative per category ({@code /slabrig mega}). Additive — it never
+     * reorders or mutates {@link #PALETTE}.
      */
     public static List<Item> placeableItems() {
         List<Item> items = new ArrayList<>();
