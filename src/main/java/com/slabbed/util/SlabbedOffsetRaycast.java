@@ -65,7 +65,7 @@ import net.minecraft.world.BlockView;
  * identity are now named links rather than restated numbers, and
  * {@code ClampUnificationTest} asserts it, so neither constant can be moved on its own
  * unnoticed. (Ruling of
- * 2026-08-06 in {@code docs/process/LIVE_LEDGER.md}, measured by
+ * 2026-08-06 in the internal live ledger, measured by
  * {@code DeepDyWindowCharacterisationTest}: required radius is 1 at {@code -1.0} and 2 at
  * both {@code -1.5} and {@code -2.0}, which is why the ruled cap is {@code -2.0} — the
  * largest magnitude a radius-2 window pays for.)

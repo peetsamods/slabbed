@@ -18,7 +18,7 @@ import net.minecraft.util.math.Direction;
  * ("doom-infinity window") mitigation only recognised a block lowered via
  * {@code isDirectCustomSlabSupportedObject} (resting directly on a Terrain-Slabs-owned custom
  * surface) — NOT an ordinary full block anchored on a plain VANILLA slab, which is this mod's
- * own core, day-one product intent (RULES.md §1 "global slab support"). A live session found
+ * own core, day-one product intent ("global slab support" — day-one product intent). A live session found
  * ~80 opaque-full-cube-at-nonzero-dy diagnostic hits on plain anchored dirt with zero Terrain
  * Slabs involvement — the exact class this mitigation exists for, just via a different (more
  * common) lowering mechanism than the one it checked.

@@ -947,7 +947,7 @@ public final class SlabRigCommand {
                         + ": sign says dy " + check.expected() + " but it measures " + got);
             }
         }
-        // SEAT-SANITY (LIVE_LEDGER 2026-08-05 second pass, "interpenetration row"): NO rig-
+        // SEAT-SANITY (live pass 2026-08-05, "interpenetration row"): NO rig-
         // authored cell may resolve a dy that puts its occupied volume inside its direct
         // support's occupied volume. This is the rule that would have caught the recipe's
         // invented flush stone under the z=14 seat slab before it ever reached a live board.

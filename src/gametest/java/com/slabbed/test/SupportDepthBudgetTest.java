@@ -66,7 +66,7 @@ import net.minecraft.util.math.BlockPos;
  * exhaustion point, the exact mirror of the pop Stage 3 removed. Monotonicity still holds (sinking
  * is downward), which is why it needs its own assertion.
  *
- * <p><b>Characterised, not fixed</b> — see {@code KNOWN_INCOMPLETE.md} row 1o. The OFF leg keeps
+ * <p><b>Characterised, not fixed</b> — see internal-notes 1o. The OFF leg keeps
  * the strict pass-through equality unchanged; the deep leg pins the substitution and asserts it is
  * a sink rather than a pop. Repairing it is a production change to {@code loweredFollowerDy}'s
  * exhaustion return and owes its own RED-first pass over both tower shapes at both caps.
@@ -277,7 +277,7 @@ public final class SupportDepthBudgetTest {
         // ⚠️ CHARACTERISATION, NOT ENDORSEMENT. This is a REAL residual found by arming Stage 4's
         // flag, reported rather than patched, and it is deliberately NOT fixed here: repairing it
         // means changing loweredFollowerDy's exhaustion return, which is Stage 3's site and a
-        // production behaviour change that owes its own RED-first pass. See KNOWN_INCOMPLETE row
+        // production behaviour change that owes its own RED-first pass. See internal-notes row
         // 1o.
         //
         // WHAT WAS MEASURED. Exhaustion returns MIN_RESOLVED_DY (Stage 3 changed it from a bare
@@ -354,7 +354,7 @@ public final class SupportDepthBudgetTest {
      * found are the SAME defect seen from either end, and a repair that trades one for the other
      * must not be able to read as green here.
      *
-     * <h2>⚠️ RED IN THE DEEP LEG TODAY — see {@code KNOWN_INCOMPLETE.md} row 1o</h2>
+     * <h2>⚠️ RED IN THE DEEP LEG TODAY — see internal-notes 1o</h2>
      *
      * <p>Measured with {@code slabbed.deepDyAlphabet=true}: {@code L6 = -1.0}, {@code L7 = -2.0},
      * across a pass-through seat whose own arm may lower nothing at all — a full-block cliff where
@@ -407,7 +407,7 @@ public final class SupportDepthBudgetTest {
             return;
         }
 
-        // ── THE DEEP LEG: CHARACTERISED, NOT ENDORSED (KNOWN_INCOMPLETE row 1o) ─────────────
+        // ── THE DEEP LEG: CHARACTERISED, NOT ENDORSED (internal-notes row 1o) ─────────────
         int cliff = -1;
         int cliffs = 0;
         for (int i = 1; i < dy.length; i++) {
@@ -551,7 +551,7 @@ public final class SupportDepthBudgetTest {
                 "the whole point of this cell: two frames the exhaustion path cannot tell apart "
                         + "must nevertheless resolve to different heights. They read the same ("
                         + dyA + "), so the fixture no longer separates them and the impossibility "
-                        + "argument in KNOWN_INCOMPLETE row 1o has lost its evidence — " + measured);
+                        + "argument in internal-notes row 1o has lost its evidence — " + measured);
 
         // ── AND THE FACT THAT SEPARATES THEM IS ONE FURTHER LEVEL DOWN ──────────────────────
         ctx.assertTrue(Math.abs(seatDyA - seatDyB) > EPS,

@@ -48,7 +48,7 @@ import net.minecraft.util.math.BlockPos;
  * the same hazard generally). Snow lying on grass/dirt/stone cannot see a slab buried below that
  * terrain at all. {@link #snowLayerOverNaturalTerrainStaysFlush} pins it. The residual reachable
  * case — Terrain Slabs, which makes half-height surfaces out of natural terrain world-wide — is
- * documented in {@code KNOWN_INCOMPLETE.md} 1k for a live judgement.
+ * documented in internal-notes 1k for a live judgement.
  *
  * <p>{@code isThinTopLayer} survives, meaning only what its name says — a THICKNESS statement, used
  * only by the bounded column walks that must not transmit a support's top face up through a
@@ -298,7 +298,7 @@ public final class ThinTopLayerLoweringTest {
      *
      * <p>NOTE for the live pass: this is the ONE arrangement where the old DODO argument still has
      * teeth, because Terrain Slabs makes half-height surfaces out of natural terrain WORLD-WIDE. See
-     * {@code KNOWN_INCOMPLETE.md} entry 1k.
+     * internal-notes entry 1k.
      */
     @GameTest(structure = "fabric-gametest-api-v1:empty")
     public void snowLayerOnTerrainSlabsSurfaceSeatsOnItsTopFace(TestContext ctx) {

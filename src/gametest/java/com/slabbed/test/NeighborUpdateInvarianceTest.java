@@ -701,7 +701,7 @@ public final class NeighborUpdateInvarianceTest {
      * is exactly the property that makes "the log is quiet" mean "nothing violated" rather than
      * "the test didn't run". It lives here, in the one shared runner, rather than in each of the
      * per-subject gametest methods, so a new subject cannot be added without reporting. (Deliberately no
-     * literal annotation token in this javadoc — HANDOFF's suite-count script counts occurrences,
+     * literal annotation token in this javadoc — tools/expected-gametest-count.py counts occurrences,
      * and a doc mention would inflate the expected total.)
      *
      * <p>The per-violation detail (<code>&lt;mutation&gt;: dy &lt;before&gt; -&gt; &lt;after&gt;</code>)

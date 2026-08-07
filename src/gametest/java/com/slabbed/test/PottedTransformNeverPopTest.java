@@ -31,7 +31,7 @@ import net.minecraft.util.math.BlockPos;
  * {@code SlabAnchorAttachment.isAnchored(world, cursor)} — <b>an anchor boolean standing in for
  * "is this cell lowered"</b>, the same bug class as L13/L14/L15. Potting a flower is an in-place
  * block-KIND change ({@code flower_pot} → {@code potted_*}), so {@code onStateReplaced} fires and
- * {@code replacementPreservesAnchor} clears the pot's anchor ({@code KNOWN_INCOMPLETE.md} 1j) —
+ * {@code replacementPreservesAnchor} clears the pot's anchor (internal-notes 1j) —
  * while the pot's RENDERED HEIGHT is untouched, because it comes from a wholly different lane
  * (the "non-solid object standing on a lowered full-block support" branch of
  * {@code getYOffsetInner}). The flag vanished, the geometry did not, and everything stacked above
@@ -40,7 +40,7 @@ import net.minecraft.util.math.BlockPos;
  * <p><b>Fix.</b> {@code hasSlabInColumn} and its magnitude twin {@code slabColumnYOffset} now also
  * accept a cell that is a {@code isLoweredStandingObject} — a standing OBJECT whose own support
  * resolves lowered — so the column's answer is a function of RESOLVED HEIGHT, not of which flower
- * is in the pot. {@code KNOWN_INCOMPLETE.md} 1j (the pot losing its own anchor) is deliberately NOT
+ * is in the pot. internal-notes 1j (the pot losing its own anchor) is deliberately NOT
  * repaired here; this makes the recorded sequence impossible regardless of it.
  */
 public final class PottedTransformNeverPopTest {

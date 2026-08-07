@@ -86,5 +86,5 @@ public final class AuditFixesTest {
 
     // (A fence-gate flush-guard test was attempted here and REMOVED: its fixture did not reproduce
     //  a lowered support, so it passed even with the fix reverted — a vacuous test. The flush-guard
-    //  gate fix is deferred to KNOWN_INCOMPLETE.md until a valid headless fixture exists, per G3.)
+    //  gate fix is deferred to the internal notes until a valid headless fixture exists, per G3.)
 }

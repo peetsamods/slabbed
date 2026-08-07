@@ -30,7 +30,7 @@ import java.util.Map;
  *       with every cell inside the 8x8x8 plot — the rig is useless if a case half-lands;
  *   <li>the rig refuses to overwrite anything it did not place, in both directions: it will not
  *       build into an occupied footprint, and {@code clear} leaves player-edited cells alone;
- *   <li>the four LIVE_LEDGER symptom cases are present by name — those are the scenes the maintainer
+ *   <li>the four live-ledger symptom cases are present by name — those are the scenes the maintainer
  *       re-tests after the -1.0 boundary fix, so losing one silently would be a real regression;
  *   <li>{@code mega} / {@code rows} build, clear, and — the Stage 2 proof — SELF-VERIFY: every
  *       support variant's reference marker measures the dy that variant's sign claims;
@@ -127,7 +127,7 @@ public final class SlabRigCatalogSmokeTest {
                 "lantern_in_trapdoor",     // ledger #4 — interpenetration
         }) {
             ctx.assertTrue(names.contains(required),
-                    "LIVE_LEDGER symptom case '" + required + "' is missing from the rig catalog");
+                    "live-ledger symptom case '" + required + "' is missing from the rig catalog");
             ctx.assertTrue(SlabRigCommand.caseByName(required) != null,
                     "case '" + required + "' is listed but not resolvable");
         }
@@ -160,7 +160,7 @@ public final class SlabRigCatalogSmokeTest {
      * quietly building the WRONG scene and a live pass over them proves nothing.
      *
      * <p>Deliberately asserts only the SUPPORT column, never the follower — the follower reading
-     * -0.5 IS the open bug (LIVE_LEDGER #1), so pinning it here would turn red the day it is fixed.
+     * -0.5 IS the open bug (live-ledger #1), so pinning it here would turn red the day it is fixed.
      */
     @GameTest(structure = "fabric-gametest-api-v1:empty")
     public void minusOneSeatReallyReadsMinusOne(TestContext ctx) {
@@ -177,7 +177,7 @@ public final class SlabRigCatalogSmokeTest {
                         + world.getBlockState(logPos));
         double logDy = com.slabbed.util.SlabSupport.getYOffset(world, logPos, world.getBlockState(logPos));
         ctx.assertTrue(logDy == -1.0,
-                "the rig's -1.0 seat must put its support at dy -1.0 (the LIVE_LEDGER boundary), got "
+                "the rig's -1.0 seat must put its support at dy -1.0 (the live-ledger boundary), got "
                         + logDy);
 
         BlockPos slabPos = origin.add(0, 2, 0);
@@ -187,7 +187,7 @@ public final class SlabRigCatalogSmokeTest {
                         + "symptom geometry), got " + slabDy);
 
         // Measured on this HEAD with the seat above (2026-08-05): the case genuinely reproduces
-        // LIVE_LEDGER #1 headlessly — follower dy over a -1.0 support reads birch_slab -0.5
+        // live-ledger #1 headlessly — follower dy over a -1.0 support reads birch_slab -0.5
         // (the 0.5 gap), birch_fence 0.0 (a FULL 1.0 gap), lantern -1.0, oak_sign -1.0.
         // Deliberately NOT asserted: those are the open bug's values and would go red on the fix.
         SlabRigCommand.clear(world, plan);
@@ -247,7 +247,7 @@ public final class SlabRigCatalogSmokeTest {
      * sign claims ({@code 0.0 / -0.5 / -1.0 / -0.5}).
      *
      * <p>A mismatch here is a real regression in the support-dy resolver, NOT a fixture to relax —
-     * the -1.0 row in particular is the LIVE_LEDGER boundary that {@code 6a7cd43a} closed.
+     * the -1.0 row in particular is the live-ledger boundary that {@code 6a7cd43a} closed.
      */
     @GameTest(structure = "fabric-gametest-api-v1:empty")
     public void megaRowsMeasureTheirDeclaredDy(TestContext ctx) {
@@ -270,7 +270,7 @@ public final class SlabRigCatalogSmokeTest {
     }
 
     /**
-     * LIVE_LEDGER (2026-08-06, the maintainer's chain/ceiling pop): {@code mega} row 3
+     * live-ledger (2026-08-06, the maintainer's chain/ceiling pop): {@code mega} row 3
      * ({@code overhang_and_ceiling}) writes its CEILING as plain scenery (a stone block one cell
      * above the subject), authored via a bare {@code plan.put} with no anchor and no freeze
      * marker. It rendered lowered purely from a LIVE geometric derivation (the subject beneath it
@@ -419,7 +419,7 @@ public final class SlabRigCatalogSmokeTest {
                             + " kit objects; refused " + refused);
         }
 
-        // Pinned census: a change here is a real change in what the rig can build. See HANDOFF.md.
+        // Pinned census: a change here is a real change in what the rig can build. See the internal notes.
         ctx.assertTrue(census.toString().equals(EXPECTED_KIT_CENSUS),
                 "kit census changed.\n  actual:   " + census + "\n  expected: " + EXPECTED_KIT_CENSUS);
 

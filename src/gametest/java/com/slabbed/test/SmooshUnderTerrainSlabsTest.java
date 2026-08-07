@@ -15,7 +15,7 @@ import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Direction;
 
 /**
- * Row G of {@code PORT_FIX_MATRIX.md} / {@code DY_SPEC.md} law L4: NO ceiling-attached block may
+ * Row G of the internal port-fix matrix / {@code DY_SPEC.md} law L4: NO ceiling-attached block may
  * be treated as raised (+0.5) by a Terrain Slabs support — it must hang FLUSH (dy 0.0), because TS
  * applies its own vertical offset and stacking Slabbed's +0.5 on top pushes the hanger UP into the
  * flush TS block (the "smoosh").

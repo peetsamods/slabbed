@@ -39,7 +39,7 @@ import net.minecraft.util.math.BlockPos;
  * <p><b>Why the pre-existing suite never caught it.</b>
  * {@code SlabOnSlabVerticalAnchorTest#slabOnBottomTypeSupportNeverAnchorsVertically} builds a
  * <b>non-lowered</b> birch bottom slab as its support, so it only ever defended the plain case.
- * Its premise ({@code KNOWN_INCOMPLETE.md} L8 — "a BOTTOM slab isn't itself 'sunk', so nothing
+ * Its premise (internal-notes L8 — "a BOTTOM slab isn't itself 'sunk', so nothing
  * should propagate upward from it") was <b>overruled entirely</b> on 2026-08-06 (exclusion #13):
  * a bottom slab's top face IS half a block below the grid, so a slab resting on it seats there
  * whether or not the support is itself sunk. {@link #slabOnFlatBottomSlabSeatsOnItsTopFace} pins
