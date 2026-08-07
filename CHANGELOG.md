@@ -2,6 +2,20 @@
 
 See LAW.md — this changelog does not redefine the law.
 
+### Improved
+
+- **The debug commands actually exist now.** `/slabdy` and `/slabdev` are meant to ship in every
+  build, switched off until you ask for them. On this build neither one was reachable at all:
+  `/slabdev` only registered from a development-only companion that is not in the download, and
+  `/slabdy` had never been registered anywhere. Both are now available in the released build, off
+  by default, and neither does anything until you type it. `/slabdy row` prints the full
+  diagnostic readout for the block you are looking at, and `/slabdy build` (or `/slabdev build`)
+  prints the exact build you are running, which is what a bug report needs. `/slabdev debug` and
+  `/slabdev record` keep their existing spelling; in a normal download they answer "not available
+  in this build" instead of failing silently, because the overlay and the recorder they drive are
+  development tools that are deliberately not shipped. The `/slabrig` test-scene commands stay out
+  of the download, unchanged.
+
 ## [0.5.0-alpha.1+26.2] — MC 26.2 alpha
 
 **A heads-up before you update**
