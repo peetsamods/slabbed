@@ -134,6 +134,24 @@ tasks.register("prepareGitHooks") {
 }
 tasks.matching { it.name == "build" }.configureEach { dependsOn("prepareGitHooks") }
 
+// ── Classname-exclusion tripwire ─────────────────────────────────────────────────────────────
+// LAW 2's recurring bug class is a block-CLASS test standing in for a geometry/role question
+// (the snow exclusion, "rejected every slab by class", instanceof-fence). This gate diffs the
+// instanceof-*Block surface of SlabSupport against a committed baseline so a new carve-out is a
+// reviewed one-line diff, never an unconscious drift. See tools/check-classname-exclusions.py.
+tasks.register("verifyClassnameExclusions") {
+    doLast {
+        def proc = new ProcessBuilder("python3", "tools/check-classname-exclusions.py")
+                .directory(projectDir).redirectErrorStream(true).start()
+        def out = proc.inputStream.text
+        logger.lifecycle(out.trim())
+        if (proc.waitFor() != 0) {
+            throw new GradleException("verifyClassnameExclusions failed — see output above.")
+        }
+    }
+}
+tasks.matching { it.name == "build" }.configureEach { dependsOn("verifyClassnameExclusions") }
+
 version = project.mod_version
 group = project.maven_group
 
