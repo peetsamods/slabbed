@@ -1,6 +1,7 @@
 package com.slabbed.test;
 
 import com.slabbed.anchor.SlabAnchorAttachment;
+import com.slabbed.anchor.SlabPlacementDyAttachment;
 import com.slabbed.util.SlabSupport;
 import net.fabricmc.fabric.api.gametest.v1.GameTest;
 import net.minecraft.block.Block;
@@ -411,6 +412,151 @@ public final class AnchoredFollowerSupportDyTest {
                 "a full block on a -1.0 TOP slab must resolve -1.0, got " + dy
                         + " (a TOP slab fails isSolidBlock but its top face IS at its cell top)");
         ctx.complete();
+    }
+
+    // ── the LIVE lane: the same cell with NO stored height (run e9eb0932, a8/a10/a15) ───────────
+
+    /**
+     * FOURTH WAVE — the visible SNAP-DOWN, and the same defect one lane over.
+     *
+     * <p>{@link #fullBlockOnMinusOneDoubleSlabSupportInheritsMinusOne} fixed the STORED answer, and
+     * Maintainer's live pass confirms it: the server writes {@code -1.0}. But the block is briefly drawn
+     * at {@code -0.5} and then drops. Recorder run {@code e9eb0932}, actions a8/a10/a15 —
+     * {@code stripped_jungle_log} on {@code smooth_stone_slab[type=double]} at {@code dy=-1.0000}:
+     *
+     * <pre>
+     *   CLIENT  dyPlaceBefore = -0.5000   dyPlaceAfter = -0.5000   center anchored=false
+     *   SERVER  dyPlaceBefore = -0.5000   dyPlaceAfter = -1.0000   center anchored=true
+     * </pre>
+     *
+     * <p><b>The client is not missing a fact — it is asking the wrong question.</b> The client's own
+     * neighbourhood snapshot in that same frame reads {@code down=smooth_stone_slab[type=double]
+     * dy=-1.0000 anchored=true}: the support's depth and its anchor were both already on the client.
+     * And the control in the same session, a13, settles it — a log on a {@code -1.0} BOTTOM slab
+     * read {@code -1.0000} on the CLIENT with {@code anchored=false} and no stored height at all.
+     * Same side, same missing store, right answer. So the split is not sync latency; the two sides
+     * disagree because the server has a stored number and the live resolver, which is all the client
+     * has until that number arrives, answers {@code -0.5} for a DOUBLE seat and {@code -1.0} for a
+     * BOTTOM one.
+     *
+     * <p><b>Root cause, and it is the same shape a THIRD time:</b> {@code slabColumnYOffset}, on
+     * finding a lowered slab in the column, answered {@code isBottomSlab(cur) ? -1.0 : -0.5} — a
+     * CLASS test plus two flat constants standing in for the seat's actual top face. The constants
+     * are correct for a slab at {@code -0.5} and silently wrong for one at {@code -1.0}. Note the
+     * server's {@code dyPlaceBefore} is {@code -0.5} too: this lane is side-independent, so it is
+     * headlessly reachable and this row runs on the server exactly as the client hits it.
+     *
+     * <p>This row deliberately puts the subject in with {@code setBlockState}, which records no
+     * anchor and no placed height — the client's prediction state, and also LAW.md lane D's
+     * authored/pre-store cell. A real-click twin already exists above and passes; if this one is
+     * ever changed to a real click it stops testing anything.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void unstoredFullBlockOnMinusOneDoubleSlabResolvesMinusOne(TestContext ctx) {
+        ServerWorld w = ctx.getWorld();
+        BlockPos towerTop = buildRealUseOnMinusOneTower(ctx, 3, 3);
+        useOn(ctx, Blocks.SMOOTH_STONE_SLAB.asItem(), towerTop, Direction.UP, 0.0);
+        BlockPos support = towerTop.up();
+        useOn(ctx, Blocks.SMOOTH_STONE_SLAB.asItem(), support, Direction.UP, 0.0);
+        BlockState supportState = w.getBlockState(support);
+        ctx.assertTrue(supportState.getBlock() instanceof SlabBlock
+                        && supportState.get(SlabBlock.TYPE) == SlabType.DOUBLE,
+                "fixture: the two clicks must leave a DOUBLE slab in one cell, got " + supportState);
+        double supportDy = SlabSupport.getYOffset(w, support, supportState);
+        ctx.assertTrue(Math.abs(supportDy + 1.0) <= EPS,
+                "fixture: the DOUBLE slab support must itself render -1.0 — at -0.5 this row would "
+                        + "coincide with the constant it is testing and prove nothing, got " + supportDy);
+
+        BlockPos subject = support.up();
+        place(w, subject, Blocks.STRIPPED_JUNGLE_LOG.getDefaultState());
+        assertUnstoredAndUnanchored(ctx, subject, "the DOUBLE-slab subject");
+
+        double dy = SlabSupport.getYOffset(w, subject, w.getBlockState(subject));
+        ctx.assertTrue(Math.abs(dy + 1.0) <= EPS,
+                "a full block with NO stored height, standing on a -1.0 DOUBLE slab, must resolve "
+                        + "-1.0, got " + dy + " (slabColumnYOffset answered a flat -0.5 for every "
+                        + "non-BOTTOM slab in the column, whatever depth that slab was actually at "
+                        + "— this is the number the client draws before the stored one arrives, and "
+                        + "the gap between the two IS the snap-down)");
+        ctx.complete();
+    }
+
+    /**
+     * THE CONTROL THAT MADE THE DIAGNOSIS POSSIBLE, pinned so it cannot rot: recorder a13, the same
+     * log with no stored height on a {@code -1.0} BOTTOM slab, measured {@code -1.0} on the CLIENT.
+     * That is the arm of the same ternary that happened to hold the right constant, and it is what
+     * ruled out "the client cannot know yet". It must stay byte-identical across this fix.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void unstoredFullBlockOnMinusOneBottomSlabStaysAtMinusOne(TestContext ctx) {
+        ServerWorld w = ctx.getWorld();
+        BlockPos towerTop = buildRealUseOnMinusOneTower(ctx, 3, 3);
+        useOn(ctx, Blocks.SMOOTH_STONE_SLAB.asItem(), towerTop, Direction.UP, 0.0);
+        BlockPos support = towerTop.up();
+        BlockState supportState = w.getBlockState(support);
+        ctx.assertTrue(supportState.getBlock() instanceof SlabBlock
+                        && supportState.get(SlabBlock.TYPE) == SlabType.BOTTOM,
+                "fixture: one click must leave a BOTTOM slab, got " + supportState);
+        double supportDy = SlabSupport.getYOffset(w, support, supportState);
+        ctx.assertTrue(Math.abs(supportDy + 1.0) <= EPS,
+                "fixture: the BOTTOM slab support must itself render -1.0, got " + supportDy);
+
+        BlockPos subject = support.up();
+        place(w, subject, Blocks.STRIPPED_JUNGLE_LOG.getDefaultState());
+        assertUnstoredAndUnanchored(ctx, subject, "the BOTTOM-slab control subject");
+
+        double dy = SlabSupport.getYOffset(w, subject, w.getBlockState(subject));
+        ctx.assertTrue(Math.abs(dy + 1.0) <= EPS,
+                "control (recorder a13): an unstored full block on a -1.0 BOTTOM slab must stay at "
+                        + "-1.0, got " + dy);
+        ctx.complete();
+    }
+
+    /**
+     * THE OVER-DEEPENING GUARD, and the reason this fix may only ever go DOWN. A DOUBLE slab that is
+     * genuinely at {@code -0.5} must keep giving its subject {@code -0.5} — the resolver must deepen
+     * only when the seat is really deeper, never because it now consults the seat at all.
+     *
+     * <p>MEASURED shape: a DOUBLE slab standing on a FLUSH bottom slab resolves {@code -0.5} for
+     * itself, so the subject above it must read {@code -0.5} both before and after.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void unstoredFullBlockOnMinusHalfDoubleSlabStaysAtMinusHalf(TestContext ctx) {
+        ServerWorld w = ctx.getWorld();
+        BlockPos base = ctx.getAbsolutePos(BlockPos.ORIGIN).add(8, 1, 8);
+        place(w, base, Blocks.STONE.getDefaultState());
+        place(w, base.up(), bottomSlab(Blocks.STONE_SLAB));
+        BlockPos support = base.up(2);
+        place(w, support, Blocks.SMOOTH_STONE_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.DOUBLE));
+        SlabAnchorAttachment.addAnchor(w, support, w.getBlockState(support));
+        double supportDy = SlabSupport.getYOffset(w, support, w.getBlockState(support));
+        ctx.assertTrue(Math.abs(supportDy + 0.5) <= EPS,
+                "fixture: this DOUBLE slab must sit at -0.5, or the row cannot tell 'deepened "
+                        + "correctly' from 'over-deepened', got " + supportDy);
+
+        BlockPos subject = support.up();
+        place(w, subject, Blocks.STRIPPED_JUNGLE_LOG.getDefaultState());
+        assertUnstoredAndUnanchored(ctx, subject, "the -0.5 DOUBLE-slab subject");
+
+        double dy = SlabSupport.getYOffset(w, subject, w.getBlockState(subject));
+        ctx.assertTrue(Math.abs(dy + 0.5) <= EPS,
+                "an unstored full block on a -0.5 DOUBLE slab must stay at -0.5, got " + dy
+                        + " (the seat lane must deepen only when the seat is genuinely deeper)");
+        ctx.complete();
+    }
+
+    /**
+     * A subject built with {@code setBlockState} holds neither of the two facts LAW 1 calls
+     * authoritative, which is exactly what makes it exercise the LIVE lane. Asserted rather than
+     * assumed: if either fact were present the row would be measuring the store instead.
+     */
+    private static void assertUnstoredAndUnanchored(TestContext ctx, BlockPos pos, String what) {
+        ServerWorld w = ctx.getWorld();
+        ctx.assertTrue(!SlabAnchorAttachment.isAnchored(w, pos),
+                "setup: " + what + " must hold no anchor, or this row tests the anchor lane");
+        ctx.assertTrue(Double.isNaN(SlabPlacementDyAttachment.storedDy(w, pos)),
+                "setup: " + what + " must hold no stored height, or this row tests the store and "
+                        + "cannot fail for the reason it exists");
     }
 
     /**

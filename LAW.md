@@ -103,6 +103,22 @@ makes that the standing state of `./gradlew build runGameTest`, not an opt-in ch
 > consecutive coverage-boundary bugs, both found by a player, both a class test standing in for a
 > shape question. **The lesson is not "add another subject"; it is that a class test inside a
 > geometry predicate is where to look first.**
+>
+> **AMENDED A FOURTH TIME 2026-08-06 (night, fourth): still 11 of 11, and DELIBERATELY so — this
+> one is not an S-2 subject.** Maintainer's next live pass confirmed the fix above server-side and then
+> reported a *visible* snap: the block is drawn at `−0.5` for a moment before dropping to `−1.0`.
+> Recorder `e9eb0932` (a8/a10/a15) shows CLIENT `−0.5` / SERVER `−1.0` for the same cell, while the
+> CLIENT's own snapshot in that frame already read the support as `dy=−1.0000 anchored=true` — so
+> the client was not missing the fact. The LIVE lane (`slabColumnYOffset`) answered
+> `isBottomSlab(cur) ? -1.0 : -0.5`: a class test plus two flat constants, correct only while the
+> slab sits at `−0.5`. **The SERVER's own pre-placement read was `−0.5` too**, which is what proves
+> the lane is side-independent and headlessly reachable all along — the store simply overwrote its
+> answer a moment later, so the defect could only ever be seen as a frame, never as a stored number.
+> **No S-2 subject was added, on purpose:** S-2 asks whether a PROTECTED cell survives a neighbour
+> edit, and this defect lives in cells that hold no stored height by definition. A subject built
+> that way would be RED by construction and would prove nothing about LAW 1. Three new rows in
+> `AnchoredFollowerSupportDyTest` assert the resolver directly instead. **This is the fifth
+> flat-constant mirror and, counting `isBottomSlab` here, exclude-by-classname number TEN.**
 
 **What this claim covers, precisely, so it is not over-read a second time (LAW.md was wrong about
 this once already, in the "8 of 8" revision below):** it covers the 11 subjects and 10 mutations
@@ -277,7 +293,7 @@ counterpart, confirmed live by S-2 itself):**
 | B | Cantilever adjacency renders on "is lowered" (booleans, no magnitude), but the anchor twin demands `dy == -0.5` **exactly** (`SlabAnchorAttachment.qualifiesForAdjacentLoweredFullBlockAnchor`) — a −1.0 neighbour renders lowered and refuses to anchor, so the block gets neither an anchor nor a frozen-flat marker. **Scope:** reachable only by ordinary full blocks and connecting structurals — the qualifier is gated on `isOrdinaryAnchorCandidate`, which rejects slabs, carpets, block entities and decorations before the equality is evaluated. **TESTED and OPEN**: S-2 subject `cantilever_full_block_beside_minus_one` (`e5704f50`) confirms it live —
 RED at `break_south_neighbor: -0.5 → 0.0`, enforcing mode. | High (any TS or mixed-slab world) |
 | C | ~~Object-follows-support-below, denied an anchor by `isCeilingAttached`'s **classname list** — floor lever/button, Y-chain, **TOP-half trapdoor** (needs no support, so the real-click repro)~~ **CLOSED 2026-08-06** — `isCeilingAttached` now asks the ROLE (does this block, in this state, actually hang from above?) instead of the block TYPE: lever/button by `BLOCK_FACE`, bell by `ATTACHMENT`, dripstone by `VERTICAL_DIRECTION`, and the two families vanilla gives no property (Y-chain, TOP-half trapdoor) by a world query for something above to hang from. Floor-mounted subjects now reach `qualifiesForDecorativeObjectAnchor` and lock. Intrinsic hangers (lantern `HANGING=true`, hanging sign, cave vines, spore blossom, hanging roots) are untouched by construction. | Moderate, real-click reachable |
-| D | Full block on an unanchored adjacency-lowered TOP/DOUBLE slab. **Narrowed 2026-08-06 (night, third):** an ANCHORED or STORED lowered TOP/DOUBLE slab support is no longer in this lane — `supportSeatDy` now reads it, S-2 subject #11 pins it. What remains is the genuinely unanchored, unstored case (a pre-store world or an authored cell), which still resolves NaN and takes the floor. | Old worlds, authored cells |
+| D | Full block on an unanchored adjacency-lowered TOP/DOUBLE slab. **Narrowed 2026-08-06 (night, third):** an ANCHORED or STORED lowered TOP/DOUBLE slab support is no longer in this lane — `supportSeatDy` now reads it, S-2 subject #11 pins it. **Narrowed again (night, fourth):** the SUBJECT no longer needs a stored height either, provided the SUPPORT is anchored or stored — `slabColumnYOffset` reads the seat instead of a constant, which is precisely the number the client draws before sync arrives. What remains is the case where the SUPPORT ITSELF holds neither fact (a pre-store world or an authored cell): the column walk cannot claim it and it still takes the floor. | Old worlds, authored cells |
 | E | Standing-object probe vs a column walk that stops at air | Low |
 | F | Gap-fill under an anchored lowered block entity | Low |
 

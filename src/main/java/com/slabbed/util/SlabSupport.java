@@ -2685,7 +2685,35 @@ public final class SlabSupport {
             if (cur.getBlock() instanceof SlabBlock
                     && (SlabAnchorAttachment.isAnchored(world, cursor)
                     || isAdjacentSideSlabLowered(world, cursor, cur))) {
-                return isBottomSlab(cur) ? -1.0 : -0.5;
+                // FIFTH mirror of the flat-constant defect, and the one the player SEES as a
+                // snap-down. These two constants are a CLASS test plus two hardcoded numbers
+                // standing in for the seat's actual top face, and they are only correct while the
+                // slab sits at -0.5: a BOTTOM slab there seats at -1.0 and a TOP/DOUBLE slab there
+                // seats at -0.5. A slab at -1.0 breaks both readings, and the -0.5 arm breaks
+                // VISIBLY — live recorder run e9eb0932, actions a8/a10/a15, a stripped_jungle_log
+                // on a smooth_stone_slab[type=double] at dy=-1.0000 read -0.5000 here. Because
+                // this is the LIVE lane, it is what the client draws until the server's stored
+                // number reaches it; the server's own dyPlaceBefore was -0.5000 in the same
+                // frames, so the disagreement was never about sync.
+                //
+                // supportSeatDy is the question these constants were approximating: what dy must a
+                // block resting on this cell take to sit on its real top face. It is asked at the
+                // cursor, so a BOTTOM slab still gets its own dy - 0.5 and a TOP/DOUBLE slab still
+                // gets its own dy, exactly as the constants assumed at -0.5 — but read rather than
+                // assumed. Recursion-safe: supportSeatDy only ever descends, shouldOffset refuses
+                // slabs so cellTopSupportDy cannot re-enter this walk, and the depth is carried.
+                //
+                // NARROWED ON PURPOSE — this may only ever go DOWN. The seat is taken only when it
+                // is strictly deeper than the constant it replaces, so a NaN seat, a flush seat, or
+                // any shallower reading keeps the historical number byte-identical. The BOTTOM arm
+                // is therefore provably unreachable by this change: its constant already equals
+                // MIN_RESOLVED_DY, so nothing can be strictly deeper and survive the clamp.
+                double historicalDy = isBottomSlab(cur) ? -1.0 : -0.5;
+                double seatDy = supportSeatDy(world, cursor, depth + 1);
+                if (Double.isFinite(seatDy) && seatDy < historicalDy - 1.0e-6) {
+                    return Math.max(seatDy, MIN_RESOLVED_DY);
+                }
+                return historicalDy;
             }
             if (isBottomSlab(cur)) {
                 return -0.5;
