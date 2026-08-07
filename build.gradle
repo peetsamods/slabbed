@@ -91,17 +91,55 @@ java {
     targetCompatibility = JavaVersion.VERSION_21
 }
 
+// ---------------------------------------------------------------------------------------------
+// ONE shared exclusion set for BOTH release artifacts (mod jar and sources jar).
+//
+// The two lists used to be maintained separately and DRIFTED apart: six units shipped as source
+// only, including the ScreenshotFlightLock tombstone. verifyReleaseAllowlist now fails on any
+// drift (one allowlist covers both jars), so this shared list is defence in depth: the exclusion
+// sets CANNOT diverge again because there is only one of them.
+//
+// Patterns are logical-unit shaped: "pkg/Foo*" covers Foo.class, Foo$Nested.class and Foo.java
+// at once, so the same list is correct for the binary jar and the sources jar.
+// ---------------------------------------------------------------------------------------------
+def releaseArtifactExclusions = [
+        // Dev/debug source trees (never shipped).
+        "com/slabbed/dev/**",
+        "com/slabbed/debug/**",
+        "com/slabbed/client/debug/**",
+        "com/slabbed/mixin/debug/**",
+        // The /slabrig live-test rig family is DEV-ONLY by the release-allowlist ruling: the
+        // ships-in-every-jar standing rule covers /slabdy and /slabdev only, not the rig.
+        // Registration is dev-gated in Slabbed.initDevFeatures; the classes leave both artifacts.
+        "com/slabbed/command/**",                          // SlabRigCommand + 14 SlabRig* units, SlabKitCommand, SlabCheckCommand
+        "com/slabbed/util/SlabTestKit*",                   // exists only to feed /slabkit and /slabrig mega
+        "com/slabbed/util/SlabdyRowFormatter*",            // no shipped consumer on this line (diagnostics + gametest only)
+        "com/slabbed/mixin/PaintingRigDropCaptureMixin*",  // dev-only mixin, moved to slabbed.rig.mixins.json (gametest mod)
+        // Inert mixin: listed in NO mixin config and referenced nowhere; added unwired in
+        // 7e4cec1d (0.2.0-beta.1-hotfix.2) and never registered since. Kept in the repo,
+        // excluded from the artifacts; deleting the source is a separate decision.
+        "com/slabbed/mixin/SlabBlockPlacementFixMixin*",
+        // Diagnostic and capture seams that must not reach a public artifact.
+        "com/slabbed/util/DebugTraceContext*",
+        "com/slabbed/util/SlabbedDebug*",
+        "com/slabbed/util/RuntimeDiagnostics*",
+        "com/slabbed/util/SlabbedAuditBridge*",
+        "com/slabbed/util/Beta4PlacementAuthorRecorder*",
+        "com/slabbed/client/GapFillerOverlay*",
+        "com/slabbed/client/SlabbedClientFlags*",          // only member fed the excluded GapFillerOverlay
+        "com/slabbed/client/ScreenshotCaptureService*",
+        "com/slabbed/client/ScreenshotCaptureContext*",
+        "com/slabbed/client/ScreenshotFlightLock*",        // tombstone file ("removed per instructions")
+        "com/slabbed/client/CaptureProfile*",
+        "com/slabbed/client/DyFingerprintDump*",
+        // Non-shippable resources.
+        "slabbed.debug.mixins.json",
+        "**/.gitkeep"
+]
+
 tasks.named("sourcesJar", Jar).configure {
-    // Keep generated release source artifacts aligned with the public runtime jar.
-    exclude("com/slabbed/dev/**")
-    exclude("com/slabbed/debug/**")
-    exclude("com/slabbed/client/debug/**")
-    exclude("com/slabbed/mixin/debug/**")
-    exclude("com/slabbed/util/SlabbedDebug.java")
-    exclude("com/slabbed/util/RuntimeDiagnostics.java")
-    exclude("com/slabbed/util/SlabbedAuditBridge.java")
-    exclude("com/slabbed/util/DebugTraceContext.java")
-    exclude("slabbed.debug.mixins.json")
+    // Keep generated release source artifacts aligned with the public runtime jar: SAME list.
+    releaseArtifactExclusions.each { pattern -> exclude(pattern) }
 }
 
 // 26.1.2 port: Countered Terrain Slabs compat is now Mojang-mapped and compiles (dual mod-id gate).
@@ -332,21 +370,9 @@ jar {
                    'Slabbed-Build-Time': slabbedBuildTime
     }
 
-    // Exclude dev-only and debug-only content from public release jar
-    exclude("com/slabbed/dev/**")
-    exclude("com/slabbed/debug/**")
-    exclude("com/slabbed/client/debug/**")
-    exclude("com/slabbed/mixin/debug/**")
-    exclude("com/slabbed/util/DebugTraceContext.class")
-    exclude("com/slabbed/client/GapFillerOverlay.class")
-    exclude("com/slabbed/client/ScreenshotCaptureContext*.class")
-    exclude("com/slabbed/client/ScreenshotCaptureService*.class")
-    exclude("com/slabbed/client/DyFingerprintDump*.class")
-    exclude("com/slabbed/client/CaptureProfile.class")
-    exclude("com/slabbed/util/SlabbedDebug.class")
-    exclude("com/slabbed/util/Beta4PlacementAuthorRecorder.class")
-    exclude("com/slabbed/util/SlabbedAuditBridge.class")
-    exclude("slabbed.debug.mixins.json")
+    // Exclude dev-only and debug-only content from the public release jar: the SAME shared list
+    // the sources jar uses (releaseArtifactExclusions above) so the two sets cannot drift again.
+    releaseArtifactExclusions.each { pattern -> exclude(pattern) }
 }
 
 def releaseHygieneForbiddenTokens = [

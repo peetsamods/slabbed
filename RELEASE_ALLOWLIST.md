@@ -121,6 +121,8 @@ anything. The split above puts the fine granularity only where a leak has actual
 
 | Entry | Reason |
 | --- | --- |
+| `com/slabbed/client/SlabbedClient` | Client entrypoint (fabric.mod.json `client`). The dangling ScreenshotCaptureService/GapFillerOverlay reflective hooks were removed by the allowlist ruling; the remaining dev-only hook (DyFingerprintDump) is gated on `isDevelopmentEnvironment()` and resolves by reflection, so the release class holds no hard link to excluded classes. |
+| `com/slabbed/client/PlacementDyPredictionJournal` | The C3 client prediction journal — the shipped prediction/correction apply path. Carries the `debugCell()`/`CellDebug` observation seam on purpose: PlacementDyPredictionClientGameTest asserts journal cell state through it against the REAL shipped path, and there is no equivalent observation point outside the class. Inert unless called; nothing shipped calls it. |
 | `com/slabbed/client/BetaNoticeClient` | Shipped one-time beta notice on world join. |
 | `com/slabbed/client/BetaNoticeSessionGate` | Per-session gate for the beta notice. |
 | `com/slabbed/client/BetaNoticeDismissedWorlds` | Per-world "don't show again" store for the beta notice. |
@@ -134,6 +136,7 @@ anything. The split above puts the fine granularity only where a leak has actual
 
 | Entry | Reason |
 | --- | --- |
+| `com/slabbed/network/PlacementDyPredictionBridge` | Common/server-safe boundary between vanilla prediction and the C3 client journal — the shipped `openSequence`/`publishClientBatch` wire. Carries the test-trace seam (`traceCorrectionWire`, `markTestPhase`, the snapshot readers) on purpose: the trace hooks are CALLED FROM the shipped SEND/RECEIVE/APPLY path (PlacementDyCorrectionServer, SlabbedClient, the journal), are no-ops until a gametest arms them, and stripping them would remove the only way PlacementDyPredictionClientGameTest and PlacementCaptureBoundaryGameTest observe the real wire. Coverage was ruled worth more than list tidiness. |
 | `com/slabbed/network/PlacementDyCorrectionPayload` | Server→client dy correction payload. |
 | `com/slabbed/network/PlacementDyCorrectionServer` | Server side of the dy correction wire. |
 | `com/slabbed/network/PlacementDyPredictionEnvelopePayload` | Client→server prediction envelope. |
@@ -143,6 +146,7 @@ anything. The split above puts the fine granularity only where a leak has actual
 | Entry | Reason |
 | --- | --- |
 | `com/slabbed/util/BuildStamp` | Reads the manifest identity stamp at runtime; release infrastructure, not diagnostics. |
+| `com/slabbed/util/SlabbedDiagnosticsBridge` | The deliberate release-safe no-op boundary: the public mod ships THIS bridge and none of the recorder/overlay/Sentinel implementations behind it. Dev and GameTest runtimes install the real provider; in release every call is a cheap no-op. That is architecture keeping diagnostics OUT of the jar, not diagnostics leaking in. |
 | `com/slabbed/util/ChainBridgeTextureVariant` | Chain ceiling-bridge texture selection. |
 | `com/slabbed/util/PlacementIntentState` | Placement intent carried across the use-on path. |
 | `com/slabbed/util/PlacementVerificationVerdict` | Placement verification result type. |
@@ -150,14 +154,33 @@ anything. The split above puts the fine granularity only where a leak has actual
 | `com/slabbed/util/SlabSupport` | Support-surface resolution. |
 | `com/slabbed/util/SlabbedOffsetRaycast` | Offset-aware nearest-hit raycast — the targeting overhaul. |
 
-## Pending ruling
+## Ruling executed (2026-08-07)
 
-Everything currently reaching a release artifact and **not** listed above is intentionally left
-unapproved. `verifyReleaseAllowlist` fails and names each one. See the RED inventory in the review
-notes; each entry needs one of the two legitimate responses:
+The original 32-unit RED inventory has been ruled on and executed; the build is GREEN with the
+allowlist honestly describing both jars.
 
-1. **Exclude it** — add an `exclude(...)` to the `jar` block *and* the `sourcesJar` block in
-   `build.gradle`, and gate/remove its registration.
+- **Approved** (rows above): `SlabbedDiagnosticsBridge`, `PlacementDyPredictionBridge`,
+  `SlabbedClient`, `PlacementDyPredictionJournal` — each with the reason on its row, including the
+  two deliberately-retained gametest observation seams.
+- **Excluded** (the shared `releaseArtifactExclusions` list in `build.gradle`, consumed by BOTH the
+  `jar` and `sourcesJar` tasks so the two sets cannot drift again): the entire `/slabrig` /
+  `/slabkit` / `/slabcheck` rig family (`com/slabbed/command/**`, `SlabTestKit`), whose registration
+  is dev-gated in `Slabbed.initDevFeatures`; `PaintingRigDropCaptureMixin`, moved out of
+  `slabbed.mixins.json` into the dev-only `slabbed.rig.mixins.json` carried by the gametest mod, so
+  release painting drops are pure vanilla; `SlabdyRowFormatter` (no shipped consumer on this line);
+  the never-wired `SlabBlockPlacementFixMixin` (source kept in the repo); `SlabbedClientFlags`; the
+  six source-only drift units (`CaptureProfile`, `DyFingerprintDump`, `ScreenshotCaptureContext`,
+  the `ScreenshotFlightLock` tombstone, two `.gitkeep`s).
+
+Standing rule note: `/slabdy` and `/slabdev` (ship in every jar, default off) are NOT restructured
+by this ruling — on this line neither is registered in release code at all (`/slabdev` lives in the
+compile-excluded `com/slabbed/dev/**` and the diagnostics mod; `/slabdy` has no registration
+anywhere), which is reported as-is, not "fixed" here.
+
+Anything NEW reaching a release artifact still needs one of the two legitimate responses:
+
+1. **Exclude it** — add it to `releaseArtifactExclusions` in `build.gradle` (one shared list for
+   both jars), and gate/remove its registration.
 2. **Approve it** — add a row above with a reason that would survive review.
 
 Silently widening a pattern to make the build green is neither.

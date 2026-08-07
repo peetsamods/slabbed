@@ -24,16 +24,6 @@ public class Slabbed implements ModInitializer {
         com.slabbed.network.PlacementDyCorrectionServer.registerReceiver();
         net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents.DISCONNECT.register(
                 (handler, server) -> com.slabbed.network.PlacementDyCorrectionServer.clearPlayer(handler.player));
-        // /slabrig — the standard live-test rig builder. Dev tooling that SHIPS in every jar (present,
-        // behaviour-neutral until invoked, op-gated). Server command: it authors real block state and
-        // genuine anchor attachments, so it registers unconditionally here (mirrors the always-on
-        // client /slabdev registration), NOT behind the dev-environment gate below.
-        com.slabbed.command.SlabRigCommand.register();
-        // /slabkit + /slabcheck — the rest of the live-test cockpit (same op-gated, ships-in-every-jar
-        // convention as /slabrig): /slabkit fills the inventory with one representative per category,
-        // /slabcheck scans for placed cells whose height has drifted from its stored placement value.
-        com.slabbed.command.SlabKitCommand.register();
-        com.slabbed.command.SlabCheckCommand.register();
         // Recorder break capture (TEST (3)-triage upgrade): the recorder was break-blind — it caused
         // the "data-destructive downgrade" false alarm, and Maintainer's tower-churn "jumping when I break
         // things" report left ZERO rows. Observation only: the handler must ALWAYS return true (never
@@ -59,6 +49,20 @@ public class Slabbed implements ModInitializer {
     private static void initDevFeatures() {
         registerDevHook("com.slabbed.dev.SlabbedDevCommands", "register");
         registerDevHook("com.slabbed.dev.SlabbedLab", "register");
+        // The /slabrig live-test rig family is DEV-ONLY (Maintainer's release-allowlist ruling: the
+        // ships-in-every-jar standing rule covers /slabdy and /slabdev, NOT the rig). Registration
+        // is gated here so none of the rig's unconditional hooks (server tick, lifecycle,
+        // entity load/unload, the ALLOW_LOAD spawn veto, reconstruction disk reads and world-save
+        // writes) can run in a release launch; the classes are also excluded from the release
+        // artifacts (see releaseArtifactExclusions in build.gradle). runGameTest is a dev
+        // environment, so the rig gametests still exercise the real registration path —
+        // SlabRigCommandSmokeTest executes /slabrig through the PRODUCTION dispatcher and fails
+        // if this gate ever stops firing there. Same reflective-hook pattern as the dev hooks
+        // above (proven structure on the 1.21.11 line): the release Slabbed.class keeps no hard
+        // link to classes that are absent from the release jar.
+        registerDevHook("com.slabbed.command.SlabRigCommand", "register");
+        registerDevHook("com.slabbed.command.SlabKitCommand", "register");
+        registerDevHook("com.slabbed.command.SlabCheckCommand", "register");
     }
 
     private static void registerDevHook(String className, String methodName) {
