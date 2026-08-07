@@ -218,19 +218,15 @@ public final class SlabAnchorAttachment {
      * magnitude — and the flat half of the law already belongs to {@link #FROZEN_FLAT_TYPE}, whose
      * precedence must not change.
      *
-     * <p><b>CLOSED 2026-08-06 — the paragraph that stood here described a hole, and the hole was
-     * this defect.</b> It read: "{@code SlabSupport.supportSeatDy} has a hole — a lowered TOP or
-     * DOUBLE slab support matches none of its three arms and reports nothing, so a piece standing
-     * on one settles on the {@code -0.5} floor instead of its true depth… it is reported, not fixed
-     * here." That was an accurate report and the wrong conclusion: because this method reads
-     * {@code getYOffset} to decide the number LAW 1 will freeze, the floor was not merely drawn, it
-     * was STORED. Live (recorder run {@code f37a3b2b}, actions a38/a39): a
-     * {@code smooth_stone_slab[type=double]} support at {@code dy=-1.0000}, and a
-     * {@code stripped_jungle_log} placed on it captured {@code -0.5000} permanently. The cause was
-     * a {@code instanceof SlabBlock} reject in the seat resolver's full-height arm — a class test
-     * where a top-face test belonged; see {@code SlabSupport.cellTopSupportDy}. Nothing in THIS
-     * method changed: it captures what {@code getYOffset} says, and {@code getYOffset} now says the
-     * right thing.
+     * <p><b>Seat-resolver hole, CLOSED 2026-08-06.</b> A lowered TOP or DOUBLE slab support once
+     * matched none of {@code SlabSupport.supportSeatDy}'s three arms, so a piece standing on one
+     * settled on the {@code -0.5} floor instead of its true depth — and because this method reads
+     * {@code getYOffset} to decide the number LAW 1 will freeze, that floor was not merely drawn,
+     * it was STORED (live-confirmed: a double-slab support at {@code -1.0} froze its follower at
+     * {@code -0.5} permanently). The cause was an {@code instanceof SlabBlock} reject in the seat
+     * resolver's full-height arm — a class test where a top-face test belonged; see
+     * {@code SlabSupport.cellTopSupportDy}. Nothing in THIS method changed: it captures what
+     * {@code getYOffset} says, and {@code getYOffset} now says the right thing.
      */
     private static void recordPlacementDy(World world, BlockPos pos, BlockState state) {
         double dy = SlabSupport.getYOffset(world, pos, state);
@@ -240,13 +236,13 @@ public final class SlabAnchorAttachment {
     }
 
     /**
-     * FREEZE-ON-PLACE (Maintainer's law — "a placed block must stay in that spot and not autonomously
-     * pop"): locks the FLAT half of a placement's height at the moment it is placed. Server-side
+     * FREEZE-ON-PLACE (LAW 1, {@code LAW.md} — a placed block must stay in that spot and not
+     * autonomously pop): locks the FLAT half of a placement's height at the moment it is placed. Server-side
      * only; called from {@code BlockOnPlacedAnchorMixin.onPlaced} after {@link #addAnchor}.
      *
      * <p>If a piece is placed FLAT (dy ≈ 0) it records a {@link #FROZEN_FLAT_TYPE} marker, so a
      * slab / lowered carrier placed under or beside it later can no longer pull it down (the exact
-     * live down-pop Maintainer reported: "I placed the slab, the spruce log popped down"). No-op for
+     * live-reported down-pop: a slab placed beside a log pulled the log down). No-op for
      * pieces that must keep tracking a support ABOVE them, and for pieces already anchored or
      * frozen. Natural / setBlockState blocks never call onPlaced, so terrain stays fully geometric.
      *
@@ -304,8 +300,8 @@ public final class SlabAnchorAttachment {
             // a lowering source" (hasLoweringSourceInColumnBelow, isAdjacentToLoweredSupport,
             // isLoweredSideSlabSource, hasLoweredNonSlabTopSupport, the gap-fill lane, the step-cull
             // dispatch, and qualifiesForBelowAnchoredBlockAnchor). Widening what earns an anchor has
-            // caused a Terrain Slabs over-lowering regression on this line twice, and
-            // KNOWN_INCOMPLETE's L11-broader entry for it is still OPEN. A stored NUMBER has exactly
+            // caused a Terrain Slabs over-lowering regression on this line twice, and the broader
+            // entry for it is still OPEN (tracked internally). A stored NUMBER has exactly
             // one consumer — getYOffsetInner's stored-height branch — and answers only for this
             // cell, so it cannot spread to a neighbour or up a column.
             //

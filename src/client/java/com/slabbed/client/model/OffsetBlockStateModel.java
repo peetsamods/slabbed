@@ -92,7 +92,7 @@ public final class OffsetBlockStateModel implements BlockStateModel, FabricBlock
         // ONE dy for every block, no per-class branch. This used to fork carpets off to
         // ClientDy.dyFor's own geometric shortcut, which had no anchor logic and so drew a carpet
         // flush whenever the common authority said anything other than "the block below is a
-        // half-height slab surface" (BUG A, live 2026-08-06, recorder 0ba17cf0). ClientDy.dyFor is
+        // half-height slab surface" (live-confirmed 2026-08-06). ClientDy.dyFor is
         // now a pure delegate to getVisualYOffset, so routing every block through it is identical
         // to calling getVisualYOffset directly — and the trace below can prove that per frame.
         //

@@ -23,7 +23,7 @@ public class Slabbed implements ModInitializer {
     }
 
     /**
-     * Ships in EVERY jar, default off — the standing rule, and Maintainer's ruling (2026-08-07) that
+     * Ships in EVERY jar, default off — the standing rule, and the maintainer ruling (2026-08-07) that
      * "ships" has to mean an op can actually invoke it on a release build, not that the bytes are
      * present but unreachable. This used to sit inside {@link #initDevOnlyFeatures()} behind
      * {@code isDevelopmentEnvironment()}, so {@code SlabbedDevCommands} shipped as dead weight.

@@ -86,8 +86,8 @@ import java.util.Locale;
  *   <li><b>dodoRisk</b> — an opaque full cube rendered at a nonzero dy <b>with at least one
  *       face where a real height step is exposed and {@code BlockRenderInfoCullMixin} does NOT
  *       redraw it</b>. The bare shape condition is only the precondition (see
- *       {@link #dodoShapePrecondition}); on its own it marked 36 of 55 rows of recorder run
- *       {@code 9e925ab0} — the mod's entire normal operating envelope — and carried no signal.</li>
+ *       {@link #dodoShapePrecondition}); on its own it marked 36 of 55 rows of a measured
+ *       recorder run — the mod's entire normal operating envelope — and carried no signal.</li>
  *   <li><b>smooshRisk</b> — a non-air decoration (not a slab, not a full cube) sitting AT the
  *       resolver's floor {@link SlabSupport#MIN_RESOLVED_DY}; the classic double-offset "smoosh"
  *       where two systems (e.g. Terrain Slabs' own offset + Slabbed's) both fire and the sum
@@ -381,7 +381,7 @@ public final class SlabbedDiagnostics {
      * expose a face-cull-vs-render see-through hole.
      *
      * <p>This was the whole of {@code dodoRisk} until {@code 21ceeb68}, and on its own it is
-     * measured noise: over recorder run {@code 9e925ab0} it selected exactly
+     * measured noise: over a full recorder run it selected exactly
      * {@code {opaqueFullCube && |visualDy| > EPS}} — <b>36 of 55 rows</b>, i.e. the mod's entire
      * normal operating envelope, with no reference to whether any hole is actually exposed or
      * whether {@code BlockRenderInfoCullMixin} already redraws it. Kept as a named precondition

@@ -70,7 +70,7 @@ import static net.minecraft.server.command.CommandManager.literal;
  * reporting. Stage 2 adds {@code mega} and {@code rows} — the two donor rigs that actually CONSUME
  * {@link SlabTestKit}'s object palette, which is why Stage 1's board looked "meager".
  *
- * <p><b>Stage 2 deviations from the donor</b> (this line has no equivalent, see HANDOFF.md):
+ * <p><b>Stage 2 deviations from the donor</b> (this line has no equivalent):
  * <ul>
  *   <li>The donor auto-places kit items through a proxy player's real {@code useOn}. This line has
  *       no proxy-player / diagnostics-bridge machinery, so subjects are AUTHORED as block states
@@ -85,8 +85,8 @@ import static net.minecraft.server.command.CommandManager.literal;
  *       SUBJECT.</li>
  * </ul>
  *
- * <p><b>Case catalog.</b> Four cases reproduce the live-confirmed symptoms recorded in
- * {@code docs/process/LIVE_LEDGER.md} (2026-08-05 pass) and are the reason this rig exists:
+ * <p><b>Case catalog.</b> Four cases reproduce the live-confirmed symptoms of the 2026-08-05
+ * live pass and are the reason this rig exists:
  * {@code follower_on_minus_one}, {@code dodo_log_over_slab}, {@code hanging_smoosh},
  * {@code lantern_in_trapdoor}. Three more port donor geometry: {@code seat_ladder} (the mega rig's
  * support-variant rows), {@code overhang_and_ceiling} (mega row 3), {@code tower_alternating}
@@ -318,7 +318,7 @@ public final class SlabRigCommand {
             anchors.removeIf(pos -> !cells.containsKey(pos));
             checks.removeIf(check -> !cells.containsKey(check.pos()));
 
-            // NEVER-POP AUTHORING (LIVE_LEDGER 2026-08-05 second + third pass, "popping in the
+            // NEVER-POP AUTHORING (live passes 2026-08-05, "popping in the
             // back row" / "ceiling scenery popping when its subject breaks"): a real click runs
             // BlockOnPlacedAnchorMixin.onPlaced = addAnchor THEN freezeLoweredOnPlace for the ONE
             // block it placed. Earlier this loop ran addAnchor over `anchors` and freeze over
@@ -476,7 +476,7 @@ public final class SlabRigCommand {
         }
 
         /**
-         * The -1.0 seat — the LIVE_LEDGER boundary, and the whole reason this rig exists.
+         * The -1.0 seat — the live-reported boundary, and the whole reason this rig exists.
          *
          * <p>Vanilla-only geometry (Terrain Slabs crashes bootstrap on this line, so the rig must
          * not depend on it). It is the donor's compound-column shape: a SOURCE column at
@@ -500,7 +500,7 @@ public final class SlabRigCommand {
             // y1 stays AIR under the seat slab (the donor's geometry): the seat is a legitimate
             // cantilever whose -0.5 destination volume is free. The recipe used to invent a flush
             // stone at y1 here — the seat slab then sank half a block INSIDE it, which is the mega
-            // board's z=14 interpenetration row (LIVE_LEDGER 2026-08-05 second pass), and the
+            // board's z=14 interpenetration row (live pass 2026-08-05), and the
             // flush-seat guard now rightly refuses that shape entirely.
             set(x, 0, z, stone());
             setAnchored(x, 2, z, bottomSlab(Blocks.STONE_SLAB));
@@ -521,7 +521,7 @@ public final class SlabRigCommand {
     private static LinkedHashMap<String, RigCase> buildCatalog() {
         LinkedHashMap<String, RigCase> cases = new LinkedHashMap<>();
 
-        // LIVE_LEDGER symptom 1 — followers on a -1.0 support stop at -0.5 (the 0.5 gap).
+        // Live symptom 1 — followers on a -1.0 support stop at -0.5 (the 0.5 gap).
         // Four followers, each on a stripped_jungle_log that itself sits on the -1.0 seat.
         add(cases, "follower_on_minus_one",
                 "ledger #1: slab/fence/lantern/sign on a stripped_jungle_log lowered to -1.0 (0.5 gap)",
@@ -540,7 +540,7 @@ public final class SlabRigCommand {
                     }
                 });
 
-        // LIVE_LEDGER symptom 2 — DODO (see-through hole) on stripped_jungle_log over birch_slab,
+        // Live symptom 2 — DODO (see-through hole) on stripped_jungle_log over birch_slab,
         // both away from and at the -1.0 boundary, plus a stacked-log variant.
         add(cases, "dodo_log_over_slab",
                 "ledger #2: stripped_jungle_log over birch_slab, off-boundary / at -1.0 / stacked",
@@ -559,7 +559,7 @@ public final class SlabRigCommand {
                     b.set(6, stackY + 1, 0, Blocks.STRIPPED_JUNGLE_LOG.getDefaultState());
                 });
 
-        // LIVE_LEDGER symptom 3 — SMOOSH: subject at dy -1.0 standing on a slab that renders -0.5,
+        // Live symptom 3 — SMOOSH: subject at dy -1.0 standing on a slab that renders -0.5,
         // so it sinks half a block INTO its own support. Columns 0/2 are the flagged pair
         // (lantern, oak_sign); columns 4/6 are the ceiling-hung comparison over a -0.5 floor.
         add(cases, "hanging_smoosh",
@@ -580,7 +580,7 @@ public final class SlabRigCommand {
                     b.set(6, 2, 0, Blocks.OAK_HANGING_SIGN.getDefaultState());
                 });
 
-        // LIVE_LEDGER symptom 4 — interpenetration: a lantern rendered inside an oak_trapdoor frame.
+        // Live symptom 4 — interpenetration: a lantern rendered inside an oak_trapdoor frame.
         // Two open trapdoors form the frame either side of the lantern cell; the lowered lane is the
         // repro, the flush lane is the control.
         add(cases, "lantern_in_trapdoor",
@@ -815,9 +815,9 @@ public final class SlabRigCommand {
         }
         BlockState state = block.getDefaultState();
         if (state.contains(Properties.WATERLOGGED)) {
-            // KNOWN_INCOMPLETE 1i: conduit's DEFAULT state is waterlogged=true, so the rig was
-            // authoring a waterlogged block into a DRY cell with no fluid cascade (BUILD_FLAG is
-            // NOTIFY_LISTENERS) — Maintainer's "water won't envelop conduits" — and its non-empty
+            // Open item 1i (tracked internally): conduit's DEFAULT state is waterlogged=true, so
+            // the rig was authoring a waterlogged block into a DRY cell with no fluid cascade
+            // (BUILD_FLAG is NOTIFY_LISTENERS) — the live "water won't envelop conduits" — and its non-empty
             // FluidState makes every anchor qualifier reject it. The dry board authors DRY
             // states; 1i's product-side question (anchoring waterlogged blocks) stays open.
             state = state.with(Properties.WATERLOGGED, false);
@@ -898,8 +898,8 @@ public final class SlabRigCommand {
     /**
      * The donor's simpler per-row rig: {@code count} BARE {@code -0.5} seats (row A) and
      * {@code count} BARE {@code -1.0} seats (row B), each row labelled by a sign and fronted by one
-     * self-verified reference marker. Nothing is placed on the seats — this is the board Maintainer
-     * hand-places onto, which is exactly what {@code mega} is not.
+     * self-verified reference marker. Nothing is placed on the seats — this is the board the live
+     * tester hand-places onto, which is exactly what {@code mega} is not.
      */
     public static RigPlan planRows(BlockPos origin, int count) {
         RigPlan plan = new RigPlan();

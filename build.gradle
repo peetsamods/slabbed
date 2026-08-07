@@ -28,7 +28,7 @@ fabricApi {
 // NeighborUpdateInvarianceTest (the S-2 law gate) ALWAYS runs its full matrix — in either mode,
 // every subject is built and every mutation applied. Only the VERDICT is conditional.
 //
-// DEFAULT (flipped 2026-08-06 by Maintainer, Phase 2's exit criterion met): ON — BLOCKING. Plain
+// DEFAULT (flipped 2026-08-06 by maintainer ruling, Phase 2's exit criterion met): ON — BLOCKING. Plain
 // `./gradlew build runGameTest`, no flag, enforces LAW 1 directly: a violation throws.
 // `-Dslabbed.lawGate=false` downgrades the verdict to CHARACTERIZATION — violations are PRINTED as
 // "[LAW-GATE] CHARACTERIZATION" lines instead of thrown. That is the escape hatch for a session
@@ -41,8 +41,8 @@ fabricApi {
 // has to be forwarded explicitly. Loom appends its own args via getJvmArguments().addAll(...), so
 // adding here is additive, not clobbering.
 // ── Stage 4 deep-dy-alphabet toggle ───────────────────────────────────────────────────────────
-// `slabbed.deepDyAlphabet` arms SlabSupport.MIN_RESOLVED_DY = -2.0. Default OFF (Maintainer's ruling,
-// 2026-08-06): cells with a stored placement height never move, but every cell without one takes
+// `slabbed.deepDyAlphabet` arms SlabSupport.MIN_RESOLVED_DY = -2.0. Default OFF (maintainer
+// ruling, 2026-08-06): cells with a stored placement height never move, but every cell without one takes
 // the live resolver and would drop half a block on first re-render. Same forwarding problem as the
 // law gate — Gradle keeps `-D` on the daemon JVM and Loom's run tasks are forked JavaExecs — so it
 // is passed through by name here. Run the deep leg with:
@@ -140,13 +140,13 @@ java {
 // always ship. /slabdy is a client command registered unconditionally by SlabbedClient — its
 // overlay defaults to off and the command toggles it. /slabdev is a server command registered
 // unconditionally by Slabbed#initShippedDebugCommands, gated at op level 2 (GAMEMASTERS): not
-// player-toggleable, op-invocable, and inert until invoked. That is Maintainer's ruling (2026-08-07)
+// player-toggleable, op-invocable, and inert until invoked. That is the maintainer ruling (2026-08-07)
 // on what "ships in every jar" has to mean — before it, /slabdev was registered only under
 // isDevelopmentEnvironment() and SlabbedDevCommands shipped as unreachable bytes. Its `audit`
 // subcommand reaches the dev-only audit harness reflectively and reports "not available in this
 // build" when that harness is absent, which is the release case.
 //
-// com/slabbed/dev/audit/** IS excluded — the pre-release hygiene gate (Maintainer's standing rule):
+// com/slabbed/dev/audit/** IS excluded — the pre-release hygiene gate (standing maintainer rule):
 // it's a file-writing dev/test harness (LiveCursorIntentRecorder, CategoryAuditRunner/Report,
 // LoweredSideLiveHitRemapRuntimeAudit, probes), not player-facing UI, and shipping it risks
 // moderation rejection regardless of the credential-redaction fix already applied to it. The 2

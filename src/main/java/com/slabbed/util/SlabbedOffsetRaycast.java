@@ -120,7 +120,7 @@ public final class SlabbedOffsetRaycast {
      * window's CONTRACT, stated as a magnitude rather than as a cell count, because the magnitude
      * is the thing anyone has a reason to change.
      *
-     * <p>Ruled {@code -2.0} by Maintainer on 2026-08-06. {@link SlabSupport#MIN_RESOLVED_DY}, the
+     * <p>Ruled {@code -2.0} (maintainer ruling, 2026-08-06). {@link SlabSupport#MIN_RESOLVED_DY}, the
      * deepest offset the resolver will ever PRODUCE, must never be deeper than this value. With
      * {@link SlabSupport#DEEP_DY_ALPHABET} off (the shipped default) it is shallower
      * ({@code -1.0}), which is the deliberate slack described in the class doc; with the flag on it

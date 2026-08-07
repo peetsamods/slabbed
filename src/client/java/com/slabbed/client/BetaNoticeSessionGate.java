@@ -9,7 +9,7 @@ import java.util.Set;
  * {@link BetaNoticeClient} so it's testable without a client/world instance.
  *
  * <p>Tracks "shown this session" PER WORLD KEY, not as a single global flag — a single flag
- * was the bug (live-reported by Maintainer): once ANY world showed the notice, a single boolean
+ * was the bug (live-reported): once ANY world showed the notice, a single boolean
  * blocked every other world for the rest of the session, including a brand-new world that was
  * never dismissed. The whole point of per-world dismissal is defeated if a session-wide cap
  * suppresses it anyway.
@@ -51,7 +51,7 @@ final class BetaNoticeSessionGate {
      * True if {@code version} carries an alpha or beta pre-release qualifier — the ONLY versions
      * that may show a notice whose text is literally "Slabbed is in beta".
      *
-     * <p>Maintainer's ruling (2026-08-07): {@code mod_version=0.5.1} shipped with no beta qualifier and
+     * <p>Maintainer ruling (2026-08-07): {@code mod_version=0.5.1} shipped with no beta qualifier and
      * the notice still fired on every world join. Deleting the notice was explicitly rejected — a
      * future {@code 0.6.0-alpha.1} must still show it — so the decision is derived from the version
      * string instead of a hand-maintained boolean, and therefore cannot drift again in either

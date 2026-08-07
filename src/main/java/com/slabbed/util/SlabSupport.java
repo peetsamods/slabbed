@@ -90,11 +90,10 @@ public final class SlabSupport {
      * on the carpet, not on the slab underneath it.
      *
      * <p><b>It is NOT a lowering-eligibility test.</b> It used to be one, at three SUBJECT-side
-     * sites, and that was BUG A (live 2026-08-06, recorder {@code eeac23d0-…}): a
-     * {@code white_carpet} at {@code (219,-55,-34)} read {@code dy 0.0} while the stone it was
-     * lying on read {@code -0.5}, floating half a block in the air — Maintainer's "placing too high".
-     * Eligibility now follows GEOMETRY alone, per her binding law of 2026-08-06:
-     * <i>"everything should be able to lower; no exceptions."</i>
+     * sites; that was a live-confirmed regression (2026-08-06): a carpet read {@code dy 0.0} while
+     * the stone it was lying on read {@code -0.5}, floating half a block in the air. Eligibility
+     * now follows GEOMETRY alone, per the binding maintainer ruling of 2026-08-06: everything
+     * should be able to lower, no exceptions — see {@code LAW.md}.
      *
      * <p><b>THE SNOW EXCLUSION IS GONE TOO (2026-08-06, second ruling) — read this before adding
      * another one.</b> {@code 112d1449} replaced the classname family with a narrower BEHAVIOUR
@@ -104,11 +103,10 @@ public final class SlabSupport {
      * actually closed: weather lays snow across whole biomes, so if it lowered wherever a slab
      * happened to lie beneath, half a continuous snowy surface would render at {@code -0.5} and
      * half at {@code 0.0} — a step through terrain the player never placed, cannot see the cause
-     * of, and cannot align. Maintainer has since ruled against that exclusion as well (recorder
-     * {@code 0ba17cf0-ddb6-45f6-b4b9-921d50c9d2d8}: {@code (306,-58,-56) powder_snow dy=0.000}
-     * over a {@code -0.5} {@code stone_slab}, reported as "Snow blocks are not lowering"). The
-     * predicate, and the separate {@code PowderSnowBlock} short-circuit at the head of
-     * {@link #getYOffset}, were both deleted.
+     * of, and cannot align. A second maintainer ruling (2026-08-06, live-confirmed: powder snow
+     * staying flush over a {@code -0.5} slab) removed that exclusion as well. The predicate, and
+     * the separate {@code PowderSnowBlock} short-circuit at the head of {@link #getYOffset}, were
+     * both deleted.
      *
      * <p><b>What closes the hazard now: geometry, not a block list.</b> The bounded column walks
      * ({@link #hasSlabInColumn}, {@link #slabColumnYOffset}) stop dead on the first
@@ -128,7 +126,7 @@ public final class SlabSupport {
      *
      * <p><b>The residual reachable case</b> — Terrain Slabs, which turns natural terrain into
      * half-height surfaces world-wide, so weather snow lands directly on "slabs" across whole
-     * biomes — is tracked in {@code KNOWN_INCOMPLETE.md} 1k for a live judgement. Pinned by
+     * biomes — is tracked for a live judgement. Pinned by
      * {@code ThinTopLayerLoweringTest}: three cells were INVERTED by this ruling, and
      * {@code #snowLayerOverNaturalTerrainStaysFlush} pins the guard that replaces them.
      */
@@ -331,8 +329,8 @@ public final class SlabSupport {
      * <p>"Lowered" here is EITHER a {@link #isDirectCustomSlabSupportedObject} (an object
      * resting directly on a Terrain-Slabs-owned custom surface) OR a persistently-{@link
      * SlabAnchorAttachment#isAnchored anchored} opaque full cube — the ordinary "full block
-     * placed on a slab" case that is this mod's own core, documented product intent
-     * (RULES.md §1), which the original direct-custom-support-only check did not cover (a
+     * placed on a slab" case that is this mod's own core, documented product intent,
+     * which the original direct-custom-support-only check did not cover (a
      * live goblin-test session found ~80 see-through-hole diagnostic hits on plain anchored
      * dirt, none of them Terrain-Slabs-related). {@code isAnchored} is a cheap O(1) chunk-
      * attachment set lookup — NOT the deep column walk in {@link #getYOffset} — and already
@@ -346,20 +344,19 @@ public final class SlabSupport {
      * seam invisible. Widened to also accept slab states so a slab can itself be the subject or
      * the neighbour of this check, same as an opaque full cube already was.
      *
-     * <p>MAGNITUDE (2026-08-06, Maintainer live on the {@code /slabrig mega} board: "back row has
-     * DODOs still"). "Lowered" is a boolean, but a height step is a DIFFERENCE: two ANCHORED
-     * cubes at −1.0 and −0.5 both read lowered, so the old {@code selfLowered != neighborLowered}
-     * evaluated {@code true != true} = false and culled a real 0.5 seam. The recorder board shows
-     * five such laterally-adjacent alternating pairs along the back row. Commit {@code 3a3f57e7}
-     * fixed this on the TS-compat line with a dy difference; this line never received it and
-     * independently evolved the boolean form, gaining the slab widening above and losing
-     * magnitude. Both properties are kept: the boolean prefilter still answers first, and the
-     * heights are compared only in the cases it cannot answer (see the tiers below).
+     * <p>MAGNITUDE (live-confirmed 2026-08-06). "Lowered" is a boolean, but a height step is a
+     * DIFFERENCE: two ANCHORED cubes at −1.0 and −0.5 both read lowered, so the old
+     * {@code selfLowered != neighborLowered} evaluated {@code true != true} = false and culled a
+     * real 0.5 seam. Commit {@code 3a3f57e7} fixed this on the TS-compat line with a dy
+     * difference; this line never received it and independently evolved the boolean form, gaining
+     * the slab widening above and losing magnitude. Both properties are kept: the boolean
+     * prefilter still answers first, and the heights are compared only in the cases it cannot
+     * answer (see the tiers below).
      *
-     * <p>ELIGIBILITY IS NOT ANCHOR STATUS (2026-08-06, Maintainer's ruling "everything should be able
-     * to lower; no exceptions", after a second live re-test still showed back-row see-through
-     * holes). Recorder session {@code 8248751f} pins the surviving pair: dy −0.5 beside dy −1.0,
-     * {@code anchor=none} on BOTH, {@code src=geometric}. The tier-1/2/3 dispatch above keys on
+     * <p>ELIGIBILITY IS NOT ANCHOR STATUS (maintainer ruling 2026-08-06 — everything should be
+     * able to lower, no exceptions; see {@code LAW.md} — after a second live re-test still showed
+     * see-through holes: dy −0.5 beside dy −1.0, {@code anchor=none} on BOTH,
+     * {@code src=geometric}). The tier-1/2/3 dispatch above keys on
      * {@link #isLoweredOpaqueFullCubeForStepCull}, an ANCHOR BOOLEAN — so two geometrically
      * lowered, never-anchored cubes both read "not lowered", landed in tier 1, and the magnitude
      * comparison was never reached. That is the same bug class as the three fixed before it: an
@@ -436,7 +433,7 @@ public final class SlabSupport {
             return stepHeightsDiffer(world, pos, state, neighborPos, neighbor, true, true);
         }
         // NEITHER side carries an anchor / TS-direct-support marker. The old form stopped here and
-        // returned false, which is exactly how Maintainer's −0.5(anchor=none) | −1.0(anchor=none) pair
+        // returned false, which is exactly how the live −0.5(anchor=none) | −1.0(anchor=none) pair
         // kept its culled seam. Screen both sides structurally first — that is what keeps tier 1
         // free — and resolve only the sides the screen could not rule out.
         boolean selfMaybe = mayBeLoweredForStepCull(world, pos, state);
@@ -473,12 +470,12 @@ public final class SlabSupport {
      * Cheap, view-independent, O(1)-lookup "this block is DEFINITELY lowered" marker: an object
      * resting directly on a Terrain-Slabs-owned custom surface, or a persistently
      * {@link SlabAnchorAttachment#isAnchored anchored} opaque full cube / slab (the ordinary "full
-     * block placed on a slab" case that is this mod's own core product intent, RULES.md §1).
+     * block placed on a slab" case that is this mod's own core product intent).
      *
      * <p>It is a SUFFICIENT condition, never a necessary one — geometric lowering carries no
      * anchor at all. Used only to pick the dispatch tier in {@link #isSlabHeightStepFace}; the
      * "is this block eligible for lowering behaviour" question is answered by resolved HEIGHT
-     * (tier 4), never by this boolean (Maintainer's law: everything should be able to lower).
+     * (tier 4), never by this boolean (see {@code LAW.md}: everything should be able to lower).
      */
     private static boolean isLoweredOpaqueFullCubeForStepCull(BlockView world, BlockPos pos, BlockState state) {
         return isDirectCustomSlabSupportedObject(world, pos, state)
@@ -1056,7 +1053,7 @@ public final class SlabSupport {
         if (!slabState.contains(SlabBlock.TYPE)) {
             return false;
         }
-        // FLUSH-SEAT GUARD (LIVE_LEDGER 2026-08-05 second pass, "interpenetration row"): side-
+        // FLUSH-SEAT GUARD (live pass 2026-08-05, "interpenetration row"): side-
         // adjacency lowering is legal only when the destination volume is free. A BOTTOM/DOUBLE
         // slab at -0.5 occupies the upper half of the cell below it, so when its DIRECT support is
         // a flush full-height seat it may not qualify — it would render half inside the very block
@@ -1211,17 +1208,17 @@ public final class SlabSupport {
      * slab resting on a LOWERED vanilla BOTTOM slab" had no lane anywhere. That case fell between
      * this reject and {@link #hasLoweredNonSlabTopSupport}'s {@code instanceof SlabBlock} reject —
      * neither asking whether the support was actually sunk — and, since {@code shouldOffset} never
-     * offsets slabs, landed on the class-based flush guard's hardcoded {@code 0.0} (live:
-     * {@code (157,-58,-10) oak_slab dy=0.000} on {@code (157,-59,-10) stone_slab dy=-0.500
-     * ANCHORED}, whose correct value is {@code -1.0}). That is Maintainer's ruling of 2026-08-06,
-     * "everything should be able to lower; no exceptions" — eligibility follows GEOMETRY, never
-     * block type. It is the same bug class as {@code b89c1f38}: a type/membership test standing in
-     * for a magnitude.
+     * offsets slabs, landed on the class-based flush guard's hardcoded {@code 0.0} (live-confirmed:
+     * a slab reading {@code dy=0.000} on an ANCHORED {@code -0.5} slab whose correct value is
+     * {@code -1.0}). Per the maintainer ruling of 2026-08-06 (see {@code LAW.md} — everything
+     * should be able to lower, no exceptions), eligibility follows GEOMETRY, never block type. It
+     * is the same bug class as {@code b89c1f38}: a type/membership test standing in for a
+     * magnitude.
      *
-     * <p><b>EXCLUSION #13 (Maintainer, 2026-08-06)</b>. The first pass of the rename above qualified a
-     * BOTTOM-slab support only when it was itself ALREADY SUNK. Asked whether a slab resting on a
-     * PLAIN bottom slab should stay flat at 0.0 — vanilla's half-block gap — Maintainer ruled: "it
-     * should lower, no? WYSIWYG law." A bottom slab's top face sits half a block below the grid
+     * <p><b>EXCLUSION #13 RULED OUT (2026-08-06)</b>. The first pass of the rename above qualified
+     * a BOTTOM-slab support only when it was itself ALREADY SUNK. Asked whether a slab resting on
+     * a PLAIN bottom slab should stay flat at 0.0 — vanilla's half-block gap — the maintainer
+     * ruled it lowers (WYSIWYG law). A bottom slab's top face sits half a block below the grid
      * <em>whether or not the slab itself is sunk</em>, so ANY block resting on it — including
      * another slab — must seat there. The "must already be sunk" condition is therefore gone: a
      * BOTTOM slab is unconditionally a lowering support, exactly as a Terrain Slabs BOTTOM_LIKE
@@ -1282,7 +1279,7 @@ public final class SlabSupport {
      * pale hanging moss. These attach to the block ABOVE and have no floor variant, so their dy
      * must be a pure function of that support and must never be lowered by a block below them in
      * the column. Chains and pointed dripstone are deliberately NOT here: chains extend to reach
-     * their support (Maintainer's ruling), and the speleothem family keeps its own merge grammar.
+     * their support (ruling of record), and the speleothem family keeps its own merge grammar.
      * Lanterns are NOT here either: a standing lantern legitimately rests on a support, so it
      * keeps the normal path (HANGING lanterns are already excluded from the below-walk).
      */
@@ -1395,7 +1392,7 @@ public final class SlabSupport {
             }
             // FREEZE-ON-PLACE: a slab locked FLAT at placement stays at 0 — a lowered carrier
             // placed beside/under it later can no longer make it inherit a lowered position
-            // (Maintainer's law: a placed block must not autonomously move / type-inherit on
+            // (LAW 1, LAW.md: a placed block must not autonomously move / type-inherit on
             // neighbor change). Read before every geometric inheritance walk below.
             if (SlabAnchorAttachment.isFrozenFlat(world, pos)) {
                 return 0.0;
@@ -1448,8 +1445,8 @@ public final class SlabSupport {
         }
 
         // FREEZE-ON-PLACE: a structural full block locked FLAT at placement stays at 0 — a slab
-        // or lowered carrier added under/beside it later can no longer pull it down (Maintainer's law:
-        // a placed block must not autonomously move). Read before every geometric lowering lane
+        // or lowered carrier added under/beside it later can no longer pull it down (LAW 1,
+        // LAW.md: a placed block must not autonomously move). Read before every geometric lowering lane
         // below (gap-fill, cantilever-adjacency, Terrain-Slabs combining, column walk).
         // Decorative followers are never frozen-flat, so they keep tracking their supports.
         if (!(state.getBlock() instanceof SlabBlock)
@@ -1691,11 +1688,11 @@ public final class SlabSupport {
      * view-independent flag and is tested FIRST of the two, so it pins terrain flush on every
      * thread; only non-opaque states can reach the view-dependent term.
      *
-     * <p>NOTE (audit KNOWN_INCOMPLETE): fence GATE is intentionally NOT folded into this flush
-     * guard yet. The fix is designed (use {@code SlabAnchorAttachment.isConnectingStructural} here,
-     * as {@code isSteppedConnectingNeighbor} now does) but could NOT be RED-proven headlessly —
-     * the anchor-lowered-support-with-no-slab-in-column fixture did not reproduce — so per
-     * VERIFICATION_PROTOCOL.md G3 it is not shipped. Tracked in KNOWN_INCOMPLETE.md.
+     * <p>NOTE: fence GATE is intentionally NOT folded into this flush guard yet. The fix is
+     * designed (use {@code SlabAnchorAttachment.isConnectingStructural} here, as
+     * {@code isSteppedConnectingNeighbor} now does) but could NOT be RED-proven headlessly — the
+     * anchor-lowered-support-with-no-slab-in-column fixture did not reproduce — and this project
+     * does not ship a fix without a reproducing RED. Tracked internally.
      */
     private static boolean isClassFlushPinnedSubject(BlockView world, BlockPos pos, BlockState state) {
         Block blk = state.getBlock();
@@ -1727,17 +1724,17 @@ public final class SlabSupport {
      * lowered full-block support" lane. Returns {@link Double#NaN} when the cell is not such an
      * object or is not lowered.
      *
-     * <p><b>BUG B</b> (live 2026-08-06, recorder {@code eeac23d0-…}). {@code (203,-54,-34)
-     * minecraft:stone} oscillated {@code -0.5 ↔ 0.0} in lockstep with the block below it being
+     * <p><b>The potted-flower oscillation</b> (live-confirmed 2026-08-06). A stone block
+     * oscillated {@code -0.5 ↔ 0.0} in lockstep with the block below it being
      * {@code minecraft:flower_pot} vs {@code minecraft:potted_cornflower} — <b>the pot's own dy was
      * {@code -0.500} in both frames</b>, so the support never moved; only its block IDENTITY
      * changed. Cause: the bounded column walks scored that cell with
      * {@code SlabAnchorAttachment.isAnchored(...)}, <b>an anchor boolean standing in for "is this
-     * cell lowered"</b> — the same bug class as L13/L14/L15. Potting a flower is an in-place
+     * cell lowered"</b> — a recurring bug class on this line. Potting a flower is an in-place
      * block-KIND change, so {@code onStateReplaced} fires and {@code replacementPreservesAnchor}
-     * clears the pot's anchor ({@code KNOWN_INCOMPLETE.md} 1j) while its rendered height, which
+     * clears the pot's anchor (tracked internally, 1j) while its rendered height, which
      * comes from a wholly different lane, is untouched. The flag vanished, the geometry did not,
-     * and the placed block above it JUMPED — a never-pop violation.
+     * and the placed block above it JUMPED — a LAW 1 (never-pop) violation; see {@code LAW.md}.
      *
      * <p>Asking for the HEIGHT instead makes the answer independent of which flower is in the pot,
      * of whether it holds a flower at all, and of whether anything was ever anchored. 1j is
@@ -1868,10 +1865,10 @@ public final class SlabSupport {
      * cap is consulted on that path. But every cell WITHOUT one takes the LIVE resolver: worlds
      * saved before the placement store landed ({@code d4f38510}, this dev cycle), worldgen,
      * {@code /setblock}, {@code /slabrig}, and {@code LAW.md} lanes A and C-F. Those cells would
-     * visibly drop half a block the first time they re-rendered after an update. Maintainer's ruling of
-     * 2026-08-06 explicitly DECLINED to call that "acceptable as a repair": no existing build
-     * shifts under anyone without warning. It stays off until there is a migration or backfill
-     * story.
+     * visibly drop half a block the first time they re-rendered after an update. The maintainer
+     * ruling of 2026-08-06 explicitly DECLINED to call that "acceptable as a repair": no existing
+     * build shifts under anyone without warning. It stays off until there is a migration or
+     * backfill story.
      *
      * <p><b>What OFF guarantees.</b> {@link #MIN_RESOLVED_DY} reads {@link #SHIPPED_MIN_RESOLVED_DY}
      * and every other constant on this line was already derived from the window contract rather
@@ -1919,8 +1916,8 @@ public final class SlabSupport {
      * constant IS {@link SlabbedOffsetRaycast#DEEPEST_TARGETABLE_DY} — not a second copy of
      * {@code -2.0} but the same field read — so the cap and the window cannot be given different
      * values, and {@code MIN_RESOLVED_DY == -(window radius)} is a DERIVABLE invariant rather than a
-     * magic number. That is Maintainer's ruling of 2026-08-06 and the whole reason the ruled cap is
-     * {@code -2.0} instead of the {@code -1.5} originally asked for: Stage 0 MEASURED the required
+     * magic number. That is the maintainer ruling of 2026-08-06 and the whole reason the ruled cap
+     * is {@code -2.0} instead of the {@code -1.5} originally asked for: Stage 0 MEASURED the required
      * radius as 1 at {@code -1.0} and 2 at BOTH {@code -1.5} and {@code -2.0}, so stopping at
      * {@code -1.5} would pay the entire radius-2 cost and leave the constant magic anyway.
      *
@@ -2010,7 +2007,7 @@ public final class SlabSupport {
      * THE SUPPORT-DY RESOLVER — the single source of truth for "how far down does a block sit
      * because of the support directly BELOW it".
      *
-     * <p>Live-reported 2026-08-05 ({@code docs/process/LIVE_LEDGER.md} symptom 1): a block placed
+     * <p>Live-reported 2026-08-05 (symptom 1 of that pass): a block placed
      * on a support already lowered to {@code -1.0} rendered at {@code -0.5}, leaving a 0.5
      * floating gap, across four families (birch_slab, birch_fence, lantern, oak_sign). Root cause:
      * the persistent anchor is a boolean membership set, not a stored height, so every lane that
@@ -2083,7 +2080,7 @@ public final class SlabSupport {
             if (seat < -0.5 - 1.0e-6) {
                 return Math.max(seat, MIN_RESOLVED_DY);
             }
-            // FLUSH-SEAT GUARD (LIVE_LEDGER 2026-08-05 second pass, "interpenetration row"): a
+            // FLUSH-SEAT GUARD (live pass 2026-08-05, "interpenetration row"): a
             // seat of exactly 0.0 means the support's top face is AT the grid line (flush solid
             // non-slab block, or a flush TOP/DOUBLE slab). The historical "anchored ⇒ at least
             // -0.5" floor would sink the follower half a block INSIDE that support (the mega
@@ -2141,7 +2138,7 @@ public final class SlabSupport {
      * a flush solid non-slab full block, or a flush TOP/DOUBLE slab (top face at the cell top).
      * Reported distinctly from "no qualifying seat" so {@link #loweredFollowerDy} can refuse the
      * {@code -0.5} floor there instead of sinking the follower half a block inside its own
-     * support (the LIVE_LEDGER "interpenetration row").
+     * support (the live-reported "interpenetration row").
      *
      * <p>Returns {@link Double#NaN} for a support that is none of these (air, a non-solid object,
      * a cantilever-lowered block), leaving the caller on its pre-existing {@code -0.5} floor.
@@ -2324,8 +2321,8 @@ public final class SlabSupport {
      * a VOLUME statement ("is the collision box a full cube"); a seat only needs a FACE statement
      * ("is the top at the cell top"). A fence, a door, a wall, a pane and a set of iron bars all
      * draw their top face at exactly the cell top and all fail the volume test, which is why a
-     * block resting on any of them lost its support's height entirely (Maintainer's live pass
-     * 2026-08-06, recorder {@code 339a58aa}: sign / lantern / log at {@code -0.5} on a
+     * block resting on any of them lost its support's height entirely (live pass
+     * 2026-08-06: sign / lantern / log at {@code -0.5} on a
      * {@code birch_fence} at {@code -1.0}).
      *
      * <p>Four terms, ordered so the common cases never pay for the rare ones:
@@ -2372,7 +2369,7 @@ public final class SlabSupport {
      * no arm of {@link #supportSeatDy} at all, so everything resting on one fell to
      * {@link #loweredFollowerDy}'s {@code -0.5} floor — invisible while the true answer happened to
      * be {@code -0.5}, and a visible half-block gap the moment a real {@code -1.0} support existed
-     * (Maintainer's live pass, recorder {@code 339a58aa}: sign/lantern/log at {@code -0.5} on a
+     * (live pass 2026-08-06: sign/lantern/log at {@code -0.5} on a
      * {@code birch_fence} at {@code -1.0}). See {@link #presentsCellTopAsTopFace}.
      */
     private static double loweredFullHeightSupportDy(BlockView world, BlockPos pos, BlockState state) {
@@ -2410,7 +2407,7 @@ public final class SlabSupport {
      * The body of {@link #loweredFullHeightSupportDy}, asked of ANY block whose top face is at its
      * own cell top — including a TOP or DOUBLE slab.
      *
-     * <p><b>Why the split (live 2026-08-06, recorder run {@code f37a3b2b}, actions a38/a39).</b>
+     * <p><b>Why the split (live-confirmed 2026-08-06).</b>
      * The wrapper's {@code instanceof SlabBlock} line was a CLASS test standing in for the top-face
      * question, the ninth of that shape found in this campaign, and
      * {@code SlabAnchorAttachment.recordPlacementDy} already carried a note describing the hole it
@@ -2647,7 +2644,7 @@ public final class SlabSupport {
         // directCustomSlabSupportDy < 0 guard below fires ONLY for a carrier actually lowered onto
         // a TS/bottom-slab surface, so a plain carrier on solid ground still returns NaN (flush).
         // KNOWN-PARTIAL: this shares the carrier's DIRECT -0.5; a carrier itself lowered -1.0 on a
-        // compound (mixed) slab is NOT yet followed to -1.0 (tracked in KNOWN_INCOMPLETE.md).
+        // compound (mixed) slab is NOT yet followed to -1.0 (tracked internally).
         if (below == null || !isSlabSitCandidate(world, belowPos, below)) {
             return Double.NaN;
         }
@@ -2671,12 +2668,12 @@ public final class SlabSupport {
      * lantern may still ATTACH to a TS underside; only its rendered dy must stay flush.
      */
     private static boolean isLoweringTopLikeCeiling(BlockState state) {
-        // DEPRECATED (2026-07-03, Maintainer live ruling): the +0.5 "reach-up" for ceiling-attached
+        // DEPRECATED (2026-07-03 maintainer ruling, live): the +0.5 "reach-up" for ceiling-attached
         // objects (lantern / dripstone / chain / …) under a top slab is deprecated — everything
         // hangs FLUSH now. In live testing the reach-up smooshed those objects UP into the slab;
         // flush looked better. Returning false disables the +0.5 at ALL three ceiling walks (the
         // ceilingHungDecorationDy cursor loop + the two getYOffsetInner walks) from ONE place, so
-        // the ruling is trivially reversible if it regresses (Maintainer: "subject to further review").
+        // the ruling is trivially reversible if it regresses (ruled "subject to further review").
         // The `slabSupportDy + 0.5` flush-COMPENSATION for a LOWERED top slab (SlabSupport.java:817
         // and :1012) is a DIFFERENT path — it nets 0.0 (flush against the lowered underside), not a
         // reach-up — and deliberately stays. Prior body: !shouldSkipOffset && isTopLikeCeilingSurface.
@@ -2765,7 +2762,7 @@ public final class SlabSupport {
                 // NOTE (2026-08-06, second ruling): no snow exclusion here either. All three
                 // SUBJECT-side sites dropped it together — leaving one behind would be the
                 // shared-predicate half-fix trap, with snow lowering on a vanilla slab but floating
-                // on a Terrain Slabs surface in Maintainer's own TS-enabled setup.
+                // on a Terrain Slabs surface in a TS-enabled live setup.
                 || (!state.getFluidState().isEmpty() && !kelpFamily)
                 || CompatHooks.shouldSkipOffset(state)) {
             return false;
@@ -2860,7 +2857,7 @@ public final class SlabSupport {
                 // standing in for the seat's actual top face, and they are only correct while the
                 // slab sits at -0.5: a BOTTOM slab there seats at -1.0 and a TOP/DOUBLE slab there
                 // seats at -0.5. A slab at -1.0 breaks both readings, and the -0.5 arm breaks
-                // VISIBLY — live recorder run e9eb0932, actions a8/a10/a15, a stripped_jungle_log
+                // VISIBLY — live-recorded: a stripped_jungle_log
                 // on a smooth_stone_slab[type=double] at dy=-1.0000 read -0.5000 here. Because
                 // this is the LIVE lane, it is what the client draws until the server's stored
                 // number reaches it; the server's own dyPlaceBefore was -0.5000 in the same
