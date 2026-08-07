@@ -52,6 +52,7 @@
       "com.slabbed.test.AnchoredFollowerSupportDyTest",
       "com.slabbed.test.FlushSeatGuardTest",
       "com.slabbed.test.SlabOnLoweredBottomSlabTest",
+      "com.slabbed.test.DeepDyWindowCharacterisationTest",
       "com.slabbed.test.RendererRegionBoundsGuardTest",
       "com.slabbed.test.BottomSlabSpawnProofTest",
       "com.slabbed.test.ServerHitToleranceShiftTest",

@@ -179,6 +179,17 @@ public final class SlabOnLoweredBottomSlabTest {
      * </ul>
      * So the tower is flush for three courses and reverts to the vanilla stagger from the fourth
      * course upward. Maintainer rules on the appearance from these numbers.
+     *
+     * <p><b>EXTENDED to L4/L5 (Stage 0 measurement B, 2026-08-07).</b> The tower now runs six
+     * courses so the ladder past the clamp is measured rather than assumed. Every original
+     * assertion (L0–L3, and the L1–L3 anchor loop) is unchanged; the two new courses are asserted
+     * separately and the raw values are printed under {@code [STAGE0-B]}. <b>Measured answer: the
+     * ladder does not decay past the clamp — L4 and L5 read {@code -1.0} exactly like L3.</b> The
+     * reason is not the depth budget: {@code addAnchor} records each course's placement height, so
+     * every course above L1 resolves its seat from the course below's STORED number and the walk
+     * terminates at depth 1. {@code MAX_SUPPORT_RESOLVE_DEPTH} is never approached here. See
+     * {@code DeepDyWindowCharacterisationTest} for the pre-store lane, which is the only shape that
+     * consumes the budget at all.
      */
     @GameTest(structure = "fabric-gametest-api-v1:empty")
     public void slabTowerLaddersToTheClampThenGaps(TestContext ctx) {
@@ -186,19 +197,22 @@ public final class SlabOnLoweredBottomSlabTest {
         BlockPos ground = ctx.getAbsolutePos(BlockPos.ORIGIN).add(2, 1, 2);
         place(w, ground, Blocks.STONE.getDefaultState());
 
-        BlockPos[] level = new BlockPos[4];
-        for (int i = 0; i < 4; i++) {
+        // SIX courses since Stage 0 measurement B; L0-L3 below are unchanged.
+        BlockPos[] level = new BlockPos[6];
+        for (int i = 0; i < level.length; i++) {
             level[i] = ground.up(i + 1);
             place(w, level[i], bottomSlab(Blocks.OAK_SLAB));
             // The real placement sequence: onPlaced -> addAnchor fires for every player click.
             SlabAnchorAttachment.addAnchor(w, level[i], w.getBlockState(level[i]));
         }
 
-        double[] dy = new double[4];
-        for (int i = 0; i < 4; i++) {
+        double[] dy = new double[level.length];
+        for (int i = 0; i < level.length; i++) {
             dy[i] = SlabSupport.getYOffset(w, level[i], w.getBlockState(level[i]));
         }
         String ladder = "L0=" + dy[0] + " L1=" + dy[1] + " L2=" + dy[2] + " L3=" + dy[3];
+        String ladderDeep = ladder + " L4=" + dy[4] + " L5=" + dy[5];
+        System.out.println("[STAGE0-B] anchored tower ladder (store live): " + ladderDeep);
 
         ctx.assertTrue(Math.abs(dy[0]) <= EPS,
                 "tower L0 (bottom slab on plain stone) must stay flush at 0.0 — " + ladder);
@@ -220,6 +234,27 @@ public final class SlabOnLoweredBottomSlabTest {
             ctx.assertTrue(SlabAnchorAttachment.isAnchored(w, level[i]),
                     "tower L" + i + " renders lowered, so it must RECORD an anchor or breaking the "
                             + "course below pops it (never-pop law) — " + ladder);
+        }
+
+        // STAGE 0, MEASUREMENT B (added 2026-08-07; nothing above this line changed). The two
+        // courses past the clamp are MEASURED, not assumed: they stay at -1.0 rather than decaying
+        // to the -0.5 exhaustion floor, because each course's placement height is STORED by
+        // addAnchor and the seat walk terminates on that stored number at depth 1. The depth budget
+        // is not reached, so a post-store tower has no "one course past the budget" behaviour at
+        // all.
+        for (int i = 4; i < level.length; i++) {
+            ctx.assertTrue(Math.abs(dy[i] + 1.0) <= EPS,
+                    "tower L" + i + " must stay at the MIN_RESOLVED_DY clamp (-1.0), NOT fall to "
+                            + "the -0.5 depth-exhaustion floor — " + ladderDeep);
+            ctx.assertTrue(SlabAnchorAttachment.isAnchored(w, level[i]),
+                    "tower L" + i + " renders lowered, so it must RECORD an anchor (never-pop "
+                            + "law) — " + ladderDeep);
+            double stored = com.slabbed.anchor.SlabPlacementDyAttachment.storedDy(w, level[i]);
+            ctx.assertTrue(Math.abs(stored + 1.0) <= EPS,
+                    "tower L" + i + " must carry a STORED placement height of -1.0 — that stored "
+                            + "fact is exactly what terminates the seat walk at depth 1 and keeps "
+                            + "MAX_SUPPORT_RESOLVE_DEPTH out of reach, got " + stored + " — "
+                            + ladderDeep);
         }
         ctx.complete();
     }
