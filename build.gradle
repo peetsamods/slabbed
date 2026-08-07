@@ -386,6 +386,114 @@ jar {
     releaseArtifactExclusions.each { pattern -> exclude(pattern) }
 }
 
+// ---------------------------------------------------------------------------------------------
+// Manifest hygiene: never advertise a class the artifact does not contain.
+//
+// Loom computes Fabric-Loom-Client-Only-Entries from the CLIENT SOURCE SET OUTPUT, not from the
+// entries that survive into the archive, and its only public hook (getAdditionalClientOnlyEntries)
+// is ADDITIVE. So the released mod jar's manifest named 42 entries, 5 of which the exclusion list
+// above had already removed:
+//
+//     com/slabbed/client/SlabbedClientFlags.class
+//     com/slabbed/client/ScreenshotCaptureContext.class
+//     com/slabbed/client/ScreenshotCaptureContext$State.class
+//     com/slabbed/client/DyFingerprintDump.class
+//     com/slabbed/client/CaptureProfile.class
+//
+// Same defect the 1.21.11 line diagnosed and fixed in 207863f0 (item V2). The port difference: that
+// line is Yarn-mapped and ships remapJar/remapSourcesJar, so the doLast attached there. This line is
+// Mojang-mapped and has NO remap tasks at all -- `jar` and `sourcesJar` ARE the shipped artifacts,
+// so the doLast attaches directly to them.
+//
+// The fix is stated as a SUBTRACTION of names that have no matching archive entry. Two properties
+// follow from that framing and are the whole reason it is the least-bad option:
+//   * it cannot drop a real entry -- a name is only removed when the archive provably lacks it;
+//   * it cannot go stale -- whatever releaseArtifactExclusions becomes later, the attribute is
+//     re-derived from what is actually in the finished archive, not from a second list to forget.
+//
+// It runs in doLast, so Gradle snapshots the pruned archive as the task's output and UP-TO-DATE
+// checking still works. It returns without touching a byte when the attribute is absent (the
+// sources jar) or already honest, so it perturbs nothing it does not have to.
+def pruneClientOnlyEntriesManifest = { File artifact ->
+    String attribute = "Fabric-Loom-Client-Only-Entries"
+    Map<String, byte[]> contents = new LinkedHashMap<>()
+    Map<String, Long> times = new LinkedHashMap<>()
+    Set<String> directories = new LinkedHashSet<>()
+
+    new java.util.zip.ZipFile(artifact).withCloseable { zip ->
+        for (entry in zip.entries()) {
+            if (contents.containsKey(entry.name)) {
+                // A rebuild keyed by entry name would silently collapse duplicates into one.
+                // Neither release archive has any (Gradle writes each path once here), so this is
+                // a loud stop rather than a quiet edit of somebody's jar.
+                throw new GradleException(
+                        "Cannot prune ${attribute} in ${artifact.name}: duplicate archive entry "
+                                + "'${entry.name}'. Rebuilding would drop one of them.")
+            }
+            times.put(entry.name, entry.time)
+            if (entry.directory) {
+                directories.add(entry.name)
+                contents.put(entry.name, new byte[0])
+            } else {
+                contents.put(entry.name, zip.getInputStream(entry).bytes)
+            }
+        }
+    }
+
+    byte[] manifestBytes = contents.get("META-INF/MANIFEST.MF")
+    if (manifestBytes == null) {
+        return
+    }
+    def manifest = new java.util.jar.Manifest(new ByteArrayInputStream(manifestBytes))
+    String declared = manifest.mainAttributes.getValue(attribute)
+    if (declared == null || declared.isEmpty()) {
+        return
+    }
+
+    List<String> present = declared.split(";").findAll { contents.containsKey(it) }
+    List<String> missing = declared.split(";").findAll { !contents.containsKey(it) }
+    if (missing.isEmpty()) {
+        return
+    }
+
+    if (present.isEmpty()) {
+        manifest.mainAttributes.remove(new java.util.jar.Attributes.Name(attribute))
+    } else {
+        manifest.mainAttributes.putValue(attribute, present.join(";"))
+    }
+    def rewritten = new ByteArrayOutputStream()
+    manifest.write(rewritten)
+    contents.put("META-INF/MANIFEST.MF", rewritten.toByteArray())
+
+    def rebuilt = new File(artifact.parentFile, artifact.name + ".manifest-pruned")
+    new java.util.zip.ZipOutputStream(new FileOutputStream(rebuilt)).withCloseable { out ->
+        contents.each { name, bytes ->
+            def entry = new java.util.zip.ZipEntry(name)
+            long time = times.get(name)
+            if (time >= 0) {
+                entry.time = time
+            }
+            out.putNextEntry(entry)
+            if (!directories.contains(name)) {
+                out.write(bytes)
+            }
+            out.closeEntry()
+        }
+    }
+    java.nio.file.Files.move(rebuilt.toPath(), artifact.toPath(),
+            java.nio.file.StandardCopyOption.REPLACE_EXISTING)
+    logger.lifecycle("[hygiene] ${artifact.name}: dropped ${missing.size()} "
+            + "${attribute} name(s) with no matching archive entry: ${missing.join(', ')}")
+}
+
+// Both shipped artifacts, for the same reason the exclusion list covers both: the sources jar
+// carries no such attribute today, and nothing guarantees it never will.
+["jar", "sourcesJar"].each { archiveTaskName ->
+    tasks.named(archiveTaskName, Jar).configure {
+        doLast { task -> pruneClientOnlyEntriesManifest(task.archiveFile.get().asFile) }
+    }
+}
+
 def releaseHygieneForbiddenTokens = [
         "LiveCursorIntentRecorder",
         "SlabModelStaleSentinel",
@@ -413,12 +521,18 @@ tasks.register("verifyReleaseJarHygiene") {
                 tasks.named("sourcesJar").get().archiveFile.get().asFile
         ].each { archive ->
             def violations = []
+            def entryNames = new HashSet<String>()
+            def manifestBytes = null
             new java.util.zip.ZipFile(archive).withCloseable { zip ->
                 zip.entries().each { entry ->
                     if (!entry.directory) {
+                        entryNames.add(entry.name)
+                        def bytes = zip.getInputStream(entry).readAllBytes()
+                        if (entry.name == "META-INF/MANIFEST.MF") {
+                            manifestBytes = bytes
+                        }
                         def content = new String(
-                                zip.getInputStream(entry).readAllBytes(),
-                                java.nio.charset.StandardCharsets.ISO_8859_1)
+                                bytes, java.nio.charset.StandardCharsets.ISO_8859_1)
                         releaseHygieneForbiddenTokens.each { token ->
                             if (content.contains(token)) {
                                 violations.add("${entry.name} -> ${token}")
@@ -431,6 +545,28 @@ tasks.register("verifyReleaseJarHygiene") {
                 throw new GradleException(
                         "Release hygiene violation in ${archive.name}:\n"
                                 + violations.unique().sort().join("\n"))
+            }
+
+            // Manifest honesty: an artifact must never ADVERTISE a class it does not contain.
+            // Loom derives Fabric-Loom-Client-Only-Entries from the client source-set output, so
+            // every unit releaseArtifactExclusions drops stays named in the manifest -- 5 of the
+            // mod jar's 42 names were phantoms before pruneClientOnlyEntriesManifest. This asserts
+            // the prune actually ran on the FINISHED archive: if that doLast is ever detached,
+            // reordered behind this gate, or defeated by a new archive path, the build goes red
+            // here instead of shipping a manifest that lies about its own contents.
+            if (manifestBytes != null) {
+                def manifest = new java.util.jar.Manifest(new ByteArrayInputStream(manifestBytes))
+                def declared = manifest.mainAttributes.getValue("Fabric-Loom-Client-Only-Entries")
+                if (declared != null && !declared.isEmpty()) {
+                    def phantom = declared.split(";").findAll { !entryNames.contains(it) }
+                    if (!phantom.isEmpty()) {
+                        throw new GradleException(
+                                "Manifest hygiene violation in ${archive.name}: "
+                                        + "Fabric-Loom-Client-Only-Entries names ${phantom.size()} "
+                                        + "entry/entries the archive does not contain:\n  "
+                                        + phantom.sort().join("\n  "))
+                    }
+                }
             }
         }
     }

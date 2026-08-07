@@ -11,7 +11,7 @@ must be reverted.
 > **Where I put it is where it goes and STAYS.** This is the core of WYSIWYG. I put a block in place A,
 > I expect it to stay there no matter what. It should not change states according to a neighbor update
 > (unless there is a specific vanilla mechanism as part of gameplay). If I want to place something at
-> dy 0.5, that's where it goes. **No exceptions.**
+> dy -0.5, that's where it goes. **No exceptions.**
 
 ## What that means for the implementation (the part that keeps getting inverted)
 

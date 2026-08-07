@@ -233,6 +233,29 @@ Concretely: the allowlist would have caught `com/slabbed/client/palette/**` on d
 would catch an approved `SlabbedClient` acquiring a `SlabModelStaleSentinelClient` call, or a mixin
 JSON listing a debug mixin, without anyone touching this file. Keep both.
 
+### Manifest honesty — the third, narrower check
+
+Both layers above ask what an artifact *contains*. Neither asks what it *claims to contain*, and an
+artifact can lie about itself: Loom derives `Fabric-Loom-Client-Only-Entries` from the client
+source-set output, not from the entries that survive the `jar` task's exclusion filter, and its only
+public hook is additive. So every unit `releaseArtifactExclusions` drops stays **named in the
+manifest** — the shipped mod jar advertised 42 entries, 5 of which it did not contain
+(`SlabbedClientFlags`, `ScreenshotCaptureContext` and its `$State`, `DyFingerprintDump`,
+`CaptureProfile`). Both gates were green throughout: the names were correct as names, and the
+classes really were gone.
+
+`pruneClientOnlyEntriesManifest` in `build.gradle` fixes it as a `doLast` on `jar` and `sourcesJar`
+(this line is Mojang-mapped and has no `remapJar`/`remapSourcesJar`, so those two *are* the shipped
+artifacts). It is stated as a **subtraction of names with no matching archive entry**, which is what
+makes it safe in both directions: it cannot drop a real entry, and it cannot go stale as this file
+and the exclusion list change, because it re-derives the attribute from the finished archive rather
+than from a second list to forget. Same defect and same remedy as the 1.21.11 line's `207863f0`
+(item V2).
+
+`verifyReleaseJarHygiene` then asserts the result on the finished archives — zero named-but-absent
+entries in either jar — so if that `doLast` is ever detached, reordered, or defeated by a new
+archive path, the build goes red instead of shipping a manifest that misdescribes its own contents.
+
 ## Maintenance
 
 - Allowlist entries that match nothing are reported as `STALE` by `releaseAllowlistReport` and
