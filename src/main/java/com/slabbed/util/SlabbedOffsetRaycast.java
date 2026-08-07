@@ -59,8 +59,12 @@ import net.minecraft.world.BlockView;
  * only the layer {@code P.y + floor(cap)} and nothing nearer, so any smaller radius loses
  * it to a side aim. <b>Change the cap and the radius moves with it, automatically. Change
  * the radius and you have changed which caps this class can honour.</b> The identity the
- * resolver must respect is therefore {@code MIN_RESOLVED_DY >= DEEPEST_TARGETABLE_DY} —
- * the alphabet may never run deeper than the window that has to click it. (Ruling of
+ * resolver must respect is therefore
+ * {@link SlabSupport#MIN_RESOLVED_DY}{@code  >= }{@link #DEEPEST_TARGETABLE_DY} —
+ * the alphabet may never run deeper than the window that has to click it. Both halves of that
+ * identity are now named links rather than restated numbers, and
+ * {@code ClampUnificationTest} asserts it, so neither constant can be moved on its own
+ * unnoticed. (Ruling of
  * 2026-08-06 in {@code docs/process/LIVE_LEDGER.md}, measured by
  * {@code DeepDyWindowCharacterisationTest}: required radius is 1 at {@code -1.0} and 2 at
  * both {@code -1.5} and {@code -2.0}, which is why the ruled cap is {@code -2.0} — the
@@ -113,9 +117,11 @@ public final class SlabbedOffsetRaycast {
      * window's CONTRACT, stated as a magnitude rather than as a cell count, because the magnitude
      * is the thing anyone has a reason to change.
      *
-     * <p>Ruled {@code -2.0} by Maintainer on 2026-08-06. {@code SlabSupport.MIN_RESOLVED_DY}, the
+     * <p>Ruled {@code -2.0} by Maintainer on 2026-08-06. {@link SlabSupport#MIN_RESOLVED_DY}, the
      * deepest offset the resolver will ever PRODUCE, must never be deeper than this value; today
      * it is shallower ({@code -1.0}), which is the deliberate slack described in the class doc.
+     * The two constants cross-reference each other on purpose — {@code ClampUnificationTest} pins
+     * the identity so neither can drift alone.
      */
     public static final double DEEPEST_TARGETABLE_DY = -2.0;
 

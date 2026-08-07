@@ -1508,9 +1508,11 @@ public final class SlabSupport {
             //      extra -0.5 to sit flush on a bottom-type surface (else a half-block gap shows
             //      underneath — the vanilla-TOP-slab-on-terrain bug). BOTTOM/DOUBLE slabs and
             //      non-slab objects are unaffected.
-            // The result is clamped to -1.0: that is the deepest offset the offset-aware pick
-            // raycast covers ({C, C.up, C.down}), so deeper niche combos (e.g. a TOP slab on a
-            // mixed slab) settle at -1.0 rather than going untargetable.
+            // The result is capped at MIN_RESOLVED_DY, so deeper niche combos (e.g. a TOP slab on
+            // a mixed slab) settle at the cap rather than being drawn where the offset-aware pick
+            // window cannot reach them. (The old wording named the window as {C, C.up, C.down};
+            // that stopped being true when the window widened to +/-WINDOW_RADIUS on 2026-08-07.
+            // Naming the cap instead of the window keeps this comment from going stale again.)
             double dy = directCustomSurfaceDy;
             double supportLoweredDy = loweredBottomSlabSupportDy(world, pos.down());
             if (Double.isFinite(supportLoweredDy) && supportLoweredDy < -1.0e-6) {
@@ -1521,9 +1523,15 @@ public final class SlabSupport {
                     && state.get(SlabBlock.TYPE) == SlabType.TOP) {
                 dy += -0.5;
             }
-            if (dy < -1.0) {
-                dy = -1.0;
-            }
+            // THE CAP IS THE SHARED ONE (2026-08-07, Stage 2). This site used to write the
+            // magnitude out by hand as `if (dy < -1.0) dy = -1.0;`, and read as correct only
+            // because the constant it duplicated happened to hold the same number. It is the SAME
+            // refusal-to-go-deeper as the support resolver's, applied on the Terrain Slabs lane
+            // instead of the vanilla one, so it must move when the cap moves or the two lanes
+            // would answer differently about the same tower. Byte-identical at -1.0: Math.max
+            // agrees with the old branch on every input, NaN and -0.0 included.
+            // ClampUnificationTest resolves ONE tower down both lanes and asserts one answer.
+            dy = Math.max(dy, MIN_RESOLVED_DY);
             return dy;
         }
 
@@ -1841,12 +1849,47 @@ public final class SlabSupport {
     }
 
     /**
-     * Deepest dy this line will ever resolve. {@code DY_SPEC.md:115} CS-CAP: the whole offset set
-     * is {@code {-1.0, -0.5, 0.0}} and {@code -1.0} is the deepest cell the offset-aware pick
-     * raycast window ({@code {C, C.up, C.down}}) can target, so a deeper tower settles at
-     * {@code -1.0} rather than rendering somewhere the player cannot click.
+     * THE CAP — the deepest dy this line will ever RESOLVE, and the one constant every clamp site
+     * in this file reads.
+     *
+     * <p><b>Derived, not asserted.</b> This is not {@code -1.0} "because the offset alphabet is
+     * {@code {-1.0, -0.5, 0.0}}" — that alphabet is a CONSEQUENCE of the cap, not its reason. What
+     * fixes the cap is the pick window. A block drawn at {@code dy} is clickable only if the
+     * offset-aware raycast tests the cell layers its shape actually occupies, and
+     * {@link SlabbedOffsetRaycast} sizes that window from its own contract constant
+     * {@link SlabbedOffsetRaycast#DEEPEST_TARGETABLE_DY}, deriving
+     * {@link SlabbedOffsetRaycast#WINDOW_RADIUS} as {@code ceil(-DEEPEST_TARGETABLE_DY)}. So the
+     * standing identity across the two files is
+     *
+     * <blockquote>{@code MIN_RESOLVED_DY >= DEEPEST_TARGETABLE_DY}</blockquote>
+     *
+     * the resolver may never PRODUCE a height deeper than the window undertakes to attribute, or
+     * the block is drawn somewhere the player cannot aim. Neither constant can be moved on its own
+     * without reading the other: {@code ClampUnificationTest} asserts the identity, and
+     * {@code DeepDyWindowCharacterisationTest} asserts the radius derivation.
+     *
+     * <p><b>The identity is an INEQUALITY today, deliberately.</b> The window already stands at the
+     * ruled {@code -2.0} (Stage 1, 2026-08-07) while this cap is still {@code -1.0}, so the pick
+     * path leads the alphabet and its permanent cost ships and live-tests on its own. The
+     * inequality closes to EQUALITY when the ruled cap lands here (Stage 4). On that day this is a
+     * one-constant edit, because every site that refuses to go deeper reads this name.
+     *
+     * <p><b>What "every site" means, and why it is now enforced.</b> Two independent lanes can
+     * saturate the same tower: the support resolver ({@link #loweredFollowerDy} and the column
+     * walk), and the direct-custom surface lane in {@link #getYOffsetInner} — the lane Terrain
+     * Slabs geometry takes. Until 2026-08-07 the second wrote its magnitude out by hand instead of
+     * naming this constant, so moving the cap would have left a TS tower and a vanilla tower at
+     * different heights in the same world for the same reason. {@code ClampUnificationTest} builds
+     * ONE tower, resolves it down both lanes, and asserts the two answers are the same number.
+     *
+     * <p><b>Not every {@code -1.0} in this file belongs here.</b> Several mean "half a block of
+     * support drop plus half a block of seat" — a magnitude that is one full block because that is
+     * the shape, not because anything refused to go deeper. Those must NOT move with the cap; see
+     * {@link #getYOffsetInner}'s compound branch, its mirror in {@link #cellTopSupportDy}, and the
+     * column walk's historical seat constant. Only a site whose job is to REFUSE TO GO DEEPER
+     * reads this name.
      */
-    private static final double MIN_RESOLVED_DY = -1.0;
+    public static final double MIN_RESOLVED_DY = -1.0;
 
     /**
      * Bound on the support-of-a-support resolver walk ({@link #loweredFollowerDy} →
@@ -2708,6 +2751,15 @@ public final class SlabSupport {
                 // any shallower reading keeps the historical number byte-identical. The BOTTOM arm
                 // is therefore provably unreachable by this change: its constant already equals
                 // MIN_RESOLVED_DY, so nothing can be strictly deeper and survive the clamp.
+                //
+                // THAT LAST SENTENCE IS CONTINGENT ON THE CAP'S VALUE, NOT ON THIS ARM (noted
+                // 2026-08-07, Stage 2). The -1.0 below is a SHAPE — "a bottom slab at -0.5 presents
+                // its top face one full block down" — while MIN_RESOLVED_DY is a REFUSAL. The two
+                // are equal today by coincidence of magnitude only, which is exactly why this
+                // constant must NOT be rewritten to read MIN_RESOLVED_DY: that would move a shape
+                // whenever the cap moved. What does change when the cap deepens is the
+                // unreachability argument above — the BOTTOM arm becomes reachable, correctly, and
+                // nothing here needs editing, but do not re-derive "provably unreachable" from it.
                 double historicalDy = isBottomSlab(cur) ? -1.0 : -0.5;
                 double seatDy = supportSeatDy(world, cursor, depth + 1);
                 if (Double.isFinite(seatDy) && seatDy < historicalDy - 1.0e-6) {
