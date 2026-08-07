@@ -3,6 +3,7 @@ package com.slabbed.test;
 import com.slabbed.compat.CompatHooks;
 import com.slabbed.compat.terrainslabs.TerrainSlabsCompat;
 import com.slabbed.util.SlabSupport;
+import com.slabbed.util.SlabbedOffsetRaycast;
 import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
 import net.fabricmc.fabric.api.client.gametest.v1.context.TestSingleplayerContext;
@@ -943,12 +944,24 @@ public final class TerrainSlabsCustomSurfaceClientGameTest implements FabricClie
     private static RayProbe rayProbeAtY(MinecraftClient mc, BlockPos pos, double targetY) {
         Vec3d eye = new Vec3d(pos.getX() + 0.5d, targetY, pos.getZ() + 2.5d);
         Vec3d end = new Vec3d(pos.getX() + 0.5d, targetY, pos.getZ() - 0.5d);
-        HitResult worldHit = mc.world.raycast(new RaycastContext(
-                eye,
-                end,
-                RaycastContext.ShapeType.OUTLINE,
-                RaycastContext.FluidHandling.NONE,
-                mc.player));
+        // The probe MUST ask the same question the product answers: "aiming at the space where the
+        // block is DRAWN, what do I target?" That is the crosshair pick, and the crosshair pick is
+        // SlabbedOffsetRaycast (ClientPickOffsetRaycastMixin redirects ClientPlayerEntity's block
+        // raycast to it — the single ownership rule).
+        //
+        // It used to call mc.world.raycast(RaycastContext) — RAW vanilla. Vanilla's voxel DDA
+        // marches only the cells the ray's own geometry enters, and this probe rides at
+        // subjectY + expectedVisualMinY + inset, i.e. INSIDE THE CELL BELOW the subject. For a
+        // lowered subject the DDA therefore never visits the subject's own cell and never queries
+        // its (correctly offset) outline shape. SlabbedOffsetRaycast's class doc names this exact
+        // case: "a near-horizontal ray passes only at the offset mid-height and so never enters
+        // the block's logical cell at all". Over a Terrain Slabs BOTTOM surface there is not even
+        // a nearer block to hit — the slab's top face is at +0.5 and the probe rides above it — so
+        // the raw call returned a flat MISS and resolveLoweredVisibleOwner (which can only retarget
+        // UP from a hit it already has) had nothing to work with. Every lowered subject over a
+        // BOTTOM_LIKE support failed `lowered_visible_target_mismatch` for that reason alone,
+        // measuring vanilla's DDA rather than Slabbed's targeting.
+        HitResult worldHit = SlabbedOffsetRaycast.raycast(mc.world, eye, end, ShapeContext.of(mc.player));
         return new RayProbe(worldHit, resolveLoweredVisibleOwner(mc, worldHit, eye, end));
     }
 
@@ -1127,9 +1140,13 @@ public final class TerrainSlabsCustomSurfaceClientGameTest implements FabricClie
                 // now lower onto a BOTTOM_LIKE surface like every other placed object — Maintainer's law
                 // "everything should be able to lower; no exceptions". They were reclassified off
                 // the thinLayer row (which suppressed the dy / direct-custom / target assertions)
-                // to lowProfileLowering, which is the identical row with thinLayer=false. The
-                // remaining thinLayer rows are ENVIRONMENT-DEPOSITED fill only (snow), per
-                // SlabSupport.isEnvironmentDepositedSurfaceFill.
+                // to lowProfileLowering, which is the identical row with thinLayer=false.
+                //
+                // 2026-08-06, second ruling: snow lost its exclusion too, so NO row in this matrix
+                // is a thinLayer row any more and the MatrixSubjectCase.thinLayer factory is now
+                // unused. Left in place deliberately — this is a fabric-client-gametest that does
+                // not run in this pass, so gutting its row vocabulary here would be an unverified
+                // edit. Maintainer: "everything should be able to lower; no exceptions".
                 // NOT EXECUTED this pass: this is a fabric-client-gametest, outside runGameTest.
                 // The dy half is proven headlessly by
                 // ThinTopLayerLoweringTest#carpetOnTerrainSlabsSurfaceSeatsOnItsTopFace.
