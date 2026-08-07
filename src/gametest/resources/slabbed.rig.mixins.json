@@ -1,0 +1,12 @@
+{
+  "required": true,
+  "package": "com.slabbed.mixin",
+  "compatibilityLevel": "JAVA_21",
+  "mixins": [
+    "PaintingRigDropCaptureMixin"
+  ],
+  "client": [],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

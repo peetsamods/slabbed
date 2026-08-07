@@ -23,8 +23,6 @@ public final class SlabbedClient implements ClientModInitializer {
         SlabAnchorClientSync.init();
         initRuntimeDiagnostics("initBsFbLiveTraceClient", "BS/FB live trace client",
                 Boolean.getBoolean("slabbed.bsfb.live.trace"));
-        initGapFillerOverlay();
-        initScreenshotCaptureService();
         initDyFingerprintDump();
         BetaNoticeClient.init();
     }
@@ -44,23 +42,12 @@ public final class SlabbedClient implements ClientModInitializer {
         invokeStaticNoArg("com.slabbed.util.RuntimeDiagnostics", methodName, label);
     }
 
-    private static void initGapFillerOverlay() {
-        if (!SlabbedClientFlags.GAP_FILL) {
-            return;
-        }
-        invokeStaticInit(
-                "com.slabbed.client.GapFillerOverlay",
-                "gap filler overlay");
-    }
-
-    private static void initScreenshotCaptureService() {
-        if (!FabricLoader.getInstance().isDevelopmentEnvironment()) {
-            return;
-        }
-        invokeStaticInit(
-                "com.slabbed.client.ScreenshotCaptureService",
-                "screenshot capture service");
-    }
+    // The ScreenshotCaptureService and GapFillerOverlay reflective hooks were removed by the
+    // release-allowlist ruling: both target classes are compile-excluded from the client source set
+    // on this line (build.gradle sourceSets.client excludes), so Class.forName could NEVER succeed —
+    // the hooks were permanently dangling and only logged a warning. GapFillerOverlay's removal also
+    // lets SlabbedClientFlags (whose only member fed that hook) leave the release artifacts without
+    // stranding a getstatic on a missing class.
 
     private static void invokeStaticInit(String className, String label) {
         invokeStaticNoArg(className, "init", label);
