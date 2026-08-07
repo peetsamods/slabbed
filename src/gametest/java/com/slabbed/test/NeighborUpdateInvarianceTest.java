@@ -114,10 +114,10 @@ public final class NeighborUpdateInvarianceTest {
 
     private static void placeStack(TestContext ctx, ItemStack stack, BlockPos clicked, Direction face, double yNudge) {
         ServerWorld world = ctx.getWorld();
-        PlayerEntity player = UseOnCombineVsExtendPlacementTest.mockPlayerHolding(ctx, clicked.up(3), stack);
+        PlayerEntity player = PlacementHarness.mockPlayerHolding(ctx, clicked.up(3), stack);
         Vec3d hit = Vec3d.ofCenter(clicked)
                 .add(face.getOffsetX() * 0.5, face.getOffsetY() * 0.5 + yNudge, face.getOffsetZ() * 0.5);
-        UseOnCombineVsExtendPlacementTest.useHeldItem(world, player, clicked, face, hit);
+        PlacementHarness.useHeldItem(world, player, clicked, face, hit);
     }
 
     private static double dy(ServerWorld w, BlockPos p) {

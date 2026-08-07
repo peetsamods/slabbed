@@ -2,6 +2,13 @@ package com.slabbed.test;
 
 import com.slabbed.anchor.SlabAnchorAttachment;
 import com.slabbed.util.SlabSupport;
+
+import static com.slabbed.test.PlacementHarness.describe;
+import static com.slabbed.test.PlacementHarness.mockPlayerHolding;
+import static com.slabbed.test.PlacementHarness.mockSlabPlayer;
+import static com.slabbed.test.PlacementHarness.row;
+import static com.slabbed.test.PlacementHarness.useHeldItem;
+import static com.slabbed.test.PlacementHarness.useHeldOakSlab;
 import net.fabricmc.fabric.api.gametest.v1.GameTest;
 import net.minecraft.block.Block;
 import net.minecraft.block.BlockState;
@@ -10,16 +17,12 @@ import net.minecraft.block.SlabBlock;
 import net.minecraft.block.enums.SlabType;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.item.ItemStack;
-import net.minecraft.item.ItemUsageContext;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.test.TestContext;
 import net.minecraft.util.ActionResult;
-import net.minecraft.util.Hand;
-import net.minecraft.util.hit.BlockHitResult;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Direction;
 import net.minecraft.util.math.Vec3d;
-import net.minecraft.world.GameMode;
 
 /**
  * Placement-path (REAL {@code useOn}) coverage for the slab combine-vs-extend decision on
@@ -63,56 +66,8 @@ import net.minecraft.world.GameMode;
  */
 public final class UseOnCombineVsExtendPlacementTest {
 
-    // ── headless useOn harness (package-visible: the unregistered RED -1.0 cell
-    //    in UseOnMinusOneLoweredCombineVsExtendRedTest reuses it) ───────────
-    static PlayerEntity mockSlabPlayer(TestContext ctx, BlockPos standAbs) {
-        PlayerEntity player = ctx.createMockPlayer(GameMode.SURVIVAL);
-        player.refreshPositionAndAngles(standAbs.getX() + 0.5, standAbs.getY(), standAbs.getZ() + 0.5, 0.0f, 0.0f);
-        player.setStackInHand(Hand.MAIN_HAND, new ItemStack(Blocks.OAK_SLAB.asItem(), 16));
-        return player;
-    }
-
-    /** Fires the REAL useOn chain (BlockItem.useOnBlock → intent mixin → canReplace → place). */
-    static ActionResult useHeldOakSlab(ServerWorld world, PlayerEntity player,
-                                       BlockPos clickAbs, Direction face, Vec3d hitAbs) {
-        ItemStack held = player.getStackInHand(Hand.MAIN_HAND);
-        BlockHitResult hit = new BlockHitResult(hitAbs, face, clickAbs, false);
-        return held.useOnBlock(new ItemUsageContext(world, player, Hand.MAIN_HAND, held, hit));
-    }
-
-    // ── GH #57 lane harness: mock player holding an arbitrary item (stone, for the
-    //    "block on top of a lowered slab support" placement rows below), and a thin
-    //    alias for useHeldOakSlab that names its intent honestly — the underlying
-    //    method is item-agnostic (it just fires whatever is in Hand.MAIN_HAND) but
-    //    keeping useHeldOakSlab's name intact avoids touching the other test files
-    //    that already call it by that name. ─────────────────────────────────────
-    static PlayerEntity mockPlayerHolding(TestContext ctx, BlockPos standAbs, ItemStack stack) {
-        PlayerEntity player = ctx.createMockPlayer(GameMode.SURVIVAL);
-        player.refreshPositionAndAngles(standAbs.getX() + 0.5, standAbs.getY(), standAbs.getZ() + 0.5, 0.0f, 0.0f);
-        player.setStackInHand(Hand.MAIN_HAND, stack);
-        return player;
-    }
-
-    static ActionResult useHeldItem(ServerWorld world, PlayerEntity player,
-                                     BlockPos clickAbs, Direction face, Vec3d hitAbs) {
-        return useHeldOakSlab(world, player, clickAbs, face, hitAbs);
-    }
-
-    static String describe(ServerWorld world, BlockPos pos) {
-        BlockState s = world.getBlockState(pos);
-        String base = s.getBlock().toString();
-        if (s.contains(SlabBlock.TYPE)) {
-            base += "[" + s.get(SlabBlock.TYPE) + "]";
-        }
-        return base + " dy=" + SlabSupport.getYOffset(world, pos, s);
-    }
-
-    static void row(String cfg, ServerWorld world, BlockPos clicked, BlockPos side, ActionResult result) {
-        System.out.println("[USEON] " + cfg
-                + " | clicked=" + describe(world, clicked)
-                + " | side=" + describe(world, side)
-                + " | result=" + result);
-    }
+    // The headless useOn harness lives in PlacementHarness (extracted from here 2026-08-07;
+    // four other suites consume it). Static-imported below.
 
     // ── control: honest combine gesture on a FLAT slab still combines ────
     // Bottom slab on solid ground (dy 0.0), slab item, click the slab's top face centrally.

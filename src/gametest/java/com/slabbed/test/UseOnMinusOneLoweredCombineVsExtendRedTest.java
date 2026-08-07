@@ -89,15 +89,15 @@ public final class UseOnMinusOneLoweredCombineVsExtendRedTest {
         ctx.assertTrue(world.getBlockState(extendCell).isAir(),
                 "fixture: the extend target cell west of the -1.0 slab must start as air");
 
-        PlayerEntity player = UseOnCombineVsExtendPlacementTest.mockSlabPlayer(ctx, top.west(3));
+        PlayerEntity player = PlacementHarness.mockSlabPlayer(ctx, top.west(3));
         // Visible span is [Y-0.5, Y]; hit its upper region: absolute Y - 0.1 → raw fraction
         // -0.1 (vanilla reads "lower half" → combine), dy-corrected fraction 0.9 (visible
         // upper half → extend intent). BlockHitResult still targets the slab's own cell,
         // exactly as the offset-aware raycast resolves side hits on lowered visuals.
         Vec3d hit = new Vec3d(top.getX(), top.getY() - 0.1, top.getZ() + 0.5);
-        ActionResult result = UseOnCombineVsExtendPlacementTest.useHeldOakSlab(
+        ActionResult result = PlacementHarness.useHeldOakSlab(
                 world, player, top, Direction.WEST, hit);
-        UseOnCombineVsExtendPlacementTest.row("minusOne.loweredTopSlab.sideClick", world, top, extendCell, result);
+        PlacementHarness.row("minusOne.loweredTopSlab.sideClick", world, top, extendCell, result);
 
         ctx.assertTrue(result.isAccepted(),
                 "-1.0 lane: useOn on the -1.0 slab's visible west face must place, got " + result);
@@ -106,11 +106,11 @@ public final class UseOnMinusOneLoweredCombineVsExtendRedTest {
                 "-1.0 lane: the -1.0-lowered TOP slab must NOT combine into a DOUBLE on a visible "
                         + "side click (WYSIWYG extend intent; intent-mixin gate is == -0.5 so the "
                         + "raw-fraction misdecision persists here), got "
-                        + UseOnCombineVsExtendPlacementTest.describe(world, top));
+                        + PlacementHarness.describe(world, top));
         BlockState extended = world.getBlockState(extendCell);
         ctx.assertTrue(extended.isOf(Blocks.OAK_SLAB),
                 "-1.0 lane: the adjacent cell must gain the extended slab, got "
-                        + UseOnCombineVsExtendPlacementTest.describe(world, extendCell));
+                        + PlacementHarness.describe(world, extendCell));
         ctx.complete();
     }
 }

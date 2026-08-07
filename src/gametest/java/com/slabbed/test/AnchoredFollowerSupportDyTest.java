@@ -631,11 +631,11 @@ public final class AnchoredFollowerSupportDyTest {
     /** This line's real headless placement harness, shared with {@code NeighborUpdateInvarianceTest}. */
     private static void useOn(TestContext ctx, Item item, BlockPos clicked, Direction face, double yNudge) {
         ServerWorld world = ctx.getWorld();
-        PlayerEntity player = UseOnCombineVsExtendPlacementTest.mockPlayerHolding(
+        PlayerEntity player = PlacementHarness.mockPlayerHolding(
                 ctx, clicked.up(3), new ItemStack(item));
         Vec3d hit = Vec3d.ofCenter(clicked)
                 .add(face.getOffsetX() * 0.5, face.getOffsetY() * 0.5 + yNudge, face.getOffsetZ() * 0.5);
-        UseOnCombineVsExtendPlacementTest.useHeldItem(world, player, clicked, face, hit);
+        PlacementHarness.useHeldItem(world, player, clicked, face, hit);
     }
 
     /**

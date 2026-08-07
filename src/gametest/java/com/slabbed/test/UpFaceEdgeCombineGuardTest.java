@@ -72,25 +72,25 @@ public final class UpFaceEdgeCombineGuardTest {
         world.setBlockState(neighbor, Blocks.OAK_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.TOP),
                 Block.NOTIFY_LISTENERS);
 
-        PlayerEntity player = UseOnCombineVsExtendPlacementTest.mockSlabPlayer(ctx, top.west(3));
+        PlayerEntity player = PlacementHarness.mockSlabPlayer(ctx, top.west(3));
         // TOP face (side=UP) near the WEST edge (localX=0.05 <= the 0.20 edge band), on the
         // slab's VISIBLE lowered top surface (world Y = top.getY() + 0.5).
         Vec3d edgeHit = new Vec3d(top.getX() + 0.05, top.getY() + 0.5, top.getZ() + 0.5);
-        ActionResult result = UseOnCombineVsExtendPlacementTest.useHeldOakSlab(
+        ActionResult result = PlacementHarness.useHeldOakSlab(
                 world, player, top, Direction.UP, edgeHit);
         System.out.println("[USEON] upFaceEdge.occupiedNeighbor | clicked="
-                + UseOnCombineVsExtendPlacementTest.describe(world, top) + " | neighbor="
-                + UseOnCombineVsExtendPlacementTest.describe(world, neighbor) + " | result=" + result);
+                + PlacementHarness.describe(world, top) + " | neighbor="
+                + PlacementHarness.describe(world, neighbor) + " | result=" + result);
 
         BlockState neighborAfter = world.getBlockState(neighbor);
         ctx.assertTrue(!(neighborAfter.contains(SlabBlock.TYPE) && neighborAfter.get(SlabBlock.TYPE) == SlabType.DOUBLE),
                 "the up-face-edge inference must NOT silently combine an unrelated pre-existing "
                         + "neighbour slab into a DOUBLE (live 'gap + ghost-face DODO' bug); got "
-                        + UseOnCombineVsExtendPlacementTest.describe(world, neighbor));
+                        + PlacementHarness.describe(world, neighbor));
         BlockState clickedAfter = world.getBlockState(top);
         ctx.assertTrue(!(clickedAfter.contains(SlabBlock.TYPE) && clickedAfter.get(SlabBlock.TYPE) == SlabType.DOUBLE),
                 "the originally-clicked lowered slab must also not silently combine; got "
-                        + UseOnCombineVsExtendPlacementTest.describe(world, top));
+                        + PlacementHarness.describe(world, top));
         ctx.complete();
     }
 
@@ -122,23 +122,23 @@ public final class UpFaceEdgeCombineGuardTest {
         ctx.assertTrue(world.getBlockState(neighbor).isAir(),
                 "fixture: the west neighbour must start EMPTY (isolates this from the occupied-neighbour case)");
 
-        PlayerEntity player = UseOnCombineVsExtendPlacementTest.mockSlabPlayer(ctx, top.west(3));
+        PlayerEntity player = PlacementHarness.mockSlabPlayer(ctx, top.west(3));
         // Exact-boundary edge hit (localX=0.05, y = the visible lowered top surface exactly):
         // forces the BOTTOM-intent branch of the remap, which — for an existing TYPE=TOP target
         // clicked from a horizontal side — satisfies vanilla's own combine condition directly.
         Vec3d edgeHit = new Vec3d(top.getX() + 0.05, top.getY() + 0.5, top.getZ() + 0.5);
-        ActionResult result = UseOnCombineVsExtendPlacementTest.useHeldOakSlab(
+        ActionResult result = PlacementHarness.useHeldOakSlab(
                 world, player, top, Direction.UP, edgeHit);
         System.out.println("[USEON] upFaceEdge.emptyNeighbor | clicked="
-                + UseOnCombineVsExtendPlacementTest.describe(world, top) + " | neighbor="
-                + UseOnCombineVsExtendPlacementTest.describe(world, neighbor) + " | result=" + result);
+                + PlacementHarness.describe(world, top) + " | neighbor="
+                + PlacementHarness.describe(world, neighbor) + " | result=" + result);
 
         BlockState clickedAfter = world.getBlockState(top);
         ctx.assertTrue(!(clickedAfter.contains(SlabBlock.TYPE) && clickedAfter.get(SlabBlock.TYPE) == SlabType.DOUBLE),
                 "the up-face-edge inference must NOT combine the CLICKED slab itself even when "
                         + "the inferred neighbour is empty (live 'placed under instead of on top' "
                         + "bug — a9 in the recorder trace); got "
-                        + UseOnCombineVsExtendPlacementTest.describe(world, top));
+                        + PlacementHarness.describe(world, top));
         ctx.complete();
     }
 
@@ -156,19 +156,19 @@ public final class UpFaceEdgeCombineGuardTest {
         world.setBlockState(slab, Blocks.OAK_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.BOTTOM),
                 Block.NOTIFY_LISTENERS);
 
-        PlayerEntity player = UseOnCombineVsExtendPlacementTest.mockSlabPlayer(ctx, slab.north(3));
+        PlayerEntity player = PlacementHarness.mockSlabPlayer(ctx, slab.north(3));
         // Literal horizontal (north) face click, upper-half fraction (bl=true per vanilla's
         // own canReplace: BOTTOM + horizontal + bl combines IN PLACE) — a genuine vanilla
         // combine gesture, unrelated to the up-face-edge (side=UP) inference path.
         Vec3d hit = new Vec3d(slab.getX() + 0.5, slab.getY() + 0.75, slab.getZ());
-        ActionResult result = UseOnCombineVsExtendPlacementTest.useHeldOakSlab(
+        ActionResult result = PlacementHarness.useHeldOakSlab(
                 world, player, slab, Direction.NORTH, hit);
         ctx.assertTrue(result.isAccepted(), "literal horizontal-face click must place, got " + result);
         BlockState after = world.getBlockState(slab);
         ctx.assertTrue(after.get(SlabBlock.TYPE) == SlabType.DOUBLE,
                 "a literal horizontal click against a BOTTOM slab at a lower-half fraction must "
                         + "still combine to DOUBLE (unaffected by the up-face-edge guard); got "
-                        + UseOnCombineVsExtendPlacementTest.describe(world, slab));
+                        + PlacementHarness.describe(world, slab));
         ctx.complete();
     }
 }
