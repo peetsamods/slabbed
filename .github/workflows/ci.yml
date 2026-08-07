@@ -46,5 +46,23 @@ jobs:
             exit 1
           fi
 
-      - name: Build and run server GameTests
+      # Both legs finalize with :verifyGameTestCount (build.gradle), which fails the build if the
+      # reported test count differs from tools/expected-gametest-count.py — the stale-run-dir
+      # false-green class is machine-gated, not a manual step.
+      - name: Build and run server GameTests (default leg)
         run: ./gradlew --no-daemon --stacktrace --console=plain build runGameTest
+
+      - name: Run server GameTests (deep dy alphabet leg)
+        run: |
+          rm -rf build/run/gameTest
+          ./gradlew --no-daemon --stacktrace --console=plain runGameTest -Dslabbed.deepDyAlphabet=true
+
+      - name: Upload gametest logs on failure
+        if: failure()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        with:
+          name: gametest-logs
+          path: |
+            build/run/gameTest/logs/
+          if-no-files-found: ignore
+          retention-days: 7
