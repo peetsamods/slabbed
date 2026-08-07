@@ -1,4 +1,4 @@
-package com.slabbed.mixin;
+package com.slabbed.mixin.recorder;
 
 import com.slabbed.Slabbed;
 import com.slabbed.util.SlabSupport;

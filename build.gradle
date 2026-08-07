@@ -118,46 +118,168 @@ java {
     targetCompatibility = JavaVersion.VERSION_21
 }
 
+// ── Pre-release hygiene gate: ONE exclusion list, BOTH artifacts ──────────────────────────────
+// Exclude dev-only and debug-only content from the public release artifacts.
+//
+// This used to live inline inside `jar { ... }` and nowhere else. `withSourcesJar()` +
+// Loom's `remapSourcesJar` build the sources artifact on a completely separate path with no
+// filter of its own, so every single thing this list excludes from the mod jar was still
+// shipping, in full source form, in slabbed-<version>-sources.jar — including
+// com/slabbed/dev/audit/**, SlabRigCommand.java, and ScreenshotCaptureService.java, which
+// reads and writes the OS system clipboard through java.awt.Toolkit. That is precisely what
+// the note below says the exclusion exists to prevent. Hence one list, parameterised by file
+// extension, applied to `jar` AND `sourcesJar`.
+//
+// com/slabbed/dev/** (top-level only) is intentionally NOT excluded: /slabdy and /slabdev must
+// always ship. /slabdy is a client command registered unconditionally by SlabbedClient — its
+// overlay defaults to off and the command toggles it. /slabdev is a server command registered
+// unconditionally by Slabbed#initShippedDebugCommands, gated at op level 2 (GAMEMASTERS): not
+// player-toggleable, op-invocable, and inert until invoked. That is Maintainer's ruling (2026-08-07)
+// on what "ships in every jar" has to mean — before it, /slabdev was registered only under
+// isDevelopmentEnvironment() and SlabbedDevCommands shipped as unreachable bytes. Its `audit`
+// subcommand reaches the dev-only audit harness reflectively and reports "not available in this
+// build" when that harness is absent, which is the release case.
+//
+// com/slabbed/dev/audit/** IS excluded — the pre-release hygiene gate (Maintainer's standing rule):
+// it's a file-writing dev/test harness (LiveCursorIntentRecorder, CategoryAuditRunner/Report,
+// LoweredSideLiveHitRemapRuntimeAudit, probes), not player-facing UI, and shipping it risks
+// moderation rejection regardless of the credential-redaction fix already applied to it. The 2
+// always-shipped classes that reference it (SlabbedDevCommands, SlabdyClientCommands) go through
+// SlabbedAuditBridge's reflection layer, not a hard import, so they load fine with this package
+// absent.
+//
+// com/slabbed/mixin/recorder/** and com/slabbed/mixin/client/recorder/** are the five mixins that
+// feed that recorder and do nothing else. They are declared in slabbed.recorder(.client).mixins
+// .json, which is NOT referenced from fabric.mod.json and is added only by
+// SlabbedDevMixinBootstrap in a development environment — so they cannot apply to a release build
+// even if a class did survive. Both configs are excluded here too.
+//
+// com/slabbed/command/** IS excluded for the same reason — it is the /slabrig dev scene rig
+// (a live-test structure builder, not player-facing tooling). The 26.2 line shipped /slabrig
+// in its RELEASE JAR and that was logged as a defect; this exclusion is the gate that stops it
+// happening on this line. com/slabbed/util/SlabTestKit goes with it (the rig's item list —
+// dev-only data, referenced by nothing that ships). Slabbed#initDevOnlyFeatures reaches the rig
+// reflectively, so both classes are safe to be absent.
+//
+// BlockStateCanPlaceAtChainDebugMixin has its `package` line commented out along with the rest of
+// the file, so its SOURCE lands at the archive ROOT rather than under com/slabbed/mixin/debug/.
+// A path-prefixed rule misses it. The `**/` form matches zero directories as well as many, so the
+// one pattern covers it at the root today and under its package if it is ever uncommented.
+def slabbedHygieneExcludes = { String ext ->
+    [
+            "com/slabbed/dev/audit/**",
+            "com/slabbed/command/**",
+            "com/slabbed/debug/**",
+            "com/slabbed/client/debug/**",
+            "com/slabbed/mixin/debug/**",
+            "com/slabbed/mixin/recorder/**",
+            "com/slabbed/mixin/client/recorder/**",
+            "com/slabbed/util/SlabTestKit.${ext}",
+            "com/slabbed/util/SlabbedDebug.${ext}",
+            "com/slabbed/dev/SlabbedLab.${ext}",
+            "com/slabbed/dev/SlabbedLabFixtures*.${ext}",
+            "com/slabbed/client/GapFillerOverlay.${ext}",
+            "com/slabbed/client/ScreenshotCaptureContext*.${ext}",
+            "com/slabbed/client/ScreenshotCaptureService*.${ext}",
+            "com/slabbed/client/CaptureProfile.${ext}",
+            "**/BlockStateCanPlaceAtChainDebugMixin.${ext}",
+            "slabbed.debug.mixins.json",
+            "slabbed.recorder.mixins.json",
+            "slabbed.recorder.client.mixins.json",
+    ].collect { it.toString() }
+}
+
 jar {
     from("LICENSE") {
         rename { "${it}_${project.base.archivesName.get()}"}
     }
 
-    // Exclude dev-only and debug-only content from public release jar.
-    // com/slabbed/dev/** (top-level only) is intentionally NOT excluded: /slabdy and
-    // /slabdev's own overlay/toggle commands must always ship (default-off,
-    // player-toggleable via slash command) — see SlabbedDevCommands and
-    // SlabdyClientCommands.
-    //
-    // com/slabbed/dev/audit/** IS excluded — the pre-release hygiene gate (Maintainer's
-    // standing rule): it's a file-writing dev/test harness (LiveCursorIntentRecorder,
-    // CategoryAuditRunner/Report, LoweredSideLiveHitRemapRuntimeAudit, probes), not
-    // player-facing UI, and shipping it risks moderation rejection regardless of the
-    // credential-redaction fix already applied to it. The 2 always-shipped classes that
-    // reference it (SlabbedDevCommands, SlabdyClientCommands) go through
-    // SlabbedAuditBridge's reflection layer, not a hard import, so they load fine with
-    // this package absent.
-    //
-    // com/slabbed/command/** IS excluded for the same reason — it is the /slabrig dev scene rig
-    // (a live-test structure builder, not player-facing tooling). The 26.2 line shipped /slabrig
-    // in its RELEASE JAR and that was logged as a defect; this exclusion is the gate that stops it
-    // happening on this line. com/slabbed/util/SlabTestKit.class goes with it (the rig's item list
-    // — dev-only data, referenced by nothing that ships). Slabbed#initDevFeatures reaches the rig
-    // reflectively, so both classes are safe to be absent.
-    exclude("com/slabbed/dev/audit/**")
-    exclude("com/slabbed/command/**")
-    exclude("com/slabbed/util/SlabTestKit.class")
-    exclude("com/slabbed/dev/SlabbedLab.class")
-    exclude("com/slabbed/dev/SlabbedLabFixtures*.class")
-    exclude("com/slabbed/debug/**")
-    exclude("com/slabbed/client/debug/**")
-    exclude("com/slabbed/mixin/debug/**")
-    exclude("com/slabbed/client/GapFillerOverlay.class")
-    exclude("com/slabbed/client/ScreenshotCaptureContext*.class")
-    exclude("com/slabbed/client/ScreenshotCaptureService*.class")
-    exclude("com/slabbed/client/CaptureProfile.class")
-    exclude("com/slabbed/util/SlabbedDebug.class")
-    exclude("slabbed.debug.mixins.json")
+    exclude(slabbedHygieneExcludes("class"))
+}
+
+tasks.named("sourcesJar", Jar) {
+    exclude(slabbedHygieneExcludes("java"))
+}
+
+// ── Manifest hygiene: never advertise a class the artifact does not contain ───────────────────
+// Loom computes Fabric-Loom-Client-Only-Entries from the CLIENT SOURCE SET OUTPUT, not from the
+// entries that survive into the artifact, and it does so inside AbstractRemapJarTask#submitWork
+// where there is no subtractive hook — getAdditionalClientOnlyEntries() is additive only. So the
+// released manifest named five classes that the exclusion list above had already removed
+// (ScreenshotCaptureService and its inner classes, CaptureProfile, GapFillerOverlay,
+// client/debug/BsFbLiveTraceClient), and the sources manifest named their .java counterparts.
+//
+// Least-bad option, and the one chosen: prune the attribute against the finished archive itself.
+// This is stated as a subtraction of names that are not present, so it cannot remove a real entry,
+// and it cannot go stale — whatever the exclusion list becomes later, the manifest is re-derived
+// from what is actually in the jar. Runs in doLast, so Gradle snapshots the pruned artifact as
+// the task output and up-to-date checking still works.
+def pruneClientOnlyEntriesManifest = { File artifact ->
+    String attribute = "Fabric-Loom-Client-Only-Entries"
+    Map<String, byte[]> contents = new LinkedHashMap<>()
+    Map<String, Long> times = new LinkedHashMap<>()
+    Set<String> directories = new LinkedHashSet<>()
+
+    new java.util.zip.ZipFile(artifact).withCloseable { zip ->
+        for (entry in zip.entries()) {
+            times.put(entry.name, entry.time)
+            if (entry.directory) {
+                directories.add(entry.name)
+                contents.put(entry.name, new byte[0])
+            } else {
+                contents.put(entry.name, zip.getInputStream(entry).bytes)
+            }
+        }
+    }
+
+    byte[] manifestBytes = contents.get("META-INF/MANIFEST.MF")
+    if (manifestBytes == null) {
+        return
+    }
+    def manifest = new java.util.jar.Manifest(new ByteArrayInputStream(manifestBytes))
+    String declared = manifest.mainAttributes.getValue(attribute)
+    if (declared == null || declared.isEmpty()) {
+        return
+    }
+
+    List<String> present = declared.split(";").findAll { contents.containsKey(it) }
+    List<String> missing = declared.split(";").findAll { !contents.containsKey(it) }
+    if (missing.isEmpty()) {
+        return
+    }
+
+    if (present.isEmpty()) {
+        manifest.mainAttributes.remove(new java.util.jar.Attributes.Name(attribute))
+    } else {
+        manifest.mainAttributes.putValue(attribute, present.join(";"))
+    }
+    def rewritten = new ByteArrayOutputStream()
+    manifest.write(rewritten)
+    contents.put("META-INF/MANIFEST.MF", rewritten.toByteArray())
+
+    def rebuilt = new File(artifact.parentFile, artifact.name + ".manifest-pruned")
+    new java.util.zip.ZipOutputStream(new FileOutputStream(rebuilt)).withCloseable { out ->
+        contents.each { name, bytes ->
+            def entry = new java.util.zip.ZipEntry(name)
+            long time = times.get(name)
+            if (time >= 0) {
+                entry.time = time
+            }
+            out.putNextEntry(entry)
+            if (!directories.contains(name)) {
+                out.write(bytes)
+            }
+            out.closeEntry()
+        }
+    }
+    java.nio.file.Files.move(rebuilt.toPath(), artifact.toPath(),
+            java.nio.file.StandardCopyOption.REPLACE_EXISTING)
+    logger.lifecycle("[hygiene] ${artifact.name}: dropped ${missing.size()} " +
+            "${attribute} name(s) with no matching archive entry: ${missing.join(', ')}")
+}
+
+tasks.matching { it.name == "remapJar" || it.name == "remapSourcesJar" }.configureEach {
+    doLast { task -> pruneClientOnlyEntriesManifest(task.archiveFile.get().asFile) }
 }
 
 // configure the maven publication

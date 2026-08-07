@@ -1,0 +1,9 @@
+{
+  "required": false,
+  "package": "com.slabbed.mixin.client.recorder",
+  "compatibilityLevel": "JAVA_21",
+  "client": [
+    "ClientPlayerInteractionRecorderMixin"
+  ],
+  "injectors": { "defaultRequire": 1 }
+}

@@ -1,4 +1,4 @@
-package com.slabbed.mixin;
+package com.slabbed.mixin.recorder;
 
 import com.slabbed.util.SlabbedAuditBridge;
 import net.minecraft.block.BlockState;

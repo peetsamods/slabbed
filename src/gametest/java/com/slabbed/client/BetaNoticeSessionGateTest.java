@@ -57,6 +57,48 @@ public final class BetaNoticeSessionGateTest {
         ctx.complete();
     }
 
+    // THE SECOND BUG (Maintainer, 2026-08-07): mod_version reached 0.5.1 — no beta qualifier at all —
+    // and "Slabbed is in beta" still fired on every world join. The fix is a predicate over the
+    // version string rather than a hand-maintained switch, so it cannot drift again in EITHER
+    // direction: a future 0.6.0-alpha.1 must still show the notice.
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void aVersionWithNoQualifierDoesNotShowTheBetaNotice(TestContext ctx) {
+        ctx.assertTrue(!BetaNoticeSessionGate.isAlphaOrBetaVersion("0.5.1"),
+                "0.5.1 is not a beta build and must not claim to be one — this is the reported bug");
+        ctx.assertTrue(!BetaNoticeSessionGate.isAlphaOrBetaVersion("0.6.0"),
+                "a plain release version must not show the notice");
+        ctx.assertTrue(!BetaNoticeSessionGate.isAlphaOrBetaVersion("0.5.1+1.21.11"),
+                "build metadata after '+' is not a pre-release qualifier");
+        ctx.assertTrue(!BetaNoticeSessionGate.isAlphaOrBetaVersion("0.5.1+beta-build"),
+                "a 'beta' inside BUILD metadata must not fake a qualifier — the qualifier is the "
+                        + "semver pre-release field, everything after the first '-' and before '+'");
+        ctx.assertTrue(!BetaNoticeSessionGate.isAlphaOrBetaVersion(null),
+                "an unresolvable version must fail silent, not fail loud");
+        ctx.complete();
+    }
+
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void alphaAndBetaQualifiersStillShowTheBetaNotice(TestContext ctx) {
+        ctx.assertTrue(BetaNoticeSessionGate.isAlphaOrBetaVersion("0.5.0-beta.8"),
+                "the version this line last shipped a notice on must still show it");
+        ctx.assertTrue(BetaNoticeSessionGate.isAlphaOrBetaVersion("0.6.0-alpha.1"),
+                "THE OTHER DIRECTION: the next planned alpha must still show the notice — "
+                        + "deleting the notice outright was explicitly rejected");
+        ctx.assertTrue(BetaNoticeSessionGate.isAlphaOrBetaVersion("1.0.0-BETA"),
+                "the qualifier check is case-insensitive");
+        ctx.complete();
+    }
+
+    // A release candidate is not "in beta", and the notice's text says exactly that. Pinned so
+    // that widening the predicate has to be a deliberate edit to the notice text as well.
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void aReleaseCandidateDoesNotShowTheBetaNotice(TestContext ctx) {
+        ctx.assertTrue(!BetaNoticeSessionGate.isAlphaOrBetaVersion("0.6.0-rc.1"),
+                "'rc' is deliberately not a beta qualifier — change the notice text before "
+                        + "widening this");
+        ctx.complete();
+    }
+
     @GameTest(structure = "fabric-gametest-api-v1:empty")
     public void nullKeyBucketIsCappedSeparatelyFromRealKeys(TestContext ctx) {
         BetaNoticeSessionGate.resetForTest();

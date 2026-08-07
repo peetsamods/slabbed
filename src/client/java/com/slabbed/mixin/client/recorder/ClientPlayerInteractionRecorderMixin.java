@@ -1,4 +1,4 @@
-package com.slabbed.mixin.client;
+package com.slabbed.mixin.client.recorder;
 
 import com.slabbed.util.SlabbedAuditBridge;
 import net.minecraft.client.network.ClientPlayerEntity;

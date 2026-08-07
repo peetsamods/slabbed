@@ -16,13 +16,35 @@ public class Slabbed implements ModInitializer {
         LOGGER.info("Slabbed initialized");
         com.slabbed.anchor.SlabAnchorAttachment.register();
         com.slabbed.util.SlabbedAuditBridge.bootstrapLiveRecorder();
+        initShippedDebugCommands();
         if (FabricLoader.getInstance().isDevelopmentEnvironment()) {
-            initDevFeatures();
+            initDevOnlyFeatures();
         }
     }
 
-    private static void initDevFeatures() {
+    /**
+     * Ships in EVERY jar, default off — the standing rule, and Maintainer's ruling (2026-08-07) that
+     * "ships" has to mean an op can actually invoke it on a release build, not that the bytes are
+     * present but unreachable. This used to sit inside {@link #initDevOnlyFeatures()} behind
+     * {@code isDevelopmentEnvironment()}, so {@code SlabbedDevCommands} shipped as dead weight.
+     *
+     * <p>Registering it costs one Brigadier node at server start. {@code /slabdev} is gated at
+     * op level 2 (GAMEMASTERS), installs no tick hook, writes nothing to the world save, and does
+     * nothing at all until someone types it — the same shape {@code /slabdy} already has on the
+     * client. Its {@code audit} subcommand reaches the dev-only audit harness reflectively and
+     * reports "not available in this build" when that harness is absent, which is the release case.
+     */
+    private static void initShippedDebugCommands() {
         registerDevHook("com.slabbed.dev.SlabbedDevCommands", "register");
+    }
+
+    /**
+     * Dev-environment only, and deliberately so. {@code /slabrig} is a live-test scene builder and
+     * {@code SlabbedLab} is a fixture harness; both are excluded from the release jar by
+     * build.gradle's pre-release hygiene gate, and the 26.2 line shipping {@code /slabrig} in a
+     * release jar was logged as a defect. These do NOT follow {@code /slabdev} out of the gate.
+     */
+    private static void initDevOnlyFeatures() {
         registerDevHook("com.slabbed.dev.SlabbedLab", "register");
         registerDevHook("com.slabbed.command.SlabRigCommand", "register");
     }

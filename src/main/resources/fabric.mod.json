@@ -6,6 +6,9 @@
   "license": "GPL-3.0-only",
   "environment": "*",
   "entrypoints": {
+    "preLaunch": [
+      "com.slabbed.SlabbedDevMixinBootstrap"
+    ],
     "main": [
       "com.slabbed.Slabbed"
     ],

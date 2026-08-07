@@ -99,7 +99,7 @@ import static net.minecraft.server.command.CommandManager.literal;
  *
  * <p>DEV-ONLY: this whole package is excluded from the release jar (build.gradle's pre-release
  * hygiene gate). The 26.2 line shipped {@code /slabrig} in a release jar and that was logged as a
- * defect; do not reference this class from any shipping code path — {@code Slabbed#initDevFeatures}
+ * defect; do not reference this class from any shipping code path — {@code Slabbed#initDevOnlyFeatures}
  * reaches it reflectively and degrades to a warning when it is absent.
  */
 public final class SlabRigCommand {
@@ -1008,7 +1008,7 @@ public final class SlabRigCommand {
 
     // -------------------------------------------------------------------------
     // Command registration — mirrors SlabbedDevCommands / SlabbedLab (op level GAMEMASTERS,
-    // dev-environment-gated by Slabbed#initDevFeatures).
+    // dev-environment-gated by Slabbed#initDevOnlyFeatures).
     // -------------------------------------------------------------------------
 
     public static void register() {

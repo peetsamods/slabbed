@@ -7,7 +7,6 @@
     "BlockRenderInfoCullMixin",
     "CarpetDyShapeMixin",
     "ClientPickOffsetRaycastMixin",
-    "ClientPlayerInteractionRecorderMixin",
     "ItemFrameRenderOffsetMixin",
     "MinecartRenderOffsetMixin",
     "SlabbedDependentRerenderMixin"

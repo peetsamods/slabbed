@@ -130,6 +130,101 @@ public final class SlabdyRecorderToggleTest {
         ctx.complete();
     }
 
+    /**
+     * The recorder's five mixins were moved OUT of slabbed.mixins.json / slabbed.client.mixins.json
+     * and into slabbed.recorder(.client).mixins.json, which fabric.mod.json does not reference and
+     * which build.gradle excludes from both release artifacts. They are added at preLaunch by
+     * SlabbedDevMixinBootstrap, and only in a development environment. That is exactly the kind of
+     * arrangement that silently stops working: nothing here is {@code required}, every call site is
+     * {@code require = 0}, and the recorder would simply go quiet rather than fail loudly.
+     *
+     * <p>So this pins the dev half of the arrangement: the config is registered with Mixin, AND its
+     * handler really was merged into the vanilla target. The release half is not testable from here
+     * (gametests only ever run in a development environment) and is proved by enumerating the
+     * artifacts instead.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void recorderMixinsStillApplyInTheDevEnvironment(TestContext ctx) {
+        // Asserted against the TARGET CLASSES, not against Mixin's config registry: Mixin removes
+        // a config from Mixins.getConfigs() the moment it is selected for an environment, so by
+        // the time a gametest runs that set is empty and a registry check reads as a false RED.
+        // The merged handler is the real proof anyway — a config that registered but selected
+        // nothing would leave the recorder just as blind.
+        //
+        // Substring, not exact name, so Mixin's own handler renaming (it prefixes conflicting
+        // private members) cannot read as a regression.
+        assertHandlerMerged(ctx,
+                net.minecraft.network.packet.c2s.play.PlayerInteractBlockC2SPacket.class,
+                "recordPacketSequence",
+                "PlayerInteractBlockPacketRecorderMixin");
+        assertHandlerMerged(ctx,
+                net.minecraft.server.network.ServerPlayNetworkHandler.class,
+                "recordServerInteract",
+                "ServerPlayNetworkHandlerRecorderMixin");
+        assertHandlerMerged(ctx,
+                net.minecraft.item.BlockItem.class,
+                "tracePlaceHead",
+                "BlockItemPlaceTraceMixin");
+
+        // The CLIENT half cannot be exercised here — runGameTest is a dedicated server, so
+        // SlabbedDevMixinBootstrap never takes its EnvType.CLIENT branch and
+        // ClientPlayerInteractionRecorderMixin never applies. What CAN be closed from here is the
+        // way that half realistically breaks: a config filename or a mixin class name that no
+        // longer resolves, which fails silently because both configs are "required": false and
+        // every call site is require = 0. So both configs are read off the classpath under the
+        // exact names the bootstrap asks for, and every class they name is resolved.
+        assertConfigResolves(ctx, "slabbed.recorder.mixins.json");
+        assertConfigResolves(ctx, "slabbed.recorder.client.mixins.json");
+        ctx.complete();
+    }
+
+    private static void assertConfigResolves(TestContext ctx, String config) {
+        var url = SlabdyRecorderToggleTest.class.getClassLoader().getResource(config);
+        ctx.assertTrue(url != null,
+                config + " must be on the classpath under exactly this name — it is the string "
+                        + "SlabbedDevMixinBootstrap passes to Mixins.addConfiguration, and a "
+                        + "mismatch just silently turns the recorder off");
+
+        com.google.gson.JsonObject json;
+        try (var in = SlabdyRecorderToggleTest.class.getClassLoader().getResourceAsStream(config)) {
+            json = com.google.gson.JsonParser.parseReader(
+                    new java.io.InputStreamReader(in, java.nio.charset.StandardCharsets.UTF_8))
+                    .getAsJsonObject();
+        } catch (IOException e) {
+            throw new AssertionError("could not read " + config, e);
+        }
+
+        String pkg = json.get("package").getAsString();
+        for (String key : new String[]{"mixins", "client", "server"}) {
+            if (!json.has(key)) {
+                continue;
+            }
+            for (var element : json.getAsJsonArray(key)) {
+                String fqcn = pkg + "." + element.getAsString();
+                // Resolved as a RESOURCE, never Class.forName: loading a mixin class directly is
+                // exactly what Mixin's transformer refuses to do, and the attempt aborts the run
+                // rather than answering the question.
+                String resource = fqcn.replace('.', '/') + ".class";
+                ctx.assertTrue(
+                        SlabdyRecorderToggleTest.class.getClassLoader().getResource(resource) != null,
+                        config + " names " + fqcn + " but " + resource + " is not on the classpath "
+                                + "— a config that selects nothing leaves the recorder blind "
+                                + "without failing anything");
+            }
+        }
+    }
+
+    private static void assertHandlerMerged(TestContext ctx, Class<?> target, String handler, String mixin) {
+        var declared = java.util.Arrays.stream(target.getDeclaredMethods())
+                .map(java.lang.reflect.Method::getName)
+                .toList();
+        ctx.assertTrue(declared.stream().anyMatch(name -> name.contains(handler)),
+                mixin + "'s handler (" + handler + ") must be merged into " + target.getSimpleName()
+                        + " — SlabbedDevMixinBootstrap's preLaunch hook is the only thing that arms "
+                        + "slabbed.recorder.mixins.json, and without it the live-cursor recorder "
+                        + "records nothing at all. Declared methods were: " + declared);
+    }
+
     private static long countVisualDiagnosticSuspects(Path sessionPath) throws IOException {
         if (!Files.exists(sessionPath)) {
             return 0;

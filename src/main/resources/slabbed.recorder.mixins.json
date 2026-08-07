@@ -1,0 +1,13 @@
+{
+  "required": false,
+  "package": "com.slabbed.mixin.recorder",
+  "compatibilityLevel": "JAVA_21",
+  "mixins": [
+    "BlockItemPlaceTraceMixin",
+    "PlayerInteractBlockPacketRecorderMixin",
+    "ServerPlayNetworkHandlerRecorderMixin",
+    "SlabBlockPlacementRecorderMixin"
+  ],
+  "client": [],
+  "injectors": { "defaultRequire": 1 }
+}
