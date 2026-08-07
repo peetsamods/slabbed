@@ -58,6 +58,13 @@ tasks.matching { it.name == "runGameTest" }.configureEach {
                     .map { v -> ["-Dslabbed.deepDyAlphabet=" + v] }
                     .orElse([])
     )
+    // Arms the RED_PENDING_RULING rows (documented open gaps that FAIL by design when armed).
+    // Same forwarding problem as the flags above: a daemon -D never reaches the forked JVM.
+    jvmArguments.addAll(
+            providers.systemProperty("slabbed.redCells")
+                    .map { v -> ["-Dslabbed.redCells=" + v] }
+                    .orElse([])
+    )
     finalizedBy("verifyGameTestCount")
 }
 

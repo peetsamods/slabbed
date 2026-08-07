@@ -16,6 +16,8 @@ import net.minecraft.block.Blocks;
 import net.minecraft.block.SlabBlock;
 import net.minecraft.block.enums.SlabType;
 import net.minecraft.entity.player.PlayerEntity;
+import net.minecraft.registry.Registries;
+import net.minecraft.util.Identifier;
 import net.minecraft.item.ItemStack;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.test.TestContext;
@@ -61,10 +63,11 @@ import net.minecraft.util.math.Vec3d;
  * <p>The -1.0 lane (vanilla TOP slab on a Terrain Slabs bottom, visual dy = -1.0, see
  * {@code OffsetRaycastTargetingTest#vanillaTopSlabOnTerrainLowersFull}) is intentionally NOT
  * here: the intent-mixin gate is {@code getVisualYOffset == -0.5d} exactly, so the raw-fraction
- * misdecision persists there and the cell is RED on HEAD. It lives UNREGISTERED in
- * {@link UseOnMinusOneLoweredCombineVsExtendRedTest} until the maintainer rules on the -1.0 gate fix.
+ * misdecision persists there and the cell is RED on HEAD. It lives below as a RED_PENDING_RULING row,
+ * skipped unless armed with {@code -Dslabbed.redCells=true}, until the maintainer rules on the
+ * -1.0 gate fix (widen the intent-mixin gate vs port the dy-corrected canReplace fraction).
  */
-public final class UseOnCombineVsExtendPlacementTest {
+public final class UseOnPlacementSuite {
 
     // The headless useOn harness lives in PlacementHarness (extracted from here 2026-08-07;
     // four other suites consume it). Static-imported below.
@@ -340,6 +343,84 @@ public final class UseOnCombineVsExtendPlacementTest {
                         + "lowered-looking support is anchored=" + anchored + " (dy=" + dy + ") — "
                         + "qualifiesForColumnLoweredAnchor's unbounded-through-solids column walk "
                         + "found the bottom slab beneath the unanchored dirt and anchored it anyway");
+        ctx.complete();
+    }
+
+    // ═══ RED_PENDING_RULING: the -1.0 combine-vs-extend lane ═══
+    // Formerly the deliberately-UNREGISTERED UseOnMinusOneLoweredCombineVsExtendRedTest; now a
+    // registered row armed only by -Dslabbed.redCells=true, so the RED inventory is visible in
+    // the suite instead of hidden in an unregistered file. THE GAP (code- and run-verified): the
+    // intent-mixin remap gate is getVisualYOffset == -0.5 EXACTLY, so a vanilla TOP slab on a
+    // Terrain Slabs bottom (visual dy -1.0) falls through unremapped to vanilla canReplace's raw
+    // fraction and COMBINES where the player visibly aimed to EXTEND. Sibling lines fixed the
+    // full dy range (forge1201 dy-corrected canReplace mixin; cleanpub fc608690); the production
+    // fix here is a maintainer decision. Armed on current HEAD: FAILS with the clicked cell
+    // reading OAK_SLAB[DOUBLE]. Both fixes must keep the -0.5 lane above green.
+    private static final String RED_CELLS_PROPERTY = "slabbed.redCells";
+
+
+    // -1.0 lane: vanilla TOP slab on a Terrain Slabs bottom (visual dy -1.0, visible span
+    // [Y-0.5, Y]). Click its west face on the VISIBLE geometry (raw fraction -0.1,
+    // dy-corrected 0.9). WYSIWYG intent: EXTEND sideways, stay TYPE=TOP.
+    // Current HEAD: no remap (gate == -0.5) → vanilla raw fraction → COMBINE → DOUBLE. RED.
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void useOnMinusOneLoweredTopSlabSideClickExtendsInsteadOfCombining(TestContext ctx) {
+        if (!Boolean.getBoolean(RED_CELLS_PROPERTY)) {
+            System.out.println("[USEON] RED_PENDING_RULING skipped — minusOne.loweredTopSlab.sideClick "
+                    + "(arm with -Dslabbed.redCells=true; RED on HEAD until the -1.0 gate ruling)");
+            ctx.complete();
+            return;
+        }
+        ServerWorld world = ctx.getWorld();
+        BlockPos origin = ctx.getAbsolutePos(BlockPos.ORIGIN);
+
+        Block ts = Registries.BLOCK.get(Identifier.of("terrainslabs", "grass_slab"));
+        ctx.assertTrue(ts != Blocks.AIR, "fixture: Terrain Slabs loaded");
+        BlockState tsBottom = ts.getDefaultState();
+        if (tsBottom.contains(SlabBlock.TYPE)) {
+            tsBottom = tsBottom.with(SlabBlock.TYPE, SlabType.BOTTOM);
+        }
+
+        BlockPos tsPos = origin.add(3, 2, 3);
+        world.setBlockState(tsPos, tsBottom, Block.NOTIFY_LISTENERS);
+        BlockPos top = tsPos.up();
+        world.setBlockState(top, Blocks.OAK_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.TOP),
+                Block.NOTIFY_LISTENERS);
+
+        double dy = SlabSupport.getYOffset(world, top, world.getBlockState(top));
+        ctx.assertTrue(dy == -1.0,
+                "fixture: vanilla TOP slab on a Terrain Slabs bottom must render -1.0 "
+                        + "(vanillaTopSlabOnTerrainLowersFull lane), got " + dy);
+        double visualDy = SlabSupport.getVisualYOffset(world, top, world.getBlockState(top));
+        ctx.assertTrue(visualDy == -1.0,
+                "fixture: intent-mixin gate input getVisualYOffset must read -1.0, got " + visualDy);
+
+        BlockPos extendCell = top.west();
+        ctx.assertTrue(world.getBlockState(extendCell).isAir(),
+                "fixture: the extend target cell west of the -1.0 slab must start as air");
+
+        PlayerEntity player = PlacementHarness.mockSlabPlayer(ctx, top.west(3));
+        // Visible span is [Y-0.5, Y]; hit its upper region: absolute Y - 0.1 → raw fraction
+        // -0.1 (vanilla reads "lower half" → combine), dy-corrected fraction 0.9 (visible
+        // upper half → extend intent). BlockHitResult still targets the slab's own cell,
+        // exactly as the offset-aware raycast resolves side hits on lowered visuals.
+        Vec3d hit = new Vec3d(top.getX(), top.getY() - 0.1, top.getZ() + 0.5);
+        ActionResult result = PlacementHarness.useHeldOakSlab(
+                world, player, top, Direction.WEST, hit);
+        PlacementHarness.row("minusOne.loweredTopSlab.sideClick", world, top, extendCell, result);
+
+        ctx.assertTrue(result.isAccepted(),
+                "-1.0 lane: useOn on the -1.0 slab's visible west face must place, got " + result);
+        BlockState clickedAfter = world.getBlockState(top);
+        ctx.assertTrue(clickedAfter.isOf(Blocks.OAK_SLAB) && clickedAfter.get(SlabBlock.TYPE) == SlabType.TOP,
+                "-1.0 lane: the -1.0-lowered TOP slab must NOT combine into a DOUBLE on a visible "
+                        + "side click (WYSIWYG extend intent; intent-mixin gate is == -0.5 so the "
+                        + "raw-fraction misdecision persists here), got "
+                        + PlacementHarness.describe(world, top));
+        BlockState extended = world.getBlockState(extendCell);
+        ctx.assertTrue(extended.isOf(Blocks.OAK_SLAB),
+                "-1.0 lane: the adjacent cell must gain the extended slab, got "
+                        + PlacementHarness.describe(world, extendCell));
         ctx.complete();
     }
 }
