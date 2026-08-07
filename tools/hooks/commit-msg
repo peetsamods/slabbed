@@ -44,20 +44,29 @@ if [ -n "$SRC_MAIN" ]; then
 fi
 
 # ── S-5: no more than one behavior change may stack without a live pass ──────────────────────
-# Count behavior-touching commits since LIVE_LEDGER.md last gained an entry; block the 2nd.
+# The live ledger lives OUTSIDE the repo (discretion law, 2026-08-07), by default at
+#   $HOME/CascadeProjects/Slabbed-notes/parity-1.21.11/LIVE_LEDGER.md   (override: $SLABBED_NOTES)
+# A behavior-touching commit is allowed only if the ledger has been updated since the previous
+# behavior-touching commit (ledger mtime vs that commit's time) — same rule as before, the
+# bookkeeping just moved out of the tracked tree.
 if [ -n "$BEHAVIOR" ]; then
-  LEDGER_COMMIT="$(git log -1 --format=%H -- docs/process/LIVE_LEDGER.md 2>/dev/null || true)"
-  RANGE="${LEDGER_COMMIT:+$LEDGER_COMMIT..HEAD}"
-  BEHAVIOR_SINCE="$(git log ${RANGE:-} --format=%H -- \
+  NOTES_DIR="${SLABBED_NOTES:-$HOME/CascadeProjects/Slabbed-notes/parity-1.21.11}"
+  LEDGER_FILE="$NOTES_DIR/LIVE_LEDGER.md"
+  if [ ! -f "$LEDGER_FILE" ]; then
+    fail "S-5: local ledger not found at $LEDGER_FILE.
+       Behavior-touching commits require the out-of-repo live ledger. Create the notes directory
+       (or set \$SLABBED_NOTES) and record the live state there before committing behavior changes."
+  fi
+  LAST_BEHAVIOR_TS="$(git log -1 --format=%ct -- \
       'src/main/**/SlabSupport.java' 'src/main/**/SlabAnchorAttachment.java' \
       'src/main/**/*PlacementIntent*' 'src/main/**/*OnPlacedAnchor*' \
-      'src/main/**/*OnStateReplaced*' 'src/main/**/*OffsetRaycast*' 2>/dev/null | wc -l | tr -d ' ')"
-  LEDGER_STAGED="$(echo "$STAGED" | grep -c 'docs/process/LIVE_LEDGER.md' || true)"
-  if [ "${BEHAVIOR_SINCE:-0}" -ge 1 ] && [ "${LEDGER_STAGED:-0}" -eq 0 ]; then
-    fail "S-5: a behavior-changing commit already landed since the last live pass, and this is another
-       one without a recorded live result. Do NOT stack. Get a live A/B first, record it in
-       docs/process/LIVE_LEDGER.md (dated, jar-sha'd, 'live-confirmed' or 'live-RED'), and stage that
-       ledger entry with this commit. The 12-tranche sight-unseen campaign is exactly what this stops."
+      'src/main/**/*OnStateReplaced*' 'src/main/**/*OffsetRaycast*' 2>/dev/null || true)"
+  LEDGER_TS="$(stat -f %m "$LEDGER_FILE" 2>/dev/null || stat -c %Y "$LEDGER_FILE" 2>/dev/null || echo 0)"
+  if [ -n "$LAST_BEHAVIOR_TS" ] && [ "$LAST_BEHAVIOR_TS" -gt "$LEDGER_TS" ]; then
+    fail "S-5: a behavior-changing commit already landed since the ledger was last updated, and this
+       is another one without a recorded live result. Do NOT stack. Get a live A/B first, record it
+       in $LEDGER_FILE (dated, jar-sha'd, 'live-confirmed' or 'live-RED'), then commit.
+       The 12-tranche sight-unseen campaign is exactly what this stops."
   fi
 fi
 
