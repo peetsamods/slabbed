@@ -399,6 +399,228 @@ tasks.register("verifyReleaseJarHygiene") {
     }
 }
 
+// ---------------------------------------------------------------------------------------------
+// Release artifact allowlist -- the INVERTED hygiene gate.
+//
+// releaseHygieneForbiddenTokens above is a DENYLIST: it can only catch names somebody thought to
+// forbid. The jar/sourcesJar exclude() lists are likewise lists of things to DROP. Neither can see
+// a package nobody thought about -- which is exactly how the V palette screen and /slabrig shipped
+// in release/mc262-0.5.0-alpha.1 (com/slabbed/client/palette/** and com/slabbed/command/** matched
+// nothing in either list).
+//
+// This gate is closed-world: every logical unit reaching a release artifact must match a reviewed
+// row in RELEASE_ALLOWLIST.md, and the build FAILS naming anything that does not. The denylist is
+// deliberately RETAINED as an independent second layer -- see RELEASE_ALLOWLIST.md for how the two
+// interact and why neither subsumes the other.
+// ---------------------------------------------------------------------------------------------
+
+def releaseAllowlistFile = rootProject.file("RELEASE_ALLOWLIST.md")
+
+// Collapse an archive entry to a "logical unit" so ONE allowlist row covers a class, its nest
+// members and its source file: Foo.class, Foo$Bar.class and Foo.java all key to ".../Foo".
+// Anything that is not a class or a source keeps its literal path (fabric.mod.json, assets/...).
+def releaseLogicalUnit = { String entryName ->
+    def name = entryName
+    if (name.endsWith(".class")) {
+        name = name.substring(0, name.length() - ".class".length())
+        int lastSlash = name.lastIndexOf('/')
+        int nest = name.indexOf('$', lastSlash + 1)
+        if (nest >= 0) {
+            name = name.substring(0, nest)
+        }
+    } else if (name.endsWith(".java")) {
+        name = name.substring(0, name.length() - ".java".length())
+    }
+    return name
+}
+
+// pkg/**  -> that package and every subpackage, recursively (resource trees only, by policy)
+// pkg/*   -> DIRECT members only; a brand-new subpackage is NOT covered. This is the palette
+//            failure encoded as a rule.
+// pkg/Foo -> exactly that one logical unit
+def releaseAllowlistMatches = { String pattern, String unit ->
+    if (pattern.endsWith("/**")) {
+        return unit.startsWith(pattern.substring(0, pattern.length() - 2))
+    }
+    if (pattern.endsWith("/*")) {
+        def prefix = pattern.substring(0, pattern.length() - 1)
+        return unit.startsWith(prefix) && !unit.substring(prefix.length()).contains("/")
+    }
+    return unit == pattern
+}
+
+// Reads the "## Approved ..." sections of RELEASE_ALLOWLIST.md. Only table rows whose first cell is
+// a backticked token count as entries, and only inside an "## Approved" section -- the explanatory
+// tables elsewhere in the document are documentation, not approvals.
+def parseReleaseAllowlist = { File file ->
+    if (!file.exists()) {
+        throw new GradleException(
+                "RELEASE_ALLOWLIST.md is missing at ${file.absolutePath}.\n"
+                        + "The release allowlist is mandatory. Restore it from git -- deleting it is\n"
+                        + "not a way to make this gate pass.")
+    }
+    def approved = new LinkedHashMap<String, String>()
+    boolean inApprovedSection = false
+    file.eachLine("UTF-8") { rawLine ->
+        def line = rawLine.trim()
+        if (line.startsWith("## ")) {
+            inApprovedSection = line.toLowerCase(java.util.Locale.ROOT).startsWith("## approved")
+            return
+        }
+        if (!inApprovedSection || !line.startsWith("|")) {
+            return
+        }
+        def cells = line.split("\\|", -1).collect { it.trim() }
+        if (cells.size() < 4) {
+            return
+        }
+        def entry = cells[1]
+        def reason = cells[2]
+        if (entry.length() <= 2 || !entry.startsWith("`") || !entry.endsWith("`")) {
+            return
+        }
+        entry = entry.substring(1, entry.length() - 1).trim()
+        if (entry.isEmpty()) {
+            return
+        }
+        if (reason.replace("`", "").trim().isEmpty()) {
+            throw new GradleException(
+                    "RELEASE_ALLOWLIST.md entry '${entry}' has no reason.\n"
+                            + "An approval with no reason is how the list rots. Give it one.")
+        }
+        if (approved.containsKey(entry)) {
+            throw new GradleException(
+                    "RELEASE_ALLOWLIST.md lists '${entry}' twice. Keep one row per entry.")
+        }
+        approved.put(entry, reason)
+    }
+    if (approved.isEmpty()) {
+        throw new GradleException(
+                "RELEASE_ALLOWLIST.md parsed to zero approved entries.\n"
+                        + "Either the '## Approved' sections were emptied or the table format was broken.\n"
+                        + "Entry rows must look like: | `com/slabbed/pkg/*` | reason |")
+    }
+    return approved
+}
+
+// Returns [unapproved: Map<unit, SortedSet<archiveName>>, stale: SortedSet<pattern>]
+def scanReleaseArtifacts = { List<File> archives ->
+    def approved = parseReleaseAllowlist(releaseAllowlistFile)
+    def unapproved = new TreeMap<String, TreeSet<String>>()
+    def matchedPatterns = new HashSet<String>()
+    archives.each { archive ->
+        if (!archive.exists()) {
+            throw new GradleException(
+                    "Release artifact ${archive.absolutePath} does not exist; cannot verify it.")
+        }
+        new java.util.zip.ZipFile(archive).withCloseable { zip ->
+            zip.entries().each { entry ->
+                if (entry.directory) {
+                    return
+                }
+                def unit = releaseLogicalUnit(entry.name)
+                def hit = approved.keySet().find { pattern ->
+                    releaseAllowlistMatches(pattern, unit)
+                }
+                if (hit != null) {
+                    matchedPatterns.add(hit)
+                } else {
+                    unapproved.computeIfAbsent(unit, { new TreeSet<String>() }).add(archive.name)
+                }
+            }
+        }
+    }
+    def stale = new TreeSet<String>(approved.keySet())
+    stale.removeAll(matchedPatterns)
+    return [unapproved: unapproved, stale: stale]
+}
+
+def releaseAllowlistArchives = { ->
+    [
+            tasks.named("jar").get().archiveFile.get().asFile,
+            tasks.named("sourcesJar").get().archiveFile.get().asFile
+    ]
+}
+
+tasks.register("verifyReleaseAllowlist") {
+    group = "verification"
+    description = "Fails naming every class or resource that reaches a release artifact without an "  +
+            "approved entry in RELEASE_ALLOWLIST.md."
+    dependsOn(tasks.named("jar"), tasks.named("sourcesJar"))
+    inputs.files(
+            tasks.named("jar").flatMap { it.archiveFile },
+            tasks.named("sourcesJar").flatMap { it.archiveFile })
+    inputs.file(releaseAllowlistFile)
+
+    doLast {
+        def result = scanReleaseArtifacts(releaseAllowlistArchives())
+
+        if (!result.stale.isEmpty()) {
+            logger.warn("RELEASE_ALLOWLIST.md has {} entry/entries that match nothing in either "
+                    + "release artifact (stale approvals rot the list): {}",
+                    result.stale.size(), result.stale.join(", "))
+        }
+
+        if (!result.unapproved.isEmpty()) {
+            def detail = result.unapproved.collect { unit, archiveNames ->
+                "  ${unit}\n      reached: ${archiveNames.join(', ')}"
+            }.join("\n")
+            throw new GradleException(
+                    "Release allowlist violation: ${result.unapproved.size()} unit(s) reached a "
+                            + "release artifact with no approved entry in RELEASE_ALLOWLIST.md.\n\n"
+                            + detail + "\n\n"
+                            + "Two legitimate responses for EACH entry above:\n"
+                            + "  1. EXCLUDE it -- add exclude(\"<path>\") to BOTH the `jar` and the "
+                            + "`sourcesJar` block\n"
+                            + "     in build.gradle (and gate or remove whatever registers it), then rebuild.\n"
+                            + "  2. APPROVE it -- add a row under an \"## Approved\" heading in "
+                            + "RELEASE_ALLOWLIST.md\n"
+                            + "     with a reason that would survive review. Package rows are "
+                            + "`pkg/*` (direct members\n"
+                            + "     only) or `pkg/**` (recursive); a bare path is a single class.\n\n"
+                            + "Widening an existing pattern purely to make this green is neither. "
+                            + "This gate is closed-world\n"
+                            + "on purpose: anything new fails by default, because anything new used "
+                            + "to SHIP by default.\n"
+                            + "Run ./gradlew25 releaseAllowlistReport for the same list without "
+                            + "failing the build.")
+        }
+
+        println("RELEASE_ALLOWLIST_VERIFY artifacts=${releaseAllowlistArchives().size()} "
+                + "unapproved=0 stale=${result.stale.size()}")
+    }
+}
+
+tasks.register("releaseAllowlistReport") {
+    group = "verification"
+    description = "Prints every unapproved unit in the release artifacts WITHOUT failing. Review " +
+            "aid only -- it does not bypass verifyReleaseAllowlist."
+    dependsOn(tasks.named("jar"), tasks.named("sourcesJar"))
+    inputs.files(
+            tasks.named("jar").flatMap { it.archiveFile },
+            tasks.named("sourcesJar").flatMap { it.archiveFile })
+    inputs.file(releaseAllowlistFile)
+    outputs.file(layout.buildDirectory.file("reports/release-allowlist/unapproved.txt"))
+
+    doLast {
+        def result = scanReleaseArtifacts(releaseAllowlistArchives())
+        def lines = []
+        lines.add("# Units reaching a release artifact with no approved RELEASE_ALLOWLIST.md entry")
+        lines.add("# unapproved=${result.unapproved.size()} stale=${result.stale.size()}")
+        result.unapproved.each { unit, archiveNames ->
+            lines.add("UNAPPROVED ${unit}\t${archiveNames.join(', ')}")
+        }
+        result.stale.each { pattern ->
+            lines.add("STALE ${pattern}\t(approved but matches nothing)")
+        }
+        def reportFile = outputs.files.singleFile
+        reportFile.parentFile.mkdirs()
+        reportFile.text = lines.join(System.lineSeparator()) + System.lineSeparator()
+        println(lines.join("\n"))
+        println("RELEASE_ALLOWLIST_REPORT ${reportFile.absolutePath}")
+    }
+}
+
 afterEvaluate {
 def test35NestedJarPath = "META-INF/jars/slabbed-diagnostics.jar"
 def processedMainDescriptor = layout.buildDirectory.file("resources/main/fabric.mod.json")
@@ -644,6 +866,8 @@ def verifyTest35DiagnosticJar = tasks.register("verifyTest35DiagnosticJar") {
                 "remapJar",
                 "sourcesJar",
                 "verifyReleaseJarHygiene",
+                "verifyReleaseAllowlist",
+                "releaseAllowlistReport",
                 "publish",
                 "publishToMavenLocal"
         ] + tasks.findAll { task -> task.name.startsWith("publish") }.collect { task -> task.name }
@@ -712,6 +936,19 @@ tasks.register("buildTest35DiagnosticJar") {
 
 tasks.named("build") {
     dependsOn(tasks.named("verifyReleaseJarHygiene"))
+    dependsOn(tasks.named("verifyReleaseAllowlist"))
+}
+
+// dependsOn on `build` alone is not enough: `gradle jar`, `gradle assemble`, `gradle publish` and
+// `gradle buildTest35DiagnosticJar` all produce or consume a release artifact without going through
+// `build`. finalizedBy on the two archive tasks makes both hygiene layers run whenever a release
+// artifact is produced, by ANY entry point -- so it is not possible to end up holding a jar that was
+// never checked. (finalizedBy is not a dependency edge, so the verifyTest35DiagnosticJar
+// ordinary-task-leak assertion is unaffected.)
+["jar", "sourcesJar"].each { archiveTaskName ->
+    tasks.named(archiveTaskName) {
+        finalizedBy(tasks.named("verifyReleaseJarHygiene"), tasks.named("verifyReleaseAllowlist"))
+    }
 }
 
 // configure the maven publication
