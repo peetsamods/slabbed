@@ -62,13 +62,15 @@ says every block is entitled to the right height in the first place.**
   (An earlier revision of this bullet read "characterization by default; a blocking S-2 could not
   be honest while this line does not obey LAW 1". That was true when written and is kept in the
   history below rather than pretended away — the line now passes.)
-- **The diff tripwire** (`tools/hooks/commit-msg`): an added line in `src/main/**` containing
-  `geometric | merge | follow | inherit | cantilever | recompute | isAdjacent.*Lowered` is presumed
-  a LAW 1 violation and blocks the commit without a logged `LAW-SIGNOFF:` and a new invariance row.
+- **The diff tripwire (S-3) is RETIRED** (2026-08-07, maintainer ruling): with S-2 blocking by
+  default, the executable test enforces LAW 1 directly, and the added-line vocabulary regex
+  (`geometric | merge | follow | …`) had become redundant belt-on-suspenders that fired on
+  comments. LAW 1's sole enforcement is S-2; the hook keeps only process-hygiene gates.
 - **Preflight trailer:** every `src/main/**` commit answers `LAW-PREFLIGHT: n` — "no, this does not
-  let a neighbour move a placed block" — or `y` with Maintainer's sign-off.
+  let a neighbour move a placed block" — or `y` with a recorded maintainer sign-off.
 - **Suite-count check:** a green run is not proof unless the reported test count matches the
-  expected total (see `HANDOFF.md`). A stale run dir silently under-reports and reads as clean.
+  expected total (`tools/expected-gametest-count.py`). A stale run dir silently under-reports and
+  reads as clean.
 - **⚠️ VACUITY CHECK — a green S-2 row is proof ONLY if at least one mutation provably reaches the
   subject's resolver.** The count check catches under-reporting; it does not catch a row that runs
   and asserts nothing. Anchored subjects resolve from the `pos.down()` chain alone, and no mutation
