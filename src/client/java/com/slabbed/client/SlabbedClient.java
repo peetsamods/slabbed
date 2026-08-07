@@ -25,6 +25,15 @@ public final class SlabbedClient implements ClientModInitializer {
                 Boolean.getBoolean("slabbed.bsfb.live.trace"));
         initDyFingerprintDump();
         BetaNoticeClient.init();
+        // Ships in EVERY jar, default off — the standing debug-tooling rule, under the maintainer's
+        // 2026-08-07 reading that the command must be INVOCABLE on a shipped jar rather than merely
+        // present as bytes. Unconditional on purpose: no isDevelopmentEnvironment() guard and no
+        // reflective hook, because either one is exactly how /slabdy and /slabdev came to be
+        // unreachable on this line. Cost is two Brigadier trees built once at client init; the
+        // commands install no tick hook, no HUD element and no world-save writer, and touch nothing
+        // until someone types them. The /slabrig family does NOT follow them out of the gate — it
+        // stays dev-gated in Slabbed.initDevFeatures and excluded from the release artifacts.
+        SlabbedDebugCommands.register();
     }
 
     private static void initDyFingerprintDump() {

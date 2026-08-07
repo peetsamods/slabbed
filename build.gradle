@@ -113,7 +113,9 @@ def releaseArtifactExclusions = [
         // Registration is dev-gated in Slabbed.initDevFeatures; the classes leave both artifacts.
         "com/slabbed/command/**",                          // SlabRigCommand + 14 SlabRig* units, SlabKitCommand, SlabCheckCommand
         "com/slabbed/util/SlabTestKit*",                   // exists only to feed /slabkit and /slabrig mega
-        "com/slabbed/util/SlabdyRowFormatter*",            // no shipped consumer on this line (diagnostics + gametest only)
+        // SlabdyRowFormatter is NO LONGER excluded: /slabdy row is a shipped consumer as of the
+        // standing-rule compliance pass, and it is the one subcommand that works for real on a
+        // release jar. See RELEASE_ALLOWLIST.md for its approval row.
         "com/slabbed/mixin/PaintingRigDropCaptureMixin*",  // dev-only mixin, moved to slabbed.rig.mixins.json (gametest mod)
         // Inert mixin: listed in NO mixin config and referenced nowhere; added unwired in
         // 7e4cec1d (0.2.0-beta.1-hotfix.2) and never registered since. Kept in the repo,
@@ -121,7 +123,15 @@ def releaseArtifactExclusions = [
         "com/slabbed/mixin/SlabBlockPlacementFixMixin*",
         // Diagnostic and capture seams that must not reach a public artifact.
         "com/slabbed/util/DebugTraceContext*",
-        "com/slabbed/util/SlabbedDebug*",
+        // NARROWED from the prefix glob "SlabbedDebug*". That glob was a name-shaped trap: it drops
+        // any future unit whose name merely STARTS with SlabbedDebug, and it silently swallowed the
+        // shipped SlabbedDebugCommandTree on first write (caught only by verifyReleaseAllowlist
+        // reporting the approval as STALE — a warning, not a failure). These two patterns cover
+        // exactly the same unit, SlabbedDebug and its nest members, and nothing else. Nothing is
+        // weakened: SlabbedDebug is NOT on the allowlist, so if it ever reached an artifact the
+        // build would fail with unapproved=1 rather than pass quietly.
+        "com/slabbed/util/SlabbedDebug.*",
+        "com/slabbed/util/SlabbedDebug\$*",
         "com/slabbed/util/RuntimeDiagnostics*",
         "com/slabbed/util/SlabbedAuditBridge*",
         "com/slabbed/util/Beta4PlacementAuthorRecorder*",
@@ -190,6 +200,7 @@ sourceSets {
             include("com/slabbed/test/TerrainSlabsOwnSlabDyGuardTest.java")
             include("com/slabbed/test/SlabLaneConduitTerrainSlabsGuardTest.java")
             include("com/slabbed/test/SlabdyRowFormatterFieldsTest.java")
+            include("com/slabbed/test/ShippedDebugCommandsTest.java")
             include("com/slabbed/client/BetaNoticeSessionGateTest.java")
             include("com/slabbed/client/BetaNoticeDismissedWorldsTest.java")
             include("com/slabbed/client/BetaNoticeDismissFeedbackTest.java")

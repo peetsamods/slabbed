@@ -131,6 +131,8 @@ anything. The split above puts the fine granularity only where a leak has actual
 | `com/slabbed/client/SlabGeometricRemeshScheduler` | Schedules section remeshes when dy changes. |
 | `com/slabbed/client/SlabImportantRemesh` | Important-dirty remesh path. |
 | `com/slabbed/client/SlabbedModelLoadingPlugin` | Installs the offset block-state model. |
+| `com/slabbed/client/SlabbedDebugCommands` | Registers `/slabdy` and `/slabdev` from the shipped client entrypoint — the standing debug-tooling rule under the maintainer's 2026-08-07 reading that the commands must be INVOCABLE on a shipped jar. Wiring only (read the crosshair, print to chat); the node structure and strings are in the headless `SlabbedDebugCommandTree`. Registers ONE callback that builds two Brigadier trees: no tick hook, no HUD element, no lifecycle listener, no world-save write, no disk access, nothing running until someone types the command. Names no excluded class — the debug tools are reached through `SlabbedDebugToolBridge`. |
+| `com/slabbed/client/SlabbedDebugToolBridge` | Release-safe client seam between those shipped commands and the two development-only debug tools (target-dy overlay, live-cursor recorder). Same architecture as `SlabbedDiagnosticsBridge`, applied to the command surface: with no provider installed — the release case — `available()` is false and the commands report "not available in this build" and change nothing. Shipping the seam is what keeps the implementations OUT of the jar while leaving the commands honest. |
 
 ### Network (class-level; `com/slabbed/network/` is a mixed package)
 
@@ -153,6 +155,8 @@ anything. The split above puts the fine granularity only where a leak has actual
 | `com/slabbed/util/SlabEnsembleCoherence` | Combined-slab ensemble coherence law. |
 | `com/slabbed/util/SlabSupport` | Support-surface resolution. |
 | `com/slabbed/util/SlabbedOffsetRaycast` | Offset-aware nearest-hit raycast — the targeting overhaul. |
+| `com/slabbed/util/SlabbedDebugCommandTree` | The Brigadier node structure and feedback strings for the shipped `/slabdy` and `/slabdev`. Pure Brigadier, generic over the command source, no Minecraft or client type in any signature — deliberately so: a client command tree is unreachable from a headless dedicated-server GameTest, and "the command is invocable" is only worth what its test is worth. `ShippedDebugCommandsTest` registers these exact builders into a real dispatcher and executes real command strings. Inert until invoked: everything runs inside an `executes(...)` body. |
+| `com/slabbed/util/SlabdyRowFormatter` | Headless field computation for the `[slabdy]` diagnostic row. **Previously excluded** with the reason "no shipped consumer on this line" — that is no longer true: `/slabdy row` is a shipped consumer, and it is the one debug subcommand that does real work on a release jar (it needs nothing but `SlabAnchorAttachment` and `SlabSupport`, both approved above). Read-only: it computes strings and touches no state. |
 
 ## Ruling executed (2026-08-07)
 
@@ -167,15 +171,44 @@ allowlist honestly describing both jars.
   `/slabkit` / `/slabcheck` rig family (`com/slabbed/command/**`, `SlabTestKit`), whose registration
   is dev-gated in `Slabbed.initDevFeatures`; `PaintingRigDropCaptureMixin`, moved out of
   `slabbed.mixins.json` into the dev-only `slabbed.rig.mixins.json` carried by the gametest mod, so
-  release painting drops are pure vanilla; `SlabdyRowFormatter` (no shipped consumer on this line);
-  the never-wired `SlabBlockPlacementFixMixin` (source kept in the repo); `SlabbedClientFlags`; the
+  release painting drops are pure vanilla; `SlabdyRowFormatter` (no shipped consumer on this line —
+  **reversed in the second pass below: `/slabdy row` is now that consumer, and the formatter is
+  approved above**); the never-wired `SlabBlockPlacementFixMixin` (source kept in the repo); `SlabbedClientFlags`; the
   six source-only drift units (`CaptureProfile`, `DyFingerprintDump`, `ScreenshotCaptureContext`,
   the `ScreenshotFlightLock` tombstone, two `.gitkeep`s).
 
-Standing rule note: `/slabdy` and `/slabdev` (ship in every jar, default off) are NOT restructured
-by this ruling — on this line neither is registered in release code at all (`/slabdev` lives in the
-compile-excluded `com/slabbed/dev/**` and the diagnostics mod; `/slabdy` has no registration
-anywhere), which is reported as-is, not "fixed" here.
+Standing rule note (updated 2026-08-07, second pass): the original text of this note reported that
+`/slabdy` and `/slabdev` were registered in no release code at all on this line — `/slabdev` only
+from the compile-excluded `com/slabbed/dev/**` and from the development-only diagnostics companion,
+`/slabdy` from nowhere. That gap has now been closed under the maintainer's ruling that "ships in every jar"
+means an operator can actually INVOKE the command on a release build, default off.
+
+- Both commands register from `com/slabbed/client/SlabbedDebugCommands`, called unconditionally by
+  `SlabbedClient` — the `client` entrypoint the shipped `fabric.mod.json` declares. No
+  `isDevelopmentEnvironment()` guard and no reflective hook, because either one is exactly how the
+  commands became unreachable in the first place.
+- They are CLIENT commands. Every debug surface on this line is client state (a local HUD overlay,
+  a recorder writing to the local game directory), so unlike the 1.21.11 sibling's server-side
+  `/slabdev audit` — which writes an audit report into the *server's* game directory and is
+  therefore gated at permission level 2 — there is no server-side surface here to op-gate. A Fabric
+  client command never reaches the server and cannot affect another player. Gating a local HUD
+  toggle at op level would also make it unusable in an ordinary singleplayer world, defeating the
+  ruling. Both roots must stay client-side together: Fabric's client dispatcher forwards to the
+  server only on "unknown command", so a client root would swallow a same-named server subcommand.
+- `/slabdev` keeps this line's live-confirmed spelling exactly (`/slabdev debug on`,
+  `/slabdev record on`). Only the registration moved; the implementations stayed in the diagnostics
+  companion and are reached through `SlabbedDebugToolBridge`. The command surface is therefore
+  identical in dev and release, and every dev use of `/slabdev debug on` exercises the shipped
+  registration path.
+- Absent implementations degrade honestly, never throw: "not available in this build".
+  `/slabdy row` and `build` need nothing but shipped code and work for real on a release jar.
+- The `/slabrig` / `/slabkit` / `/slabcheck` family does NOT follow them out of the gate. It stays
+  dev-gated in `Slabbed.initDevFeatures` and excluded from both artifacts, unchanged.
+- Not shipped, deliberately: the sibling's `/slabdev audit` subcommand. Its harness
+  (`com/slabbed/dev/audit/**`) is Yarn-named, does not compile under this line's Mojang mappings and
+  is compile-excluded from `main` (`build.gradle`'s trailing `sourceSets.main.java.exclude`), so the
+  node could never do anything in ANY build here — shipping a permanently dead node would be
+  surface without substance. It gets added when the harness is ported.
 
 Anything NEW reaching a release artifact still needs one of the two legitimate responses:
 
