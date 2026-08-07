@@ -1,70 +1,54 @@
 package com.slabbed.client;
 
-import com.slabbed.util.BuildStamp;
 import com.slabbed.util.LiveCursorIntentRecorder;
 import net.fabricmc.api.ClientModInitializer;
-import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallback;
-import net.fabricmc.fabric.api.client.command.v2.ClientCommands;
-import net.minecraft.client.Minecraft;
-import net.minecraft.network.chat.Component;
 
 public final class SlabbedDiagnosticsClient implements ClientModInitializer {
     @Override
     public void onInitializeClient() {
-        registerSlabdev();
+        installDebugToolProvider();
         SlabModelStaleSentinelClient.init();
     }
 
-    private static void registerSlabdev() {
-        ClientCommandRegistrationCallback.EVENT.register((dispatcher, registryAccess) ->
-                dispatcher.register(ClientCommands.literal("slabdev")
-                        .then(ClientCommands.literal("debug")
-                                .executes(context -> setTargetDyOverlay(!TargetDyOverlay.isEnabled()))
-                                .then(ClientCommands.literal("on")
-                                        .executes(context -> setTargetDyOverlay(true)))
-                                .then(ClientCommands.literal("off")
-                                        .executes(context -> setTargetDyOverlay(false)))
-                                .then(ClientCommands.literal("toggle")
-                                        .executes(context -> setTargetDyOverlay(!TargetDyOverlay.isEnabled()))))
-                        .then(ClientCommands.literal("record")
-                                .executes(context -> setLiveCursorRecorder(LiveCursorIntentRecorder.toggle()))
-                                .then(ClientCommands.literal("on")
-                                        .executes(context -> setLiveCursorRecorderTo(true)))
-                                .then(ClientCommands.literal("off")
-                                        .executes(context -> setLiveCursorRecorderTo(false)))
-                                .then(ClientCommands.literal("toggle")
-                                        .executes(context -> setLiveCursorRecorder(
-                                                LiveCursorIntentRecorder.toggle()))))));
-    }
+    /**
+     * The {@code /slabdev} tree used to be registered right here, which is precisely why the command
+     * did not exist on a shipped jar: this class is in the development-only diagnostics companion.
+     * Registration now lives in the shipped {@code SlabbedDebugCommands}, and this class supplies
+     * the implementations behind {@link SlabbedDebugToolBridge}. The command surface is therefore
+     * identical in dev and in release — the only difference is whether this provider was installed —
+     * and every dev use of {@code /slabdev debug on} exercises the shipped registration path.
+     */
+    private static void installDebugToolProvider() {
+        SlabbedDebugToolBridge.install(new SlabbedDebugToolBridge.Provider() {
+            @Override
+            public boolean overlayEnabled() {
+                return TargetDyOverlay.isEnabled();
+            }
 
-    private static int setTargetDyOverlay(boolean enabled) {
-        TargetDyOverlay.setEnabled(enabled);
-        Minecraft client = Minecraft.getInstance();
-        if (client.player != null) {
-            client.player.sendSystemMessage(Component.literal(
-                    "[slabdev] debug overlay: " + (enabled ? "on" : "off")));
-        }
-        return 1;
-    }
+            @Override
+            public void setOverlayEnabled(boolean enabled) {
+                TargetDyOverlay.setEnabled(enabled);
+            }
 
-    private static int setLiveCursorRecorderTo(boolean target) {
-        if (LiveCursorIntentRecorder.enabled() != target) {
-            LiveCursorIntentRecorder.toggle();
-        } else if (target) {
-            LiveCursorIntentRecorder.bootstrap();
-        }
-        return setLiveCursorRecorder(target);
-    }
+            @Override
+            public boolean recorderEnabled() {
+                return LiveCursorIntentRecorder.enabled();
+            }
 
-    private static int setLiveCursorRecorder(boolean enabled) {
-        Minecraft client = Minecraft.getInstance();
-        if (client.player != null) {
-            client.player.sendSystemMessage(Component.literal(
-                    "[slabdev] live cursor recorder: " + (enabled ? "on" : "off")
-                            + " (" + LiveCursorIntentRecorder.currentLogPathDisplay() + ")"));
-            client.player.sendSystemMessage(Component.literal(
-                    "[slabdev] " + BuildStamp.describeShort()));
-        }
-        return 1;
+            @Override
+            public void setRecorderEnabled(boolean enabled) {
+                if (LiveCursorIntentRecorder.enabled() != enabled) {
+                    LiveCursorIntentRecorder.toggle();
+                } else if (enabled) {
+                    // Already on: re-open the log so a repeated "on" still yields a usable session.
+                    LiveCursorIntentRecorder.bootstrap();
+                }
+            }
+
+            @Override
+            public String recorderStatus() {
+                return LiveCursorIntentRecorder.currentLogPathDisplay();
+            }
+        });
     }
 }
