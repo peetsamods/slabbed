@@ -1,16 +1,16 @@
 # LAW.md — the law of Slabbed (supreme)
 
 This file is the constitution. **No other document may redefine the laws below. Where any file —
-`RULES`, `DY_SPEC`, `KNOWN_INCOMPLETE`, `HANDOFF`, `SPINE`, a test's javadoc, or a memory note —
+`DY_SPEC`, a release doc, an internal note, a test's javadoc, or a memory note —
 conflicts with LAW.md, LAW.md wins and the other document is wrong.** A doc that "improves" or
 "clarifies" a law into something a neighbour can change is not a clarification; it is a violation
 and must be reverted.
 
-Ported to the Fabric 1.21.11 parity line 2026-08-06 from the 26.2 donor, plus Maintainer's second law.
+Ported to the Fabric 1.21.11 parity line 2026-08-06 from the 26.2 donor, plus the second law.
 
 ---
 
-## LAW 1 — Placement is permanent (Maintainer, verbatim)
+## LAW 1 — Placement is permanent (maintainer ruling, verbatim)
 
 > **Where I put it is where it goes and STAYS.** This is the core of WYSIWYG. I put a block in
 > place A, I expect it to stay there no matter what. It should not change states according to a
@@ -28,7 +28,7 @@ Ported to the Fabric 1.21.11 parity line 2026-08-06 from the 26.2 donor, plus Ma
    breaking a block that lost its support). That is the *block* being removed by vanilla — never
    Slabbed silently re-deriving a different height for a block that is still there.
 
-## LAW 2 — Everything can lower (Maintainer, 2026-08-06, verbatim)
+## LAW 2 — Everything can lower (maintainer ruling, 2026-08-06, verbatim)
 
 > **Everything should be able to lower; no exceptions.**
 
@@ -49,7 +49,7 @@ says every block is entitled to the right height in the first place.**
 - **`NeighborUpdateInvarianceTest`** (the S-2 gate): place via the real `useOn` path, record the
   height exactly, mutate every class of neighbour without touching the block, assert the height is
   byte-identical. **This test *is* LAW 1.**
-- **✅ S-2 is BLOCKING BY DEFAULT (flipped 2026-08-06 by Maintainer).** `./gradlew build runGameTest` —
+- **✅ S-2 is BLOCKING BY DEFAULT (flipped 2026-08-06 by maintainer ruling).** `./gradlew build runGameTest` —
   no flag — enforces the law directly. `-Dslabbed.lawGate=false` is the escape hatch for a session
   deliberately introducing a new RED subject and needing the inventory without failing the build
   while it's fixed forward; it is never a way to land a known violation quietly.
@@ -89,7 +89,7 @@ S-2 passes with 9 of 9 subjects CLEAN under enforcement, and the default flag fl
 makes that the standing state of `./gradlew build runGameTest`, not an opt-in check.
 
 > **AMENDED 2026-08-06 (night, second): 10 of 10 CLEAN, and the tenth subject exists because a
-> PLAYER found what the gate could not.** Maintainer's live pass caught followers floating above a
+> PLAYER found what the gate could not.** A live pass caught followers floating above a
 > `−1.0` fence while S-2 read 9/9 CLEAN, because no subject had ever rested on a support that was
 > neither a slab nor a solid cube. The gate was not wrong about what it tested; it had never been
 > asked. Read the paragraph below with that as the live example of what "precisely" means: a green
@@ -99,7 +99,7 @@ makes that the standing state of `./gradlew build runGameTest`, not an opt-in ch
 > the SAME reason, on the opposite side of the same boundary.** The fence fix taught
 > `supportSeatDy` to ask a top-FACE question instead of a volume question — but its full-height arm
 > still opened with `state.getBlock() instanceof SlabBlock`, so the new predicate was never asked
-> about a TOP or DOUBLE slab, both of which pass it. Recorder run `f37a3b2b` (actions a38/a39): a
+> about a TOP or DOUBLE slab, both of which pass it. Live-recorded: a
 > `smooth_stone_slab[type=double]` support at `−1.0`, a `stripped_jungle_log` placed on it captured
 > `−0.5`, while the same session's fence, chain and BOTTOM-slab supports were all correct. Two
 > consecutive coverage-boundary bugs, both found by a player, both a class test standing in for a
@@ -107,7 +107,7 @@ makes that the standing state of `./gradlew build runGameTest`, not an opt-in ch
 > geometry predicate is where to look first.**
 >
 > **AMENDED A FOURTH TIME 2026-08-06 (night, fourth): still 11 of 11, and DELIBERATELY so — this
-> one is not an S-2 subject.** Maintainer's next live pass confirmed the fix above server-side and then
+> one is not an S-2 subject.** The next live pass confirmed the fix above server-side and then
 > reported a *visible* snap: the block is drawn at `−0.5` for a moment before dropping to `−1.0`.
 > Recorder `e9eb0932` (a8/a10/a15) shows CLIENT `−0.5` / SERVER `−1.0` for the same cell, while the
 > CLIENT's own snapshot in that frame already read the support as `dy=−1.0000 anchored=true` — so
@@ -130,8 +130,8 @@ same measurement repeated for subjects #10 and #11. It does
 (6 of 10 mutations still have zero live cells anywhere — see the reachability table below); or
 anything requiring Terrain Slabs, which cannot load in this headless environment at all. **This
 line obeys LAW 1 for what S-2 tests. Whether it obeys LAW 1 everywhere is a live-testing question,
-not a headless one**, and the LIVE_LEDGER entry dated 2026-08-06 (night) records six specific rows
-Maintainer's next pass must cover before this milestone is trusted beyond the gate itself.
+not a headless one**, and the internal live-ledger entry dated 2026-08-06 (night) records six specific rows
+The next live pass must cover before this milestone is trusted beyond the gate itself.
 
 The frozen-height architecture is still not the general design — the placement-dy store closes the
 cases this matrix found, not every live-recompute lane in `SlabSupport`. Anchors and frozen-flat
@@ -146,7 +146,7 @@ Stated plainly so no future reader mistakes aspiration for reality: **on 1.21.11
 2026-08-06, before the fixes above], height is recomputed live on every read.** Anchors and
 frozen-flat markers are partial patches over that design, not the design itself. S-2 is therefore
 **RED on this architecture by construction**, and lands first as a *characterization* run whose RED
-inventory goes to Maintainer before any row is re-specced.
+inventory goes to the maintainer before any row is re-specced.
 
 **S-2 actually ran (`89792d44`, 2026-08-06): 2 of 8 subjects RED, both on `break_directly_below`
 only.** This is a smaller RED surface than the A–F table below predicted, and it exposed a lane the
@@ -168,8 +168,8 @@ table did not name:
 > (candle — `freezeLoweredOnPlace`'s block-type allow-list replaced with a behavioural
 > `hangsFromTheCellAbove` exclusion) and `c51ec869` (lane B — the placement-dy store records a
 > height for lowered placements no anchor lane claims, without granting an anchor; the rejected
-> alternative was measured, not argued, to feed the open `KNOWN_INCOMPLETE` L11-broader
-> anchor-widening leak). S-2 is 9/9 CLEAN enforcing. Maintainer flipped the default the same night. See
+> alternative was measured, not argued, to feed the open internal L11-broader
+> anchor-widening leak). S-2 is 9/9 CLEAN enforcing. The maintainer flipped the default the same night. See
 > the section above for what this milestone does and does not cover.
 
 **Lane G — support-removal-driven magnitude re-derivation (confirmed, S-2-proven, and CLOSED

@@ -20,7 +20,7 @@ that reads the world changes. So this spec + its enumeration test (`DySpecificat
 **Exception — L3 (collision) is NOT invariant:** the 26.1.2 port deliberately ships lowered-
 collision-follow (`BlockCollisionsLoweredAboveMixin`), the opposite of main's collision-never-offset.
 Collision is a per-port design ruling; do not treat a collision-follow port as non-conformant. Every
-*visual* dy row IS invariant. See [PORT_FIX_MATRIX.md](PORT_FIX_MATRIX.md) row 7.
+*visual* dy row IS invariant. See the internal port-fix matrix (maintainer notes), row 7.
 
 **How to read a row.** `SPEC-ID | subject block | local config | required dy | law | pinning test`.
 The **required dy** is the *product intent* (what it SHOULD be per the laws), not merely "what the
@@ -34,12 +34,12 @@ re-invoke the three triad application sites (see L1 and the Coverage section for
 ## The laws (named invariants every row obeys)
 
 - **L1 — WYSIWYG.** A placed block renders, outlines, and raycasts at the same `dy`. The three
-  never disagree. (`RULES.md` §6.) NOTE: the enumeration test pins the shared `getYOffset` scalar
+  never disagree. (`LAW.md`, WYSIWYG.) NOTE: the enumeration test pins the shared `getYOffset` scalar
   the three consume; it does not yet independently assert each application site (outline/raycast
   `VoxelShape` min-Y, model mesh offset). A refactor that unwired one mixin could break the triad
   without a RED here — that narrow gap is listed under Coverage.
 - **L2 — Never-pop.** A block's `dy` is fixed at placement and does not change when a neighbor
-  changes. "Snaps are illegal." (`RULES.md` never-pop law.)
+  changes. "Snaps are illegal." (LAW 1, `LAW.md`.)
 - **L3 — Collision (PER-PORT ruling, NOT a universal invariant).** On main / 1.21.1 collision stays
   at the vanilla grid position while the visual `dy` lowers. On **26.1.2** collision deliberately
   FOLLOWS the visual ("solid where you see it", `BlockCollisionsLoweredAboveMixin`). Forge 1.20.1
@@ -76,9 +76,9 @@ a Terrain Slabs surface (`terrain_slabs:*` / `terrainslabs:*`).
 
 These had a categorical lowering exclusion for most of the project's life — first a CLASSNAME
 family (`isThinTopLayer`, `8d3f105f`), then a narrowed BEHAVIOUR predicate
-(`isEnvironmentDepositedSurfaceFill`, `112d1449`). **Both are gone as of 2026-08-06** (Maintainer's
-binding law: *"everything should be able to lower; no exceptions"*, ruled twice — carpet first,
-then snow). There is no thin-layer term in any dy lane now; these rows are pure geometry, and they
+(`isEnvironmentDepositedSurfaceFill`, `112d1449`). **Both are gone as of 2026-08-06** (maintainer
+ruling, binding law: *"everything should be able to lower; no exceptions"*, ruled twice — carpet
+first, then snow). There is no thin-layer term in any dy lane now; these rows are pure geometry, and they
 exist mainly so a future port does not re-derive the exclusion from the old commits.
 
 The snowy-terrain hazard the exclusion protected is carried by **L5** instead: the column walks
@@ -98,7 +98,7 @@ check that the CLIENT consumes these numbers. On this line `ClientDy.dyFor` held
 anchor-blind carpet authority that the chunk model and the outline both read, so carpets rendered
 flush while every row above was already correct. It is now a pure delegate to `getVisualYOffset`,
 pinned by `ClientCarpetDyAuthorityTest`. Exactly ONE layer may offset a carpet's OUTLINE
-(`CarpetDyShapeMixin`, client) — see `RULES.md` §16.
+(`CarpetDyShapeMixin`, client) — a standing maintainer rule (internal notes).
 
 ### Ceiling-attached blocks (the full `isCeilingAttached` family)
 
@@ -111,7 +111,7 @@ dripstone still smooshed while the always-hung test stayed green.
 
 | SPEC-ID | subject | local config | dy | law | test |
 |---|---|---|---|---|---|
-| `CH-VANILLA-TOP` | hanging roots / lantern / dripstone / chain | under a vanilla TOP slab | **0.0** (was +0.5) | reach-up DEPRECATED 2026-07-03 (Maintainer live ruling — flush looked better; provisional, may regress) | `DySpecificationTest`, `SmooshUnderTerrainSlabsTest` (roots + lantern + dripstone + chain, all flush) |
+| `CH-VANILLA-TOP` | hanging roots / lantern / dripstone / chain | under a vanilla TOP slab | **0.0** (was +0.5) | reach-up DEPRECATED 2026-07-03 (maintainer live ruling — flush looked better; provisional, may regress) | `DySpecificationTest`, `SmooshUnderTerrainSlabsTest` (roots + lantern + dripstone + chain, all flush) |
 | `CH-TS` | hanging roots (always-hung lane) | under a TS TOP/DOUBLE slab | **0.0** | L4 (no smoosh) | `SmooshUnderTerrainSlabsTest` |
 | `CH-TS-OBJECT` | hanging lantern / Y-chain / pointed dripstone (`getYOffsetInner` lane) | under a TS TOP/DOUBLE slab | **0.0** | L4 (no smoosh) | `SmooshUnderTerrainSlabsTest` (lantern TOP+DOUBLE, chain TOP, dripstone TOP) |
 | `CH-FLUSH` | hanging roots | under a flush full block | **0.0** | — (weak control¹) | `DySpecificationTest`, `SmooshUnderTerrainSlabsTest` |
@@ -143,7 +143,7 @@ dripstone still smooshed while the always-hung test stayed green.
 The persistent anchor is a boolean membership set, **not a stored height**. A follower that carries
 one therefore resolves its dy from the support below it at read time, and it must resolve from that
 support's *actual* dy — never from the *kind* of support. Live-reported 2026-08-05 (0.5 floating gap
-across `birch_slab` / `birch_fence` / `lantern` / `oak_sign`); see `docs/process/LIVE_LEDGER.md`.
+across `birch_slab` / `birch_fence` / `lantern` / `oak_sign`); recorded in the internal live ledger.
 
 | SPEC-ID | subject | local config | dy | law | test |
 |---|---|---|---|---|---|
@@ -165,7 +165,7 @@ clickable only if the offset-aware pick window tests the cell layers its shape o
 is `MIN_RESOLVED_DY >= DEEPEST_TARGETABLE_DY`; it is an INEQUALITY with the flag off (cap −1.0
 against a window built for −2.0, deliberate slack so the pick-path cost ships alone) and closes to
 EQUALITY with the flag on, where `MIN_RESOLVED_DY` literally READS `DEEPEST_TARGETABLE_DY`. So
-`MIN_RESOLVED_DY == -(window radius)` is derivable, which is Maintainer's stated reason (2026-08-06) for
+`MIN_RESOLVED_DY == -(window radius)` is derivable, which is the maintainer's stated reason (2026-08-06) for
 ruling the cap −2.0 rather than the −1.5 originally asked for: Stage 0 MEASURED the required radius
 as 1 at −1.0 and 2 at BOTH −1.5 and −2.0, so −1.5 would pay the whole radius-2 cost and leave the
 constant magic anyway.
@@ -205,8 +205,8 @@ These are tracked deliberately — the spec is the oracle; the gap is the findin
 
 | SPEC-ID | case | spec intent | current | where |
 |---|---|---|---|---|
-| `OPEN-MINUS1` | side-click a −1.0-lowered slab (vanilla TOP on TS bottom) | EXTEND (stay −1.0) | COMBINES to a double AND pops +0.5 | `UseOnMinusOneLoweredCombineVsExtendRedTest` — **intentionally NOT registered** in `fabric.mod.json` (RED-cell discipline: it fails by design until the fix lands; register it then). `HANDOFF.md` Q6 |
-| `OPEN-STAIRS` | stairs visual lowering vs collision | decide: collision-follow OR exclude | visual −0.5 with vanilla collision (WYSIWYG mismatch) | `HANDOFF.md` Q3 |
+| `OPEN-MINUS1` | side-click a −1.0-lowered slab (vanilla TOP on TS bottom) | EXTEND (stay −1.0) | COMBINES to a double AND pops +0.5 | `UseOnMinusOneLoweredCombineVsExtendRedTest` — **intentionally NOT registered** in `fabric.mod.json` (RED-cell discipline: it fails by design until the fix lands; register it then). Internal notes, Q6 |
+| `OPEN-STAIRS` | stairs visual lowering vs collision | decide: collision-follow OR exclude | visual −0.5 with vanilla collision (WYSIWYG mismatch) | Internal notes, Q3 |
 
 ---
 
@@ -250,7 +250,7 @@ When you add a fix that closes one of these, add its row + pin it, and move it o
 1. Copy `DY_SPEC.md` + `DySpecificationTest` (adjust only the MC-API glue) onto the port.
 2. Run `runGameTest`. Every RED row is a spec violation — the exact list of what to fix, before
    any live testing.
-3. Update the port's column in [PORT_FIX_MATRIX.md](PORT_FIX_MATRIX.md).
+3. Update the port's column in the internal port-fix matrix (maintainer notes).
 4. Only then do a live pass — and only for the live-only rows above.
 
 _This file lives on `main` as the canonical spec. It is version-invariant by design; if you find

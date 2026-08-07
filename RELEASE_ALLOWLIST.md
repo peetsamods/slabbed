@@ -159,7 +159,7 @@ no inert, undeclared mixin shipping on this line.
 
 ### Shipped debug surface — `/slabdy` and `/slabdev`
 
-Maintainer's standing rule: **the debug tooling ships in EVERY jar, default off, op-invocable.** These
+Standing maintainer rule: **the debug tooling ships in EVERY jar, default off, op-invocable.** These
 rows exist because of that rule, not in spite of it — do not "clean" them out. This is the sharpest
 difference from the 26.2 line, whose allowlist excludes `com/slabbed/dev/**` and the debug commands
 wholesale (on that line neither command is registered from release code at all, which its own ruling
