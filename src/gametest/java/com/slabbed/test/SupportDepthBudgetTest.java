@@ -90,6 +90,18 @@ public final class SupportDepthBudgetTest {
      */
     private static final int COURSES_PAST_THE_BUDGET = 3;
 
+    /**
+     * A DELIBERATELY TALLER pass-through fixture, used only by the cliff cell below.
+     *
+     * <p>It is a separate constant, and the cliff cell builds its own tower rather than growing
+     * {@link #COURSES_PAST_THE_BUDGET}, so the two characterisation rows above keep measuring the
+     * exact ladder their own messages describe. Seven courses past the budget makes the truncation
+     * point travel far enough up the stack that the DISTANCE from it down to the bottom of the
+     * tower — the lookahead an exhaustion rule would need in order to answer correctly — is
+     * visibly different for each course, which is the point the cell measures.
+     */
+    private static final int TALL_COURSES_PAST_THE_BUDGET = 7;
+
     // ─────────────────────────────────────────────────────────────────────────────
     // 1. THE DERIVATION
     // ─────────────────────────────────────────────────────────────────────────────
@@ -316,8 +328,328 @@ public final class SupportDepthBudgetTest {
     }
 
     // ─────────────────────────────────────────────────────────────────────────────
+    // 4. THE CLIFF — monotonicity is NECESSARY BUT NOT SUFFICIENT, and this is why
+    // ─────────────────────────────────────────────────────────────────────────────
+
+    /**
+     * <b>No course may sit further below the course under it than that course's own seat can
+     * lower it.</b>
+     *
+     * <p>{@link #assertNonIncreasing} is the guard Stage 3 shipped, and it is the guard that MISSED
+     * the defect Stage 4 found: a ladder that steps down and then falls off a cliff is still
+     * non-increasing. Monotonicity bounds the ladder on ONE side only. This cell adds the other
+     * side, and the bound it uses is not a constant — it is read off the SEAT each course actually
+     * rests on, because that is what decides how far one course may lower the next:
+     *
+     * <ul>
+     *   <li>a course seated on a BOTTOM slab takes the half-height arm, so it may sit up to half a
+     *       block below its support;</li>
+     *   <li>a course seated on a FULL-HEIGHT top face takes the pass-through arm, which lowers it
+     *       by NOTHING — it must read exactly what it is standing on.</li>
+     * </ul>
+     *
+     * <p>Together with monotonicity that is a two-sided band, and a walk that substitutes a value
+     * it did not measure falls outside it in whichever direction the substitution errs. The band is
+     * the same shape in both directions on purpose: the pop Stage 3 removed and the sink Stage 4
+     * found are the SAME defect seen from either end, and a repair that trades one for the other
+     * must not be able to read as green here.
+     *
+     * <h2>⚠️ RED IN THE DEEP LEG TODAY — see {@code KNOWN_INCOMPLETE.md} row 1o</h2>
+     *
+     * <p>Measured with {@code slabbed.deepDyAlphabet=true}: {@code L6 = -1.0}, {@code L7 = -2.0},
+     * across a pass-through seat whose own arm may lower nothing at all — a full-block cliff where
+     * the band allows zero. The OFF leg keeps the band ENFORCING; the deep leg characterises the
+     * one known cliff and pins its position, its magnitude, and the fact that there is exactly one.
+     *
+     * <p><b>And the cell MEASURES why no exhaustion return value can close it.</b> The walk for
+     * course {@code k} truncates at course {@code k - MAX_SUPPORT_RESOLVE_DEPTH}, and the value it
+     * has to invent there is that course's own resolved height — which is decided by the courses
+     * BELOW the truncation point, {@code k - MAX_SUPPORT_RESOLVE_DEPTH} of them. That distance
+     * grows with every course added to the stack, so the printed table below is the evidence that
+     * the information the exhaustion path is missing is not one lookahead away, or two, but
+     * unboundedly many. Reported, not patched.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void passThroughTowerNeverCliffsPastWhatItsSeatCanLower(TestContext ctx) {
+        ServerWorld w = ctx.getWorld();
+        BlockPos ground = ctx.getAbsolutePos(BlockPos.ORIGIN).add(2, 1, 2);
+        int budget = SlabSupport.MAX_SUPPORT_RESOLVE_DEPTH;
+
+        BlockPos[] level = buildPreStorePassThroughTower(ctx, w, ground,
+                budget + TALL_COURSES_PAST_THE_BUDGET);
+        double[] dy = readLadder(w, level);
+        String ladder = format("tall pass-through", level, dy);
+        System.out.println("[STAGE5-CLIFF] " + ladder);
+
+        // ── PREMISES ────────────────────────────────────────────────────────────────────────
+        ctx.assertTrue(Math.abs(dy[1] + 0.5) <= EPS,
+                "premise: the second slab course must sit at -0.5, or this stack is not standing "
+                        + "in a hole at all — " + ladder);
+        for (int i = 2; i < level.length; i++) {
+            ctx.assertTrue(SlabAnchorAttachment.isAnchored(w, level[i]),
+                    "premise: full-height course L" + i + " must be genuinely anchored, or the "
+                            + "resolver never walks through it and this cell measures nothing — "
+                            + ladder);
+        }
+        ctx.assertTrue(level.length > budget + 2,
+                "premise: the tower must be taller than the budget plus the two slab courses, or "
+                        + "no course truncates and the band is never tested where it matters — "
+                        + ladder);
+
+        // ── MONOTONICITY still holds, and is still asserted: this cell ADDS a bound, it does
+        //    not replace the one Stage 3 shipped. Stage 3's pop returning must go RED here too.
+        assertNonIncreasing(ctx, dy, ladder);
+
+        double[] allowed = allowedDropPerCourse(w, level);
+        if (!SlabSupport.DEEP_DY_ALPHABET) {
+            assertWithinOneSeatsDrop(ctx, dy, allowed, ladder);
+            ctx.complete();
+            return;
+        }
+
+        // ── THE DEEP LEG: CHARACTERISED, NOT ENDORSED (KNOWN_INCOMPLETE row 1o) ─────────────
+        int cliff = -1;
+        int cliffs = 0;
+        for (int i = 1; i < dy.length; i++) {
+            if (dy[i] < dy[i - 1] - allowed[i] - EPS) {
+                cliffs++;
+                if (cliff < 0) {
+                    cliff = i;
+                }
+            }
+        }
+        StringBuilder lookahead = new StringBuilder("[STAGE5-LOOKAHEAD]");
+        for (int k = budget + 1; k < level.length; k++) {
+            lookahead.append(" k=").append(k)
+                    .append(" truncatesAtL").append(k - budget)
+                    .append(" whoseTruthIs").append(dy[k - budget])
+                    .append(" substituted").append(SlabSupport.MIN_RESOLVED_DY)
+                    .append(" coursesBelowTheTruncationPoint=").append(k - budget).append(';');
+        }
+        System.out.println(lookahead);
+
+        ctx.assertTrue(cliff > 0,
+                "the deep leg was expected to REPRODUCE the exhaustion cliff and did not. If the "
+                        + "exhaustion path has been repaired, delete this branch and let the band "
+                        + "run enforcing in both legs — do not leave a characterisation standing "
+                        + "over a fixed defect — " + ladder);
+        ctx.assertTrue(cliff == budget + 1,
+                "CHARACTERISED (row 1o): the cliff must appear at the first course whose walk "
+                        + "truncates, L" + (budget + 1) + "; it appears at L" + cliff + ". A "
+                        + "different position means the budget is being spent differently than "
+                        + "one unit per course — " + ladder);
+        ctx.assertTrue(Math.abs(allowed[cliff]) <= EPS,
+                "CHARACTERISED (row 1o): the cliff must land on a PASS-THROUGH seat, which may "
+                        + "lower its follower by nothing at all — that is what makes it a cliff "
+                        + "rather than a legal step. Seat at L" + (cliff - 1) + " allows "
+                        + allowed[cliff] + " — " + ladder);
+        ctx.assertTrue(Math.abs(dy[cliff] - SlabSupport.MIN_RESOLVED_DY) <= EPS,
+                "CHARACTERISED (row 1o): the cliff drops to the exhaustion return, which is "
+                        + "MIN_RESOLVED_DY (" + SlabSupport.MIN_RESOLVED_DY + "); it drops to "
+                        + dy[cliff] + " — " + ladder);
+        ctx.assertTrue(cliffs == 1,
+                "CHARACTERISED (row 1o): there must be exactly ONE cliff — the substitution enters "
+                        + "once and every course above carries it unchanged. " + cliffs
+                        + " cliffs means the exhaustion path has changed shape and this row no "
+                        + "longer describes it — " + ladder);
+        for (int i = cliff; i < dy.length; i++) {
+            ctx.assertTrue(Math.abs(dy[i] - SlabSupport.MIN_RESOLVED_DY) <= EPS,
+                    "CHARACTERISED (row 1o): above the cliff every pass-through course carries the "
+                            + "exhaustion value unchanged, so L" + i + " must equal the cap; it "
+                            + "reads " + dy[i] + " — " + ladder);
+        }
+        // AND THE OTHER DIRECTION, ENFORCING EVEN HERE: whatever the exhaustion path does, it may
+        // never make a course read SHALLOWER than what its own seat hands it. This is Stage 3's
+        // pop, and it stays RED-able in the deep leg — the sink above is characterised, the pop
+        // never is.
+        for (int i = 1; i < dy.length; i++) {
+            ctx.assertTrue(dy[i] <= dy[i - 1] + EPS,
+                    "L" + i + " (" + dy[i] + ") reads SHALLOWER than the course it rests on, L"
+                            + (i - 1) + " (" + dy[i - 1] + ") — Stage 3's pop, returning at the "
+                            + "deeper cap. This direction is never characterised — " + ladder);
+        }
+        ctx.complete();
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────────
+    // 5. WHY NO EXHAUSTION VALUE CAN CLOSE IT — the fact that decides the answer is
+    //    below the horizon, and this cell builds the two frames that prove it
+    // ─────────────────────────────────────────────────────────────────────────────
+
+    /**
+     * <b>Two truncation frames that are INDISTINGUISHABLE to the exhaustion path, and that need
+     * DIFFERENT answers.</b>
+     *
+     * <p>This cell exists so nobody spends another session looking for the right exhaustion
+     * CONSTANT. There is not one, and this is the reason rather than the symptom.
+     *
+     * <p>When the walk runs out of budget at some cell, everything it is allowed to know is that
+     * cell and its immediate surroundings. Build two towers:
+     *
+     * <ul>
+     *   <li><b>A</b> — stone, a bottom slab, a second bottom slab, then anchored full-height
+     *       courses. Its first full-height course rests on a slab that is itself lowered.</li>
+     *   <li><b>B</b> — stone, ONE bottom slab, then anchored full-height courses. Its first
+     *       full-height course rests on a slab that is flush.</li>
+     * </ul>
+     *
+     * <p>The two cells this compares hold the SAME block, in the SAME anchor state, with the SAME
+     * absence of a stored height, resting on the SAME kind of seat — and they resolve half a block
+     * apart, because the thing that separates them is the slab TWO courses down. Push the towers
+     * taller and that separating fact moves further below the horizon without bound while the two
+     * frames stay identical. So the exhaustion return cannot be a constant, and it cannot be a
+     * function of what the truncated frame can see either.
+     *
+     * <p><b>Neither leg characterises anything here.</b> These are plain resolved heights on towers
+     * short enough that the budget is never reached, so this row is a statement about what the
+     * right answers ARE, and it must stay green through any repair of the exhaustion path. If it
+     * ever goes RED, the repair changed a value that was already correct.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void identicalTruncationFramesWouldNeedDifferentExhaustionValues(TestContext ctx) {
+        ServerWorld w = ctx.getWorld();
+
+        // Deliberately SHORT towers: three full-height courses cannot reach the budget, so every
+        // number below is a fully resolved height and not a truncated one.
+        BlockPos[] a = buildPreStorePassThroughTower(ctx, w,
+                ctx.getAbsolutePos(BlockPos.ORIGIN).add(2, 1, 2), 3);
+        BlockPos[] b = buildPreStoreOneSlabPassThroughTower(ctx, w,
+                ctx.getAbsolutePos(BlockPos.ORIGIN).add(5, 1, 2), 3);
+
+        // The two frames being compared: the first FULL-HEIGHT course of each tower.
+        BlockPos frameA = a[2];
+        BlockPos frameB = b[1];
+        BlockPos seatA = a[1];
+        BlockPos seatB = b[0];
+
+        double dyA = dy(w, frameA);
+        double dyB = dy(w, frameB);
+        double seatDyA = dy(w, seatA);
+        double seatDyB = dy(w, seatB);
+        String measured = "A: frame=" + w.getBlockState(frameA).getBlock() + " dy=" + dyA
+                + " seat=" + w.getBlockState(seatA).getBlock() + " seatDy=" + seatDyA
+                + " | B: frame=" + w.getBlockState(frameB).getBlock() + " dy=" + dyB
+                + " seat=" + w.getBlockState(seatB).getBlock() + " seatDy=" + seatDyB;
+        System.out.println("[STAGE5-HORIZON] " + measured);
+
+        // ── THE FRAMES ARE THE SAME, in every term the exhaustion path could branch on ──────
+        ctx.assertTrue(w.getBlockState(frameA) == w.getBlockState(frameB),
+                "premise: the two frames must hold the identical block state, or they are "
+                        + "distinguishable and this cell proves nothing — " + measured);
+        ctx.assertTrue(w.getBlockState(seatA) == w.getBlockState(seatB),
+                "premise: the two frames must rest on the identical seat state — " + measured);
+        ctx.assertTrue(SlabAnchorAttachment.isAnchored(w, frameA)
+                        && SlabAnchorAttachment.isAnchored(w, frameB),
+                "premise: both frames must be anchored, in the same way — " + measured);
+        ctx.assertFalse(SlabPlacementDyAttachment.hasStoredDy(w, frameA)
+                        || SlabPlacementDyAttachment.hasStoredDy(w, frameB),
+                "premise: both frames must be PRE-STORE, or the walk terminates at depth 1 and "
+                        + "the exhaustion path is never consulted — " + measured);
+
+        // ── AND THEY RESOLVE HALF A BLOCK APART ─────────────────────────────────────────────
+        ctx.assertTrue(Math.abs(dyA - dyB) > EPS,
+                "the whole point of this cell: two frames the exhaustion path cannot tell apart "
+                        + "must nevertheless resolve to different heights. They read the same ("
+                        + dyA + "), so the fixture no longer separates them and the impossibility "
+                        + "argument in KNOWN_INCOMPLETE row 1o has lost its evidence — " + measured);
+
+        // ── AND THE FACT THAT SEPARATES THEM IS ONE FURTHER LEVEL DOWN ──────────────────────
+        ctx.assertTrue(Math.abs(seatDyA - seatDyB) > EPS,
+                "the separating fact must live in the SEAT, one level below the frames — if the "
+                        + "seats agree, the difference came from somewhere this cell does not "
+                        + "name and the story is wrong — " + measured);
+        ctx.assertTrue(Math.abs((dyA - seatDyA) - (dyB - seatDyB)) <= EPS,
+                "both frames must take the SAME arm — each sits one half-height seat below its "
+                        + "own support — so the only thing that differs is how deep that support "
+                        + "already was, which is exactly what a truncated walk cannot see — "
+                        + measured);
+        ctx.complete();
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────────
     // helpers
     // ─────────────────────────────────────────────────────────────────────────────
+
+    /**
+     * How far each course's own SEAT is entitled to lower it, read off the block it rests on
+     * rather than written down as a constant. A bottom-slab seat takes the half-height arm (half a
+     * block); anything else this fixture builds presents its cell top and takes the pass-through
+     * arm (nothing at all). Index 0 is unused — the bottom course has no course below it.
+     */
+    private static double[] allowedDropPerCourse(ServerWorld w, BlockPos[] level) {
+        double[] allowed = new double[level.length];
+        for (int i = 1; i < level.length; i++) {
+            BlockState seat = w.getBlockState(level[i - 1]);
+            boolean halfHeight = seat.getBlock() instanceof SlabBlock
+                    && seat.contains(SlabBlock.TYPE)
+                    && seat.get(SlabBlock.TYPE) == SlabType.BOTTOM;
+            allowed[i] = halfHeight ? 0.5 : 0.0;
+        }
+        return allowed;
+    }
+
+    /**
+     * THE BAND, in one place: a course may sit below the course under it, but never by more than
+     * that course's seat can lower it, and never above it at all.
+     */
+    private static void assertWithinOneSeatsDrop(TestContext ctx, double[] dy, double[] allowed,
+                                                 String ladder) {
+        for (int i = 1; i < dy.length; i++) {
+            ctx.assertTrue(dy[i] >= dy[i - 1] - allowed[i] - EPS,
+                    "CLIFF: L" + i + " (" + dy[i] + ") sits " + (dy[i - 1] - dy[i]) + " below the "
+                            + "course it rests on, L" + (i - 1) + " (" + dy[i - 1] + "), but that "
+                            + "seat may only lower it by " + allowed[i] + ". Monotonicity does not "
+                            + "see this — a ladder that steps down and then falls off a cliff is "
+                            + "still non-increasing — " + ladder);
+            ctx.assertTrue(dy[i] <= dy[i - 1] + EPS,
+                    "POP: L" + i + " (" + dy[i] + ") reads SHALLOWER than the course it rests on, "
+                            + "L" + (i - 1) + " (" + dy[i - 1] + ") — " + ladder);
+        }
+    }
+
+    /**
+     * The pass-through shape, taller: stone / two bottom slabs / a stack of anchored full-height
+     * courses. Identical in construction to the fixture inside
+     * {@link #passThroughTowerPastTheBudgetNeverRises}, extracted so the cliff cell can build a
+     * different HEIGHT without touching that cell's characterisation rows.
+     */
+    private static BlockPos[] buildPreStorePassThroughTower(TestContext ctx, ServerWorld w,
+                                                            BlockPos ground, int fullHeightCourses) {
+        w.setBlockState(ground, Blocks.STONE.getDefaultState(), Block.NOTIFY_LISTENERS);
+        BlockPos[] level = new BlockPos[2 + fullHeightCourses];
+        for (int i = 0; i < level.length; i++) {
+            level[i] = ground.up(i + 1);
+            BlockState state = i < 2
+                    ? bottomSlab(Blocks.OAK_SLAB)
+                    : Blocks.STRIPPED_JUNGLE_LOG.getDefaultState();
+            w.setBlockState(level[i], state, Block.NOTIFY_LISTENERS);
+            SlabAnchorAttachment.addAnchor(w, level[i], w.getBlockState(level[i]));
+        }
+        clearStoredHeights(ctx, w, level);
+        return level;
+    }
+
+    /**
+     * The pass-through shape with only ONE bottom-slab course under the stack, so the stack stands
+     * in a half-block hole instead of a full-block one. Same construction as
+     * {@link #buildPreStorePassThroughTower} in every other respect.
+     */
+    private static BlockPos[] buildPreStoreOneSlabPassThroughTower(TestContext ctx, ServerWorld w,
+                                                                   BlockPos ground,
+                                                                   int fullHeightCourses) {
+        w.setBlockState(ground, Blocks.STONE.getDefaultState(), Block.NOTIFY_LISTENERS);
+        BlockPos[] level = new BlockPos[1 + fullHeightCourses];
+        for (int i = 0; i < level.length; i++) {
+            level[i] = ground.up(i + 1);
+            BlockState state = i < 1
+                    ? bottomSlab(Blocks.OAK_SLAB)
+                    : Blocks.STRIPPED_JUNGLE_LOG.getDefaultState();
+            w.setBlockState(level[i], state, Block.NOTIFY_LISTENERS);
+            SlabAnchorAttachment.addAnchor(w, level[i], w.getBlockState(level[i]));
+        }
+        clearStoredHeights(ctx, w, level);
+        return level;
+    }
 
     /**
      * THE INVARIANT, in one place so both shapes assert the identical thing: no course may resolve
