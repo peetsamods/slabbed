@@ -51,21 +51,31 @@ import net.minecraft.util.shape.VoxelShape;
  *       suite stayed green.</li>
  * </ul>
  *
- * <p><b>CI STATUS OF THE DELIBERATELY-RED ROWS.</b> The window rows are written as
- * CHARACTERISATION: they assert what today's radius-1 window actually does (including the misses),
- * so the suite stays green and the RED is documented rather than thrown. Each such assertion names,
- * in its message, the exact condition Stage 1 must INVERT when the window widens to radius 2 — so
- * widening the window turns these rows RED on purpose and forces the update, and they can never be
- * mistaken for an endorsement of the current behaviour. Every one of them is paired, in the same
- * cell, with a positive control at today's {@code -1.0} cap, so a broken aim can never masquerade
- * as the finding.
+ * <p><b>CI STATUS OF THE DELIBERATELY-RED ROWS — ✅ INVERTED BY STAGE 1 (the window widening).</b>
+ * As written for Stage 0 the window rows were CHARACTERISATION: they asserted what the radius-1
+ * window actually did <em>including its misses</em>, so the suite stayed green and the RED was
+ * documented rather than thrown, and each such assertion named in its message the exact condition
+ * Stage 1 had to invert. Stage 1 widened {@code SlabbedOffsetRaycast.consumeCell} to
+ * {@code SlabbedOffsetRaycast.WINDOW_RADIUS} and those rows went RED exactly as designed; they are
+ * now inverted in place, so the same cells pin the ±2 behaviour that the widening bought. <b>No
+ * row was deleted and no positive control was touched</b> — every measurement in this file is
+ * still paired, in the same cell, with a {@code -1.0} control, so a broken aim still cannot
+ * masquerade as a finding. The rows that were never about the window (B and C) are untouched.
+ *
+ * <p><b>The radius is no longer written down here.</b> {@link #TODAYS_WINDOW_RADIUS} now READS
+ * {@code SlabbedOffsetRaycast.WINDOW_RADIUS}, which is itself derived from that class's
+ * {@code DEEPEST_TARGETABLE_DY}. A third copy of the number is exactly how these two would drift
+ * apart again.
  */
 public final class DeepDyWindowCharacterisationTest {
 
     private static final double EPS = 1.0e-6;
 
-    /** The radius {@code SlabbedOffsetRaycast.consumeCell} actually searches today. */
-    private static final int TODAYS_WINDOW_RADIUS = 1;
+    /**
+     * The radius {@code SlabbedOffsetRaycast.consumeCell} actually searches — READ from the
+     * production constant, never restated. Stage 1 moved it from 1 to 2.
+     */
+    private static final int TODAYS_WINDOW_RADIUS = SlabbedOffsetRaycast.WINDOW_RADIUS;
 
     // ──────────────────────────────────────────────────────────────────────────
     // A. THE ±1 PICK WINDOW
@@ -75,16 +85,22 @@ public final class DeepDyWindowCharacterisationTest {
      * A-1 — <b>MEASURES the survey's central claim: a BOTTOM slab at {@code -1.5} occupies only
      * {@code P.y-2} and cannot be attributed to its owner.</b>
      *
-     * <p>The claim is CONFIRMED for a ray that travels in the shape's own cell layer (the ordinary
-     * crosshair aim at the block's visible body from the side) and REFUTED as stated for a ray that
-     * also passes through the owner cell {@code P} — the DDA tests {@code P} as a PRIMARY cell
-     * there, and a primary cell is tested regardless of its offset. "Untargetable" is therefore too
-     * strong; "untargetable from the side, where the player is actually looking" is the measured
-     * truth, and it is the case the existing suite pins at every shallower magnitude
-     * ({@code OffsetRaycastTargetingTest} cells 2, 5 and 8).
+     * <p><b>As measured under the radius-1 window (Stage 0):</b> the claim was CONFIRMED for a ray
+     * travelling in the shape's own cell layer (the ordinary crosshair aim at the block's visible
+     * body from the side) and REFUTED as stated for a ray that also passes through the owner cell
+     * {@code P} — the DDA tests {@code P} as a PRIMARY cell there, and a primary cell is tested
+     * regardless of its offset. "Untargetable" was therefore too strong; "untargetable from the
+     * side, where the player is actually looking" was the measured truth, and it is the case the
+     * existing suite pins at every shallower magnitude ({@code OffsetRaycastTargetingTest} cells 2,
+     * 5 and 8).
      *
-     * <p>Positive control in the same cell: the identical subject at today's {@code -1.0} cap
-     * occupies {@code P.y-1}, is inside the radius-1 window, and IS hit by the same side aim.
+     * <p><b>Under the radius-2 window Stage 1 shipped, the side aim is recovered</b> — the layer the deep slab occupies is 2 cells from its owner, and 2 is now
+     * inside the window. The side-ray row below is inverted accordingly; the geometry rows above it
+     * (which layer, which required radius) are measurements of the shape and did not move.
+     *
+     * <p>Positive control in the same cell, untouched by the inversion: the identical subject at
+     * the resolver's {@code -1.0} cap occupies {@code P.y-1}, needs radius 1, and IS hit by the
+     * same side aim.
      */
     @GameTest(structure = "fabric-gametest-api-v1:empty")
     public void deepBottomSlabIsUnreachableFromItsOwnLayerUnderTheRadiusOneWindow(TestContext ctx) {
@@ -126,14 +142,14 @@ public final class DeepDyWindowCharacterisationTest {
                 "MEASUREMENT A: attributing that layer to its owner needs a window radius of 2; "
                         + "today's radius is " + TODAYS_WINDOW_RADIUS + " — " + deepSpan);
 
-        ctx.assertFalse(deepSideHit,
-                "CHARACTERISATION (deliberately pins the DEFECT, radius-1 window): a side ray "
+        ctx.assertTrue(deepSideHit,
+                "INVERTED BY STAGE 1 (was: assertFalse, pinning the radius-1 DEFECT). A side ray "
                         + "travelling through the -1.5 bottom slab's own body at y=" + sideAim
-                        + " marches only cell layer " + deepSpan.lowLayer + ", whose window "
-                        + "{L-1,L,L+1} excludes the owner at P.y=" + deep.getY() + ", so the block "
-                        + "the player is looking at is NOT hit. STAGE 1 MUST INVERT THIS "
-                        + "ASSERTION when the window widens to radius 2 — a green here after the "
-                        + "widening means the widening did not take.");
+                        + " marches only cell layer " + deepSpan.lowLayer + ", which is 2 cells "
+                        + "from the owner at P.y=" + deep.getY() + ". Under the radius-"
+                        + TODAYS_WINDOW_RADIUS + " window that layer's probe set reaches the owner, "
+                        + "so the block the player is looking at IS hit. A RED here means the "
+                        + "widening did not take — this assertion is the one that proves it did.");
 
         ctx.assertTrue(deepDownHit,
                 "MEASUREMENT A, the survey's overstatement: 'occupies ONLY P.y-2 and is therefore "
@@ -146,11 +162,16 @@ public final class DeepDyWindowCharacterisationTest {
 
     /**
      * A-2 — <b>MEASURES the survey's second claim: a full block at {@code -1.5} spans
-     * {@code P.y-2..P.y-1}, so grazing rays miss it.</b> Measured verdict: PARTLY CONFIRMED. The
-     * block occupies two layers; the UPPER one ({@code P.y-1}) is inside the radius-1 window and IS
-     * hit, the LOWER one ({@code P.y-2}) is outside it and is NOT. So the subject is not invisible
-     * — it is a block whose bottom half cannot be clicked, which is a distinct (and arguably worse
-     * to diagnose) defect from a block that cannot be clicked at all.
+     * {@code P.y-2..P.y-1}, so grazing rays miss it.</b> Measured verdict under the radius-1 window
+     * (Stage 0): PARTLY CONFIRMED. The block occupies two layers; the UPPER one ({@code P.y-1}) was
+     * inside the radius-1 window and WAS hit, the LOWER one ({@code P.y-2}) was outside it and was
+     * NOT. So the subject was never invisible — it was a block whose bottom half could not be
+     * clicked, a distinct (and arguably worse to diagnose) defect from one that cannot be clicked
+     * at all.
+     *
+     * <p><b>Stage 1's radius-2 window closes the split</b>: both layers are now within the window,
+     * so both halves are clickable. The lower-layer row is inverted accordingly. The upper-layer
+     * row is the aim's positive control and is unchanged — it passed before and must still pass.
      */
     @GameTest(structure = "fabric-gametest-api-v1:empty")
     public void deepFullBlockLosesOnlyItsLowerLayerUnderTheRadiusOneWindow(TestContext ctx) {
@@ -178,12 +199,13 @@ public final class DeepDyWindowCharacterisationTest {
                 "MEASUREMENT A: the UPPER layer P.y-1 is one cell from the owner, so the radius-1 "
                         + "window already attributes it — a grazing ray at y=" + highAim + " hits. "
                         + "This is also the positive control for the aim.");
-        ctx.assertFalse(lowHit,
-                "CHARACTERISATION (deliberately pins the DEFECT, radius-1 window): a grazing ray "
-                        + "through the LOWER half of the same block at y=" + lowAim + " marches "
-                        + "only layer " + s.lowLayer + ", two cells from the owner, and misses. The "
-                        + "block's bottom half is unclickable. STAGE 1 MUST INVERT THIS ASSERTION "
-                        + "when the window widens to radius 2.");
+        ctx.assertTrue(lowHit,
+                "INVERTED BY STAGE 1 (was: assertFalse, pinning the radius-1 DEFECT — the block's "
+                        + "bottom half was unclickable). A grazing ray through the LOWER half of "
+                        + "the same block at y=" + lowAim + " marches only layer " + s.lowLayer
+                        + ", two cells from the owner; the radius-" + TODAYS_WINDOW_RADIUS
+                        + " window reaches that far, so both halves of the block are now clickable "
+                        + "and the split-clickability defect is closed.");
         ctx.complete();
     }
 
@@ -228,8 +250,23 @@ public final class DeepDyWindowCharacterisationTest {
         ctx.assertTrue(expected[2] == 2,
                 "the identity MIN_RESOLVED_DY == -(window radius) holds at -2.0 with radius 2 —"
                         + table);
-        ctx.assertTrue(TODAYS_WINDOW_RADIUS == 1,
-                "today's window radius is 1, which is why MIN_RESOLVED_DY is -1.0 —" + table);
+
+        // INVERTED BY STAGE 1 (was: assertTrue(TODAYS_WINDOW_RADIUS == 1), "which is why
+        // MIN_RESOLVED_DY is -1.0"). The window now stands at the radius the RULED cap needs, ahead
+        // of the alphabet that will use it — so the identity holds as an INEQUALITY during stages
+        // 1-3 and closes to equality at Stage 4. Both halves are asserted: the radius is the one
+        // the ruled cap derives, and it is not SHALLOWER than the cap the resolver may produce.
+        ctx.assertTrue(TODAYS_WINDOW_RADIUS
+                        == (int) Math.ceil(-SlabbedOffsetRaycast.DEEPEST_TARGETABLE_DY),
+                "STAGE 1: the shipping window radius must be the one DERIVED from the window's own "
+                        + "cap (" + SlabbedOffsetRaycast.DEEPEST_TARGETABLE_DY + " -> radius "
+                        + (int) Math.ceil(-SlabbedOffsetRaycast.DEEPEST_TARGETABLE_DY) + "), "
+                        + "measured " + TODAYS_WINDOW_RADIUS + " —" + table);
+        ctx.assertTrue(TODAYS_WINDOW_RADIUS == 2,
+                "STAGE 1: the ruled cap is -2.0 and the measured required radius at -2.0 is 2, so "
+                        + "the shipping radius must be 2 — measured " + TODAYS_WINDOW_RADIUS
+                        + ". (It was 1 before Stage 1; this row is the inverted Stage 0 row.) —"
+                        + table);
         ctx.complete();
     }
 

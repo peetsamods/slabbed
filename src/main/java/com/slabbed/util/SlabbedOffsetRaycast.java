@@ -35,19 +35,59 @@ import net.minecraft.world.BlockView;
  * outline of {@code C} itself plus the <em>vertical neighbours</em> {@code C.up()} and
  * {@code C.down()} that carry a non-zero visual offset.
  *
- * <p><b>±1 window completeness.</b> Visual offsets lie in the closed set
- * {@code {-1.0,-0.5,0.0}} — the historical {@code +0.5} ceiling reach-up is DEPRECATED
- * (2026-07-03 live ruling; ceiling hangers now render FLUSH, see
- * {@code SlabSupport.isLoweringTopLikeCeiling}) — and every block shape is at most one
- * cell tall, so an owner at {@code P} occupies at most {@code {P, P.down()}} (for
- * {@code -1.0}). Any ray that intersects the owner's shape must enter one of those
- * cells, and {@code P} is within ±1 of every such cell — so testing
- * {@code {C, C.up(), C.down()}} at each visited cell is provably sufficient (the
- * {@code C.up()} probe is currently defensive headroom: it matters only if a positive
- * offset ever returns, e.g. by reversing the reach-up ruling). The grazing gametests in
- * {@code OffsetRaycastTargetingTest} pin the extremes — the deep {@code -1.0} owner and
- * the now-flush ceiling hanger — so a future out-of-range offset trips a red test
- * rather than silently mistargeting.
+ * <p><b>Window completeness — as a function of the cap, not of a hardcoded radius.</b>
+ * The window radius is not a free constant: it is fixed by the deepest offset the window
+ * undertakes to attribute, {@link #DEEPEST_TARGETABLE_DY}, and {@link #WINDOW_RADIUS} is
+ * DERIVED from it in code rather than written down a second time. The derivation:
+ *
+ * <ol>
+ *   <li>Every block outline is at most one cell tall and starts at or above its own cell
+ *       floor, so an owner at {@code P} carrying visual offset {@code dy} occupies world
+ *       Y within {@code [P.y + dy, P.y + dy + 1]}.</li>
+ *   <li>The cell layers that interval can touch are therefore
+ *       {@code P.y + floor(dy) .. P.y}. With {@code dy <= 0} nothing is ever above
+ *       {@code P.y}; the farthest layer BELOW the owner is {@code floor(dy)} cells away,
+ *       which over {@code dy ∈ [DEEPEST_TARGETABLE_DY, 0]} is worst at the cap and equals
+ *       {@code ceil(-DEEPEST_TARGETABLE_DY)}.</li>
+ *   <li>A ray that intersects the owner's shape must march at least one of those layers
+ *       — the DDA visits every cell the segment passes through — and each of them is
+ *       within {@code ceil(-DEEPEST_TARGETABLE_DY)} of {@code P}.</li>
+ * </ol>
+ *
+ * <p>So {@code WINDOW_RADIUS = ceil(-DEEPEST_TARGETABLE_DY)} is <em>sufficient</em>, and it
+ * is also <em>necessary</em>: a half-height BOTTOM slab sitting at exactly the cap occupies
+ * only the layer {@code P.y + floor(cap)} and nothing nearer, so any smaller radius loses
+ * it to a side aim. <b>Change the cap and the radius moves with it, automatically. Change
+ * the radius and you have changed which caps this class can honour.</b> The identity the
+ * resolver must respect is therefore {@code MIN_RESOLVED_DY >= DEEPEST_TARGETABLE_DY} —
+ * the alphabet may never run deeper than the window that has to click it. (Ruling of
+ * 2026-08-06 in {@code docs/process/LIVE_LEDGER.md}, measured by
+ * {@code DeepDyWindowCharacterisationTest}: required radius is 1 at {@code -1.0} and 2 at
+ * both {@code -1.5} and {@code -2.0}, which is why the ruled cap is {@code -2.0} — the
+ * largest magnitude a radius-2 window pays for.)
+ *
+ * <p><b>Slack is deliberate right now.</b> {@code SlabSupport.MIN_RESOLVED_DY} is still
+ * {@code -1.0} while this window is built for {@code -2.0}: the window lands ahead of the
+ * alphabet on purpose, so the permanent pick-path cost ships and live-tests by itself
+ * rather than entangled with a geometry change. While that slack exists the extra probes
+ * are <em>provably inert</em>: with every offset the build can mint confined to
+ * {@code [-1.0, 0.0]}, a shape never reaches further than one cell from its owner, so the
+ * outer ring of the window can only reach positions whose shape the ray does not intersect
+ * — {@code raycastBlock} returns {@code null} for every one of them. The ring cannot even
+ * perturb the primary/neighbour bookkeeping: cell Y is monotonic along a segment and the
+ * DDA is contiguous, so any position the outer ring marks and that is later marched as a
+ * primary cell was already marked, one cell earlier along the same ray, by the inner ring.
+ * {@code PickWindowWideningTest} demonstrates this by running identical rays through both
+ * radii and comparing the results, rather than leaving it as an argument.
+ *
+ * <p>The upward half of the window is symmetric defensive headroom: visual offsets lie in
+ * the closed set {@code {-1.0,-0.5,0.0}} — the historical {@code +0.5} ceiling reach-up is
+ * DEPRECATED (2026-07-03 live ruling; ceiling hangers now render FLUSH, see
+ * {@code SlabSupport.isLoweringTopLikeCeiling}) — so no positive offset exists today and
+ * the upward probes never yield a hit; if one ever returns it is covered up to
+ * {@code +WINDOW_RADIUS}. The grazing gametests in {@code OffsetRaycastTargetingTest} pin
+ * the extremes — the deep {@code -1.0} owner and the now-flush ceiling hanger — so a
+ * future out-of-range offset trips a red test rather than silently mistargeting.
  *
  * <p><b>Parity with vanilla.</b> For non-offset blocks (shapes contained in their own
  * cell) the nearest hit equals vanilla's first-cell hit, because ray distance is
@@ -68,7 +108,55 @@ import net.minecraft.world.BlockView;
  */
 public final class SlabbedOffsetRaycast {
 
+    /**
+     * The deepest visual offset this pick window undertakes to attribute to its owner — the
+     * window's CONTRACT, stated as a magnitude rather than as a cell count, because the magnitude
+     * is the thing anyone has a reason to change.
+     *
+     * <p>Ruled {@code -2.0} by Maintainer on 2026-08-06. {@code SlabSupport.MIN_RESOLVED_DY}, the
+     * deepest offset the resolver will ever PRODUCE, must never be deeper than this value; today
+     * it is shallower ({@code -1.0}), which is the deliberate slack described in the class doc.
+     */
+    public static final double DEEPEST_TARGETABLE_DY = -2.0;
+
+    /**
+     * How many cells above and below each marched cell {@link NearestCollector#consumeCell} tests.
+     *
+     * <p><b>DERIVED, never written twice.</b> {@code ceil(-DEEPEST_TARGETABLE_DY)} is exactly the
+     * number of cells that separate an owner from the deepest layer its shape can occupy at the
+     * cap — see the completeness proof in the class doc. Computed once at class init, so the hot
+     * path reads a folded constant and pays nothing for the derivation.
+     */
+    public static final int WINDOW_RADIUS = (int) Math.ceil(-DEEPEST_TARGETABLE_DY);
+
     private SlabbedOffsetRaycast() {
+    }
+
+    /**
+     * What one ray cost, in operations rather than wall-clock — the instrument behind this line's
+     * pick-path perf gate ({@code PickWindowWideningTest}).
+     *
+     * <p>Wall-clock is not admissible here: it is noisy, machine-dependent, and this project has
+     * shipped a perf regression twice without a timing test ever going red. These are counts of
+     * the work the window actually does, so they are exact, deterministic for a fixed scene and
+     * ray, and comparable between two window radii.
+     *
+     * @param windowRadius   the radius the ray was run at
+     * @param cellsMarched   DDA cells visited — a property of the ray, NOT of the window
+     * @param neighborProbes calls into the neighbour arm; exactly {@code 2 * windowRadius} per
+     *                       marched cell, before any de-duplication
+     * @param posAllocations {@code BlockPos} objects allocated by the neighbour arm (probes that
+     *                       survive the de-duplication set) — the allocation-regression instrument
+     * @param dyResolutions  {@code SlabSupport.getVisualYOffset} calls that missed the memo — the
+     *                       expensive resolution, one full support walk each
+     * @param shapeRaycasts  {@code BlockView.raycastBlock} calls — the expensive shape test
+     */
+    public record Cost(int windowRadius,
+                       int cellsMarched,
+                       int neighborProbes,
+                       int posAllocations,
+                       int dyResolutions,
+                       int shapeRaycasts) {
     }
 
     /**
@@ -78,14 +166,43 @@ public final class SlabbedOffsetRaycast {
      * {@code null}, matching {@code Entity.raycast}.
      */
     public static BlockHitResult raycast(BlockView world, Vec3d start, Vec3d end, ShapeContext shapeContext) {
-        if (world == null || start == null || end == null) {
-            return missed(start, end);
-        }
-        if (start.equals(end)) {
-            return missed(start, end);
-        }
+        return raycastWithWindow(world, start, end, shapeContext, WINDOW_RADIUS);
+    }
 
-        final NearestCollector collector = new NearestCollector(world, start, end, shapeContext);
+    /**
+     * The same raycast at an explicitly chosen window radius. <b>Not a production entry point</b> —
+     * the pick path always goes through {@link #raycast}, which fixes the radius at
+     * {@link #WINDOW_RADIUS}. This exists so a test can run one identical ray through two radii and
+     * compare, which is what turns "widening the window is behaviour-neutral at today's alphabet"
+     * from an argument into a measurement, and what lets the perf gate state the cost of the
+     * widening relative to the window it replaced instead of against a wall clock.
+     */
+    public static BlockHitResult raycastWithWindow(BlockView world, Vec3d start, Vec3d end,
+                                                   ShapeContext shapeContext, int windowRadius) {
+        if (world == null || start == null || end == null || start.equals(end)) {
+            return missed(start, end);
+        }
+        BlockHitResult best = collect(world, start, end, shapeContext, windowRadius).best;
+        return best != null ? best : missed(start, end);
+    }
+
+    /**
+     * Runs one ray and reports what it COST rather than what it hit. See {@link Cost}.
+     */
+    public static Cost measureCost(BlockView world, Vec3d start, Vec3d end,
+                                   ShapeContext shapeContext, int windowRadius) {
+        if (world == null || start == null || end == null || start.equals(end)) {
+            return new Cost(windowRadius, 0, 0, 0, 0, 0);
+        }
+        NearestCollector c = collect(world, start, end, shapeContext, windowRadius);
+        return new Cost(windowRadius, c.cellsMarched, c.neighborProbes,
+                c.posAllocations, c.dyResolutions, c.shapeRaycasts);
+    }
+
+    private static NearestCollector collect(BlockView world, Vec3d start, Vec3d end,
+                                            ShapeContext shapeContext, int windowRadius) {
+        final NearestCollector collector =
+                new NearestCollector(world, start, end, shapeContext, windowRadius);
 
         // Reuse vanilla's DDA: the per-cell factory always returns null so the helper
         // marches every cell along [start, end]; the nearest hit is accumulated as a
@@ -99,9 +216,7 @@ public final class SlabbedOffsetRaycast {
                     return null;
                 },
                 c -> null);
-
-        BlockHitResult best = collector.best;
-        return best != null ? best : missed(start, end);
+        return collector;
     }
 
     private static BlockHitResult missed(Vec3d start, Vec3d end) {
@@ -124,29 +239,48 @@ public final class SlabbedOffsetRaycast {
         private final Vec3d start;
         private final Vec3d end;
         private final ShapeContext shapeContext;
+        private final int windowRadius;
         private final LongOpenHashSet shapeTested = new LongOpenHashSet();
         private final Long2DoubleOpenHashMap dyMemo = new Long2DoubleOpenHashMap();
 
         private BlockHitResult best = null;
         private double bestDistSq = Double.POSITIVE_INFINITY;
 
-        NearestCollector(BlockView world, Vec3d start, Vec3d end, ShapeContext shapeContext) {
+        // Work counters for the pick-path perf gate. Four int increments on a path whose unit of
+        // work is a VoxelShape raycast; they are unconditional so the gate can never measure a
+        // differently-instrumented path from the one that ships.
+        private int cellsMarched;
+        private int neighborProbes;
+        private int posAllocations;
+        private int dyResolutions;
+        private int shapeRaycasts;
+
+        NearestCollector(BlockView world, Vec3d start, Vec3d end, ShapeContext shapeContext,
+                         int windowRadius) {
             this.world = world;
             this.start = start;
             this.end = end;
             this.shapeContext = shapeContext;
+            this.windowRadius = windowRadius;
             this.dyMemo.defaultReturnValue(Double.NaN);
         }
 
         /**
          * Test the cell itself (always, for vanilla parity) then its vertical neighbours
-         * (only those carrying a non-zero visual offset — a non-offset neighbour is
-         * reached as its own primary cell).
+         * out to {@link #WINDOW_RADIUS} (only those carrying a non-zero visual offset — a
+         * non-offset neighbour is reached as its own primary cell).
+         *
+         * <p>The bound is the derived {@link #WINDOW_RADIUS}, so this loop widens or narrows with
+         * {@link #DEEPEST_TARGETABLE_DY} and can never fall out of step with the completeness
+         * proof in the class doc.
          */
         void consumeCell(int x, int y, int z) {
+            cellsMarched++;
             testPrimary(x, y, z);
-            testNeighbor(x, y - 1, z);
-            testNeighbor(x, y + 1, z);
+            for (int d = 1; d <= windowRadius; d++) {
+                testNeighbor(x, y - d, z);
+                testNeighbor(x, y + d, z);
+            }
         }
 
         private void testPrimary(int x, int y, int z) {
@@ -158,10 +292,12 @@ public final class SlabbedOffsetRaycast {
         }
 
         private void testNeighbor(int x, int y, int z) {
+            neighborProbes++;
             long key = BlockPos.asLong(x, y, z);
             if (shapeTested.contains(key)) {
                 return;
             }
+            posAllocations++;
             BlockPos pos = new BlockPos(x, y, z);
             BlockState state = world.getBlockState(pos);
             if (state.isAir()) {
@@ -170,6 +306,7 @@ public final class SlabbedOffsetRaycast {
             // Only an offset neighbour can intrude into a cell that is not its own.
             double dy = dyMemo.get(key);
             if (Double.isNaN(dy)) {
+                dyResolutions++;
                 dy = SlabSupport.getVisualYOffset(world, pos, state);
                 dyMemo.put(key, dy);
             }
@@ -194,6 +331,7 @@ public final class SlabbedOffsetRaycast {
             }
             // raycastBlock mirrors vanilla: it raycasts the outline and refines the
             // reported side via getRaycastShape (both already dy-offset by the mixin).
+            shapeRaycasts++;
             BlockHitResult hit = world.raycastBlock(start, end, pos, outline, state);
             if (hit == null) {
                 return;
