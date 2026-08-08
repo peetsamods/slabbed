@@ -42,7 +42,7 @@ slab-lowering, placement, and visual-contact work since 0.2.0-beta.4.
 - Lowered trapdoor seam resolves from the correct block-state authority.
 
 ### Developer
-- `/slabdy` overlay: a toggleable HUD readout of the targeted block's source and visual offset (off by default).
+- `/slabdy` overlay: a toggleable HUD readout of the targeted block's source and visual offset, now off by default in release/profile launches.
 
 ### Known limitations
 - A face-culling / shadow artifact beside a lowered full-block ↔ vanilla-slab boundary is deferred to a later render/culling slice.

@@ -261,7 +261,7 @@ public final class SlabAnchorAttachment {
 
     /**
      * FREEZE-ON-PLACE: locks a piece's lowered height at the moment it is placed so it
-     * NEVER autonomously moves afterwards. Maintainer's law — "a placed block must stay in
+     * NEVER autonomously moves afterwards. LAW 1 (the placement law) — "a placed block must stay in
      * that spot and not autonomously pop." Once a piece is recorded here, the lowered
      * dy is read from the persistent anchor and {@code getYOffsetInner} never recomputes
      * it, so breaking a neighbour / source can no longer un-lower it (the pop) and the
@@ -628,7 +628,7 @@ public final class SlabAnchorAttachment {
         BlockState state = world.getBlockState(pos);
         double dy = SlabSupport.getYOffset(world, pos, state);
         Slabbed.LOGGER.info(
-                "[MAINTAINER_BETA4_COMPOUND_VISIBLE_RENDER_TRACE_MARKER_SET] action={} pos={} marker={} label={} serverMarker={} clientMarker=n/a modelViewType=Level slabSupportDy={} clientDy=n/a candidateRerenderScheduled=false neighborRerenderScheduled=false",
+                "[BETA4_COMPOUND_VISIBLE_RENDER_TRACE_MARKER_SET] action={} pos={} marker={} label={} serverMarker={} clientMarker=n/a modelViewType=Level slabSupportDy={} clientDy=n/a candidateRerenderScheduled=false neighborRerenderScheduled=false",
                 action,
                 shortPos(pos),
                 compoundVisibleAttachmentLabel(type),
@@ -648,7 +648,7 @@ public final class SlabAnchorAttachment {
         }
         double dy = state == null ? 0.0d : SlabSupport.getYOffset(world, pos, state);
         Slabbed.LOGGER.info(
-                "[MAINTAINER_BETA4_COMPOUND_VISIBLE_RENDER_TRACE_SUPPORT_UPDATE] pos={} marker=lowered_slab_carrier serverMarker={} clientMarker=n/a modelViewType=Level slabSupportDy={} clientDy=n/a candidateRerenderScheduled=false neighborRerenderScheduled=false",
+                "[BETA4_COMPOUND_VISIBLE_RENDER_TRACE_SUPPORT_UPDATE] pos={} marker=lowered_slab_carrier serverMarker={} clientMarker=n/a modelViewType=Level slabSupportDy={} clientDy=n/a candidateRerenderScheduled=false neighborRerenderScheduled=false",
                 shortPos(pos),
                 qualifies,
                 dy);

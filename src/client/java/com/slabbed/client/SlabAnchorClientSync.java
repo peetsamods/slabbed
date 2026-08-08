@@ -413,7 +413,7 @@ public final class SlabAnchorClientSync {
             return;
         }
         Slabbed.LOGGER.info(
-                "[MAINTAINER_BETA4_COMPOUND_VISIBLE_RENDER_TRACE_CLIENT_SYNC] event={} pos=chunk marker={} serverMarker=n/a clientMarker={} modelViewType=Level slabSupportDy=n/a clientDy=n/a candidateRerenderScheduled={} neighborRerenderScheduled={}",
+                "[BETA4_COMPOUND_VISIBLE_RENDER_TRACE_CLIENT_SYNC] event={} pos=chunk marker={} serverMarker=n/a clientMarker={} modelViewType=Level slabSupportDy=n/a clientDy=n/a candidateRerenderScheduled={} neighborRerenderScheduled={}",
                 event,
                 type,
                 newPresent,
@@ -435,7 +435,7 @@ public final class SlabAnchorClientSync {
         double slabSupportDy = mc.level == null ? 0.0d : SlabSupport.getYOffset(mc.level, pos, state);
         double clientDy = mc.level == null ? 0.0d : ClientDy.dyFor(mc.level, pos, state);
         Slabbed.LOGGER.info(
-                "[MAINTAINER_BETA4_COMPOUND_VISIBLE_RENDER_TRACE_RERENDER] pos={} marker={} serverMarker=n/a clientMarker={} modelViewType=Level slabSupportDy={} clientDy={} candidateRerenderScheduled=true neighborRerenderScheduled=true sourceRerenderScheduled=true",
+                "[BETA4_COMPOUND_VISIBLE_RENDER_TRACE_RERENDER] pos={} marker={} serverMarker=n/a clientMarker={} modelViewType=Level slabSupportDy={} clientDy={} candidateRerenderScheduled=true neighborRerenderScheduled=true sourceRerenderScheduled=true",
                 pos.toShortString(),
                 marker,
                 clientMarker,
@@ -445,7 +445,7 @@ public final class SlabAnchorClientSync {
             return;
         }
         Slabbed.LOGGER.info(
-                "[MAINTAINER_BETA4_COMPOUND_VISIBLE_RENDER_TRACE_SUMMARY] classification=RERENDER_NOT_SCHEDULED pos={} marker={} markerSet=clientAttachment clientMarker={} modelDy={} candidateRerenderScheduled=true neighborRerenderScheduled=true releaseBlockers=MaintainerLiveRetest",
+                "[BETA4_COMPOUND_VISIBLE_RENDER_TRACE_SUMMARY] classification=RERENDER_NOT_SCHEDULED pos={} marker={} markerSet=clientAttachment clientMarker={} modelDy={} candidateRerenderScheduled=true neighborRerenderScheduled=true releaseBlockers=MaintainerLiveRetest",
                 pos.toShortString(),
                 marker,
                 clientMarker,
