@@ -817,7 +817,7 @@ public final class SlabbedLabClientGameTest implements FabricClientGameTest {
         // direct/manual reruns only.
         // runBsFb05sInteractionIntegrityProof(ctx, singleplayer, screenshotDir, knownScreenshotFiles, artifacts);
 
-        // BS-FB-0.5S live placement intent (RED PROOF — captures Maintainer's live
+        // BS-FB-0.5S live placement intent (RED PROOF — captures the maintainer's live
         // path where an intended 0.5S side slab ray hits vanilla block space
         // and places TOP instead of BOTTOM).
         // Side-channel notes only.
@@ -834,7 +834,7 @@ public final class SlabbedLabClientGameTest implements FabricClientGameTest {
         // Class C harness status: case1 reports "FB dy drifted from -0.5 to 0.0"
         // even though its own notes show the fixture never reached that baseline
         // (case1_fbDyPre=0.0, case1_slabTypePre=none, case1_serverAnchorPost=false).
-        // This does not classify Maintainer's current adjacent-lowered-double jump path.
+        // This does not classify the maintainer's current adjacent-lowered-double jump path.
         // Keep method for direct/manual repair only.
         // runBsFb1sLiveRegressionProof(ctx, singleplayer, screenshotDir, knownScreenshotFiles, artifacts);
 
@@ -2099,7 +2099,7 @@ public final class SlabbedLabClientGameTest implements FabricClientGameTest {
      * BS-FB-1S live-regression proof: post-support-removal stability + fresh
      * 0.5S placement after the original BS support has been broken.
      *
-     * <p>Captures Maintainer's live observation after b72629c
+     * <p>Captures the maintainer's live observation after b72629c
      * (save/bs-fb-1s-top-half-placement):
      * <ol>
      *   <li>Existing BS-FB-0.5S systems should remain visually stable when the
@@ -2116,7 +2116,7 @@ public final class SlabbedLabClientGameTest implements FabricClientGameTest {
      * register manifest artifacts.
      *
      * <p>Stops the gametest suite (RED) if the regression is reproduced — that
-     * is the captured proof of Maintainer's live failure.
+     * is the captured proof of the maintainer's live failure.
      */
     static void runBsFb1sLiveRegressionProof(
             ClientGameTestContext ctx,
@@ -3031,7 +3031,7 @@ public final class SlabbedLabClientGameTest implements FabricClientGameTest {
      * BS-FB-1S top-support law proof (RED PROOF — captures missing top-face
      * support on the lowered full-height side slab).
      *
-     * <p>Fixture geometry (Maintainer shorthand: BS-FB-1S+):
+     * <p>Fixture geometry (the maintainer shorthand: BS-FB-1S+):
      * <ul>
      *   <li>{@code bsPos}   — bottom slab (BS) at FIXTURE_ORIGIN+(72,0,0).</li>
      *   <li>{@code fbPos}   — stone full block (FB) at bsPos.up(), anchored

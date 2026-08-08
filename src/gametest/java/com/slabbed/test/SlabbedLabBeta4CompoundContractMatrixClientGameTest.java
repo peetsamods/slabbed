@@ -531,7 +531,7 @@ public final class SlabbedLabBeta4CompoundContractMatrixClientGameTest
             return Cls.GREEN;
         }
 
-        // RED indicators (match Maintainer's documented live failure modes):
+        // RED indicators (match the maintainer's documented live failure modes):
         //   - placed slot is air after tick (pop-off / placement vanished)
         //   - placed at COMPOUND.up() instead of the side neighbor (upward
         //     placement / wrong column)
@@ -634,7 +634,7 @@ public final class SlabbedLabBeta4CompoundContractMatrixClientGameTest
         // A-prime intent (docs/beta4-compound-source-mode-design.md): the
         // persistent compound anchor preserves authored dy=-1.0 across
         // source slab removal. GREEN iff post-break compound stays at
-        // dy=-1.0; RED if it collapses (Maintainer's live "jump" symptom).
+        // dy=-1.0; RED if it collapses (the maintainer's live "jump" symptom).
         Double postDy = extractDy(observed, "post-break", "compound");
         if (postDy == null) {
             return Cls.UNDECIDED;

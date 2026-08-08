@@ -978,7 +978,7 @@ public final class SlabbedLabBsFbAdjacentPlacementProofClientGameTest implements
 
             if (retarget != null) {
                 throw new RuntimeException("RED: " + proofName
-                        + " unexpected slab-held retarget from Maintainer trace"
+                        + " unexpected slab-held retarget from the maintainer trace"
                         + " initial=" + describeHit(initialHit)
                         + " final=" + describeHit(retarget)
                         + " sideSlabRetargetFired=true");

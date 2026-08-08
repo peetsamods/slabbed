@@ -304,7 +304,7 @@ public final class SlabAnchorAttachment {
      *
      * <p>Default OFF on this line for now ({@code -Dslabbed.frozenDy=true} is the opt-in): the donor
      * ships default-ON only alongside its client prediction journal and landing resolver. Running the
-     * store alone was live-RED on 2026-08-05 (see {@code docs/process/LIVE_LEDGER.md}) — without
+     * store alone was live-RED on 2026-08-05 (see the internal notes) — without
      * prediction every placement renders flat then pops when the attachment sync lands, and a world
      * with no stored facts renders stable-flat everywhere. Flip the default back to ON only when
      * Slices 2d (resolver) and 2i (prediction) are complete and live-passed. Legacy worlds carry no
@@ -540,7 +540,7 @@ public final class SlabAnchorAttachment {
 
     /**
      * FREEZE-ON-PLACE: locks a piece's lowered height at the moment it is placed so it
-     * NEVER autonomously moves afterwards. Maintainer's law — "a placed block must stay in
+     * NEVER autonomously moves afterwards. LAW 1 (the placement law) — "a placed block must stay in
      * that spot and not autonomously pop." Once a piece is recorded here, the lowered
      * dy is read from the persistent anchor and {@code getYOffsetInner} never recomputes
      * it, so breaking a neighbour / source can no longer un-lower it (the pop) and the
@@ -591,7 +591,7 @@ public final class SlabAnchorAttachment {
             return;
         }
         // dy ≈ 0: lock the FLAT height of a structural piece so a slab / lowered carrier placed
-        // under or beside it later can no longer pull it down (Maintainer's "placed slab under a
+        // under or beside it later can no longer pull it down (the maintainer's "placed slab under a
         // floating block must not lower it"). Natural (terrain / setBlockState, which never calls
         // onPlaced) pieces stay fully geometric.
         addToAttachment(world, pos, FROZEN_FLAT_TYPE, "frozen_flat");

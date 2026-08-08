@@ -2163,7 +2163,7 @@ public final class SlabSupport {
 
         // FREEZE-ON-PLACE: a structural full block locked FLAT at placement stays at 0 — a
         // slab or lowered carrier added under/beside it later can no longer pull it down
-        // (Maintainer's law: a placed block must not autonomously move). Read before any of the
+        // (LAW 1 (the placement law): a placed block must not autonomously move). Read before any of the
         // geometric lowering below. Decorative followers are never frozen-flat, so they keep
         // tracking their supports.
         if (SlabAnchorAttachment.isFrozenFlat(world, pos)) {
