@@ -29,7 +29,7 @@ import org.spongepowered.asm.mixin.injection.Redirect;
  * {@code SlabSupportStateMixin}, and added the fence/wall/pane outline gate —
  * mirroring commit 39a345e7 on the 1.21.11 branch. The {@link SlabbedOffsetRaycast}
  * util it depends on is verified on 1.21.1 by the server gametests in
- * {@code OffsetRaycastTargetingTest}. Final client-pick acceptance is Maintainer's live
+ * {@code OffsetRaycastTargetingTest}. Final client-pick acceptance is the maintainer's live
  * {@code runClient} (fabric-client-gametest is broken on 1.21.1).
  */
 @Mixin(GameRenderer.class)

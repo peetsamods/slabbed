@@ -330,7 +330,7 @@ public final class NeighborUpdateInvarianceTest {
     private record NamedMutation(String name, Mutation mutation) {
     }
 
-    // ── the parametric law assertion: one @GameTest per subject, loops all mutations ─────────
+    // ── the parametric law assertion: one GameTest method per subject, loops all mutations ─────────
     private void runSubject(TestContext h, NamedSubject subject) {
         runSubject(h, subject, false);
     }

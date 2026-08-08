@@ -542,7 +542,7 @@ public final class SlabbedLabFixtureTest {
     }
 
     /**
-     * Maintainer's law proof: a structural full block <em>placed</em> flat (dy=0) must STAY at
+     * LAW 1 (the placement law) proof: a structural full block <em>placed</em> flat (dy=0) must STAY at
      * dy=0 even after a bottom slab is later placed directly under it. No autonomous pop,
      * no retroactively-inherited lowering.
      *
@@ -554,7 +554,7 @@ public final class SlabbedLabFixtureTest {
      * {@link #unfrozenBlockLowersWhenSlabAddedBelow} for that uncovered control), but the
      * frozen-flat marker is read first in {@code getYOffsetInner} and pins dy at 0.0.
      *
-     * <p>This is the exact violation Maintainer reported: "Placing that bottom slab under a
+     * <p>This is the exact violation the maintainer reported: "Placing that bottom slab under a
      * floating block caused the block to inherit a lowered position. That is against the law."
      */
     @GameTest(templateName = "fabric-gametest-api-v1:empty")
@@ -680,7 +680,7 @@ public final class SlabbedLabFixtureTest {
                 + " — a stale anchor would pin it lowered (smooshed into the slab)");
 
         // Regression guard: a STRUCTURAL full block lowered onto a bottom slab MUST still anchor
-        // (Maintainer's never-pop law for structural pieces is unchanged by the follower fix).
+        // (the maintainer's never-pop law for structural pieces is unchanged by the follower fix).
         BlockPos structSlabPos = origin.add(4, 2, 0);
         BlockPos stonePos = structSlabPos.up();
         world.setBlockState(structSlabPos, slab(SlabType.BOTTOM), Block.NOTIFY_ALL);

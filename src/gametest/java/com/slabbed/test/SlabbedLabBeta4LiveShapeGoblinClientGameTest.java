@@ -32,7 +32,7 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
- * Opt-in diagnostic harness for Maintainer's beta4 canonical live shape.
+ * Opt-in diagnostic harness for the maintainer's beta4 canonical live shape.
  *
  * <p>No gameplay behavior is implemented here. The test builds the live
  * structure, proves the source truth, then records the current lower/upper/top

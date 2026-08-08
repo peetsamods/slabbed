@@ -14,7 +14,7 @@ import net.minecraft.world.chunk.WorldChunk;
  * dense {@code slabbed:frozen_flat} chunk data must remain exact without exceeding Fabric's
  * per-attachment synchronization ceiling.
  *
- * <p>1.21.1 translation: vanilla {@code @GameTest(templateName)} annotation; donor's
+ * <p>1.21.1 translation: vanilla {@code GameTest(templateName)} annotation; donor's
  * {@code ctx.assertEquals}/{@code throwGameTestException} rewritten onto this harness's
  * {@code assertTrue} house primitive.
  */

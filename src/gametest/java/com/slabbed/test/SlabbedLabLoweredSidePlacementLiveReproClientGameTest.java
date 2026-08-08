@@ -2143,7 +2143,7 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
      * 1) Build the same precondition as the live-order side-by-side case:
      *    FB-A direct BS support; FB-B side-by-side at same Y with no direct BOTTOM support.
      * 2) Break and replace the inherited-support TOP slab path around FB-B while FB-A is alive.
-     * 3) Break FB-A (the pointed block in Maintainer's report).
+     * 3) Break FB-A (the pointed block in the maintainer's report).
      * 4) Re-place the slab path again and optionally churn it once more.
      *
      * For every phase, tick 0/1/2/3 are asserted:
@@ -2291,7 +2291,7 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
         assertSurvivorChurnSupportTimeline(ctx, singleplayer, "after side-slab break (source alive)",
                 sourceFullPos, survivorFullPos);
 
-        // Step 2: replace slab; Maintainer’s follow-up often restores legal state here.
+        // Step 2: replace slab; the maintainer’s follow-up often restores legal state here.
         singleplayer.getServer().runOnServer(server -> {
             server.getPlayerManager().getPlayerList().get(0).setStackInHand(
                     Hand.MAIN_HAND,
@@ -4323,7 +4323,7 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                         + " loweredLaneBelowTop=" + describeOwnerFacts(mc.world, loweredLaneBelowTop);
                 if (requireGreen) {
                     System.out.println("[MAINTAINER_BETA4_LIVE_SCREENSHOT_BAND_SPLIT_HARNESS_FAIL] " + reason);
-                    throw new RuntimeException("Maintainer beta4 live screenshot upper side band did not stay GREEN");
+                    throw new RuntimeException("the maintainer beta4 live screenshot upper side band did not stay GREEN");
                 }
                 System.out.println("[MAINTAINER_BETA4_LIVE_SCREENSHOT_SIDE_LOWER_RED] " + reason);
                 redSummary.append(reason).append('\n');
@@ -5444,7 +5444,7 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                     + " visibleOwner=" + visibleOwner
                     + " vanillaTarget=" + describeHit(vanilla)
                     + " finalTarget=" + describeHit(finalTarget)
-                    + " note=current reconstructed shape did not prove Maintainer mismatch");
+                    + " note=current reconstructed shape did not prove the maintainer mismatch");
         });
     }
 
@@ -18560,7 +18560,7 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
     }
 
     /**
-     * Focused Beta 3.5 RED/proof matrix for Maintainer's remaining generic slab-height hit acceptance gap.
+     * Focused Beta 3.5 RED/proof matrix for the maintainer's remaining generic slab-height hit acceptance gap.
      *
      * Gate: -Dslabbed.beta35SlabHeightHitAcceptanceRed=true
      */
@@ -19072,7 +19072,7 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
     }
 
     /**
-     * Maintainer Beta 3.5 live-hitbox/gate audit.
+     * the maintainer Beta 3.5 live-hitbox/gate audit.
      *
      * Gate: -Dslabbed.beta35LiveHitboxGateRed=true
      */
@@ -19161,7 +19161,7 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
     }
 
     /**
-     * Maintainer Beta 3.5 live-hitbox owner proof.
+     * the maintainer Beta 3.5 live-hitbox owner proof.
      *
      * Gate: -Dslabbed.beta35LiveHitboxOwnerRed=true
      */
@@ -20445,7 +20445,7 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
     }
 
     /**
-     * Fence-family live-faithful classification for Maintainer's Beta 3.5 false-green report.
+     * Fence-family live-faithful classification for the maintainer's Beta 3.5 false-green report.
      *
      * Gate: -Dslabbed.beta35FenceFamilyLiveRed=true
      */
@@ -22288,9 +22288,9 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
      *   middleCarrierSlab(S) stone_slab[type=bottom] + updatePersistentLoweredSlabCarrier
      *   upperAnchorBlock (B) Blocks.STONE + addAnchor        — second ordinary full block
      *   supportPos       (S) stone_slab[type=bottom] + updatePersistentLoweredSlabCarrier
-     *   torchPos              floor torch placed on supportPos (Maintainer live: floating at vanilla Y)
+     *   torchPos              floor torch placed on supportPos (the maintainer live: floating at vanilla Y)
      *
-     * Maintainer live after 04ace65: "SBSBS+item = floating item in vanilla position."
+     * the maintainer live after 04ace65: "SBSBS+item = floating item in vanilla position."
      * Expected supportDy=-0.500, torchDy=-1.000, contactGap=0.000 if fix is applied.
      * RED if isVanillaPosition=true (torchDy≈0) or contactGap nonzero.
      *
