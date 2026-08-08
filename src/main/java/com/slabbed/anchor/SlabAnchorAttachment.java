@@ -579,7 +579,7 @@ public final class SlabAnchorAttachment {
 
     /**
      * FREEZE-ON-PLACE: locks a piece's height at the moment it is placed so it NEVER autonomously
-     * moves afterwards. the maintainer's law — "a placed block must stay in that spot and not autonomously
+     * moves afterwards. LAW 1 (the placement law) — "a placed block must stay in that spot and not autonomously
      * pop." Server-side only; called from {@code BlockOnPlacedAnchorMixin} (Block#setPlacedBy).
      *
      * <p>If the piece is placed LOWERED (dy &lt; 0) it records an anchor (read as the lowered dy by
@@ -592,7 +592,7 @@ public final class SlabAnchorAttachment {
      * stays fully geometric.
      */
     /**
-     * WYSIWYG click follow (the maintainer's law): set by the placement-intent mixin when the player places a
+     * WYSIWYG click follow (LAW 1 (the placement law)): set by the placement-intent mixin when the player places a
      * SLAB by clicking a lowered block/slab face whose visible surface should own the new slab height.
      * The placement must then land on that lowered surface (where the crosshair clicked) instead of
      * freezing flat at grid height or merging into the underside. Stores the predicted placement cell;
@@ -645,7 +645,7 @@ public final class SlabAnchorAttachment {
         if (isAnchored(world, pos) || isFrozenFlat(world, pos)) {
             return;
         }
-        // WYSIWYG (the maintainer's law): a SLAB placed by clicking a lowered block's SIDE face must FOLLOW that
+        // WYSIWYG (LAW 1 (the placement law)): a SLAB placed by clicking a lowered block's SIDE face must FOLLOW that
         // lowered surface — it lands where the crosshair clicked, NOT frozen flat at grid height. Anchor it
         // lowered so it both lands correctly AND holds its position if the neighbour is later removed
         // (NEVER-POP-down preserved). This overrides the side-inherited freeze-flat rail below, which only

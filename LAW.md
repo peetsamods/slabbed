@@ -6,7 +6,7 @@ conflicts with LAW.md, LAW.md wins and the other document is wrong.** A doc that
 "clarifies" the law into something a neighbor can change is not a clarification; it is a violation and
 must be reverted.
 
-## The law (the maintainer, verbatim)
+## The law (maintainer ruling, verbatim)
 
 > **Where I put it is where it goes and STAYS.** This is the core of WYSIWYG. I put a block in place A,
 > I expect it to stay there no matter what. It should not change states according to a neighbor update
@@ -43,7 +43,7 @@ must be reverted.
   violation and blocks the commit unless it carries a logged `LAW-SIGNOFF:` and adds an invariance row.
 - **Session-start reading:** this file is required reading #1 (see `AGENTS.md`). Before editing
   `src/main/**` you answer, in the commit trailer, `LAW-PREFLIGHT: n` — "no, this change does not let a
-  neighbor move a placed block" — or `y` with the maintainer's sign-off.
+  neighbor move a placed block" — or `y` with a recorded maintainer sign-off.
 
 ## History (why this file exists)
 

@@ -24,7 +24,7 @@ import net.minecraft.world.level.block.state.properties.SlabType;
  *
  * <p>Each {@code @GameTest} below pins ONE canonical fixture from a distinct behavior family to its
  * expected {@code dy} and {@code src} classification (see
- * {@code docs/process/RELEASE_SANITY_CHECKLIST.md} §3). Every fixture maps to a historical fix
+ * the internal notes §3). Every fixture maps to a historical fix
  * commit; if that behavior silently re-breaks, its fixture goes RED — that is the "a behavior that
  * used to be correct silently changed" catch.
  *

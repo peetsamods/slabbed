@@ -57,7 +57,7 @@ import net.minecraft.world.level.block.state.properties.SlabType;
  * namespace-scoped: a hopper beside a chest lowered by a genuine VANILLA column must still inherit
  * {@code -0.5} while the same override is active.
  *
- * <p><b>Mutation-proof note — CORRECTED 2026-07-05 by a fresh empirical re-run (see HANDOFF.md /
+ * <p><b>Mutation-proof note — CORRECTED 2026-07-05 by a fresh empirical re-run (see the internal notes /
  * SLABBED_SPINE.md for the full mutation table; this replaces the original "three independent choke
  * points" claim, which underspecified the picture in both directions).</b> A campaign sweeper
  * reviewing this class's original commit ({@code 6ca3f050}) traced a FOURTH candidate choke point by

@@ -180,7 +180,7 @@ allowlist honestly describing both jars.
 Standing rule note (updated 2026-08-07, second pass): the original text of this note reported that
 `/slabdy` and `/slabdev` were registered in no release code at all on this line — `/slabdev` only
 from the compile-excluded `com/slabbed/dev/**` and from the development-only diagnostics companion,
-`/slabdy` from nowhere. That gap has now been closed under the maintainer's ruling that "ships in every jar"
+`/slabdy` from nowhere. That gap has now been closed under the maintainer ruling that "ships in every jar"
 means an operator can actually INVOKE the command on a release build, default off.
 
 - Both commands register from `com/slabbed/client/SlabbedDebugCommands`, called unconditionally by

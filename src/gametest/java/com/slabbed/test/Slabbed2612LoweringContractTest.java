@@ -1309,7 +1309,7 @@ public final class Slabbed2612LoweringContractTest {
     /**
      * RC2-C NEVER-POP rail (must stay green): a slab authored on its OWN solid ground beside a lowered
      * slab LANE still freezes FLAT (0.0) — slabLoweringIsSideInheritedOnly returns true for the
-     * solid-below case, so freeze records FROZEN_FLAT (the maintainer's law for a block on its own flush ground).
+     * solid-below case, so freeze records FROZEN_FLAT (LAW 1 (the placement law) for a block on its own flush ground).
      */
     @GameTest(structure = "fabric-gametest-api-v1:empty")
     public void rc2cSlabOnSolidGroundBesideLoweredLaneFreezesFlat(GameTestHelper helper) {
