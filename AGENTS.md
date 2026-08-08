@@ -20,6 +20,14 @@ identical copy for tools that read that name; edit both together.
    (`Slabbed-notes/` beside the worktree roots; the hook's S-5 gate knows the path). Do not
    create new process docs in the repo — write them to the notes directory.
 
+## ⛔ Never track proprietary or diary content
+
+No decompiled/extracted Minecraft sources (`_mcsrc*`, `net/minecraft/**` java) may EVER be
+tracked — that is redistribution of proprietary code in a public repo; a sibling project needed
+a full history rewrite over exactly this (2026-08-07). No development-diary docs in the tree
+(they live in the notes directory, see above). The hook's S-7 gate blocks these paths
+mechanically; do not weaken it, do not commit with --no-verify.
+
 ## Comments document invariants, not history
 
 A comment states what must stay true and, at most, one dated ruling-of-record pointer. Session

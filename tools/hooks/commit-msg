@@ -70,6 +70,14 @@ if [ -n "$BEHAVIOR" ]; then
   fi
 fi
 
+# ── S-7: forbidden paths — proprietary sources and diary content ────────────────────────────
+BAD_PATHS="$(echo "$STAGED" | grep -E '^_mcsrc|/net/minecraft/.*\.java$|^docs/binder/' || true)"
+if [ -n "$BAD_PATHS" ]; then
+  fail "S-7: staged paths are forbidden (decompiled Minecraft sources / diary docs). Extracted
+       sources live OUTSIDE the repo; diaries live in the local notes directory:
+$(echo "$BAD_PATHS" | sed 's/^/         /' | head -12)"
+fi
+
 # ── S-6: discretion gate — the public repo carries no personal or machine-local data ─────────
 # Maintainer ruling 2026-08-07: no personal names, no local absolute paths, no development-diary
 # identifiers in any ADDED line of any tracked file. Process notes live OUTSIDE the repo.
