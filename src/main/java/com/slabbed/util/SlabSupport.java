@@ -1252,11 +1252,21 @@ public final class SlabSupport {
 
     private static boolean slabHeightStepFaceAgainst(BlockView world, BlockPos pos, BlockState state, Direction direction, double selfDy) {
         BlockPos neighborPos = pos.offset(direction);
-        BlockState neighbor = world.getBlockState(neighborPos);
+        BlockState neighbor;
+        try {
+            neighbor = world.getBlockState(neighborPos);
+        } catch (IndexOutOfBoundsException outsideRenderSnapshot) {
+            return false;
+        }
         if (neighbor.isAir()) {
             return false;
         }
-        double neighborDy = getYOffset(world, neighborPos, neighbor);
+        double neighborDy;
+        try {
+            neighborDy = getYOffset(world, neighborPos, neighbor);
+        } catch (IndexOutOfBoundsException outsideRenderSnapshot) {
+            return false;
+        }
         return Math.abs(selfDy - neighborDy) > 1.0e-6;
     }
 
