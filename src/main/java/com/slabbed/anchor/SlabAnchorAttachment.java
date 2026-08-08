@@ -101,6 +101,16 @@ public final class SlabAnchorAttachment {
             }
     );
 
+    /**
+     * Package-private proof seam for the attachment-capacity regression tests.
+     *
+     * <p>This returns the exact codec registered below, so the test cannot accidentally
+     * exercise a duplicate approximation of the production sync path.
+     */
+    static PacketCodec<RegistryByteBuf, LongOpenHashSet> packetCodecForTesting() {
+        return PACKET_CODEC;
+    }
+
     public static final AttachmentType<LongOpenHashSet> ANCHOR_TYPE =
             AttachmentRegistry.<LongOpenHashSet>create(ANCHOR_ID, builder -> builder
                     .persistent(SET_CODEC)
