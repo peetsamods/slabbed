@@ -32,6 +32,7 @@ import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.state.property.Properties;
 import net.minecraft.text.Text;
+import net.minecraft.util.Identifier;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Direction;
 import net.minecraft.world.World;
@@ -642,7 +643,87 @@ public final class SlabRigCommand {
                     b.set(0, 7, 0, bottomSlab(Blocks.STONE_SLAB));
                 });
 
+        // THE OPEN RULING (2026-08-07): custom slab (Terrain Slabs) resting ON a vanilla slab.
+        // TerrainSlabsGuardSweepTest measured that the onPlaced anchor chain CAPTURES a TS-owned
+        // slab in this shape — dy=-0.5, anchored=true — and headless cannot say whether that is
+        // WYSIWYG seating or Slabbed's offset stacking on TS's own (the double-offset family),
+        // because real TS geometry never loads in runGameTest. This scene puts the question and
+        // its two references side by side so one screenshot answers it:
+        //   x=0  THE QUESTION  — vanilla bottom slab, TS bottom slab placed on top (anchored, as
+        //                        a real click authors it). Seats on the vanilla top face, or sinks?
+        //   x=2  INVERSE CONTROL — TS bottom slab, vanilla TOP slab on top: the live-confirmed
+        //                        -1.0 lane, known good. If x=0 looks wrong and x=2 looks right,
+        //                        the defect is direction-specific.
+        //   x=4  TS BASELINE   — TS bottom slab on plain ground, nothing above: TS's own
+        //                        rendering with Slabbed contributing nothing. The reference height.
+        // Vanilla-only environments (and headless runs without a TS stand-in) build the scaffold
+        // and skip the TS cells — the rig must never hard-depend on Terrain Slabs.
+        add(cases, "ts_on_vanilla",
+                "OPEN RULING: TS slab on a vanilla slab (x=0) vs the known-good inverse (x=2) "
+                        + "vs a bare TS baseline (x=4) — does the TS slab seat or sink?",
+                b -> {
+                    BlockState tsBottom = terrainSlabsBottomSlab();
+
+                    // x=0 — the question. Ground, vanilla bottom slab, TS slab authored as a click.
+                    b.set(0, 0, 0, stone());
+                    b.set(0, 1, 0, bottomSlab(Blocks.STONE_SLAB));
+                    if (tsBottom != null) {
+                        b.setAnchored(0, 2, 0, tsBottom);
+                    }
+
+                    // x=2 — the inverse, live-confirmed correct: vanilla TOP slab on a TS bottom.
+                    b.set(2, 0, 0, stone());
+                    if (tsBottom != null) {
+                        b.set(2, 1, 0, tsBottom);
+                        b.setAnchored(2, 2, 0,
+                                Blocks.OAK_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.TOP));
+                    }
+
+                    // x=4 — TS alone on plain ground: the untouched reference height.
+                    b.set(4, 0, 0, stone());
+                    if (tsBottom != null) {
+                        b.set(4, 1, 0, tsBottom);
+                    }
+                });
+
         return cases;
+    }
+
+    /**
+     * A Terrain Slabs BOTTOM slab state, resolved from the registry at build time, or {@code null}
+     * when Terrain Slabs is absent.
+     *
+     * <p>Resolved by NAMESPACE + shape, never by a hard class or block reference: this class must
+     * stay loadable (and this rig buildable) in a vanilla-only environment, and the headless
+     * gametest registers namespace-matched stand-ins rather than the real mod. Deterministic —
+     * candidates are ordered by id so the same world always gets the same block.
+     */
+    private static BlockState terrainSlabsBottomSlab() {
+        Block best = null;
+        String bestId = null;
+        for (Block block : Registries.BLOCK) {
+            if (!(block instanceof SlabBlock)) {
+                continue;
+            }
+            Identifier id = Registries.BLOCK.getId(block);
+            String ns = id.getNamespace();
+            if (!"terrain_slabs".equals(ns) && !"terrainslabs".equals(ns)) {
+                continue;
+            }
+            if (!id.getPath().endsWith("_slab")) {
+                continue;   // the compat's own named-surface rule
+            }
+            String key = id.toString();
+            if (bestId == null || key.compareTo(bestId) < 0) {
+                best = block;
+                bestId = key;
+            }
+        }
+        if (best == null) {
+            return null;
+        }
+        BlockState state = best.getDefaultState();
+        return state.contains(SlabBlock.TYPE) ? state.with(SlabBlock.TYPE, SlabType.BOTTOM) : state;
     }
 
     private static BlockState openTrapdoor(Direction leafFace) {
