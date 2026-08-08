@@ -30,6 +30,7 @@ Current repo-local focus docs:
 - `docs/codex/10-troubleshooting-when-stuck.md`
 - `docs/codex/11-model-thread-policy.md`
 - `docs/codex/12-goal-mode.md`
+- `docs/codex/13-mixin-layer-wiring-audit.md`
 
 Archive-only source pack:
 
