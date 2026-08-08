@@ -168,3 +168,10 @@ Not done:
 - the behavior is “probably fine”
 
 Done means the behavior is actually correct. :contentReference[oaicite:25]{index=25} :contentReference[oaicite:26]{index=26}
+
+## 19) Standard release sanity checklist
+- `docs/process/RELEASE_SANITY_CHECKLIST.md` is the standardized repeatable regression matrix for this branch.
+- Run it in addition to `RELEASE_GATE.md`; it does not replace the branch release gate.
+- The maintained automated lane is `./gradlew runGameTest`, including the `SLABBED-FP` dy fingerprint.
+- Compare versions by diffing captured `SLABBED-FP` lines, not by memory.
+- A fingerprint baseline edit must travel with the matching in-code assertion change.
