@@ -11,7 +11,7 @@ import net.minecraft.world.level.BlockGetter;
  * <p>This class once carried a private carpet special case, which made it a second dy authority:
  * model, outline, raycast and the /slabdev debug overlay showed carpet sunken while the server-side
  * authority said flush. That split is the recorded root of the carpet WYSIWYG disagreement.
- * The rule now lives in {@code SlabSupport.getYOffset} itself (Maintainer's 2026-07-27 ruling:
+ * The rule now lives in {@code SlabSupport.getYOffset} itself (the maintainer's 2026-07-27 ruling:
  * carpet is -0.5, matching what players see), and this class must never re-grow a divergent
  * branch — {@code ForgeCarpetDyAuthorityGameTest} enforces that structurally.
  */

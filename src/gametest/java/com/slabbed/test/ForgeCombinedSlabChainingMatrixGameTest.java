@@ -50,7 +50,7 @@ import net.minecraftforge.gametest.PrefixGameTestTemplate;
  * (vanilla-on-terrain, terrain-on-vanilla, terrain-on-terrain). The Forge
  * runGameTestServer environment loads NO Terrain Slabs jar, so those orderings are
  * untestable headless here and remain covered only by the TS compat code paths +
- * Maintainer's live route. This port covers the branch's OWN combined chains: slab-under-
+ * the maintainer's live route. This port covers the branch's OWN combined chains: slab-under-
  * full-block, cantilevered slab lanes, the compound -1.0 lane, stacked slab columns,
  * and 3-high chains.
  *

@@ -643,12 +643,12 @@ public final class SlabSupport {
      * THE ONE CHOKE POINT for every dy-computing ceiling walk, so the ruling can never be applied
      * to one walk and forgotten on the others (this project's recorded shared-predicate lesson).
      *
-     * <p>DEAD BY RULING (Maintainer 2026-07-27, upholding her 2026-07-03 live ruling on the 26.2
+     * <p>DEAD BY RULING (the maintainer 2026-07-27, upholding her 2026-07-03 live ruling on the 26.2
      * reference): the +0.5 reach-up under a FLUSH top slab smooshed objects UP into the slab in
      * live testing; everything hangs FLUSH now. Returning false disables the reach-up at all
      * three governed gates from one place — trivially reversible if live testing regresses
      * ("subject to further review"). NOT governed here, deliberately: the +0.5 merge
-     * compensation under a LOWERED top slab (Maintainer 2026-07-01: deliberate ceiling-mount
+     * compensation under a LOWERED top slab (the maintainer 2026-07-01: deliberate ceiling-mount
      * geometry), which lives on the lowered-support path.
      */
     private static boolean isLoweringTopLikeCeiling(BlockState state) {
@@ -1433,7 +1433,7 @@ public final class SlabSupport {
             return 0.0;
         }
         // Carpet: canonical -0.5 over a bottom slab (or a lowered column), 0.0 otherwise —
-        // Maintainer's 2026-07-27 ruling: match what players already see. This is ClientDy's former
+        // the maintainer's 2026-07-27 ruling: match what players already see. This is ClientDy's former
         // private rule RELOCATED byte-identically, so model/outline/raycast/overlay AND every
         // server decision now read the same number from ONE authority. Placement is load-bearing:
         //   - BELOW the recursion guard, so nested queries keep returning 0.0 exactly as before
@@ -2700,7 +2700,7 @@ public final class SlabSupport {
 
         // FREEZE-ON-PLACE: a structural full block locked FLAT at placement stays at 0 — a
         // slab or lowered carrier added under/beside it later can no longer pull it down
-        // (Maintainer's law: a placed block must not autonomously move). Read before any of the
+        // (LAW 1 (the placement law): a placed block must not autonomously move). Read before any of the
         // geometric lowering below. Decorative followers are never frozen-flat, so they keep
         // tracking their supports.
         if (SlabAnchorAttachment.isFrozenFlat(world, pos)) {

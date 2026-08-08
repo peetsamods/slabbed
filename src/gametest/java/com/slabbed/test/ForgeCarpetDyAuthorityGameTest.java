@@ -27,7 +27,7 @@ import java.nio.file.Path;
  * decision — excluded carpet via {@code isThinTopLayer} and said 0.0. Players SAW a sunken carpet
  * that the click-handling treated as flush.
  *
- * <p>Maintainer's ruling (2026-07-27): carpet is -0.5 — match what players already see. The fix
+ * <p>maintainer ruling (2026-07-27): carpet is -0.5 — match what players already see. The fix
  * RELOCATES ClientDy's rule byte-identically into {@code getYOffset} (below the recursion guard,
  * so nested queries keep returning 0.0 exactly as today) and makes ClientDy a pure delegate.
  * No other block family moves; the snow-layer sibling is pinned flat by this test precisely

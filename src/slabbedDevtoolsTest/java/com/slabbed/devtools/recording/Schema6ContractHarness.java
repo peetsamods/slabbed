@@ -16,7 +16,7 @@ public final class Schema6ContractHarness {
     public static void main(String[] args) throws Exception {
         require(args.length == 1, "expected one build/tmp root argument");
         Path requested = Path.of(args[0], "run-" + System.nanoTime()).toAbsolutePath();
-        String command = "net.minecraft.client.main.Main --username Maintainer --version 1.20.1 "
+        String command = "net.minecraft.client.main.Main --username TestPlayer --version 1.20.1 "
                 + "--accessToken super-secret-jwt --uuid 11112222333344445555666677778888 "
                 + "--xuid 9999888877776666 --clientId client-secret --session session-secret "
                 + "--credential=example --uuid=equals-uuid --xuid=equals-xuid "
@@ -448,7 +448,7 @@ public final class Schema6ContractHarness {
                         && manifest.contains("--xuid [REDACTED]")
                         && manifest.contains("--clientId [REDACTED]")
                         && manifest.contains("--session [REDACTED]")
-                        && manifest.contains("--username Maintainer")
+                        && manifest.contains("--username TestPlayer")
                         && manifest.contains("[HOME]/private-profile"),
                 "manifest must preserve useful identity while redacting secrets and home path");
         for (String secret : List.of(

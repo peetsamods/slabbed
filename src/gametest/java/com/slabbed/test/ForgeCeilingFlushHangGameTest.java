@@ -15,7 +15,7 @@ import net.minecraftforge.gametest.GameTestHolder;
 import net.minecraftforge.gametest.PrefixGameTestTemplate;
 
 /**
- * THE CEILING REACH-UP KILL — Maintainer's ruling (2026-07-27, upholding her 2026-07-03 live ruling on
+ * THE CEILING REACH-UP KILL — maintainer ruling (2026-07-27, upholding her 2026-07-03 live ruling on
  * the 26.2 reference): the +0.5 reach-up for ceiling-attached objects under a FLUSH top slab is
  * dead. Everything hangs FLUSH. In live testing the reach-up smooshed objects UP into the slab;
  * flush looked better.
@@ -26,7 +26,7 @@ import net.minecraftforge.gametest.PrefixGameTestTemplate;
  * Trivially reversible if live testing regresses ("subject to further review").
  *
  * <p>DELIBERATELY PRESERVED, pinned below: the +0.5 merge compensation under a LOWERED top slab
- * (Maintainer's 2026-07-01 ruling — deliberate ceiling-mount geometry, not a bug) and flush hang under
+ * (the maintainer's 2026-07-01 ruling — deliberate ceiling-mount geometry, not a bug) and flush hang under
  * ordinary full ceilings.
  */
 @GameTestHolder("slabbed")
@@ -67,7 +67,7 @@ public final class ForgeCeilingFlushHangGameTest {
 
         // --- PIN 1 (must not move): under a LOWERED top slab the merge compensation SURVIVES ---
         // Fixture from the F6 family: a cantilevered TOP slab reads -0.5; the lantern under it
-        // sits at supportDy + 0.5 = 0.0, flush against the lowered underside — Maintainer's 2026-07-01
+        // sits at supportDy + 0.5 = 0.0, flush against the lowered underside — the maintainer's 2026-07-01
         // ruling says this is deliberate ceiling-mount geometry. The kill must not touch it.
         BlockPos eaveSupport = ctx.absolutePos(new BlockPos(7, 4, 1));
         BlockPos eave = eaveSupport.east();

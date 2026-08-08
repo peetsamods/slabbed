@@ -61,7 +61,7 @@ import net.minecraftforge.gametest.PrefixGameTestTemplate;
  * <p><b>Scope honesty</b>: this proves the RAYCAST GEOMETRY and the SERVER USE path
  * on the current architecture. It does NOT prove the live client pipeline
  * ({@code Minecraft.hitResult} wiring, anchor mirror sync — divergence D1) — that
- * half remains live-only via Maintainer's Modrinth jar-swap route.
+ * half remains live-only via the maintainer's Modrinth jar-swap route.
  */
 @GameTestHolder("slabbed")
 @PrefixGameTestTemplate(false)
@@ -204,7 +204,7 @@ public final class ForgeOccupiedLoweredLaneTargetHijackGameTest {
             ctx.assertTrue(near(laneDyAfter, -0.5d),
                     "lane slab must keep -0.5 when the new piece goes above, got " + text(laneDyAfter));
             // aboveDy is RECORDED, not asserted: -0.5 (lane-following) vs 0.0 is the exact
-            // canonical choice Maintainer has to pin (research step 4). Bare record below.
+            // canonical choice the maintainer has to pin (research step 4). Bare record below.
         } else {
             outcome = "RED_UNEXPECTED";
         }
