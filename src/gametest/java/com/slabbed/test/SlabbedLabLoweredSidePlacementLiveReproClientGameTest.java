@@ -77,7 +77,7 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
             try (TestSingleplayerContext singleplayer = ctx.worldBuilder()
                     .setUseConsistentSettings(true)
                     .create()) {
-                runthe maintainerBeta4AboveAngleTargetingOwnerSplitRedCase(ctx, singleplayer, false);
+                runBeta4AboveAngleTargetingOwnerSplitRedCase(ctx, singleplayer, false);
             }
             return;
         }
@@ -113,10 +113,10 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
             try (TestSingleplayerContext singleplayer = ctx.worldBuilder()
                     .setUseConsistentSettings(true)
                     .create()) {
-                runthe maintainerBeta4StoneSlabTargetingOutlineMismatchRedCase(ctx, singleplayer);
-                runthe maintainerBeta4AdjacentVisibleTargetRedCase(ctx, singleplayer);
+                runBeta4StoneSlabTargetingOutlineMismatchRedCase(ctx, singleplayer);
+                runBeta4AdjacentVisibleTargetRedCase(ctx, singleplayer);
                 runBeta4SeamNoRescueBoundaryCase(ctx, singleplayer);
-                runthe maintainerBeta4AboveAngleTargetingOwnerSplitRedCase(ctx, singleplayer, false);
+                runBeta4AboveAngleTargetingOwnerSplitRedCase(ctx, singleplayer, false);
                 runBeta4SeamVisibleUpperSideFaceRedCase(ctx, singleplayer);
                 runBeta4SeamVisibleUpperAnchoredUpStealRedCase(ctx, singleplayer);
             }
@@ -136,7 +136,7 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
             try (TestSingleplayerContext singleplayer = ctx.worldBuilder()
                     .setUseConsistentSettings(true)
                     .create()) {
-                runthe maintainerBeta4AdjacentVisibleTargetRedCase(ctx, singleplayer);
+                runBeta4AdjacentVisibleTargetRedCase(ctx, singleplayer);
             }
             return;
         }
@@ -145,7 +145,7 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
             try (TestSingleplayerContext singleplayer = ctx.worldBuilder()
                     .setUseConsistentSettings(true)
                     .create()) {
-                runthe maintainerBeta4AboveAngleTargetingOwnerSplitRedCase(ctx, singleplayer);
+                runBeta4AboveAngleTargetingOwnerSplitRedCase(ctx, singleplayer);
             }
             return;
         }
@@ -154,7 +154,7 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
             try (TestSingleplayerContext singleplayer = ctx.worldBuilder()
                     .setUseConsistentSettings(true)
                     .create()) {
-                runthe maintainerBeta4StoneSlabTargetingOutlineMismatchRedCase(ctx, singleplayer);
+                runBeta4StoneSlabTargetingOutlineMismatchRedCase(ctx, singleplayer);
             }
             return;
         }
@@ -3895,18 +3895,18 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
         runBeta4LiveScreenshotTopFaceGhostRedCase(ctx, singleplayer, redSummary);
         if (redSummary.length() > 0) {
             String summary = redSummary.toString();
-            System.out.println("[SLABBED_BETA4_LIVE_SCREENSHOT_BAND_SPLIT_HARNESS_GREEN]"
+            System.out.println("[BETA4_LIVE_SCREENSHOT_BAND_SPLIT_HARNESS_GREEN]"
                     + " classification=EXPECTED_RED_AUDIT"
                     + " summary=" + summary.replace('\n', '|'));
-            System.out.println("[SLABBED_BETA4_LIVE_SCREENSHOT_HARNESS_GREEN]"
+            System.out.println("[BETA4_LIVE_SCREENSHOT_HARNESS_GREEN]"
                     + " classification=EXPECTED_RED_AUDIT"
                     + " summary=" + summary.replace('\n', '|'));
             return;
         }
-        System.out.println("[SLABBED_BETA4_LIVE_SCREENSHOT_BAND_SPLIT_HARNESS_GREEN]"
+        System.out.println("[BETA4_LIVE_SCREENSHOT_BAND_SPLIT_HARNESS_GREEN]"
                 + " classification=FIXED_GREEN"
                 + " reason=screenshot_shape_top_face_and_side_bands_green");
-        System.out.println("[SLABBED_BETA4_LIVE_SCREENSHOT_HARNESS_GREEN]"
+        System.out.println("[BETA4_LIVE_SCREENSHOT_HARNESS_GREEN]"
                 + " classification=FIXED_GREEN"
                 + " reason=screenshot_shape_top_face_and_side_bands_green");
     }
@@ -4268,7 +4268,7 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
         movePlayerForFace(ctx, singleplayer, clickedTopFullPos, face);
         ctx.runOnClient(mc -> {
             if (mc.player == null || mc.interactionManager == null || mc.world == null) {
-                throw new RuntimeException("[SLABBED_BETA4_LIVE_SCREENSHOT_HARNESS_FAIL] case="
+                throw new RuntimeException("[BETA4_LIVE_SCREENSHOT_HARNESS_FAIL] case="
                         + proof + " reason=client_not_ready");
             }
             assertBeta4LiveScreenshotSourceTruth(
@@ -4280,7 +4280,7 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                     expectedSideSlabPos,
                     sideHit);
             emitCompoundSlabDiscriminator(
-                    "[SLABBED_BETA4_LIVE_SCREENSHOT_DISCRIMINATOR]",
+                    "[BETA4_LIVE_SCREENSHOT_DISCRIMINATOR]",
                     proof,
                     mc.world,
                     clickedTopFullPos,
@@ -4296,7 +4296,7 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
         singleplayer.getClientWorld().waitForChunksRender();
         ctx.runOnClient(mc -> {
             if (mc.world == null) {
-                throw new RuntimeException("[SLABBED_BETA4_LIVE_SCREENSHOT_HARNESS_FAIL] case="
+                throw new RuntimeException("[BETA4_LIVE_SCREENSHOT_HARNESS_FAIL] case="
                         + proof + " reason=client_world_missing_after_click");
             }
             BlockState actual = mc.world.getBlockState(expectedSideSlabPos);
@@ -4322,15 +4322,15 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                         + " clicked=" + describeOwnerFacts(mc.world, clickedTopFullPos)
                         + " loweredLaneBelowTop=" + describeOwnerFacts(mc.world, loweredLaneBelowTop);
                 if (requireGreen) {
-                    System.out.println("[SLABBED_BETA4_LIVE_SCREENSHOT_BAND_SPLIT_HARNESS_FAIL] " + reason);
+                    System.out.println("[BETA4_LIVE_SCREENSHOT_BAND_SPLIT_HARNESS_FAIL] " + reason);
                     throw new RuntimeException("the maintainer beta4 live screenshot upper side band did not stay GREEN");
                 }
-                System.out.println("[SLABBED_BETA4_LIVE_SCREENSHOT_SIDE_LOWER_RED] " + reason);
+                System.out.println("[BETA4_LIVE_SCREENSHOT_SIDE_LOWER_RED] " + reason);
                 redSummary.append(reason).append('\n');
             } else {
                 String marker = requireGreen
-                        ? "[SLABBED_BETA4_LIVE_SCREENSHOT_SIDE_UPPER_GREEN]"
-                        : "[SLABBED_BETA4_LIVE_SCREENSHOT_SIDE_LOWER_GREEN]";
+                        ? "[BETA4_LIVE_SCREENSHOT_SIDE_UPPER_GREEN]"
+                        : "[BETA4_LIVE_SCREENSHOT_SIDE_LOWER_GREEN]";
                 System.out.println(marker
                         + " result=" + resultText[0]
                         + " resultWasPass=" + resultWasPass
@@ -4365,7 +4365,7 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
         movePlayerForUp(ctx, singleplayer, clickedTopFullPos);
         ctx.runOnClient(mc -> {
             if (mc.player == null || mc.interactionManager == null || mc.world == null) {
-                throw new RuntimeException("[SLABBED_BETA4_LIVE_SCREENSHOT_HARNESS_FAIL] case="
+                throw new RuntimeException("[BETA4_LIVE_SCREENSHOT_HARNESS_FAIL] case="
                         + proof + " reason=client_not_ready");
             }
             assertBeta4LiveScreenshotSourceTruth(
@@ -4383,7 +4383,7 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
         singleplayer.getClientWorld().waitForChunksRender();
         ctx.runOnClient(mc -> {
             if (mc.world == null) {
-                throw new RuntimeException("[SLABBED_BETA4_LIVE_SCREENSHOT_HARNESS_FAIL] case="
+                throw new RuntimeException("[BETA4_LIVE_SCREENSHOT_HARNESS_FAIL] case="
                         + proof + " reason=client_world_missing_after_click");
             }
             BlockState actual = mc.world.getBlockState(expectedTopSlabPos);
@@ -4410,10 +4410,10 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                         + " skippedCandidate=" + describeOwnerFacts(mc.world, skippedTopSlabPos)
                         + " clicked=" + describeOwnerFacts(mc.world, clickedTopFullPos)
                         + " loweredLaneBelowTop=" + describeOwnerFacts(mc.world, loweredLaneBelowTop);
-                System.out.println("[SLABBED_BETA4_LIVE_SCREENSHOT_TOP_FACE_GHOST_RED] " + reason);
+                System.out.println("[BETA4_LIVE_SCREENSHOT_TOP_FACE_GHOST_RED] " + reason);
                 redSummary.append(reason).append('\n');
             } else {
-                System.out.println("[SLABBED_BETA4_LIVE_SCREENSHOT_TOP_FACE_GHOST_GREEN]"
+                System.out.println("[BETA4_LIVE_SCREENSHOT_TOP_FACE_GHOST_GREEN]"
                         + " result=" + resultText[0]
                         + " resultWasPass=" + resultWasPass
                         + " sourceFace=" + topHit.getSide().asString()
@@ -4459,7 +4459,7 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                 loweredLaneBelowTop,
                 loweredLane);
         int legalHorizontalLoweredLanes = countLegalLoweredSlabLanes(world, clickedTopFullPos);
-        System.out.println("[SLABBED_BETA4_LIVE_SCREENSHOT_HARNESS_GREEN]"
+        System.out.println("[BETA4_LIVE_SCREENSHOT_HARNESS_GREEN]"
                 + " case=" + proof
                 + " clickedBlockId=" + clicked.getBlock()
                 + " clickedPos=" + clickedTopFullPos.toShortString()
@@ -4484,7 +4484,7 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                 || !loweredLaneCarrier
                 || !lowerFull.isOf(Blocks.STONE)
                 || Math.abs(lowerFullDy + 0.5d) > EPSILON) {
-            throw new RuntimeException("[SLABBED_BETA4_LIVE_SCREENSHOT_HARNESS_FAIL]"
+            throw new RuntimeException("[BETA4_LIVE_SCREENSHOT_HARNESS_FAIL]"
                     + " case=" + proof
                     + " reason=source_truth_invalid"
                     + " clicked=" + describeOwnerFacts(world, clickedTopFullPos)
@@ -4514,7 +4514,7 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                 throw new RuntimeException("[" + rowName + "] client not ready for compound no-legal-lane proof");
             }
             emitCompoundSlabDiscriminator(
-                    "[SLABBED_BETA4_NO_LEGAL_LANE_DISCRIMINATOR]",
+                    "[BETA4_NO_LEGAL_LANE_DISCRIMINATOR]",
                     rowName + "-" + halfLabel,
                     mc.world,
                     compoundPos,
@@ -4531,7 +4531,7 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
             String expectedLaw = visibleUpperBand
                     ? "COMPOUND_VISIBLE_SIDE_UPPER_SLAB"
                     : "COMPOUND_BELOW_LANE_SIDE_SLAB";
-            System.out.println("[SLABBED_BETA4_COMPOUND_BELOW_LANE_SIDE_SLAB_ATTEMPT]"
+            System.out.println("[BETA4_COMPOUND_BELOW_LANE_SIDE_SLAB_ATTEMPT]"
                     + " row=" + rowName
                     + " half=" + halfLabel
                     + " result=" + result
@@ -4580,8 +4580,8 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                         + adjacentLanePos.toShortString() + ", found " + adjacent + " dy=" + adjacentDy);
             }
             System.out.println((visibleUpperBand
-                    ? "[SLABBED_BETA4_COMPOUND_OLD_ROW_VISIBLE_UPPER_SUPERSEDED_GREEN]"
-                    : "[SLABBED_BETA4_COMPOUND_BELOW_LANE_SIDE_SLAB_GREEN]")
+                    ? "[BETA4_COMPOUND_OLD_ROW_VISIBLE_UPPER_SUPERSEDED_GREEN]"
+                    : "[BETA4_COMPOUND_BELOW_LANE_SIDE_SLAB_GREEN]")
                     + " row=" + rowName
                     + " half=" + halfLabel
                     + " classification=" + expectedLaw
@@ -4617,7 +4617,7 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                 throw new RuntimeException("[" + rowName + "] client not ready for compound legal-remap proof");
             }
             emitCompoundSlabDiscriminator(
-                    "[SLABBED_BETA4_INTERNAL_ROW3_DISCRIMINATOR]",
+                    "[BETA4_INTERNAL_ROW3_DISCRIMINATOR]",
                     rowName,
                     mc.world,
                     compoundPos,
@@ -4627,7 +4627,7 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                     placedLanePos,
                     true);
             ActionResult result = mc.interactionManager.interactBlock(mc.player, Hand.MAIN_HAND, hit);
-            System.out.println("[SLABBED_BETA4_COMPOUND_SLAB_LEGAL_REMAP_PENDING]"
+            System.out.println("[BETA4_COMPOUND_SLAB_LEGAL_REMAP_PENDING]"
                     + " row=" + rowName
                     + " phase=post-click"
                     + " result=" + result
@@ -4665,7 +4665,7 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                 failCompoundSlabHarness(rowName, "legal-remap GREEN must author BOTTOM stone_slab dy=-0.500 at "
                         + placedLanePos.toShortString() + ", found " + placed + " dy=" + placedDy);
             }
-            System.out.println("[SLABBED_BETA4_COMPOUND_SLAB_LEGAL_REMAP_GREEN]"
+            System.out.println("[BETA4_COMPOUND_SLAB_LEGAL_REMAP_GREEN]"
                     + " row=" + rowName
                     + " phase=after-tick"
                     + " compound=" + describeOwnerFacts(mc.world, compoundPos)
@@ -4694,7 +4694,7 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
             if (mc.world == null) {
                 throw new RuntimeException("[" + rowName + "] client world missing for merge pending note");
             }
-            System.out.println("[SLABBED_BETA4_COMPOUND_SLAB_DOUBLE_MERGE_PENDING]"
+            System.out.println("[BETA4_COMPOUND_SLAB_DOUBLE_MERGE_PENDING]"
                     + " row=" + rowName
                     + " face=" + face.asString()
                     + " compound=" + describeOwnerFacts(mc.world, compoundPos)
@@ -4721,7 +4721,7 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                 throw new RuntimeException("[" + rowName + "] client not ready for compound top-click note");
             }
             ActionResult result = mc.interactionManager.interactBlock(mc.player, Hand.MAIN_HAND, hit);
-            System.out.println("[SLABBED_BETA4_COMPOUND_SLAB_LEGAL_REMAP_PENDING]"
+            System.out.println("[BETA4_COMPOUND_SLAB_LEGAL_REMAP_PENDING]"
                     + " row=" + rowName
                     + " half=top"
                     + " face=" + face.asString()
@@ -4748,7 +4748,7 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
             if (mc.world == null) {
                 throw new RuntimeException("[" + rowName + "] client world missing for compound sanity note");
             }
-            System.out.println("[SLABBED_BETA4_COMPOUND_BELOW_LANE_SIDE_SLAB_PENDING]"
+            System.out.println("[BETA4_COMPOUND_BELOW_LANE_SIDE_SLAB_PENDING]"
                     + " row=" + rowName
                     + " sanity=no_ghost_flicker_after_tick"
                     + " compound=" + describeOwnerFacts(mc.world, compoundPos)
@@ -4810,7 +4810,7 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                             + face.asString() + ", count=" + legalLaneCount
                             + " adjacent=" + describeOwnerFacts(mc.world, adjacentLanePos));
                 }
-                System.out.println("[SLABBED_BETA4_COMPOUND_SLAB_HARNESS_SOURCE_GREEN]"
+                System.out.println("[BETA4_COMPOUND_SLAB_HARNESS_SOURCE_GREEN]"
                         + " row=" + rowName
                         + " source=" + describeOwnerFacts(mc.world, compoundPos)
                         + " clickTarget=" + hit.getBlockPos().toShortString()
@@ -4822,12 +4822,12 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                             + legalLaneCount + " intendedDirection=" + face.asString()
                             + " adjacent=" + describeOwnerFacts(mc.world, adjacentLanePos));
                 }
-                System.out.println("[SLABBED_BETA4_COMPOUND_SLAB_HARNESS_SOURCE_GREEN]"
+                System.out.println("[BETA4_COMPOUND_SLAB_HARNESS_SOURCE_GREEN]"
                         + " row=" + rowName
                         + " source=" + describeOwnerFacts(mc.world, compoundPos)
                         + " clickTarget=" + hit.getBlockPos().toShortString()
                         + " legalLaneCount=" + legalLaneCount);
-                System.out.println("[SLABBED_BETA4_COMPOUND_BELOW_LANE_SIDE_SLAB_PENDING]"
+                System.out.println("[BETA4_COMPOUND_BELOW_LANE_SIDE_SLAB_PENDING]"
                         + " row=" + rowName
                         + " phase=pre-click"
                         + " source=" + describeOwnerFacts(mc.world, compoundPos)
@@ -4919,7 +4919,7 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
     }
 
     private static void failCompoundSlabHarness(String rowName, String reason) {
-        System.out.println("[SLABBED_BETA4_COMPOUND_SLAB_HARNESS_FAIL]"
+        System.out.println("[BETA4_COMPOUND_SLAB_HARNESS_FAIL]"
                 + " row=" + rowName
                 + " reason=" + reason);
         throw new RuntimeException("[" + rowName + "] compound slab harness topology invalid: " + reason);
@@ -5320,7 +5320,7 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                 setup);
     }
 
-    private static void runthe maintainerBeta4StoneSlabTargetingOutlineMismatchRedCase(
+    private static void runBeta4StoneSlabTargetingOutlineMismatchRedCase(
             ClientGameTestContext ctx,
             TestSingleplayerContext singleplayer
     ) {
@@ -5353,7 +5353,7 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
 
         ctx.runOnClient(mc -> {
             if (mc.player == null || mc.world == null || mc.gameRenderer == null) {
-                throw new RuntimeException("[SLABBED_BETA4_TARGETING_RED] client not ready");
+                throw new RuntimeException("[BETA4_TARGETING_RED] client not ready");
             }
 
             mc.gameRenderer.updateCrosshairTarget(0.0f);
@@ -5380,7 +5380,7 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
             boolean slabHeldProtectionPreservedExpected = expectedOwner.equals(finalOwner);
             boolean sideOwnerWouldWin = visibleOwner.equals(finalOwner);
 
-            System.out.println("[SLABBED_BETA4_TARGETING] shape=compact_lowered_stone_with_upper_double_slab"
+            System.out.println("[BETA4_TARGETING] shape=compact_lowered_stone_with_upper_double_slab"
                     + " held=minecraft:stone_slab"
                     + " expectedOwnerClass=" + expectedOwnerClass
                     + " actualOwnerClass=" + actualOwnerClass
@@ -5404,7 +5404,7 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                     + " sideOwnerWouldWin=" + sideOwnerWouldWin);
 
             if (expectedOwner.equals(vanillaOwner) && !expectedOwner.equals(finalOwner)) {
-                throw new RuntimeException("[SLABBED_BETA4_TARGETING_RED]"
+                throw new RuntimeException("[BETA4_TARGETING_RED]"
                         + " expectedOwner=" + expectedOwner
                         + " visibleOwner=" + visibleOwner
                         + " vanillaTarget=" + describeHit(vanilla)
@@ -5427,7 +5427,7 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                         + " finalHitVector=" + describeHitVector(finalTarget)
                         + " expectedFacts=" + describeOwnerFacts(mc.world, expectedOwnerPos)
                         + " visibleFacts=" + describeOwnerFacts(mc.world, visibleSlabOwnerPos));
-                System.out.println("[SLABBED_BETA4_TARGETING_GREEN]"
+                System.out.println("[BETA4_TARGETING_GREEN]"
                         + " expectedOwner=" + expectedOwner
                         + " visibleOwner=" + visibleOwner
                         + " vanillaTarget=" + describeHit(vanilla)
@@ -5439,7 +5439,7 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                 return;
             }
 
-            throw new RuntimeException("[SLABBED_BETA4_TARGETING_PROOF_GAP]"
+            throw new RuntimeException("[BETA4_TARGETING_PROOF_GAP]"
                     + " expectedOwner=" + expectedOwner
                     + " visibleOwner=" + visibleOwner
                     + " vanillaTarget=" + describeHit(vanilla)
@@ -5448,14 +5448,14 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
         });
     }
 
-    private static void runthe maintainerBeta4AboveAngleTargetingOwnerSplitRedCase(
+    private static void runBeta4AboveAngleTargetingOwnerSplitRedCase(
             ClientGameTestContext ctx,
             TestSingleplayerContext singleplayer
     ) {
-        runthe maintainerBeta4AboveAngleTargetingOwnerSplitRedCase(ctx, singleplayer, true);
+        runBeta4AboveAngleTargetingOwnerSplitRedCase(ctx, singleplayer, true);
     }
 
-    private static void runthe maintainerBeta4AboveAngleTargetingOwnerSplitRedCase(
+    private static void runBeta4AboveAngleTargetingOwnerSplitRedCase(
             ClientGameTestContext ctx,
             TestSingleplayerContext singleplayer,
             boolean includeGroundControl
@@ -5490,7 +5490,7 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
 
         String red;
         if (includeGroundControl) {
-            red = runthe maintainerBeta4AngleTargetingProbe(
+            red = runBeta4AngleTargetingProbe(
                     ctx,
                     singleplayer,
                     "ground_front",
@@ -5512,7 +5512,7 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
             lowerFrontRed = isLowerFrontRed(red) && lowerFrontRed == null ? red : lowerFrontRed;
         }
 
-        red = runthe maintainerBeta4AngleTargetingProbe(
+        red = runBeta4AngleTargetingProbe(
                 ctx,
                 singleplayer,
                 "live_above_across_pitch_steep_up",
@@ -5539,7 +5539,7 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
         }
     }
 
-    private static String runthe maintainerBeta4AngleTargetingProbe(
+    private static String runBeta4AngleTargetingProbe(
             ClientGameTestContext ctx,
             TestSingleplayerContext singleplayer,
             String angle,
@@ -5556,7 +5556,7 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
         double horiz = Math.sqrt(delta.x * delta.x + delta.z * delta.z);
         float yaw = (float) Math.toDegrees(Math.atan2(-delta.x, delta.z));
         float pitch = (float) (-Math.toDegrees(Math.atan2(delta.y, horiz)));
-        return runthe maintainerBeta4AngleTargetingProbe(
+        return runBeta4AngleTargetingProbe(
                 ctx,
                 singleplayer,
                 angle,
@@ -5571,7 +5571,7 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                 expectGreen);
     }
 
-    private static String runthe maintainerBeta4AngleTargetingProbe(
+    private static String runBeta4AngleTargetingProbe(
             ClientGameTestContext ctx,
             TestSingleplayerContext singleplayer,
             String angle,
@@ -5590,7 +5590,7 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
 
         ctx.runOnClient(mc -> {
             if (mc.player == null || mc.world == null || mc.gameRenderer == null) {
-                throw new RuntimeException("[SLABBED_BETA4_ABOVE_ANGLE_RED] angle=" + angle + " client not ready");
+                throw new RuntimeException("[BETA4_ABOVE_ANGLE_RED] angle=" + angle + " client not ready");
             }
 
             mc.gameRenderer.updateCrosshairTarget(0.0f);
@@ -5685,7 +5685,7 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                     + " anchoredOwnerWon=" + anchoredOwnerWon
                     + " classification=" + classification;
 
-                System.out.println("[SLABBED_BETA4_ABOVE_ANGLE]" + facts);
+                System.out.println("[BETA4_ABOVE_ANGLE]" + facts);
 
             if (expectGreen && anchoredOwnerWon) {
                 System.out.println("[BETA4_ANCHORED_UP_PRESERVE_GREEN]" + facts);
@@ -5694,7 +5694,7 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
 
             if (expectedVisibleOwnerHit) {
                 System.out.println("[BETA4_SEAM_VISIBLE_UPPER_SLAB_GREEN]" + facts);
-                System.out.println("[SLABBED_BETA4_SCREENSHOT_INTENT_GREEN]" + facts);
+                System.out.println("[BETA4_SCREENSHOT_INTENT_GREEN]" + facts);
                 return;
             }
 
@@ -5713,7 +5713,7 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                         + " anchoredOwnerWon=true"
                         + " groundAngleExpectedGreen=" + expectGreen;
                 System.out.println(redMessage[0]);
-                System.out.println("[SLABBED_BETA4_SCREENSHOT_INTENT_RED]" + facts
+                System.out.println("[BETA4_SCREENSHOT_INTENT_RED]" + facts
                         + " suspectedFailingLayer=anchored-owner-preserved-over-visible-owner"
                         + " anchoredOwnerWon=true"
                         + " groundAngleExpectedGreen=" + expectGreen);
@@ -5725,7 +5725,7 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                     + " anchoredOwnerWon=false"
                     + " groundAngleExpectedGreen=" + expectGreen;
             System.out.println(redMessage[0]);
-            System.out.println("[SLABBED_BETA4_SCREENSHOT_INTENT_RED]" + facts
+            System.out.println("[BETA4_SCREENSHOT_INTENT_RED]" + facts
                     + " suspectedFailingLayer=unexpected-owner-live-targeting"
                     + " anchoredOwnerWon=false"
                     + " groundAngleExpectedGreen=" + expectGreen);
@@ -5753,7 +5753,7 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                 && SlabAnchorAttachment.isAnchored(world, expectedOwnerPos.down());
     }
 
-    private static void runthe maintainerBeta4AdjacentVisibleTargetRedCase(
+    private static void runBeta4AdjacentVisibleTargetRedCase(
             ClientGameTestContext ctx,
             TestSingleplayerContext singleplayer
     ) {
@@ -5795,7 +5795,7 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
 
         ctx.runOnClient(mc -> {
             if (mc.player == null || mc.world == null || mc.gameRenderer == null) {
-                throw new RuntimeException("[SLABBED_BETA4_ADJACENT_VISIBLE_RED] client not ready");
+                throw new RuntimeException("[BETA4_ADJACENT_VISIBLE_RED] client not ready");
             }
 
             mc.gameRenderer.updateCrosshairTarget(0.0f);
@@ -5874,11 +5874,11 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
 
             if (adjacentOwnerWon) {
                 System.out.println("[BETA4_ADJACENT_VISIBLE_SEAM_GREEN]" + facts);
-                System.out.println("[SLABBED_BETA4_ADJACENT_VISIBLE_GREEN]" + facts);
+                System.out.println("[BETA4_ADJACENT_VISIBLE_GREEN]" + facts);
                 return;
             }
 
-            throw new RuntimeException("[SLABBED_BETA4_ADJACENT_VISIBLE_RED]" + facts
+            throw new RuntimeException("[BETA4_ADJACENT_VISIBLE_RED]" + facts
                     + " suspectedFailingLayer=adjacent-visible-owner-not-preserved");
         });
     }
@@ -18683,7 +18683,7 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
         String outcome = notReproduced ? "NOT_REPRODUCED" : "RED";
         String summaryFailureLayer = notReproduced ? "HIT_ACCEPTANCE_FIXTURE_MISMATCH" : firstFailureLayer;
         String exactProblematicHeight = notReproduced ? "NOT_REPRODUCED_IN_MATRIX" : firstFailureHeight;
-        String nextSlice = notReproduced ? "live_fixture_capture_or_the maintainer_exact_height_replay"
+        String nextSlice = notReproduced ? "live_fixture_capture_or_maintainer_exact_height_replay"
                 : (mixedHeldResultsAtOneHeight ? "category_specific_hit_acceptance_audit"
                 : "generic_slab_height_hit_acceptance_fix");
 
@@ -19148,7 +19148,7 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                 + " fenceWallLiveEvidence=VISUAL_SELECTION_GREEN_COLLISION_OVERHANG_SEPARATED"
                 + " anvilPriorProof=CONTACT_TRIAD_GREEN_NOT_TRUE_COLLISION_AUTHORITY"
                 + " fenceGateCategory=SEPARATE_FROM_FENCE_WALL_FAMILY"
-                + " recommendedNextSlice=the maintainer_live_acceptance_visual_hitbox_recheck"
+                + " recommendedNextSlice=maintainer_live_acceptance_visual_hitbox_recheck"
                 + " productionBehaviorChanged=false"
                 + " releaseAudit=NOT_RUN"
                 + " releaseTagMoved=false");

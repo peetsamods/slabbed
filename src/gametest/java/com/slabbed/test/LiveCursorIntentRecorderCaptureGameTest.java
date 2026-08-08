@@ -2053,7 +2053,7 @@ public final class LiveCursorIntentRecorderCaptureGameTest {
         System.setProperty(LiveCursorIntentRecorder.DIR_PROPERTY, dir.toString());
         String priorCommand = System.getProperty("sun.java.command");
         System.setProperty("sun.java.command",
-                "net.minecraft.client.main.Main --username the maintainer "
+                "net.minecraft.client.main.Main --username TestPlayer "
                         + "--accessToken eyJhbGciOiJSUzI1NiJ9.super-secret-jwt-token --userType msa");
         try {
             try {
@@ -2101,7 +2101,7 @@ public final class LiveCursorIntentRecorderCaptureGameTest {
                 throw helper.assertionException(
                         "manifest.json must NOT contain the raw accessToken value — got: " + text);
             }
-            if (!text.contains("--username the maintainer")) {
+            if (!text.contains("--username TestPlayer")) {
                 throw helper.assertionException(
                         "manifest.json's javaCommand must keep non-sensitive args — got: " + text);
             }
