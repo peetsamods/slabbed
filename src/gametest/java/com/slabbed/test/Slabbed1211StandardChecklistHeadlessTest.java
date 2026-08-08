@@ -165,6 +165,39 @@ public final class Slabbed1211StandardChecklistHeadlessTest {
         ctx.complete();
     }
 
+    /**
+     * GH #22 (Terrain Slabs visual log logic): a full block placed directly on a log that
+     * itself sits lowered on a Terrain Slabs bottom-like surface must inherit the log's
+     * lowered dy, not stay flush at 0.0. The log is a full solid cube, so it terminates
+     * {@code hasSlabInColumn}'s downward walk on itself when queried from the block above
+     * (the walk stops at the first non-air, non-slab, non-thin-layer state) — the TS slab
+     * one level further down is never reached, and the flush "opaque full cube always stays
+     * flush" guard in {@code getYOffsetInner} takes over, producing a world-hole DODO. This
+     * mirrors the mechanism already fixed on main (c5f01bfd) and compat1211 (5684fd09) for
+     * vanilla-slab / TS-native carriers respectively; this row proves (or refutes) the same
+     * bug shape on THIS branch's own dy-resolution path (Fabric 1.21.1, no TS-compat module).
+     */
+    @GameTest(templateName = "fabric-gametest-api-v1:empty")
+    public void fullBlockOnLogLoweredOntoTerrainSlabsInheritsLoweredDy(TestContext ctx) {
+        BlockPos tsSlab = new BlockPos(2, 1, 2);
+        BlockPos log = new BlockPos(2, 2, 2);
+        BlockPos fullBlock = new BlockPos(2, 3, 2);
+
+        BlockState tsSlabState = TEST_TERRAIN_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.BOTTOM);
+        ctx.setBlockState(tsSlab, tsSlabState);
+        ctx.setBlockState(log, Blocks.OAK_LOG.getDefaultState());
+        ctx.setBlockState(fullBlock, Blocks.STONE.getDefaultState());
+
+        double logDy = dy(ctx, log);
+        Slabbed.LOGGER.info("CHECKLIST-FP | gh22_log_on_terrain_slabs | dy={}",
+                String.format(java.util.Locale.ROOT, "%.3f", logDy));
+
+        expectDy(ctx, fullBlock, logDy,
+                "gh22_full_block_on_log_lowered_onto_terrain_slabs");
+        clear(ctx, fullBlock, log, tsSlab);
+        ctx.complete();
+    }
+
     @GameTest(templateName = "fabric-gametest-api-v1:empty")
     public void ceilingHungUnderTopSlabRaisesHalf(TestContext ctx) {
         BlockPos ceiling = new BlockPos(2, 3, 2);
