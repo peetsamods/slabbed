@@ -10,7 +10,7 @@ import java.util.function.Function;
  * The Brigadier node structure for the two debug commands that ship in EVERY jar, default off:
  * {@code /slabdy} and {@code /slabdev}.
  *
- * <p><b>Why the tree lives here and not next to the client wiring.</b> Maintainer's standing rule says
+ * <p><b>Why the tree lives here and not next to the client wiring.</b> the maintainer's standing rule says
  * both commands ship in every jar, and her 2026-08-07 ruling fixed the reading: the command must be
  * <em>invocable</em> on a shipped jar, not merely present as bytes. A claim like that is only worth
  * what its test is worth, and a client command tree is not reachable from a headless

@@ -29,7 +29,7 @@ import net.minecraft.world.phys.shapes.VoxelShape;
 import net.minecraft.world.level.Level;
 
 /**
- * Evidence-only tracer for Maintainer's Beta 3.5 slab-height hit-acceptance gap.
+ * Evidence-only tracer for the maintainer's Beta 3.5 slab-height hit-acceptance gap.
  */
 public final class Beta35SlabHeightHitAcceptanceRecorder {
     private static final String FLAG = "slabbed.beta35SlabHeightHitAcceptance";

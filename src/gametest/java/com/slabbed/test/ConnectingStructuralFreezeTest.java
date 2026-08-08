@@ -24,7 +24,7 @@ import net.minecraft.world.phys.Vec3;
  * to the freeze-flat gate): a fence/wall/pane/gate placed FLAT must freeze at its placed height like
  * every other structural piece — on unfixed 26.2 the structural gate required isSolidRender, so
  * connecting blocks stayed LIVE forever and sank -0.5 the moment someone edited a slab under them
- * (Maintainer's down-pop while editing beneath existing builds; the exact scenario FROZEN_FLAT exists for).
+ * (the maintainer's down-pop while editing beneath existing builds; the exact scenario FROZEN_FLAT exists for).
  * Control pins the feature direction: a fence placed ON a lowered support still follows it down.
  */
 public final class ConnectingStructuralFreezeTest {

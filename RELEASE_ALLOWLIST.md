@@ -131,7 +131,7 @@ anything. The split above puts the fine granularity only where a leak has actual
 | `com/slabbed/client/SlabGeometricRemeshScheduler` | Schedules section remeshes when dy changes. |
 | `com/slabbed/client/SlabImportantRemesh` | Important-dirty remesh path. |
 | `com/slabbed/client/SlabbedModelLoadingPlugin` | Installs the offset block-state model. |
-| `com/slabbed/client/SlabbedDebugCommands` | Registers `/slabdy` and `/slabdev` from the shipped client entrypoint — the standing debug-tooling rule under Maintainer's 2026-08-07 reading that the commands must be INVOCABLE on a shipped jar. Wiring only (read the crosshair, print to chat); the node structure and strings are in the headless `SlabbedDebugCommandTree`. Registers ONE callback that builds two Brigadier trees: no tick hook, no HUD element, no lifecycle listener, no world-save write, no disk access, nothing running until someone types the command. Names no excluded class — the debug tools are reached through `SlabbedDebugToolBridge`. |
+| `com/slabbed/client/SlabbedDebugCommands` | Registers `/slabdy` and `/slabdev` from the shipped client entrypoint — the standing debug-tooling rule under the maintainer's 2026-08-07 reading that the commands must be INVOCABLE on a shipped jar. Wiring only (read the crosshair, print to chat); the node structure and strings are in the headless `SlabbedDebugCommandTree`. Registers ONE callback that builds two Brigadier trees: no tick hook, no HUD element, no lifecycle listener, no world-save write, no disk access, nothing running until someone types the command. Names no excluded class — the debug tools are reached through `SlabbedDebugToolBridge`. |
 | `com/slabbed/client/SlabbedDebugToolBridge` | Release-safe client seam between those shipped commands and the two development-only debug tools (target-dy overlay, live-cursor recorder). Same architecture as `SlabbedDiagnosticsBridge`, applied to the command surface: with no provider installed — the release case — `available()` is false and the commands report "not available in this build" and change nothing. Shipping the seam is what keeps the implementations OUT of the jar while leaving the commands honest. |
 
 ### Network (class-level; `com/slabbed/network/` is a mixed package)
@@ -180,7 +180,7 @@ allowlist honestly describing both jars.
 Standing rule note (updated 2026-08-07, second pass): the original text of this note reported that
 `/slabdy` and `/slabdev` were registered in no release code at all on this line — `/slabdev` only
 from the compile-excluded `com/slabbed/dev/**` and from the development-only diagnostics companion,
-`/slabdy` from nowhere. That gap has now been closed under Maintainer's ruling that "ships in every jar"
+`/slabdy` from nowhere. That gap has now been closed under the maintainer ruling that "ships in every jar"
 means an operator can actually INVOKE the command on a release build, default off.
 
 - Both commands register from `com/slabbed/client/SlabbedDebugCommands`, called unconditionally by

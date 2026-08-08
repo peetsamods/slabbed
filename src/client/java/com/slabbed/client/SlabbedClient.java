@@ -25,7 +25,7 @@ public final class SlabbedClient implements ClientModInitializer {
                 Boolean.getBoolean("slabbed.bsfb.live.trace"));
         initDyFingerprintDump();
         BetaNoticeClient.init();
-        // Ships in EVERY jar, default off — the standing debug-tooling rule, under Maintainer's
+        // Ships in EVERY jar, default off — the standing debug-tooling rule, under the maintainer's
         // 2026-08-07 reading that the command must be INVOCABLE on a shipped jar rather than merely
         // present as bytes. Unconditional on purpose: no isDevelopmentEnvironment() guard and no
         // reflective hook, because either one is exactly how /slabdy and /slabdev came to be

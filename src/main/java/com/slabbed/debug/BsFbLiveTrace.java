@@ -14,7 +14,7 @@ import net.minecraft.world.level.block.state.BlockState;
  * <p>Enable with: -Dslabbed.bsfb.live.trace=true
  *
  * <p>This diagnostic captures actual live world state at specific moments
- * to diagnose Maintainer's reported BS-FB regression:
+ * to diagnose the maintainer's reported BS-FB regression:
  * - breaking original bottom slab appears to make the BS-FB system move upward
  * - placing intended 0.5S afterward appears to jump into 1S
  *

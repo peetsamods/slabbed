@@ -1,7 +1,12 @@
 #!/usr/bin/env bash
-# Slabbed law guardrails (post-mortem S-1/S-3/S-4/S-5). Enforced at commit time.
+# Slabbed guardrails (S-1/S-4/S-5/S-6). Enforced at commit time.
 # Install once per checkout:  git config core.hooksPath tools/hooks
 # Bypass in a genuine emergency:  git commit --no-verify   (logged in your reflog; use sparingly)
+#
+# S-2 (NeighborUpdateInvarianceTest) is the LAW 1 gate and is BLOCKING BY DEFAULT since
+# 2026-08-06 — the executable test enforces the law; this hook only guards process hygiene.
+# S-3 (the added-line vocabulary regex) was RETIRED 2026-08-07 by maintainer ruling: with S-2
+# blocking, a keyword tripwire that fires on comments was redundant belt-on-suspenders.
 set -euo pipefail
 MSG_FILE="$1"
 MSG="$(cat "$MSG_FILE")"
@@ -34,44 +39,51 @@ if [ -n "$SRC_MAIN" ]; then
     fail "S-4: this commit changes src/main/** — add a trailer answering the law preflight:
          LAW-PREFLIGHT: n     (this change does NOT let a neighbor move a placed block)
        or, if it might:
-         LAW-PREFLIGHT: y     (+ record Maintainer's sign-off in the body). See LAW.md."
-  fi
-fi
-
-# ── S-3: diff tripwire on the violation vocabulary in ADDED lines ────────────────────────────
-if [ -n "$SRC_MAIN" ]; then
-  ADDED_HITS="$(git diff --cached --unified=0 -- 'src/main/**' \
-    | grep -E '^\+' | grep -vE '^\+\+\+' \
-    | grep -EiC0 'geometric|\bmerge\b|\bfollow\b|inherit|cantilever|recompute|isAdjacent.*Lowered' || true)"
-  if [ -n "$ADDED_HITS" ]; then
-    if ! echo "$MSG" | grep -qE '^LAW-SIGNOFF: .'; then
-      fail "S-3: added source lines use the law-violating vocabulary
-       (geometric/merge/follow/inherit/cantilever/recompute/isAdjacent*Lowered) — these describe
-       'a neighbor decides this block's height', which the law forbids. If this is genuinely a
-       placement-time-only computation or a legitimate refactor, add a trailer:
-         LAW-SIGNOFF: <reason>   and add/adjust a NeighborUpdateInvarianceTest row proving the law holds.
-       Offending lines:
-$(echo "$ADDED_HITS" | sed 's/^/         /' | head -12)"
-    fi
+         LAW-PREFLIGHT: y     (+ record the maintainer sign-off in the body). See LAW.md."
   fi
 fi
 
 # ── S-5: no more than one behavior change may stack without a live pass ──────────────────────
-# Count behavior-touching commits since LIVE_LEDGER.md last gained an entry; block the 2nd.
+# The live ledger lives OUTSIDE the repo (discretion law, 2026-08-07), by default at
+#   $HOME/CascadeProjects/Slabbed-notes/port-26.2/LIVE_LEDGER.md   (override: $SLABBED_NOTES)
+# A behavior-touching commit is allowed only if the ledger has been updated since the previous
+# behavior-touching commit (ledger mtime vs that commit's time) — same rule as before, the
+# bookkeeping just moved out of the tracked tree.
 if [ -n "$BEHAVIOR" ]; then
-  LEDGER_COMMIT="$(git log -1 --format=%H -- docs/process/LIVE_LEDGER.md 2>/dev/null || true)"
-  RANGE="${LEDGER_COMMIT:+$LEDGER_COMMIT..HEAD}"
-  BEHAVIOR_SINCE="$(git log ${RANGE:-} --format=%H -- \
+  NOTES_DIR="${SLABBED_NOTES:-$HOME/CascadeProjects/Slabbed-notes/port-26.2}"
+  LEDGER_FILE="$NOTES_DIR/LIVE_LEDGER.md"
+  if [ ! -f "$LEDGER_FILE" ]; then
+    fail "S-5: local ledger not found at $LEDGER_FILE.
+       Behavior-touching commits require the out-of-repo live ledger. Create the notes directory
+       (or set \$SLABBED_NOTES) and record the live state there before committing behavior changes."
+  fi
+  LAST_BEHAVIOR_TS="$(git log -1 --format=%ct -- \
       'src/main/**/SlabSupport.java' 'src/main/**/SlabAnchorAttachment.java' \
       'src/main/**/*PlacementIntent*' 'src/main/**/*OnPlacedAnchor*' \
-      'src/main/**/*OnStateReplaced*' 'src/main/**/*OffsetRaycast*' 2>/dev/null | wc -l | tr -d ' ')"
-  LEDGER_STAGED="$(echo "$STAGED" | grep -c 'docs/process/LIVE_LEDGER.md' || true)"
-  if [ "${BEHAVIOR_SINCE:-0}" -ge 1 ] && [ "${LEDGER_STAGED:-0}" -eq 0 ]; then
-    fail "S-5: a behavior-changing commit already landed since the last live pass, and this is another
-       one without a recorded live result. Do NOT stack. Get Maintainer's live A/B first, record it in
-       docs/process/LIVE_LEDGER.md (dated, jar-sha'd, 'live-confirmed' or 'live-RED'), and stage that
-       ledger entry with this commit. The 12-tranche sight-unseen campaign is exactly what this stops."
+      'src/main/**/*OnStateReplaced*' 'src/main/**/*OffsetRaycast*' 2>/dev/null || true)"
+  LEDGER_TS="$(stat -f %m "$LEDGER_FILE" 2>/dev/null || stat -c %Y "$LEDGER_FILE" 2>/dev/null || echo 0)"
+  if [ -n "$LAST_BEHAVIOR_TS" ] && [ "$LAST_BEHAVIOR_TS" -gt "$LEDGER_TS" ]; then
+    fail "S-5: a behavior-changing commit already landed since the ledger was last updated, and this
+       is another one without a recorded live result. Do NOT stack. Get a live A/B first, record it
+       in $LEDGER_FILE (dated, jar-sha'd, 'live-confirmed' or 'live-RED'), then commit.
+       The 12-tranche sight-unseen campaign is exactly what this stops."
   fi
+fi
+
+# ── S-6: discretion gate — the public repo carries no personal or machine-local data ─────────
+# Maintainer ruling 2026-08-07: no personal names, no local absolute paths, no development-diary
+# identifiers in any ADDED line of any tracked file. Process notes live OUTSIDE the repo.
+# Pattern assembled from pieces so this hook's own diff can never match itself.
+DISCRETION_PAT="Ju""lia|jool""mac|/Use""rs/"
+DISCRETION_HITS="$(git diff --cached --unified=0 \
+  | grep -E '^\+' | grep -vE '^\+\+\+' \
+  | grep -E "$DISCRETION_PAT" || true)"
+if [ -n "$DISCRETION_HITS" ]; then
+  fail "S-6: added lines contain personal or machine-local data (a personal name, a local
+       username, or an absolute home-directory path). The public repo stays impersonal — move
+       narrative to the local notes ledger and reference rulings as 'maintainer ruling, <date>'.
+       Offending lines:
+$(echo "$DISCRETION_HITS" | sed 's/^/         /' | head -12)"
 fi
 
 exit 0

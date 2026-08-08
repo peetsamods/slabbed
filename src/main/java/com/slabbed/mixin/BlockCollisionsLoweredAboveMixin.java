@@ -12,7 +12,7 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Redirect;
 
 /**
- * COLLISION-FOLLOW broadphase half (Maintainer's "solid where you see it"): MC's
+ * COLLISION-FOLLOW broadphase half (the maintainer's "solid where you see it"): MC's
  * {@link BlockCollisions} iterator is cell-bounded — it only asks each cell's OWN block for a
  * collision shape. A Slabbed-lowered block's collision lives partly in the cell BELOW it (its shape
  * hangs down by |dy| to sit at the visual position), so the broadphase never samples that hanging

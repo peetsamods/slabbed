@@ -1185,7 +1185,7 @@ public final class SlabRigCommand {
                     // Where the item lands and which face is clicked. Rows 0-2 seat on the support's
                     // up-face. Row 3 (overhang_and_ceiling) is a HANGING attempt: click the ceiling
                     // block's DOWN face so the item lands in the hang gap through the real hanging path.
-                    // An item that refuses to hang leaves that gap empty and free for Maintainer to use.
+                    // An item that refuses to hang leaves that gap empty and free for the maintainer to use.
                     BlockPos clicked;
                     Direction face;
                     BlockPos target;

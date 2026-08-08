@@ -15,7 +15,7 @@ import java.util.Set;
 /**
  * Persisted, client-side set of world/server keys where the player clicked "don't show this
  * again" on the beta notice. Deliberately scoped per-world (not a single global on/off switch)
- * so dismissing it in one world doesn't silence it in a brand new one — Maintainer's explicit request.
+ * so dismissing it in one world doesn't silence it in a brand new one — the maintainer's explicit request.
  */
 final class BetaNoticeDismissedWorlds {
 

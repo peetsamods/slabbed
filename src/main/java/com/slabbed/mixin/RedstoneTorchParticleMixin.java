@@ -20,7 +20,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
  * <p>{@link RedstoneTorchBlock} extends {@code BaseTorchBlock} (NOT {@code TorchBlock}) and has its own
  * {@code animateTick}, so {@link TorchParticleMixin} (on {@code TorchBlock}) does not cover it — without
  * this the redstone dust emits 0.5 above the lowered model (the regular torch was already correct;
- * Maintainer 2026-06-19). Mirrors vanilla's position + 0.2 jitter, only shifted by dy, and only when LIT.
+ * the maintainer 2026-06-19). Mirrors vanilla's position + 0.2 jitter, only shifted by dy, and only when LIT.
  * The wall variant ({@code RedstoneWallTorchBlock}) overrides {@code animateTick} and is unaffected.
  */
 @Mixin(RedstoneTorchBlock.class)

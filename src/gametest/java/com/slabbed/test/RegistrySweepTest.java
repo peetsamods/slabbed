@@ -44,13 +44,13 @@ import java.util.Locale;
 import java.util.Map;
 
 /**
- * THE REGISTRY SWEEP — Maintainer's entire manual block-family sweep, mechanized.
+ * THE REGISTRY SWEEP — the maintainer's entire manual block-family sweep, mechanized.
  *
  * <p>Places <em>every placeable {@link BlockItem} in the game</em> onto the three standard rigs via
  * the REAL {@code useOn} path (never {@code setBlock} + a hand-rolled onPlaced — the documented
  * false-green), and emits a per-item TSV report at {@code build/reports/slabbed-sweep.tsv}:
  * landing dy (GOES), the frozen {@link SlabAnchorAttachment#storedPlacementDy stored placement dy},
- * a family-agnostic SEAT verdict computed from the actual outline shapes (this is Maintainer's eyeball
+ * a family-agnostic SEAT verdict computed from the actual outline shapes (this is the maintainer's eyeball
  * mechanized: FLUSH / GAP / OVERLAP with the delta), and a STAYS verdict (LAW.md: a placed block's
  * height must survive a neighbor edit byte-identical, or the block itself vanishes by a genuine
  * vanilla mechanic). One gradle run replaces days of manual testing; the report is the GOES

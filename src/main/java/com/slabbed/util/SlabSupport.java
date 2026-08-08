@@ -165,7 +165,7 @@ public final class SlabSupport {
         // support — so a block placed on it must NOT anchor -0.5. This is the single choke point feeding
         // every anchor-qualification site; without it, onPlaced anchors the block -0.5 SERVER-side while
         // the client reads geometric 0.0 (the column walk already stops flush at a TS slab), so the block
-        // visibly SNAPS DOWN into the TS surface when the anchor syncs (Maintainer's "snapping down after a
+        // visibly SNAPS DOWN into the TS surface when the anchor syncs (the maintainer's "snapping down after a
         // short delay" on a terrain slab). Vanilla bottom slabs are untouched (shouldSkipSlabSupport keys
         // only on terrain_slabs/terrainslabs ids).
         if (CompatHooks.shouldSkipSlabSupport(below)) {
@@ -953,7 +953,7 @@ public final class SlabSupport {
 
         // Ceiling-attached blocks under a top slab are OWNED by the ceiling walks in
         // getYOffsetInner (post-D2 ruling: flush 0.0, or the lowered merge compensation) — never by
-        // the -0.5 below-lane. NOTE (D2 high-sweeper finding 2, awaiting Maintainer's ruling — audit Q4):
+        // the -0.5 below-lane. NOTE (D2 high-sweeper finding 2, awaiting maintainer ruling — audit Q4):
         // this exclusion also denies the below-lane to a SANDWICHED object (bottom slab below, top
         // slab above), which pops it to 0.0 when the top slab appears. Behavior is donor-parity;
         // kept as-is pending the ruling. Use isCeilingAttached here (safe, no shape calcs)
@@ -1061,7 +1061,7 @@ public final class SlabSupport {
      *   <li>{@code -0.5} for blocks sitting above a bottom slab (or chain).</li>
      *   <li>{@code slabDy + 0.5} (net &lt;= 0.0) for ceiling-attached blocks under a LOWERED top
      *       slab (merge compensation); under a FLUSH top slab they hang at {@code 0.0} — the old
-     *       +0.5 reach-up is dead per Maintainer's 2026-07-03 ruling (isLoweringTopLikeCeiling).</li>
+     *       +0.5 reach-up is dead per the maintainer's 2026-07-03 ruling (isLoweringTopLikeCeiling).</li>
      *   <li>{@code -1.5} for floor-contact objects seated on a compound-visible marked slab.</li>
      *   <li>{@code 0.0} otherwise (no offset).</li>
      * </ul>
@@ -1505,7 +1505,7 @@ public final class SlabSupport {
         // merely -0.5 lowered block (or a flush block) has no compound side — a slab placed against it
         // must merge at the neighbour's actual magnitude via the normal cantilever lane (RC2-A), NOT be
         // forced to -1.0. Without this gate, aiming at the side of a -0.5 block set the compound marker
-        // and the slab overshot to -1.0 (Maintainer: "upper-half placement lands wrong").
+        // and the slab overshot to -1.0 (maintainer ruling: "upper-half placement lands wrong").
         if (sourceDy > -1.0d + 1.0e-6d) {
             return false;
         }
@@ -1942,7 +1942,7 @@ public final class SlabSupport {
             }
             if (n.getBlock() instanceof SlabBlock) {
                 // GAP-2: a BARE single lowered SLAB neighbour (no full-block column under it) is a valid
-                // cantilever source — Maintainer's scenario #3 in pure form. The old code 'continue'd on every
+                // cantilever source — the maintainer's scenario #3 in pure form. The old code 'continue'd on every
                 // slab neighbour, so this read 0.0 (the slab floated half a block too high). Detect
                 // recursion-safely and carry its magnitude out (-0.5, or -1.0 for a compound side slab).
                 double m = loweredSlabMagnitude(world, nPos, n);
@@ -2063,7 +2063,7 @@ public final class SlabSupport {
      * A BLOCK ENTITY (hopper / chest / furnace / …) cantilevered over AIR — the block-entity analogue of
      * {@link #isCantileverFullBlockCandidate} / {@link #isCantileverConnectingCandidate}. Air-gated
      * ({@code pos.below()} must be air) so a block entity resting on its OWN solid ground beside a lowered
-     * neighbour keeps dy=0 and never sinks (Maintainer's NEVER-POP rail). Ceiling-hung block entities (hanging
+     * neighbour keeps dy=0 and never sinks (the maintainer's NEVER-POP rail). Ceiling-hung block entities (hanging
      * signs) are excluded — they hang from ABOVE and are dispatched first by {@link #getYOffsetInner}, so
      * they never reach this lane. Recursion-safe (no {@link #getYOffset}).
      */
@@ -2398,7 +2398,7 @@ public final class SlabSupport {
     /**
      * True for a slab whose lowered dy comes ONLY from a lowered SIDE neighbour (slab-lane
      * inheritance), with NO genuine lowered support directly below it. Used by freeze-on-place: a
-     * freshly PLACED slab in this state must NOT snap down to the neighbour's level (Maintainer's
+     * freshly PLACED slab in this state must NOT snap down to the neighbour's level (the maintainer's
      * NEVER-POP law — a placed block stays where it was put); it freezes flat instead. A slab lowered
      * by genuine support BELOW (a lowered carrier — slab or full block) is excluded here so it still
      * legitimately follows that support down (anchored -0.5).
@@ -2413,7 +2413,7 @@ public final class SlabSupport {
         // freezeLoweredOnPlace must ANCHOR it -0.5 (its dy<0 branch -> addAnchorUnchecked), NOT mark it
         // FROZEN_FLAT — otherwise the server freezes 0.0 while the client predicts geometric -0.5 and
         // the slab snaps up (the RC1-class desync). A slab on SOLID ground (pos.below() NOT air) is
-        // unchanged: it falls through to the original logic and still freezes FLAT (Maintainer's NEVER-POP
+        // unchanged: it falls through to the original logic and still freezes FLAT (the maintainer's NEVER-POP
         // rail — a slab on its own flush ground beside a lowered lane stays at dy=0).
         if (world.getBlockState(pos.below()).isAir()) {
             return false;
@@ -2494,11 +2494,11 @@ public final class SlabSupport {
      * and the two {@code getYOffsetInner} walks), so the ruling can never be applied to one walk and
      * forgotten on the others.
      *
-     * <p>DEPRECATED (2026-07-03, Maintainer live ruling): the +0.5 "reach-up" for ceiling-attached objects
+     * <p>DEPRECATED (2026-07-03, the maintainer live ruling): the +0.5 "reach-up" for ceiling-attached objects
      * (lantern / dripstone / chain / lever / TOP-trapdoor / ...) under a FLUSH top slab is deprecated —
      * everything hangs FLUSH now. In live testing the reach-up smooshed those objects UP into the slab;
      * flush looked better. Returning false disables the +0.5 at ALL three ceiling walks from ONE place,
-     * so the ruling is trivially reversible if it regresses (Maintainer: "subject to further review").
+     * so the ruling is trivially reversible if it regresses (maintainer ruling: "subject to further review").
      * The {@code slabDy + 0.5} flush-COMPENSATION for a LOWERED top slab (the walk-B tracking and the
      * ceilingHungDecorationDy support read) is a DIFFERENT path — it nets &lt;= 0.0 (flush against the
      * lowered underside), not a reach-up — and deliberately stays: it is the 26.2-native live-confirmed
@@ -2515,7 +2515,7 @@ public final class SlabSupport {
      * +0.5 merge compensation so it sits flush against the lowered underside, not 0.5 too low). A
      * Terrain Slabs slab renders FLUSH ({@code shouldSkipOffset}), so it is never treated as a
      * lowered support. Under a FLUSH top slab it hangs flush at 0.0 — the old +0.5 reach-up is dead
-     * per Maintainer's 2026-07-03 ruling ({@link #isLoweringTopLikeCeiling}).
+     * per the maintainer's 2026-07-03 ruling ({@link #isLoweringTopLikeCeiling}).
      */
     private static double ceilingHungDecorationDy(BlockGetter world, BlockPos pos, BlockState state) {
         BlockPos supportPos = pos.above();
@@ -2638,7 +2638,7 @@ public final class SlabSupport {
                 // falls back to the -0.5 floor below (never pops UP to flush). The -1.0 boundary is
                 // deliberate: a slab resting on a -1.0 support without the owner-top placement marker
                 // stays at the single-step -0.5 on THIS live (frozen-OFF) lane. NOTE (GOES C2, A7
-                // re-spec, design §5, Maintainer-ruled D1): under the shipping frozen-ON config the aimed
+                // re-spec, design §5, the maintainer-ruled D1): under the shipping frozen-ON config the aimed
                 // LANDING on a -1.0 owner's visible top is FLUSH -1.0 (the landing resolver freezes it at
                 // placement; useOnSlabOnTopOfCompoundFollowsToMinusOne now pins -1.0 on the stored value).
                 // This live-lane -0.5 at exactly -1.0 is the DISCLOSED frozen-OFF divergence — the
@@ -2664,7 +2664,7 @@ public final class SlabSupport {
                 return -0.5;
             }
             // FREEZE-ON-PLACE: a slab locked FLAT at placement stays at 0 — a lowered carrier placed
-            // beside/under it later can no longer make it inherit a lowered position (Maintainer's law).
+            // beside/under it later can no longer make it inherit a lowered position (LAW 1 (the placement law)).
             if (SlabAnchorAttachment.isFrozenFlat(world, pos)) {
                 return 0.0;
             }
@@ -2682,7 +2682,7 @@ public final class SlabSupport {
             // anchor / frozen-flat checks above (a compound or recorded placement decision still wins)
             // and BEFORE the canUseInheritedSlabLaneYOffset gate, which would short-circuit a fresh
             // unmarked plain slab to 0.0. AIR-GATED at pos.below(): a slab on its own SOLID ground
-            // beside a lowered block keeps dy=0 and stays FROZEN_FLAT (Maintainer's NEVER-POP rail).
+            // beside a lowered block keeps dy=0 and stays FROZEN_FLAT (the maintainer's NEVER-POP rail).
             // F5b: fluid-blind — bucketing an unmarked RC2-A cantilever slab must not pop it flush
             // (and everything riding it) while its dry twin holds.
             if (world.getBlockState(pos.below()).isAir()
@@ -2726,7 +2726,7 @@ public final class SlabSupport {
         }
 
         // FREEZE-ON-PLACE: a structural full block locked FLAT at placement stays at 0 — a slab or
-        // lowered carrier added under/beside it later can no longer pull it down (Maintainer's law: a
+        // lowered carrier added under/beside it later can no longer pull it down (LAW 1 (the placement law): a
         // placed block must not autonomously move). Read before any geometric lowering below.
         // Decorative followers are never frozen-flat, so they keep tracking their supports.
         if (!(state.getBlock() instanceof SlabBlock)
@@ -2750,7 +2750,7 @@ public final class SlabSupport {
             // stays as the connector's NEVER-POP fallback: support removed -> below is air -> lane NaN
             // -> sidecar preserves -1.0; support flushed -> lane NaN -> sidecar follows to -0.5 (the
             // anti-sink MERGE rule). Recursion-safe (beta35FenceWallVariantContactDy never calls
-            // getYOffset); Maintainer's precedent: "stacking a lowered fencepost on a lowered fencepost
+            // getYOffset); the maintainer's precedent: "stacking a lowered fencepost on a lowered fencepost
             // snaps the upper one upward".
             if (isBeta35FenceWallVariantContactObject(state)) {
                 double stackedConnectingDy = beta35FenceWallVariantContactDy(world, pos, state);
@@ -2761,7 +2761,7 @@ public final class SlabSupport {
             // Beta4 sidecar: an authored compound full-block anchor means the block sits on a slab
             // that was ITSELF lowered, so it drops an extra -0.5 below the slab's lowered top (total
             // -1.0). It must FOLLOW the slab directly below it: -1.0 only while that slab is genuinely
-            // lowered (-0.5); if the slab was later flushed to 0.0 (frozen-flat by Maintainer's NEVER-POP
+            // lowered (-0.5); if the slab was later flushed to 0.0 (frozen-flat by the maintainer's NEVER-POP
             // law, or its own lowering source removed) the block sits ON it at -0.5 — it must NOT stay
             // stuck at -1.0 and SINK/MERGE into the flush slab (the reported "merging" / "anti-
             // inheritance violated"). When the slab is REMOVED entirely (air/non-slab below) the
@@ -2998,7 +2998,7 @@ public final class SlabSupport {
 
         // direct: ceiling-attached blocks directly under a top slab. Track the slab's OWN dy so a
         // LOWERED top slab gives the block a flush merge (slabDy=-0.5 → 0.0, slabDy=-1.0 → -0.5), NOT
-        // +0.5 which would float it UP into the lowered slab (Maintainer: "trapdoor placed under a lowered
+        // +0.5 which would float it UP into the lowered slab (maintainer ruling: "trapdoor placed under a lowered
         // slab merges into it; breaking the slab drops it to flush 0.0" — 26.2-native, live-confirmed,
         // survives the D2 ruling). The FLUSH top slab's +0.5 reach-up is gated by the ruling predicate
         // (dead since 2026-07-03): a flush top slab no longer moves the block — it stays 0.0.
@@ -3332,7 +3332,7 @@ public final class SlabSupport {
         // Any block Terrain Slabs positions "on top" itself (its ontop system: VegetationBlock family
         // + TS's runtime-extensible on-top registry — snow layers by default, other mods can add) must
         // sit FLUSH here: TS already shifts model + outline + raycast −0.5 via SlabOffsetModel and its
-        // ontop mixins, so Slabbed must NOT also lower it -0.5 (the double-offset sinks it; Maintainer
+        // ontop mixins, so Slabbed must NOT also lower it -0.5 (the double-offset sinks it; the maintainer
         // 2026-06-19 for the vegetation case). ROLE gate, not a class list (powder-snow lesson): asks
         // TS's own on-top predicate through CompatHooks. Excluding it lets getYOffset fall through to
         // the column walk, which terminates flush at the TS block → dy 0, so TS's offset is the only

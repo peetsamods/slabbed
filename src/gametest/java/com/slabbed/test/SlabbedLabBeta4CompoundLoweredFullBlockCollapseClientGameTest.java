@@ -34,7 +34,7 @@ import net.minecraft.world.World;
  * ordinary {@code minecraft:stone} on a legal lowered bottom slab carrier
  * showing {@code placedDy=-1.0} at the {@code BlockItem.place} return and then
  * collapsing to {@code placedDy=-0.5} once {@code Block.onPlaced} recorded the
- * persistent full-block anchor. The visible jump matches Maintainer's symptom.
+ * persistent full-block anchor. The visible jump matches the maintainer's symptom.
  *
  * <p>Topology mirrored here:
  * <ul>

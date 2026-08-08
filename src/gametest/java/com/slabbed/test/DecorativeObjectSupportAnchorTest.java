@@ -120,7 +120,7 @@ public final class DecorativeObjectSupportAnchorTest {
     /**
      * REGRESSION GUARD (matches the sibling's {@code flatCandleNeverAnchors}): a decorative object on
      * ordinary flush ground (NOT lowered) must never gain a spurious anchor from the freeze path —
-     * otherwise it could refuse to follow a slab shoved under it later (Maintainer's WYSIWYG law).
+     * otherwise it could refuse to follow a slab shoved under it later (the maintainer's WYSIWYG law).
      */
     @GameTest(structure = "fabric-gametest-api-v1:empty")
     public void flatCandleNeverAnchors(GameTestHelper helper) {

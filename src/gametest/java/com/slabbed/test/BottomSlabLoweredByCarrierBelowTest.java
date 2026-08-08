@@ -28,7 +28,7 @@ import net.minecraft.world.level.block.state.properties.SlabType;
  * real caller, {@code SlabAnchorAttachment.qualifiesAsSideAdjacentLoweredFullAnchorSource}, is reached
  * only from {@code qualifiesForSideAdjacentLoweredFullAnchor}, which begins with an unconditional
  * {@code if (true) return false;} — the side-adjacent-lowered-full-block anchor lane is intentionally
- * DISABLED (Maintainer's "no sideways inheritance" law, port of 1.21.1 83afed84; guarded by
+ * DISABLED (the maintainer's "no sideways inheritance" law, port of 1.21.1 83afed84; guarded by
  * {@code Slabbed2612LoweringContractTest#sideAdjacentFullBlockMustNotInheritLowering}). So this widening
  * changes NO live authoring behaviour today; it is cross-port hygiene so the DOUBLE-only regression is not
  * reintroduced if that lane is ever re-enabled, and so the predicate is self-consistent with its three

@@ -139,7 +139,7 @@ public final class Slabbed2612LoweringContractTest {
         helper.setBlock(blockRel.below(), bottomSlab());
 
         assertDy(helper, level, blockRel, 0.0,
-                "frozen-flat stone MUST stay flat (0.0) after a slab is placed under it (Maintainer's NEVER-POP law)");
+                "frozen-flat stone MUST stay flat (0.0) after a slab is placed under it (the maintainer's NEVER-POP law)");
         helper.succeed();
     }
 
@@ -251,7 +251,7 @@ public final class Slabbed2612LoweringContractTest {
     public void loweredSlabIsSolidAtVisualLowerHalf(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
         // Build a lowered slab, ANCHOR it via the real placement path (freeze law), then remove the
-        // support below so it CANTILEVERS — lowered -0.5 with AIR below it (Maintainer's exact case).
+        // support below so it CANTILEVERS — lowered -0.5 with AIR below it (the maintainer's exact case).
         BlockPos base = new BlockPos(2, 2, 2);
         helper.setBlock(base, bottomSlab());                              // carrier
         helper.setBlock(base.above(), Blocks.STONE.defaultBlockState());  // lowered stone
@@ -284,7 +284,7 @@ public final class Slabbed2612LoweringContractTest {
 
     /**
      * SNAP fix: a slab PLACED beside a lowered block but on flush ground must STAY flush — it must
-     * NOT inherit the neighbour's lowered position (Maintainer's no-side-contagion law). RED before the
+     * NOT inherit the neighbour's lowered position (the maintainer's no-side-contagion law). RED before the
      * fix: the placed slab snaps to -0.5 (isAdjacentSideSlabLowered, then frozen by the anchor).
      */
     @GameTest(structure = "fabric-gametest-api-v1:empty")
@@ -359,7 +359,7 @@ public final class Slabbed2612LoweringContractTest {
 
         assertDy(helper, level, besideRel, 0.0,
                 "full block placed beside a lowered carrier on its own flush ground MUST stay flush (0.0); "
-                + "it must NOT inherit a side-adjacent anchor (Maintainer's no-inheritance law)");
+                + "it must NOT inherit a side-adjacent anchor (the maintainer's no-inheritance law)");
         helper.succeed();
     }
 
@@ -516,7 +516,7 @@ public final class Slabbed2612LoweringContractTest {
 
     /**
      * SNAP probe: a bottom slab AUTHORED (real placement path) on its own flush ground, but beside a
-     * NAMED lowered slab lane, must STAY flush (Maintainer's NEVER-POP). If it snaps to -0.5 at placement
+     * NAMED lowered slab lane, must STAY flush (the maintainer's NEVER-POP). If it snaps to -0.5 at placement
      * it has inherited the neighbor's lowering — a violation. (Diagnostic for "snapping down slab".)
      */
     @GameTest(structure = "fabric-gametest-api-v1:empty")
@@ -957,7 +957,7 @@ public final class Slabbed2612LoweringContractTest {
     }
 
     /**
-     * Documents that a Y-axis chain under a TOP slab hangs FLUSH at 0.0 — Maintainer's 2026-07-03
+     * Documents that a Y-axis chain under a TOP slab hangs FLUSH at 0.0 — the maintainer's 2026-07-03
      * flush-ceiling ruling (D2 port; the donor's isLoweringTopLikeCeiling returns false). The old
      * +0.5 "connect up" reach-up is deprecated; the ceiling-bridge MODEL (1.5-block) closes the
      * visual seam to the slab underside from grid height.
@@ -1309,7 +1309,7 @@ public final class Slabbed2612LoweringContractTest {
     /**
      * RC2-C NEVER-POP rail (must stay green): a slab authored on its OWN solid ground beside a lowered
      * slab LANE still freezes FLAT (0.0) — slabLoweringIsSideInheritedOnly returns true for the
-     * solid-below case, so freeze records FROZEN_FLAT (Maintainer's law for a block on its own flush ground).
+     * solid-below case, so freeze records FROZEN_FLAT (LAW 1 (the placement law) for a block on its own flush ground).
      */
     @GameTest(structure = "fabric-gametest-api-v1:empty")
     public void rc2cSlabOnSolidGroundBesideLoweredLaneFreezesFlat(GameTestHelper helper) {
@@ -1387,7 +1387,7 @@ public final class Slabbed2612LoweringContractTest {
      * beside a lowered full-block tower (the proven RC2-A anchoring path of
      * {@link #rc2cCantileverSlabAnchorsNotFreezesFlat}: a cantilever slab ANCHORS -0.5, it does NOT
      * freeze flat), then the tower is REMOVED so the slab survives purely on its -0.5 anchor with air
-     * below it. This is Maintainer's scenario #3 source in pure form: a lone lowered slab over air, with no
+     * below it. This is the maintainer's scenario #3 source in pure form: a lone lowered slab over air, with no
      * column the cantilever bridge could otherwise find.
      */
     private static BlockPos bareLoweredSlab(GameTestHelper helper, ServerLevel level, BlockPos bareRel) {
@@ -1460,7 +1460,7 @@ public final class Slabbed2612LoweringContractTest {
     // ── GAP-2: slab cantilevered over air beside a BARE single lowered SLAB (no column) → -0.5 ─────
 
     /**
-     * GAP-2 (Maintainer's scenario #3 in pure form): a slab cantilevered over air beside a BARE single
+     * GAP-2 (the maintainer's scenario #3 in pure form): a slab cantilevered over air beside a BARE single
      * lowered SLAB — anchored -0.5 with AIR below it, no full-block column under the neighbour — must
      * land -0.5, not 0.0. Pre-fix isAdjacentLoweredFullBlockSource 'continue'd on the slab neighbour
      * and no column bridged it, so the cantilever slab read 0.0 (floated half a block too high).

@@ -7,7 +7,7 @@ import java.util.Objects;
  * and the two client debug tools they drive — the target-dy overlay and the live-cursor recorder.
  *
  * <p>Both tools live in the development-only diagnostics companion mod and are, by design, absent
- * from a release jar. The shipped commands must still be invocable there (Maintainer's 2026-08-07
+ * from a release jar. The shipped commands must still be invocable there (the maintainer's 2026-08-07
  * ruling), and they must not throw when the implementation is missing — so they never name those
  * classes at all. They call this seam; the companion installs a provider into it at client init.
  * With no provider installed {@link #available()} is false and the commands report

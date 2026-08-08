@@ -23,7 +23,7 @@ import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.Vec3;
 
 /**
- * D2 port (audit STATE_DEFENSE_DIVERGENCE_2026-07-07) of Maintainer's 2026-07-03 FLUSH-CEILING ruling:
+ * D2 port (audit STATE_DEFENSE_DIVERGENCE_2026-07-07) of the maintainer's 2026-07-03 FLUSH-CEILING ruling:
  * the +0.5 "reach-up" for ceiling-attached objects under a FLUSH top slab is deprecated — everything
  * hangs flush. Donor: {@code isLoweringTopLikeCeiling -> false}, the ONE shared choke point for all
  * three dy-computing ceiling walks. Symptom (audit D2): placing a top slab above a lever / chain /
@@ -31,7 +31,7 @@ import net.minecraft.world.phys.Vec3;
  * autonomously moving placed block (never-pop violated in the upward direction).
  *
  * <p>What deliberately SURVIVES the ruling (pinned by the controls here): the lowered-top-slab
- * flush-COMPENSATION (`slabDy + 0.5`, which nets &lt;= 0.0 — Maintainer's live-confirmed "trapdoor placed
+ * flush-COMPENSATION (`slabDy + 0.5`, which nets &lt;= 0.0 — the maintainer's live-confirmed "trapdoor placed
  * under a lowered slab merges into it" fix, 26.2-native and absent from the donor).
  */
 public final class CeilingFlushRulingTest {
@@ -321,7 +321,7 @@ public final class CeilingFlushRulingTest {
         helper.succeed();
     }
 
-    /** Maintainer's live-confirmed merge: trapdoor under the -1.0 marked slab reads -0.5 — survives the ruling. */
+    /** the maintainer's live-confirmed merge: trapdoor under the -1.0 marked slab reads -0.5 — survives the ruling. */
     @GameTest(structure = "fabric-gametest-api-v1:empty")
     public void controlTrapdoorUnderMarkedUpperSlabKeepsCompensation(GameTestHelper helper) {
         ServerLevel w = helper.getLevel();

@@ -19,7 +19,7 @@ import java.util.Locale;
 
 /**
  * Tier-2 client-side dy FINGERPRINT dump (companion to the headless
- * {@code Slabbed2612DyFingerprintTest}; see {@code docs/process/RELEASE_SANITY_CHECKLIST.md} §3).
+ * {@code Slabbed2612DyFingerprintTest}; see the internal notes §3).
  *
  * <p>The headless gametest fingerprint runs on the SERVER and is blind to one live-only class:
  * client-vs-server {@code getYOffset} divergence (the "snaps to the wrong dy after a delay" sync

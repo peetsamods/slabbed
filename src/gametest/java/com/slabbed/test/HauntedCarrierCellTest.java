@@ -25,7 +25,7 @@ import net.minecraft.world.level.block.state.properties.SlabType;
  * <p>F2 — the LOWERED_SLAB_CARRIER marker was IMMORTAL: {@code removeAnchor} cleared six attachment
  * types but not the carrier, and {@code removePersistentLoweredSlabCarrier} had zero callers — so the
  * marker outlived break/re-place cycles and re-lowered fresh slabs placed at old lane positions
- * (misplacement that accumulates precisely in build-break-rebuild areas — Maintainer's churn).
+ * (misplacement that accumulates precisely in build-break-rebuild areas — the maintainer's churn).
  *
  * <p>F1 — the false-support contradiction: a slab could be FROZEN_FLAT (renders 0.0) while carrying
  * the carrier marker, and every support READER trusted the marker without consulting the freeze — so

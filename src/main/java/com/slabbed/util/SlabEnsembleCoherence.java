@@ -13,7 +13,7 @@ import net.minecraft.world.phys.shapes.Shapes;
 import net.minecraft.world.phys.shapes.VoxelShape;
 
 /**
- * ENSEMBLE COHERENCE classifier — Phase 1 of docs/design/ENSEMBLE_COHERENCE_DESIGN.md (Maintainer-approved
+ * ENSEMBLE COHERENCE classifier — Phase 1 of docs/design/ENSEMBLE_COHERENCE_DESIGN.md (the maintainer-approved
  * lane, 2026-07-07). The video-vs-recorder correlation proved the dominant live complaint is a class
  * every per-block gate is structurally silent on: neighbors at different dys clip into each other
  * (flush hopper under −0.5 chest), leave mid-stack seams (−1.0 under −0.5), or render entirely below

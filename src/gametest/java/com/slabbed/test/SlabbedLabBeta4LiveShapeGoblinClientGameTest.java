@@ -32,7 +32,7 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
- * Opt-in diagnostic harness for Maintainer's beta4 canonical live shape.
+ * Opt-in diagnostic harness for the maintainer's beta4 canonical live shape.
  *
  * <p>No gameplay behavior is implemented here. The test builds the live
  * structure, proves the source truth, then records the current lower/upper/top
@@ -70,7 +70,7 @@ public final class SlabbedLabBeta4LiveShapeGoblinClientGameTest implements Fabri
             return;
         }
 
-        System.out.println("[MAINTAINER_BETA4_LIVE_GOBLIN_PARITY_START]"
+        System.out.println("[BETA4_LIVE_GOBLIN_PARITY_START]"
                 + " flag=-Dslabbed.beta4LiveShapeGoblin=true"
                 + " mode=real_crosshair_sequence"
                 + " syntheticUsed=false"
@@ -85,23 +85,23 @@ public final class SlabbedLabBeta4LiveShapeGoblinClientGameTest implements Fabri
             final boolean[] structureGreen = {false};
             ctx.runOnClient(mc -> {
                 if (mc.world == null) {
-                    System.out.println("[MAINTAINER_BETA4_LIVE_GOBLIN_STRUCTURE_INVALID] reason=client_world_missing");
+                    System.out.println("[BETA4_LIVE_GOBLIN_STRUCTURE_INVALID] reason=client_world_missing");
                     return;
                 }
                 structureGreen[0] = emitStructureProof(mc.world);
             });
             if (!structureGreen[0]) {
-                System.out.println("[MAINTAINER_BETA4_LIVE_GOBLIN_PARITY_SUMMARY]"
+                System.out.println("[BETA4_LIVE_GOBLIN_PARITY_SUMMARY]"
                         + " structure=RED realCrosshair=false syntheticUsed=false"
                         + " lowerAimParity=NOT_RUN upperAimParity=NOT_RUN topAimParity=NOT_RUN"
                         + " firstSide=NOT_RUN lowerAfterFirst=NOT_RUN repeatPlacement=NOT_RUN topFace=NOT_RUN"
                         + " ghost=false wrongDelta=false wrongOwner=false releaseBlockers=structure");
-                System.out.println("[MAINTAINER_BETA4_LIVE_GOBLIN_DONE] status=STRUCTURE_INVALID");
+                System.out.println("[BETA4_LIVE_GOBLIN_DONE] status=STRUCTURE_INVALID");
                 return;
             }
 
             syncHeldMainHand(ctx, singleplayer, new ItemStack(Items.STONE_SLAB, 16));
-            System.out.println("[MAINTAINER_BETA4_LIVE_GOBLIN_TARGETING_DIAG_START]"
+            System.out.println("[BETA4_LIVE_GOBLIN_TARGETING_DIAG_START]"
                     + " realCrosshair=true"
                     + " syntheticUsed=false"
                     + " intendedOwner=" + UPPER_FULL.toShortString()
@@ -114,7 +114,7 @@ public final class SlabbedLabBeta4LiveShapeGoblinClientGameTest implements Fabri
             RealClickResult firstSide = runRealCrosshairClick(
                     ctx, singleplayer, "FIRST_SIDE", "UPPER", ANGLE_A_FACE,
                     visibleSideHitPoint(UPPER_FULL, ANGLE_A_FACE, 0.75d, EXPECTED_UPPER_FULL_DY),
-                    "MAINTAINER_BETA4_LIVE_GOBLIN_AIM_UPPER_REAL_TARGET",
+                    "BETA4_LIVE_GOBLIN_AIM_UPPER_REAL_TARGET",
                     UPPER_FULL.offset(ANGLE_A_FACE), "stone_slab[type=top] dy=-0.5");
             verdicts.upperAimParity = firstSide.aimParity;
             verdicts.firstSide = firstSide.result;
@@ -130,7 +130,7 @@ public final class SlabbedLabBeta4LiveShapeGoblinClientGameTest implements Fabri
                             ctx, singleplayer, "LOWER_AFTER_FIRST", "LOWER", ANGLE_A_FACE,
                             lowerAfterFirstCorridor.hit,
                             lowerAfterFirstCorridor.eye,
-                            "MAINTAINER_BETA4_LIVE_GOBLIN_AIM_LOWER_REAL_TARGET",
+                            "BETA4_LIVE_GOBLIN_AIM_LOWER_REAL_TARGET",
                             UPPER_FULL.offset(ANGLE_A_FACE).offset(ANGLE_A_FACE),
                             "stone_slab[type=bottom] dy=-0.5")
                     : noCorridorClick("LOWER_AFTER_FIRST", lowerAfterFirstCorridor);
@@ -143,7 +143,7 @@ public final class SlabbedLabBeta4LiveShapeGoblinClientGameTest implements Fabri
             RealClickResult repeat = runRealCrosshairClick(
                     ctx, singleplayer, "REPEAT", "UPPER", ANGLE_A_FACE,
                     visibleSideHitPoint(UPPER_FULL, ANGLE_A_FACE, 0.75d, EXPECTED_UPPER_FULL_DY),
-                    "MAINTAINER_BETA4_LIVE_GOBLIN_AIM_UPPER_REAL_TARGET",
+                    "BETA4_LIVE_GOBLIN_AIM_UPPER_REAL_TARGET",
                     UPPER_FULL.offset(ANGLE_A_FACE), "stone_slab[type=double] dy=-0.5");
             verdicts.repeatPlacement = repeat.result;
             verdicts.absorb(repeat);
@@ -151,7 +151,7 @@ public final class SlabbedLabBeta4LiveShapeGoblinClientGameTest implements Fabri
             RealClickResult topFace = runRealCrosshairClick(
                     ctx, singleplayer, "TOP_FACE", "TOP", Direction.UP,
                     visibleTopHitPoint(UPPER_FULL, EXPECTED_UPPER_FULL_DY),
-                    "MAINTAINER_BETA4_LIVE_GOBLIN_AIM_TOP_REAL_TARGET",
+                    "BETA4_LIVE_GOBLIN_AIM_TOP_REAL_TARGET",
                     UPPER_FULL.up(), "stone_slab[type=bottom] dy=0.0");
             verdicts.topAimParity = topFace.aimParity;
             verdicts.topFace = topFace.result;
@@ -165,7 +165,7 @@ public final class SlabbedLabBeta4LiveShapeGoblinClientGameTest implements Fabri
             }
 
             String releaseBlockers = parityReleaseBlockers(verdicts, legacySequenceStale);
-            System.out.println("[MAINTAINER_BETA4_LIVE_GOBLIN_PARITY_SUMMARY]"
+            System.out.println("[BETA4_LIVE_GOBLIN_PARITY_SUMMARY]"
                     + " structure=GREEN"
                     + " realCrosshair=true"
                     + " syntheticUsed=false"
@@ -181,7 +181,7 @@ public final class SlabbedLabBeta4LiveShapeGoblinClientGameTest implements Fabri
                     + " wrongDelta=" + verdicts.wrongDelta
                     + " wrongOwner=" + verdicts.wrongOwner
                     + " releaseBlockers=" + releaseBlockers);
-            System.out.println("[MAINTAINER_BETA4_LIVE_GOBLIN_TARGETING_SUMMARY]"
+            System.out.println("[BETA4_LIVE_GOBLIN_TARGETING_SUMMARY]"
                     + " lower=" + verdicts.lowerTargeting
                     + " upper=" + verdicts.upperTargeting
                     + " top=" + verdicts.topTargeting
@@ -192,7 +192,7 @@ public final class SlabbedLabBeta4LiveShapeGoblinClientGameTest implements Fabri
                     + " ownerFailures=" + verdicts.countTargeting("OWNER_FAIL")
                     + " occlusionCases=" + verdicts.countTargeting("OCCLUSION_EXPECTED")
                     + " nextAction=" + verdicts.nextTargetingAction());
-            System.out.println("[MAINTAINER_BETA4_LIVE_GOBLIN_CORRIDOR_SUMMARY]"
+            System.out.println("[BETA4_LIVE_GOBLIN_CORRIDOR_SUMMARY]"
                     + " lowerCorridor=" + verdicts.lowerCorridor
                     + " lowerAfterFirstCorridor=" + verdicts.lowerAfterFirstCorridor
                     + " legacySequence=" + (legacySequenceStale ? "STALE" : "CURRENT")
@@ -202,12 +202,12 @@ public final class SlabbedLabBeta4LiveShapeGoblinClientGameTest implements Fabri
                     + " ghost=" + verdicts.ghost
                     + " wrongDelta=" + verdicts.wrongDelta
                     + " releaseBlockers=" + releaseBlockers);
-            System.out.println("[MAINTAINER_BETA4_LIVE_GOBLIN_DONE] status=OK");
+            System.out.println("[BETA4_LIVE_GOBLIN_DONE] status=OK");
         }
     }
 
     private static void runCompoundVisibleSlabLaneRedProof(ClientGameTestContext ctx) {
-        System.out.println("[MAINTAINER_BETA4_COMPOUND_VISIBLE_SLAB_LANE_START]"
+        System.out.println("[BETA4_COMPOUND_VISIBLE_SLAB_LANE_START]"
                 + " flag=-Dslabbed.beta4CompoundVisibleSlabLaneRed=true"
                 + " mode=gated_red_proof"
                 + " gameplayChange=false"
@@ -224,7 +224,7 @@ public final class SlabbedLabBeta4LiveShapeGoblinClientGameTest implements Fabri
             final boolean[] fixtureGreen = {false};
             ctx.runOnClient(mc -> {
                 if (mc.world == null) {
-                    System.out.println("[MAINTAINER_BETA4_COMPOUND_VISIBLE_SLAB_LANE_FIXTURE_FAIL]"
+                    System.out.println("[BETA4_COMPOUND_VISIBLE_SLAB_LANE_FIXTURE_FAIL]"
                             + " fixtureTruth=FAIL reason=client_world_missing");
                     return;
                 }
@@ -232,11 +232,11 @@ public final class SlabbedLabBeta4LiveShapeGoblinClientGameTest implements Fabri
             });
 
             if (!fixtureGreen[0]) {
-                System.out.println("[MAINTAINER_BETA4_COMPOUND_VISIBLE_SLAB_LANE_SUMMARY]"
+                System.out.println("[BETA4_COMPOUND_VISIBLE_SLAB_LANE_SUMMARY]"
                         + " fixtureTruth=FAIL lower=PENDING upper=PENDING merge=PENDING top=PENDING"
                         + " supportMissing=PENDING triad=PENDING reload=PENDING"
                         + " releaseBlockers=fixture");
-                throw new RuntimeException("[MAINTAINER_BETA4_COMPOUND_VISIBLE_SLAB_LANE_FIXTURE_FAIL]"
+                throw new RuntimeException("[BETA4_COMPOUND_VISIBLE_SLAB_LANE_FIXTURE_FAIL]"
                         + " reason=fixture_truth_not_proven");
             }
 
@@ -252,7 +252,7 @@ public final class SlabbedLabBeta4LiveShapeGoblinClientGameTest implements Fabri
             results.triad = emitCompoundVisibleTriadRed(ctx, singleplayer, results);
             results.reload = emitCompoundVisibleReloadRed(ctx, singleplayer, results, singleplayerClosedForReload);
 
-            System.out.println("[MAINTAINER_BETA4_COMPOUND_VISIBLE_SLAB_LANE_SUMMARY]"
+            System.out.println("[BETA4_COMPOUND_VISIBLE_SLAB_LANE_SUMMARY]"
                     + " fixtureTruth=GREEN"
                     + " lower=" + results.lower
                     + " upper=" + results.upper
@@ -294,7 +294,7 @@ public final class SlabbedLabBeta4LiveShapeGoblinClientGameTest implements Fabri
             mc.gameRenderer.updateCrosshairTarget(0.0f);
             HitResult beforeTarget = mc.crosshairTarget;
             action[0] = mc.interactionManager.interactBlock(mc.player, Hand.MAIN_HAND, hit).toString();
-            System.out.println("[MAINTAINER_BETA4_COMPOUND_VISIBLE_SLAB_LANE_TRACE]"
+            System.out.println("[BETA4_COMPOUND_VISIBLE_SLAB_LANE_TRACE]"
                     + " row=" + caseName
                     + " phase=click"
                     + " expectedLaw=" + expectedLaw
@@ -342,7 +342,7 @@ public final class SlabbedLabBeta4LiveShapeGoblinClientGameTest implements Fabri
             }
             mc.gameRenderer.updateCrosshairTarget(0.0f);
             secondAction[0] = mc.interactionManager.interactBlock(mc.player, Hand.MAIN_HAND, upperHit).toString();
-            System.out.println("[MAINTAINER_BETA4_COMPOUND_VISIBLE_SLAB_LANE_TRACE]"
+            System.out.println("[BETA4_COMPOUND_VISIBLE_SLAB_LANE_TRACE]"
                     + " row=MERGE phase=clicks"
                     + " expectedLaw=COMPOUND_VISIBLE_SIDE_DOUBLE_SLAB"
                     + " expectedSource=" + UPPER_FULL.toShortString()
@@ -384,7 +384,7 @@ public final class SlabbedLabBeta4LiveShapeGoblinClientGameTest implements Fabri
             mc.gameRenderer.updateCrosshairTarget(0.0f);
             HitResult beforeTarget = mc.crosshairTarget;
             action[0] = mc.interactionManager.interactBlock(mc.player, Hand.MAIN_HAND, hit).toString();
-            System.out.println("[MAINTAINER_BETA4_COMPOUND_VISIBLE_SLAB_LANE_TRACE]"
+            System.out.println("[BETA4_COMPOUND_VISIBLE_SLAB_LANE_TRACE]"
                     + " row=" + caseName
                     + " phase=click"
                     + " expectedLaw=" + expectedLaw
@@ -436,7 +436,7 @@ public final class SlabbedLabBeta4LiveShapeGoblinClientGameTest implements Fabri
             namedStatesPreserved[0] = isNamedCompoundVisibleLaneFixture(world, fixture);
             noDyBelowMinusOne[0] = noDyBelowMinusOne(world, fixture);
 
-            System.out.println("[MAINTAINER_BETA4_COMPOUND_VISIBLE_SLAB_LANE_SUPPORT_MISSING_TRACE]"
+            System.out.println("[BETA4_COMPOUND_VISIBLE_SLAB_LANE_SUPPORT_MISSING_TRACE]"
                     + " removedSupport=" + describeBlock(world, TOP_SLAB_A)
                     + " sourceBefore=" + beforeSource[0]
                     + " sourceAfter=" + afterSource[0]
@@ -458,7 +458,7 @@ public final class SlabbedLabBeta4LiveShapeGoblinClientGameTest implements Fabri
                 && !sourceJumped[0]
                 && namedStatesPreserved[0]
                 && noDyBelowMinusOne[0] ? "GREEN" : "RED";
-        System.out.println("[MAINTAINER_BETA4_COMPOUND_VISIBLE_SLAB_LANE_SUPPORT_MISSING_" + verdict + "]"
+        System.out.println("[BETA4_COMPOUND_VISIBLE_SLAB_LANE_SUPPORT_MISSING_" + verdict + "]"
                 + " expected=source_owned_named_dy_-1.0_lane_states_survive_support_removal"
                 + " fixtureStates=" + fixture.statusSummary()
                 + " supportRemoved=" + supportRemoved[0]
@@ -520,7 +520,7 @@ public final class SlabbedLabBeta4LiveShapeGoblinClientGameTest implements Fabri
             BlockState candidateState = world.getBlockState(candidate);
             serverLegal[0] = isSlabDy(world, candidate, expectedType, -1.0d);
             serverFinal[0] = describeBlock(world, candidate, candidateState);
-            System.out.println("[MAINTAINER_BETA4_COMPOUND_VISIBLE_SLAB_LANE_SERVER_FINAL]"
+            System.out.println("[BETA4_COMPOUND_VISIBLE_SLAB_LANE_SERVER_FINAL]"
                     + " row=" + caseName
                     + " candidate=" + serverFinal[0]);
         });
@@ -529,7 +529,7 @@ public final class SlabbedLabBeta4LiveShapeGoblinClientGameTest implements Fabri
         ctx.runOnClient(mc -> {
             if (mc.world == null) {
                 verdict[0] = "RED";
-                System.out.println("[MAINTAINER_BETA4_COMPOUND_VISIBLE_SLAB_LANE_" + caseName + "_RED]"
+                System.out.println("[BETA4_COMPOUND_VISIBLE_SLAB_LANE_" + caseName + "_RED]"
                         + " reason=client_world_missing_after_click"
                         + " expectedLaw=" + expectedLaw);
                 return;
@@ -543,7 +543,7 @@ public final class SlabbedLabBeta4LiveShapeGoblinClientGameTest implements Fabri
             double candidateDy = dy(mc.world, candidate, candidateState);
             boolean noRecursiveDy = candidateDy >= -1.0d - EPSILON;
             verdict[0] = clientLegal && serverLegal[0] && sourceLegal && noRecursiveDy ? "GREEN" : "RED";
-            System.out.println("[MAINTAINER_BETA4_COMPOUND_VISIBLE_SLAB_LANE_" + caseName + "_" + verdict[0] + "]"
+            System.out.println("[BETA4_COMPOUND_VISIBLE_SLAB_LANE_" + caseName + "_" + verdict[0] + "]"
                     + " expectedLaw=" + expectedLaw
                     + " action=" + action
                     + " expectedCandidate=" + candidate.toShortString()
@@ -578,7 +578,7 @@ public final class SlabbedLabBeta4LiveShapeGoblinClientGameTest implements Fabri
             serverMarked[0] = SlabAnchorAttachment.isCompoundVisibleOwnerTopSlab(world, candidate, candidateState);
             serverLegal[0] = isSlabDy(world, candidate, SlabType.BOTTOM, -1.0d) && serverMarked[0];
             serverFinal[0] = describeBlock(world, candidate, candidateState);
-            System.out.println("[MAINTAINER_BETA4_COMPOUND_VISIBLE_SLAB_LANE_SERVER_FINAL]"
+            System.out.println("[BETA4_COMPOUND_VISIBLE_SLAB_LANE_SERVER_FINAL]"
                     + " row=" + caseName
                     + " candidate=" + serverFinal[0]);
         });
@@ -587,7 +587,7 @@ public final class SlabbedLabBeta4LiveShapeGoblinClientGameTest implements Fabri
         ctx.runOnClient(mc -> {
             if (mc.world == null) {
                 verdict[0] = "RED";
-                System.out.println("[MAINTAINER_BETA4_COMPOUND_VISIBLE_SLAB_LANE_" + caseName + "_RED]"
+                System.out.println("[BETA4_COMPOUND_VISIBLE_SLAB_LANE_" + caseName + "_RED]"
                         + " reason=client_world_missing_after_click"
                         + " expectedLaw=" + expectedLaw);
                 return;
@@ -604,7 +604,7 @@ public final class SlabbedLabBeta4LiveShapeGoblinClientGameTest implements Fabri
             boolean noDyZeroFloatingSlab = !(candidateState.isOf(Blocks.STONE_SLAB)
                     && Math.abs(candidateDy) <= EPSILON);
             verdict[0] = clientLegal && serverLegal[0] && sourceLegal && noDyZeroFloatingSlab ? "GREEN" : "RED";
-            System.out.println("[MAINTAINER_BETA4_COMPOUND_VISIBLE_SLAB_LANE_" + caseName + "_" + verdict[0] + "]"
+            System.out.println("[BETA4_COMPOUND_VISIBLE_SLAB_LANE_" + caseName + "_" + verdict[0] + "]"
                     + " expectedLaw=" + expectedLaw
                     + " action=" + action
                     + " supportRemoved=" + supportRemoved
@@ -636,7 +636,7 @@ public final class SlabbedLabBeta4LiveShapeGoblinClientGameTest implements Fabri
                 && "GREEN".equals(results.top)
                 && "GREEN".equals(results.supportMissing);
         if (!allNamedStatesGreen) {
-            System.out.println("[MAINTAINER_BETA4_COMPOUND_VISIBLE_SLAB_LANE_TRIAD_RED]"
+            System.out.println("[BETA4_COMPOUND_VISIBLE_SLAB_LANE_TRIAD_RED]"
                     + " expected=model_outline_raycast_target_agree_for_each_named_dy_-1.0_slab_result"
                     + " lower=" + results.lower
                     + " upper=" + results.upper
@@ -669,7 +669,7 @@ public final class SlabbedLabBeta4LiveShapeGoblinClientGameTest implements Fabri
             missingSurface = proof[0].missingSurfaces("manualVisual");
         }
         String provenSurfaces = proof[0].provenSurfaces();
-        System.out.println("[MAINTAINER_BETA4_COMPOUND_VISIBLE_SLAB_LANE_TRIAD_" + verdict + "]"
+        System.out.println("[BETA4_COMPOUND_VISIBLE_SLAB_LANE_TRIAD_" + verdict + "]"
                 + " expected=model_outline_raycast_target_agree_for_each_named_dy_-1.0_slab_result"
                 + " lower=" + results.lower
                 + " upper=" + results.upper
@@ -706,7 +706,7 @@ public final class SlabbedLabBeta4LiveShapeGoblinClientGameTest implements Fabri
                 && "GREEN".equals(results.top)
                 && "GREEN".equals(results.supportMissing);
         if (!allNamedStatesGreen) {
-            System.out.println("[MAINTAINER_BETA4_COMPOUND_VISIBLE_SLAB_LANE_RELOAD_RED]"
+            System.out.println("[BETA4_COMPOUND_VISIBLE_SLAB_LANE_RELOAD_RED]"
                     + " expected=named_dy_-1.0_slab_states_persist_after_reload_or_equivalent_save_load_proof"
                     + " lower=" + results.lower
                     + " upper=" + results.upper
@@ -718,7 +718,7 @@ public final class SlabbedLabBeta4LiveShapeGoblinClientGameTest implements Fabri
         }
 
         try {
-            System.out.println("[MAINTAINER_BETA4_COMPOUND_VISIBLE_SLAB_LANE_RELOAD_START]"
+            System.out.println("[BETA4_COMPOUND_VISIBLE_SLAB_LANE_RELOAD_START]"
                     + " expected=named_dy_-1.0_slab_states_persist_after_TestWorldSave_open"
                     + " reloadHarness=TestWorldSave.open"
                     + " sameTickRequery=false");
@@ -729,7 +729,7 @@ public final class SlabbedLabBeta4LiveShapeGoblinClientGameTest implements Fabri
             final ReloadFixtureSnapshot[] before = new ReloadFixtureSnapshot[1];
             reloadSource.getServer().runOnServer(server -> before[0] = captureReloadSnapshot(server.getOverworld(),
                     fixture));
-            emitReloadSnapshot("[MAINTAINER_BETA4_COMPOUND_VISIBLE_SLAB_LANE_RELOAD_BEFORE]", before[0], null);
+            emitReloadSnapshot("[BETA4_COMPOUND_VISIBLE_SLAB_LANE_RELOAD_BEFORE]", before[0], null);
             TestWorldSave save = reloadSource.getWorldSave();
             reloadSource.close();
             singleplayerClosedForReload[0] = true;
@@ -742,7 +742,7 @@ public final class SlabbedLabBeta4LiveShapeGoblinClientGameTest implements Fabri
                     World world = server.getOverworld();
                     after[0] = captureReloadSnapshot(world, fixture);
                 });
-                emitReloadSnapshot("[MAINTAINER_BETA4_COMPOUND_VISIBLE_SLAB_LANE_RELOAD_AFTER]", before[0], after[0]);
+                emitReloadSnapshot("[BETA4_COMPOUND_VISIBLE_SLAB_LANE_RELOAD_AFTER]", before[0], after[0]);
                 boolean sourceTruth = before[0].sourcePass() && after[0].sourcePass();
                 boolean noCollapse = after[0].noCollapseToDyZeroOrMinusHalf;
                 boolean noDeepDy = after[0].noDyBelowMinusOne;
@@ -752,7 +752,7 @@ public final class SlabbedLabBeta4LiveShapeGoblinClientGameTest implements Fabri
                         && sourceTruth
                         && noDeepDy;
                 String verdict = fixture.green() && persisted ? "GREEN" : "RED";
-                System.out.println("[MAINTAINER_BETA4_COMPOUND_VISIBLE_SLAB_LANE_RELOAD_" + verdict + "]"
+                System.out.println("[BETA4_COMPOUND_VISIBLE_SLAB_LANE_RELOAD_" + verdict + "]"
                         + " expected=named_dy_-1.0_slab_states_persist_after_TestWorldSave_open"
                         + " lower=" + results.lower
                         + " upper=" + results.upper
@@ -775,7 +775,7 @@ public final class SlabbedLabBeta4LiveShapeGoblinClientGameTest implements Fabri
                 }
             }
         } catch (Throwable t) {
-            System.out.println("[MAINTAINER_BETA4_COMPOUND_VISIBLE_SLAB_LANE_RELOAD_PENDING]"
+            System.out.println("[BETA4_COMPOUND_VISIBLE_SLAB_LANE_RELOAD_PENDING]"
                     + " expected=named_dy_-1.0_slab_states_persist_after_reload_or_equivalent_save_load_proof"
                     + " lower=" + results.lower
                     + " upper=" + results.upper
@@ -841,7 +841,7 @@ public final class SlabbedLabBeta4LiveShapeGoblinClientGameTest implements Fabri
             status[0] = describeNamedFixture(world, fixture);
         });
 
-        System.out.println("[MAINTAINER_BETA4_COMPOUND_VISIBLE_SLAB_LANE_NAMED_FIXTURE]"
+        System.out.println("[BETA4_COMPOUND_VISIBLE_SLAB_LANE_NAMED_FIXTURE]"
                 + " purpose=" + purpose
                 + " lowerAction=" + lowerAction
                 + " upperAction=" + upperAction
@@ -870,7 +870,7 @@ public final class SlabbedLabBeta4LiveShapeGoblinClientGameTest implements Fabri
             }
             mc.gameRenderer.updateCrosshairTarget(0.0f);
             action[0] = mc.interactionManager.interactBlock(mc.player, Hand.MAIN_HAND, hit).toString();
-            System.out.println("[MAINTAINER_BETA4_COMPOUND_VISIBLE_SLAB_LANE_TRACE]"
+            System.out.println("[BETA4_COMPOUND_VISIBLE_SLAB_LANE_TRACE]"
                     + " row=" + label
                     + " phase=build_named_state"
                     + " face=" + face.asString()
@@ -897,7 +897,7 @@ public final class SlabbedLabBeta4LiveShapeGoblinClientGameTest implements Fabri
             }
             mc.gameRenderer.updateCrosshairTarget(0.0f);
             action[0] = mc.interactionManager.interactBlock(mc.player, Hand.MAIN_HAND, hit).toString();
-            System.out.println("[MAINTAINER_BETA4_COMPOUND_VISIBLE_SLAB_LANE_TRACE]"
+            System.out.println("[BETA4_COMPOUND_VISIBLE_SLAB_LANE_TRACE]"
                     + " row=" + label
                     + " phase=build_named_state"
                     + " syntheticHit=" + describeHit(hit)
@@ -917,7 +917,7 @@ public final class SlabbedLabBeta4LiveShapeGoblinClientGameTest implements Fabri
         TriadSurface merge = proveTriadSurface(world, entity, "merge", fixture.mergePos, SlabType.DOUBLE);
         TriadSurface top = proveTriadSurface(world, entity, "top", fixture.topPos, SlabType.BOTTOM);
         boolean modelAuthority = lower.model && upper.model && merge.model && top.model;
-        System.out.println("[MAINTAINER_BETA4_COMPOUND_VISIBLE_SLAB_LANE_MODEL_AUTHORITY_"
+        System.out.println("[BETA4_COMPOUND_VISIBLE_SLAB_LANE_MODEL_AUTHORITY_"
                 + (modelAuthority ? "GREEN" : "RED") + "]"
                 + " expectedModelDy=-1.0"
                 + " lower modelDy=" + lower.modelDy
@@ -983,7 +983,7 @@ public final class SlabbedLabBeta4LiveShapeGoblinClientGameTest implements Fabri
                 && markerTruth;
         boolean caseGreen = dyOk && outlineOk && raycastOk && targetOk;
         String markerName = compoundVisibleMarkerName(name);
-        System.out.println("[MAINTAINER_BETA4_COMPOUND_VISIBLE_SLAB_LANE_TRIAD_CASE]"
+        System.out.println("[BETA4_COMPOUND_VISIBLE_SLAB_LANE_TRIAD_CASE]"
                 + " caseName=" + name
                 + " pos=" + pos.toShortString()
                 + " state=" + state
@@ -1016,7 +1016,7 @@ public final class SlabbedLabBeta4LiveShapeGoblinClientGameTest implements Fabri
                 + ",target:" + targetOk
                 + ",modelAuthority:" + modelOk
                 + " verdict=" + (caseGreen && modelOk ? "GREEN_EXCEPT_MANUAL_VISUAL" : "RED"));
-        System.out.println("[MAINTAINER_BETA4_COMPOUND_VISIBLE_SLAB_LANE_MODEL_AUTHORITY_CASE]"
+        System.out.println("[BETA4_COMPOUND_VISIBLE_SLAB_LANE_MODEL_AUTHORITY_CASE]"
                 + " caseName=" + name
                 + " pos=" + pos.toShortString()
                 + " state=" + state
@@ -1318,7 +1318,7 @@ public final class SlabbedLabBeta4LiveShapeGoblinClientGameTest implements Fabri
             if (mc.player == null || mc.world == null || mc.interactionManager == null) {
                 click[0].aimParity = "RED";
                 click[0].result = "RED";
-                System.out.println("[MAINTAINER_BETA4_LIVE_GOBLIN_AIM_PARITY_FAIL]"
+                System.out.println("[BETA4_LIVE_GOBLIN_AIM_PARITY_FAIL]"
                         + " step=" + step + " reason=client_not_ready");
                 return;
             }
@@ -1367,7 +1367,7 @@ public final class SlabbedLabBeta4LiveShapeGoblinClientGameTest implements Fabri
                         expectedChangedPos, expectedChangedState);
             }
             if (!parity) {
-                System.out.println("[MAINTAINER_BETA4_LIVE_GOBLIN_AIM_PARITY_FAIL]"
+                System.out.println("[BETA4_LIVE_GOBLIN_AIM_PARITY_FAIL]"
                         + " step=" + step
                         + " reason=" + parityReason(realBlock, targetOwner, faceOk, bandOk)
                         + " expectedBand=" + expectedBand
@@ -1380,7 +1380,7 @@ public final class SlabbedLabBeta4LiveShapeGoblinClientGameTest implements Fabri
             click[0].action = action.toString();
             if ("REPEAT".equals(step) && repeatSeamTraceEnabled()) {
                 BlockState immediate = mc.world.getBlockState(expectedChangedPos);
-                System.out.println("[MAINTAINER_BETA4_REPEAT_SEAM_CLIENT_RESULT]"
+                System.out.println("[BETA4_REPEAT_SEAM_CLIENT_RESULT]"
                         + " interactCall=ClientPlayerInteractionManager.interactBlock"
                         + " action=" + action
                         + " immediateClientState=" + describeBlock(mc.world, expectedChangedPos, immediate)
@@ -1407,11 +1407,11 @@ public final class SlabbedLabBeta4LiveShapeGoblinClientGameTest implements Fabri
             click[0].wrongDelta = delta.wrongDelta;
             click[0].result = "GREEN".equals(click[0].aimParity) && delta.expectedChanged && !delta.wrongDelta ? "GREEN" : "RED";
             String marker = switch (step) {
-                case "FIRST_SIDE" -> "[MAINTAINER_BETA4_LIVE_GOBLIN_SEQUENCE_FIRST_SIDE]";
-                case "LOWER_AFTER_FIRST" -> "[MAINTAINER_BETA4_LIVE_GOBLIN_SEQUENCE_LOWER_AFTER_FIRST]";
-                case "REPEAT" -> "[MAINTAINER_BETA4_LIVE_GOBLIN_SEQUENCE_REPEAT]";
-                case "TOP_FACE" -> "[MAINTAINER_BETA4_LIVE_GOBLIN_SEQUENCE_TOP_FACE]";
-                default -> "[MAINTAINER_BETA4_LIVE_GOBLIN_SEQUENCE]";
+                case "FIRST_SIDE" -> "[BETA4_LIVE_GOBLIN_SEQUENCE_FIRST_SIDE]";
+                case "LOWER_AFTER_FIRST" -> "[BETA4_LIVE_GOBLIN_SEQUENCE_LOWER_AFTER_FIRST]";
+                case "REPEAT" -> "[BETA4_LIVE_GOBLIN_SEQUENCE_REPEAT]";
+                case "TOP_FACE" -> "[BETA4_LIVE_GOBLIN_SEQUENCE_TOP_FACE]";
+                default -> "[BETA4_LIVE_GOBLIN_SEQUENCE]";
             };
             System.out.println(marker
                     + " result=" + click[0].result
@@ -1422,7 +1422,7 @@ public final class SlabbedLabBeta4LiveShapeGoblinClientGameTest implements Fabri
                     + " changedCount=" + delta.changedCount
                     + " ghost=" + delta.ghost
                     + " wrongDelta=" + delta.wrongDelta);
-            System.out.println("[MAINTAINER_BETA4_LIVE_GOBLIN_DELTA_SCAN]"
+            System.out.println("[BETA4_LIVE_GOBLIN_DELTA_SCAN]"
                     + " step=" + step
                     + " " + delta.describe);
             if ("REPEAT".equals(step) && repeatSeamTraceEnabled()) {
@@ -1434,7 +1434,7 @@ public final class SlabbedLabBeta4LiveShapeGoblinClientGameTest implements Fabri
                 String seam = clientFinalDouble && serverFinalDouble
                         ? "FIXED_GREEN"
                         : "SERVER_TOLERANCE_REJECT";
-                System.out.println("[MAINTAINER_BETA4_REPEAT_SEAM_SUMMARY]"
+                System.out.println("[BETA4_REPEAT_SEAM_SUMMARY]"
                         + " clientPredict=DOUBLE"
                         + " serverTolerance=" + (serverFinalDouble
                                 ? "LOWERED_SAME_CELL_SLAB_MERGE"
@@ -1464,12 +1464,12 @@ public final class SlabbedLabBeta4LiveShapeGoblinClientGameTest implements Fabri
             BlockPos expectedChangedPos,
             String expectedChangedState
     ) {
-        System.out.println("[MAINTAINER_BETA4_REPEAT_SEAM_START]"
+        System.out.println("[BETA4_REPEAT_SEAM_START]"
                 + " mode=finalization_fix"
                 + " gameplayChange=true"
                 + " target=" + expectedChangedPos.toShortString()
                 + " expected=" + expectedChangedState);
-        System.out.println("[MAINTAINER_BETA4_REPEAT_SEAM_CLIENT_BEFORE]"
+        System.out.println("[BETA4_REPEAT_SEAM_CLIENT_BEFORE]"
                 + " target=" + facts.describe()
                 + " state=" + facts.state
                 + " dy=" + facts.dy
@@ -1479,7 +1479,7 @@ public final class SlabbedLabBeta4LiveShapeGoblinClientGameTest implements Fabri
                 + " localZ=" + facts.localZ
                 + " visualLocalY=" + facts.visualLocalY
                 + " heldItem=" + held);
-        System.out.println("[MAINTAINER_BETA4_REPEAT_SEAM_CLIENT_PREDICT]"
+        System.out.println("[BETA4_REPEAT_SEAM_CLIENT_PREDICT]"
                 + " target=" + expectedChangedPos.toShortString()
                 + " predictedState=minecraft:stone_slab[type=double]"
                 + " predictedDy=-0.5"
@@ -1495,7 +1495,7 @@ public final class SlabbedLabBeta4LiveShapeGoblinClientGameTest implements Fabri
         singleplayer.getServer().runOnServer(server -> {
             World world = server.getOverworld();
             serverFinal[0] = describeBlock(world, target);
-            System.out.println("[MAINTAINER_BETA4_REPEAT_SEAM_SERVER_TICK]"
+            System.out.println("[BETA4_REPEAT_SEAM_SERVER_TICK]"
                     + " tick=" + tick
                     + " target=" + target.toShortString()
                     + " state=" + serverFinal[0]);
@@ -1505,13 +1505,13 @@ public final class SlabbedLabBeta4LiveShapeGoblinClientGameTest implements Fabri
     private static void emitRepeatSeamClientTick(ClientGameTestContext ctx, int tick, BlockPos target) {
         ctx.runOnClient(mc -> {
             if (mc.world == null) {
-                System.out.println("[MAINTAINER_BETA4_REPEAT_SEAM_CLIENT_TICK]"
+                System.out.println("[BETA4_REPEAT_SEAM_CLIENT_TICK]"
                         + " tick=" + tick
                         + " target=" + target.toShortString()
                         + " state=client_world_missing");
                 return;
             }
-            System.out.println("[MAINTAINER_BETA4_REPEAT_SEAM_CLIENT_TICK]"
+            System.out.println("[BETA4_REPEAT_SEAM_CLIENT_TICK]"
                     + " tick=" + tick
                     + " target=" + target.toShortString()
                     + " state=" + describeBlock(mc.world, target));
@@ -1524,7 +1524,7 @@ public final class SlabbedLabBeta4LiveShapeGoblinClientGameTest implements Fabri
         result.result = "NO_CORRIDOR";
         result.action = "NOT_RUN";
         result.targetingClassification = "NO_CORRIDOR";
-        System.out.println("[MAINTAINER_BETA4_LIVE_GOBLIN_LOWER_CORRIDOR_SEQUENCE]"
+        System.out.println("[BETA4_LIVE_GOBLIN_LOWER_CORRIDOR_SEQUENCE]"
                 + " step=" + step
                 + " result=NO_CORRIDOR"
                 + " selected=false"
@@ -1563,7 +1563,7 @@ public final class SlabbedLabBeta4LiveShapeGoblinClientGameTest implements Fabri
     }
 
     private static void emitLegacySequenceStale(ParityVerdicts verdicts) {
-        System.out.println("[MAINTAINER_BETA4_LIVE_GOBLIN_LEGACY_SEQUENCE_STALE]"
+        System.out.println("[BETA4_LIVE_GOBLIN_LEGACY_SEQUENCE_STALE]"
                 + " classification=STALE_DIAGNOSTIC_EXPECTATION"
                 + " supersededBy=COMPOUND_VISIBLE_SLAB_LANE"
                 + " oldLowerExpected=\"stone_slab[type=bottom] dy=-0.5\""
@@ -1601,13 +1601,13 @@ public final class SlabbedLabBeta4LiveShapeGoblinClientGameTest implements Fabri
         final boolean[] green = {false};
         ctx.runOnClient(mc -> {
             if (mc.world == null) {
-                System.out.println("[MAINTAINER_BETA4_LIVE_GOBLIN_STRUCTURE_INVALID] reason=client_world_missing");
+                System.out.println("[BETA4_LIVE_GOBLIN_STRUCTURE_INVALID] reason=client_world_missing");
                 return;
             }
             green[0] = emitStructureProof(mc.world);
         });
         if (!green[0]) {
-            throw new RuntimeException("[MAINTAINER_BETA4_LIVE_GOBLIN_STRUCTURE_INVALID] reason=fixture_truth_not_proven");
+            throw new RuntimeException("[BETA4_LIVE_GOBLIN_STRUCTURE_INVALID] reason=fixture_truth_not_proven");
         }
         return green[0];
     }
@@ -1633,7 +1633,7 @@ public final class SlabbedLabBeta4LiveShapeGoblinClientGameTest implements Fabri
         syncAim(ctx, singleplayer, eyeFor(face), hit.getPos());
         ctx.runOnClient(mc -> {
             if (mc.player == null || mc.world == null || mc.interactionManager == null) {
-                throw new RuntimeException("[MAINTAINER_BETA4_LIVE_GOBLIN_STRUCTURE_INVALID] case="
+                throw new RuntimeException("[BETA4_LIVE_GOBLIN_STRUCTURE_INVALID] case="
                         + caseName + " reason=client_not_ready");
             }
             mc.gameRenderer.updateCrosshairTarget(0.0f);
@@ -1643,7 +1643,7 @@ public final class SlabbedLabBeta4LiveShapeGoblinClientGameTest implements Fabri
             BlockState sourceBefore = mc.world.getBlockState(UPPER_FULL);
             BlockState candidateBefore = mc.world.getBlockState(candidate);
             ActionResult action = mc.interactionManager.interactBlock(mc.player, Hand.MAIN_HAND, hit);
-            System.out.println("[MAINTAINER_BETA4_LIVE_GOBLIN_TRACE]"
+            System.out.println("[BETA4_LIVE_GOBLIN_TRACE]"
                     + " case=" + caseName
                     + " phase=click"
                     + " expectedOwner=" + UPPER_FULL.toShortString()
@@ -1661,7 +1661,7 @@ public final class SlabbedLabBeta4LiveShapeGoblinClientGameTest implements Fabri
         waitForClient(ctx, singleplayer, 2);
         ctx.runOnClient(mc -> {
             if (mc.world == null) {
-                throw new RuntimeException("[MAINTAINER_BETA4_LIVE_GOBLIN_STRUCTURE_INVALID] case="
+                throw new RuntimeException("[BETA4_LIVE_GOBLIN_STRUCTURE_INVALID] case="
                         + caseName + " reason=client_world_missing_after_click");
             }
             BlockState after = mc.world.getBlockState(candidate);
@@ -1680,7 +1680,7 @@ public final class SlabbedLabBeta4LiveShapeGoblinClientGameTest implements Fabri
             verdicts.wrongOwner |= wrongOwner[0];
             verdicts.ghost |= ghost;
             verdicts.observedCases++;
-            System.out.println("[MAINTAINER_BETA4_LIVE_GOBLIN_" + caseName + "_" + verdict[0] + "]"
+            System.out.println("[BETA4_LIVE_GOBLIN_" + caseName + "_" + verdict[0] + "]"
                     + " expected=stone_slab[type=" + expectedType.asString() + "] dy=-0.5"
                     + " candidate=" + describeBlock(mc.world, candidate)
                     + " source=" + describeBlock(mc.world, UPPER_FULL)
@@ -1688,7 +1688,7 @@ public final class SlabbedLabBeta4LiveShapeGoblinClientGameTest implements Fabri
                     + " wrongOwner=" + wrongOwner[0]
                     + " ghost=" + ghost);
             if ("SUPPORT_PRESENT_SIDE_LOWER".equals(caseName)) {
-                System.out.println("[MAINTAINER_BETA4_LIVE_GOBLIN_SIDE_LOWER_EXACT_" + verdict[0] + "]"
+                System.out.println("[BETA4_LIVE_GOBLIN_SIDE_LOWER_EXACT_" + verdict[0] + "]"
                         + " clickedSource=" + describeBlock(mc.world, UPPER_FULL)
                         + " hitFace=" + hit.getSide().asString()
                         + " hitY=" + hit.getPos().y
@@ -1698,7 +1698,7 @@ public final class SlabbedLabBeta4LiveShapeGoblinClientGameTest implements Fabri
                         + " actualCandidate=" + describeBlock(mc.world, candidate)
                         + " otherNearbySlabChanged=" + describeNearbySlabs(mc.world, candidate));
                 if (wrongUpperForLower) {
-                    System.out.println("[MAINTAINER_BETA4_LIVE_GOBLIN_SIDE_LOWER_WRONG_RESULT_RED]"
+                    System.out.println("[BETA4_LIVE_GOBLIN_SIDE_LOWER_WRONG_RESULT_RED]"
                             + " reason=lower_half_click_produced_upper_result"
                             + " expectedCandidate=" + candidate.toShortString()
                             + " expected=stone_slab[type=bottom] dy=-0.5"
@@ -1706,7 +1706,7 @@ public final class SlabbedLabBeta4LiveShapeGoblinClientGameTest implements Fabri
                             + " source=" + describeBlock(mc.world, UPPER_FULL));
                 }
             } else if ("SUPPORT_PRESENT_SIDE_UPPER".equals(caseName)) {
-                System.out.println("[MAINTAINER_BETA4_LIVE_GOBLIN_SIDE_UPPER_FIRST_" + verdict[0] + "]"
+                System.out.println("[BETA4_LIVE_GOBLIN_SIDE_UPPER_FIRST_" + verdict[0] + "]"
                         + " clickedSource=" + describeBlock(mc.world, UPPER_FULL)
                         + " hitFace=" + hit.getSide().asString()
                         + " hitY=" + hit.getPos().y
@@ -1737,7 +1737,7 @@ public final class SlabbedLabBeta4LiveShapeGoblinClientGameTest implements Fabri
         syncAim(ctx, singleplayer, eyeFor(ANGLE_A_FACE), upperHit.getPos());
         ctx.runOnClient(mc -> {
             if (mc.player == null || mc.world == null || mc.interactionManager == null) {
-                throw new RuntimeException("[MAINTAINER_BETA4_LIVE_GOBLIN_REPEAT_PLACEMENT_RED]"
+                throw new RuntimeException("[BETA4_LIVE_GOBLIN_REPEAT_PLACEMENT_RED]"
                         + " reason=client_not_ready_before_first_click");
             }
             mc.gameRenderer.updateCrosshairTarget(0.0f);
@@ -1746,7 +1746,7 @@ public final class SlabbedLabBeta4LiveShapeGoblinClientGameTest implements Fabri
         waitForClient(ctx, singleplayer, 2);
         ctx.runOnClient(mc -> {
             if (mc.player == null || mc.world == null || mc.interactionManager == null) {
-                throw new RuntimeException("[MAINTAINER_BETA4_LIVE_GOBLIN_REPEAT_PLACEMENT_RED]"
+                throw new RuntimeException("[BETA4_LIVE_GOBLIN_REPEAT_PLACEMENT_RED]"
                         + " reason=client_not_ready_before_second_click");
             }
             mc.gameRenderer.updateCrosshairTarget(0.0f);
@@ -1755,7 +1755,7 @@ public final class SlabbedLabBeta4LiveShapeGoblinClientGameTest implements Fabri
         waitForClient(ctx, singleplayer, 2);
         ctx.runOnClient(mc -> {
             if (mc.world == null) {
-                System.out.println("[MAINTAINER_BETA4_LIVE_GOBLIN_REPEAT_PLACEMENT_RED]"
+                System.out.println("[BETA4_LIVE_GOBLIN_REPEAT_PLACEMENT_RED]"
                         + " reason=client_world_missing_after_repeat");
                 return;
             }
@@ -1768,7 +1768,7 @@ public final class SlabbedLabBeta4LiveShapeGoblinClientGameTest implements Fabri
             verdict[0] = legalRepeat ? "GREEN" : "RED";
             verdicts.ghost |= !legalRepeat && actual.isOf(Blocks.STONE_SLAB);
             verdicts.observedCases++;
-            System.out.println("[MAINTAINER_BETA4_LIVE_GOBLIN_REPEAT_PLACEMENT_" + verdict[0] + "]"
+            System.out.println("[BETA4_LIVE_GOBLIN_REPEAT_PLACEMENT_" + verdict[0] + "]"
                     + " firstAction=" + firstAction[0]
                     + " secondAction=" + secondAction[0]
                     + " clickedSource=" + describeBlock(mc.world, UPPER_FULL)
@@ -1805,13 +1805,13 @@ public final class SlabbedLabBeta4LiveShapeGoblinClientGameTest implements Fabri
                 UPPER_FULL.getZ() + 2.6d), hit.getPos());
         ctx.runOnClient(mc -> {
             if (mc.player == null || mc.world == null || mc.interactionManager == null) {
-                throw new RuntimeException("[MAINTAINER_BETA4_LIVE_GOBLIN_STRUCTURE_INVALID] case="
+                throw new RuntimeException("[BETA4_LIVE_GOBLIN_STRUCTURE_INVALID] case="
                         + caseName + " reason=client_not_ready");
             }
             mc.gameRenderer.updateCrosshairTarget(0.0f);
             HitResult beforeTarget = mc.crosshairTarget;
             ActionResult action = mc.interactionManager.interactBlock(mc.player, Hand.MAIN_HAND, hit);
-            System.out.println("[MAINTAINER_BETA4_LIVE_GOBLIN_TRACE]"
+            System.out.println("[BETA4_LIVE_GOBLIN_TRACE]"
                     + " case=" + caseName
                     + " phase=click"
                     + " expectedOwner=" + UPPER_FULL.toShortString()
@@ -1828,7 +1828,7 @@ public final class SlabbedLabBeta4LiveShapeGoblinClientGameTest implements Fabri
         waitForClient(ctx, singleplayer, 2);
         ctx.runOnClient(mc -> {
             if (mc.world == null) {
-                throw new RuntimeException("[MAINTAINER_BETA4_LIVE_GOBLIN_STRUCTURE_INVALID] case="
+                throw new RuntimeException("[BETA4_LIVE_GOBLIN_STRUCTURE_INVALID] case="
                         + caseName + " reason=client_world_missing_after_click");
             }
             BlockState actual = mc.world.getBlockState(expectedTop);
@@ -1848,7 +1848,7 @@ public final class SlabbedLabBeta4LiveShapeGoblinClientGameTest implements Fabri
             verdict[0] = legalTop ? "GREEN" : "RED";
             verdicts.ghost |= !legalTop && ghostOrSkip;
             verdicts.observedCases++;
-            System.out.println("[MAINTAINER_BETA4_LIVE_GOBLIN_" + caseName + "_" + verdict[0] + "]"
+            System.out.println("[BETA4_LIVE_GOBLIN_" + caseName + "_" + verdict[0] + "]"
                     + " expectedCandidate=" + expectedTop.toShortString()
                     + " expected=stone_slab[type=bottom] dy=0.0"
                     + " supportRemoved=" + removeSupport
@@ -1861,7 +1861,7 @@ public final class SlabbedLabBeta4LiveShapeGoblinClientGameTest implements Fabri
                     + " missingUnderSlabVariantSupportPos=" + TOP_SLAB_A.toShortString()
                     + " source=" + describeBlock(mc.world, UPPER_FULL));
             if ("SUPPORT_PRESENT_TOP_FACE".equals(caseName) && !legalTop && ghostOrSkip) {
-                System.out.println("[MAINTAINER_BETA4_LIVE_GOBLIN_TOP_FACE_WRONG_RESULT_RED]"
+                System.out.println("[BETA4_LIVE_GOBLIN_TOP_FACE_WRONG_RESULT_RED]"
                         + " reason=top_face_exact_candidate_failed"
                         + " expectedCandidate=" + expectedTop.toShortString()
                         + " expected=stone_slab[type=bottom] dy=0.0"
@@ -1892,7 +1892,7 @@ public final class SlabbedLabBeta4LiveShapeGoblinClientGameTest implements Fabri
         syncAim(ctx, singleplayer, eyeFor(ANGLE_A_FACE), upperHit.getPos());
         ctx.runOnClient(mc -> {
             if (mc.player == null || mc.world == null || mc.interactionManager == null) {
-                throw new RuntimeException("[MAINTAINER_BETA4_LIVE_GOBLIN_" + caseName
+                throw new RuntimeException("[BETA4_LIVE_GOBLIN_" + caseName
                         + "_RED] reason=client_not_ready_before_side_place");
             }
             mc.gameRenderer.updateCrosshairTarget(0.0f);
@@ -1903,7 +1903,7 @@ public final class SlabbedLabBeta4LiveShapeGoblinClientGameTest implements Fabri
             BlockState upperBefore = mc.world.getBlockState(UPPER_FULL);
             BlockState candidateBefore = mc.world.getBlockState(sideCandidate);
             ActionResult action = mc.interactionManager.interactBlock(mc.player, Hand.MAIN_HAND, upperHit);
-            System.out.println("[MAINTAINER_BETA4_LIVE_GOBLIN_TRACE]"
+            System.out.println("[BETA4_LIVE_GOBLIN_TRACE]"
                     + " case=" + caseName
                     + " phase=click"
                     + " expectedOwner=" + UPPER_FULL.toShortString()
@@ -1927,7 +1927,7 @@ public final class SlabbedLabBeta4LiveShapeGoblinClientGameTest implements Fabri
         ctx.runOnClient(mc -> {
             if (mc.world == null) {
                 verdict[0] = "RED";
-                System.out.println("[MAINTAINER_BETA4_LIVE_GOBLIN_" + caseName
+                System.out.println("[BETA4_LIVE_GOBLIN_" + caseName
                         + "_RED] reason=client_world_missing_after_click");
                 return;
             }
@@ -1948,7 +1948,7 @@ public final class SlabbedLabBeta4LiveShapeGoblinClientGameTest implements Fabri
             verdicts.miss |= miss[0];
             verdicts.wrongOwner |= wrongOwner[0];
             verdicts.observedCases++;
-            System.out.println("[MAINTAINER_BETA4_LIVE_GOBLIN_" + caseName + "_" + verdict[0] + "]"
+            System.out.println("[BETA4_LIVE_GOBLIN_" + caseName + "_" + verdict[0] + "]"
                     + " expected=stone_slab[type=top] dy=-0.5"
                     + " supportRemoved=true"
                     + " missingUnderSlabVariantTested=true"
@@ -2001,7 +2001,7 @@ public final class SlabbedLabBeta4LiveShapeGoblinClientGameTest implements Fabri
             SlabAnchorAttachment.removePersistentLoweredSlabCarrier(world, TOP_SLAB_A);
             world.breakBlock(TOP_SLAB_A, false);
             world.updateNeighborsAlways(TOP_SLAB_A, Blocks.AIR, null);
-            System.out.println("[MAINTAINER_BETA4_LIVE_GOBLIN_SUPPORT_MISSING_SETUP]"
+            System.out.println("[BETA4_LIVE_GOBLIN_SUPPORT_MISSING_SETUP]"
                     + " missingUnderSlabVariantTested=true"
                     + " missingUnderSlabVariantSupportPos=" + TOP_SLAB_A.toShortString()
                     + " removedSupport=" + describeBlock(world, TOP_SLAB_A)
@@ -2026,8 +2026,8 @@ public final class SlabbedLabBeta4LiveShapeGoblinClientGameTest implements Fabri
         boolean missingVariantNamed = TOP_SLAB_A.equals(UPPER_FULL.down());
         String marker = bottomA && bottomB && bridgeA && bridgeB && topA && topB && upper
                 && sideCandidateEmpty && topFaceCandidateEmpty && skippedTopCandidateEmpty && missingVariantNamed
-                ? "[MAINTAINER_BETA4_LIVE_GOBLIN_STRUCTURE_GREEN]"
-                : "[MAINTAINER_BETA4_LIVE_GOBLIN_STRUCTURE_INVALID]";
+                ? "[BETA4_LIVE_GOBLIN_STRUCTURE_GREEN]"
+                : "[BETA4_LIVE_GOBLIN_STRUCTURE_INVALID]";
         System.out.println(marker
                 + " fixtureTruth=" + (marker.endsWith("GREEN]") ? "GREEN" : "RED")
                 + " bottomSlabA=" + describeBlock(world, BOTTOM_SLAB_A)
@@ -2072,8 +2072,8 @@ public final class SlabbedLabBeta4LiveShapeGoblinClientGameTest implements Fabri
         boolean green = bottomA && bottomB && bridgeA && bridgeB && topA && topB && upper
                 && sideCandidateEmpty && topFaceCandidateEmpty && skippedTopCandidateEmpty && missingVariantNamed;
         String marker = green
-                ? "[MAINTAINER_BETA4_COMPOUND_VISIBLE_SLAB_LANE_FIXTURE_GREEN]"
-                : "[MAINTAINER_BETA4_COMPOUND_VISIBLE_SLAB_LANE_FIXTURE_FAIL]";
+                ? "[BETA4_COMPOUND_VISIBLE_SLAB_LANE_FIXTURE_GREEN]"
+                : "[BETA4_COMPOUND_VISIBLE_SLAB_LANE_FIXTURE_FAIL]";
         System.out.println(marker
                 + " fixtureTruth=" + (green ? "GREEN" : "FAIL")
                 + " bottomSlabA=" + describeBlock(world, BOTTOM_SLAB_A)
@@ -2244,7 +2244,7 @@ public final class SlabbedLabBeta4LiveShapeGoblinClientGameTest implements Fabri
             double visualLocalY
     ) {
         AimCandidate[] candidates = corridorCandidates(face, visualLocalY);
-        System.out.println("[MAINTAINER_BETA4_LIVE_GOBLIN_AIM_CORRIDOR_START]"
+        System.out.println("[BETA4_LIVE_GOBLIN_AIM_CORRIDOR_START]"
                 + " caseName=" + caseName
                 + " intendedOwnerPos=" + UPPER_FULL.toShortString()
                 + " intendedFace=" + face.asString()
@@ -2263,7 +2263,7 @@ public final class SlabbedLabBeta4LiveShapeGoblinClientGameTest implements Fabri
             ctx.runOnClient(mc -> {
                 if (mc.player == null || mc.world == null) {
                     result[0] = AimCorridor.none(caseName, index + 1);
-                    System.out.println("[MAINTAINER_BETA4_LIVE_GOBLIN_AIM_CORRIDOR_CANDIDATE]"
+                    System.out.println("[BETA4_LIVE_GOBLIN_AIM_CORRIDOR_CANDIDATE]"
                             + " caseName=" + caseName
                             + " cameraIndex=" + index
                             + " cameraName=" + candidate.name
@@ -2288,7 +2288,7 @@ public final class SlabbedLabBeta4LiveShapeGoblinClientGameTest implements Fabri
                 if ("OCCLUSION_EXPECTED".equals(diagnostic.classification) && facts.pos != null) {
                     occluder = describeBlock(mc.world, facts.pos);
                 }
-                System.out.println("[MAINTAINER_BETA4_LIVE_GOBLIN_AIM_CORRIDOR_CANDIDATE]"
+                System.out.println("[BETA4_LIVE_GOBLIN_AIM_CORRIDOR_CANDIDATE]"
                         + " caseName=" + caseName
                         + " cameraIndex=" + index
                         + " cameraName=" + candidate.name
@@ -2313,7 +2313,7 @@ public final class SlabbedLabBeta4LiveShapeGoblinClientGameTest implements Fabri
             }
         }
         if (selected != null) {
-            System.out.println("[MAINTAINER_BETA4_LIVE_GOBLIN_AIM_CORRIDOR_SELECTED]"
+            System.out.println("[BETA4_LIVE_GOBLIN_AIM_CORRIDOR_SELECTED]"
                     + " caseName=" + caseName
                     + " cameraName=" + selected.cameraName
                     + " eye=" + fmtVec(selected.eye)
@@ -2323,7 +2323,7 @@ public final class SlabbedLabBeta4LiveShapeGoblinClientGameTest implements Fabri
                     + " classification=" + selected.classification
                     + " testedCandidates=" + tested);
             if (caseName.startsWith("sequence")) {
-                System.out.println("[MAINTAINER_BETA4_LIVE_GOBLIN_LOWER_CORRIDOR_SEQUENCE]"
+                System.out.println("[BETA4_LIVE_GOBLIN_LOWER_CORRIDOR_SEQUENCE]"
                         + " step=LOWER_AFTER_FIRST"
                         + " result=CORRIDOR_SELECTED"
                         + " cameraName=" + selected.cameraName
@@ -2332,7 +2332,7 @@ public final class SlabbedLabBeta4LiveShapeGoblinClientGameTest implements Fabri
             }
             return selected.withTested(tested);
         }
-        System.out.println("[MAINTAINER_BETA4_LIVE_GOBLIN_AIM_CORRIDOR_NONE]"
+        System.out.println("[BETA4_LIVE_GOBLIN_AIM_CORRIDOR_NONE]"
                 + " caseName=" + caseName
                 + " intendedOwnerPos=" + UPPER_FULL.toShortString()
                 + " intendedFace=" + face.asString()
@@ -2340,7 +2340,7 @@ public final class SlabbedLabBeta4LiveShapeGoblinClientGameTest implements Fabri
                 + " testedCandidates=" + tested
                 + " marker=NO_PLAYER_REALISTIC_LOWER_CORRIDOR");
         if (caseName.startsWith("sequence")) {
-            System.out.println("[MAINTAINER_BETA4_LIVE_GOBLIN_LOWER_CORRIDOR_SEQUENCE]"
+            System.out.println("[BETA4_LIVE_GOBLIN_LOWER_CORRIDOR_SEQUENCE]"
                     + " step=LOWER_AFTER_FIRST"
                     + " result=NO_CORRIDOR"
                     + " testedCandidates=" + tested
@@ -2407,28 +2407,28 @@ public final class SlabbedLabBeta4LiveShapeGoblinClientGameTest implements Fabri
 
     private static void emitTargetingDiagnostic(String step, String expectedBand, TargetingDiagnostic diagnostic) {
         String markers = switch (expectedBand) {
-            case "LOWER" -> "[MAINTAINER_BETA4_LIVE_GOBLIN_TARGETING_LOWER_DIAG]";
-            case "UPPER" -> "[MAINTAINER_BETA4_LIVE_GOBLIN_TARGETING_UPPER_DIAG]";
-            case "TOP" -> "[MAINTAINER_BETA4_LIVE_GOBLIN_TARGETING_TOP_DIAG]";
-            default -> "[MAINTAINER_BETA4_LIVE_GOBLIN_TARGETING_DIAG]";
+            case "LOWER" -> "[BETA4_LIVE_GOBLIN_TARGETING_LOWER_DIAG]";
+            case "UPPER" -> "[BETA4_LIVE_GOBLIN_TARGETING_UPPER_DIAG]";
+            case "TOP" -> "[BETA4_LIVE_GOBLIN_TARGETING_TOP_DIAG]";
+            default -> "[BETA4_LIVE_GOBLIN_TARGETING_DIAG]";
         };
         markers = switch (step) {
-            case "FIRST_SIDE" -> markers + "\n[MAINTAINER_BETA4_LIVE_GOBLIN_TARGETING_SEQUENCE_FIRST_DIAG]";
-            case "LOWER_AFTER_FIRST" -> markers + "\n[MAINTAINER_BETA4_LIVE_GOBLIN_TARGETING_SEQUENCE_LOWER_AFTER_FIRST_DIAG]";
-            case "TOP_FACE" -> markers + "\n[MAINTAINER_BETA4_LIVE_GOBLIN_TARGETING_SEQUENCE_TOP_DIAG]";
+            case "FIRST_SIDE" -> markers + "\n[BETA4_LIVE_GOBLIN_TARGETING_SEQUENCE_FIRST_DIAG]";
+            case "LOWER_AFTER_FIRST" -> markers + "\n[BETA4_LIVE_GOBLIN_TARGETING_SEQUENCE_LOWER_AFTER_FIRST_DIAG]";
+            case "TOP_FACE" -> markers + "\n[BETA4_LIVE_GOBLIN_TARGETING_SEQUENCE_TOP_DIAG]";
             default -> markers;
         };
         for (String marker : markers.split("\n")) {
             System.out.println(marker + " step=" + step + " " + diagnostic.describe());
         }
         switch (diagnostic.classification) {
-            case "HARNESS_AIM_FAIL" -> System.out.println("[MAINTAINER_BETA4_LIVE_GOBLIN_TARGETING_HARNESS_AIM_FAIL]"
+            case "HARNESS_AIM_FAIL" -> System.out.println("[BETA4_LIVE_GOBLIN_TARGETING_HARNESS_AIM_FAIL]"
                     + " step=" + step + " reason=" + diagnostic.reason);
-            case "OWNER_FAIL" -> System.out.println("[MAINTAINER_BETA4_LIVE_GOBLIN_TARGETING_OWNER_FAIL]"
+            case "OWNER_FAIL" -> System.out.println("[BETA4_LIVE_GOBLIN_TARGETING_OWNER_FAIL]"
                     + " step=" + step + " reason=" + diagnostic.reason);
-            case "OCCLUSION_EXPECTED" -> System.out.println("[MAINTAINER_BETA4_LIVE_GOBLIN_TARGETING_OCCLUSION_EXPECTED]"
+            case "OCCLUSION_EXPECTED" -> System.out.println("[BETA4_LIVE_GOBLIN_TARGETING_OCCLUSION_EXPECTED]"
                     + " step=" + step + " reason=" + diagnostic.reason);
-            case "SEQUENCE_STATE_MISMATCH" -> System.out.println("[MAINTAINER_BETA4_LIVE_GOBLIN_TARGETING_SEQUENCE_STATE_MISMATCH]"
+            case "SEQUENCE_STATE_MISMATCH" -> System.out.println("[BETA4_LIVE_GOBLIN_TARGETING_SEQUENCE_STATE_MISMATCH]"
                     + " step=" + step + " reason=" + diagnostic.reason);
             default -> {
             }

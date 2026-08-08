@@ -28,7 +28,7 @@ import net.minecraft.world.level.block.state.properties.WallSide;
  * dependent block", because the neighbour-update tick may not fire within a gametest frame.
  *
  * <p>Chain survival is intentionally VANILLA FLOATING: a chain does NOT pop when its support is removed.
- * Maintainer's commit {@code df3a0dd4} ("restore vanilla floating-chain behavior") un-registered the old
+ * the maintainer's commit {@code df3a0dd4} ("restore vanilla floating-chain behavior") un-registered the old
  * {@code ChainBlockNeighborSurvivalMixin} pop-off mixin and flipped its repro tests to "chain stays";
  * that dead mixin (and the orphaned Yarn-mapped {@code ChainSurvivalReproTest}) were deleted 2026-06-18.
  * {@link #chainDoesNotPopWhenSupportRemoved} pins that policy here so a re-registered survival mixin

@@ -1502,7 +1502,7 @@ public abstract class BlockItemPlacementIntentMixin {
     }
 
     /**
-     * WYSIWYG side-click follow (Maintainer's law, 2026-06-19): when the player places a SLAB by clicking the
+     * WYSIWYG side-click follow (LAW 1 (the placement law), 2026-06-19): when the player places a SLAB by clicking the
      * SIDE face of a -0.5 lowered block, mark the predicted placement cell so {@code freezeLoweredOnPlace}
      * anchors it on the lowered surface (where the crosshair clicked) instead of freezing it flat at grid
      * height (the reported "lands 0.5 high"). Gated to a -0.5 lowered click so it does not touch the

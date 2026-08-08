@@ -23,7 +23,7 @@ import java.util.List;
 
 /**
  * The standing debug-tooling rule says {@code /slabdy} and {@code /slabdev} ship in EVERY jar,
- * default off. Maintainer's 2026-08-07 ruling fixed the reading: the command must be INVOCABLE on a
+ * default off. the maintainer's 2026-08-07 ruling fixed the reading: the command must be INVOCABLE on a
  * shipped jar, not merely present as bytes. Before this pass neither was — {@code /slabdev}
  * registered only from the development-only diagnostics companion, and {@code /slabdy} had no
  * registration anywhere on this line.

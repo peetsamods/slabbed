@@ -17,7 +17,7 @@ import java.util.LinkedHashMap;
 /**
  * Client driver for the MODEL_STALE sentinel ({@link SlabModelStaleSentinel}): the tick-end sampler,
  * the suppression-window event feeds (level change, chunk unload, F3+A render invalidation), and the
- * red-row sink (recorder row + a rate-limited in-game ping so Maintainer sees a verdict WHILE PLAYING instead
+ * red-row sink (recorder row + a rate-limited in-game ping so the maintainer sees a verdict WHILE PLAYING instead
  * of discovering staleness by staring at blocks — the whole point of the probe).
  *
  * <p>All judging work is gated behind an active recorder session; with the recorder off this whole

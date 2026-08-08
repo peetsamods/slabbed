@@ -17,7 +17,7 @@ import net.minecraft.world.level.block.state.properties.SlabType;
  * {@code StateChangeAnchorTest}): the state-change jitter defense. An in-place block-KIND transform to
  * another lock-eligible block (grass_block → dirt from a random tick, log → stripped, copper
  * oxidation) MUST keep the height-lock — on unfixed 26.2 the removal hook strips ALL seven attachments
- * unconditionally, so blocks placed on Maintainer's grass terrain un-lower/jitter WITH NO PLAYER ACTION. A
+ * unconditionally, so blocks placed on the maintainer's grass terrain un-lower/jitter WITH NO PLAYER ACTION. A
  * genuine break (→ air), a fluid, or a replacement with a non-lock block (a slab) must still clear.
  *
  * <p>Donor lesson preserved verbatim: the transform setBlock MUST use {@code Block.UPDATE_ALL} —

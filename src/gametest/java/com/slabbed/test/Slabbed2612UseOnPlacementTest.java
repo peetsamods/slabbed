@@ -218,7 +218,7 @@ public final class Slabbed2612UseOnPlacementTest {
     /**
      * MAINTAINER WYSIWYG (2026-06-19, FIXED): clicking the SIDE face of a -0.5 lowered block to place a slab,
      * even when the placement cell has SOLID GROUND below it, must FOLLOW to the lowered surface (-0.5) —
-     * it lands where the crosshair clicked, NOT frozen flat 0.5 above (Maintainer's "lands 0.5 high" bug). The
+     * it lands where the crosshair clicked, NOT frozen flat 0.5 above (the maintainer's "lands 0.5 high" bug). The
      * fix: the placement-intent mixin marks the clicked-lowered-face placement, and freezeLoweredOnPlace
      * anchors it lowered instead of taking the side-inherited freeze-flat rail. Companion guard:
      * {@link #useOnSlabOnFlushGroundBesideLoweredStaysFrozenFlat} (clicking the FLAT GROUND's top, not the
@@ -315,7 +315,7 @@ public final class Slabbed2612UseOnPlacementTest {
      * COMPOUND owner must land on the EAST (clicked) side — NEVER flip to the WEST (opposite) side. The legacy
      * {@code replaceabilityGuard} "visible lane" walk to {@code originalSide.getOpposite()} existed only to
      * chase the old post-hoc retargeter's lie about the visible owner; once compound markers/lanes exist it
-     * flipped a side placement to the wrong side (Maintainer's live build: aim east, slab lands west). The compound
+     * flipped a side placement to the wrong side (the maintainer's live build: aim east, slab lands west). The compound
      * markers here reproduce a genuine built compound owner (the bare-column tests above reject the remap and
      * place via vanilla, so they never exercised the flip).
      */
@@ -420,7 +420,7 @@ public final class Slabbed2612UseOnPlacementTest {
     /**
      * P26-12 RED: cantilever-against-cantilever. Slab A is placed beside a lowered block (anchored -0.5).
      * Placing slab B by clicking A's lowered side face must ALSO land -0.5 (WYSIWYG follow) and must NOT pop
-     * A back up to 0.0. Maintainer's live report: placing B sent BOTH to vanilla 0.0 (0.5 high). Drives the real
+     * A back up to 0.0. the maintainer's live report: placing B sent BOTH to vanilla 0.0 (0.5 high). Drives the real
      * useOn path on the SERVER (the authoritative dy the client now mirrors). Honest (visible-band) hit.
      */
     @GameTest(structure = "fabric-gametest-api-v1:empty")
@@ -493,7 +493,7 @@ public final class Slabbed2612UseOnPlacementTest {
     }
 
     /**
-     * REGRESSION (Maintainer live report, 2026-08-04) — {@code RELEASE_SANITY_CHECKLIST.md} §G row G2a:
+     * REGRESSION (the maintainer live report, 2026-08-04) — {@code RELEASE_SANITY_CHECKLIST.md} §G row G2a:
      * two {@code oak_fence} on two side-by-side bottom slabs at the SAME height MUST connect. In game
      * they did not: both arms were cut.
      *
@@ -700,7 +700,7 @@ public final class Slabbed2612UseOnPlacementTest {
         helper.succeed();
     }
 
-    // ── A7 (RE-SPEC'D — GOES C2, design §5, Maintainer-ruled D1): a slab placed via useOn on the visible top
+    // ── A7 (RE-SPEC'D — GOES C2, design §5, the maintainer-ruled D1): a slab placed via useOn on the visible top
     //         of a compound -1.0 owner lands FLUSH at -1.0. ──────────────────────────────────────────
 
     @GameTest(structure = "fabric-gametest-api-v1:empty")
@@ -763,7 +763,7 @@ public final class Slabbed2612UseOnPlacementTest {
     }
 
     /**
-     * Maintainer live RED (2026-06-21): clicking the visible UP face of an anchored lowered TOP slab must stack
+     * the maintainer live RED (2026-06-21): clicking the visible UP face of an anchored lowered TOP slab must stack
      * a new bottom slab on that lowered surface. It must not reinterpret the UP hit as a DOWN merge and
      * fill the lower half underneath the clicked slab.
      */

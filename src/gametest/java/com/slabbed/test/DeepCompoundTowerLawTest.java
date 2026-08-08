@@ -61,7 +61,7 @@ import java.util.List;
  * falls through to a flat, non-compounding {@code -0.5} default instead of even the naively-floored
  * {@code -1.0}. So the observed gap past the boundary is larger than 0.5 and does not visibly grow
  * further (everything above stacks flush on that same wrong, shallow value) — still exactly the
- * disjointed-tower symptom Maintainer reported live ("as soon as you pass like 5 blocks from the ground,
+ * disjointed-tower symptom the maintainer reported live ("as soon as you pass like 5 blocks from the ground,
  * the entire law is completely broken"), just with a bigger live gap than the package's one-line
  * {@code Math.max(-1.0, ...)} summary implies in isolation. The failure messages below report the
  * exact observed vs. expected numbers every run — treat those as ground truth over this comment.

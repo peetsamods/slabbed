@@ -26,7 +26,7 @@ import java.util.List;
  *       bake sample through {@code OffsetBlockStateModel.emitQuads}, and the recorded bakedDy must equal
  *       both the expected geometry (-0.5, the floor-torch lane) and the live logical dy. If the capture
  *       wiring is dead — the "probe silently absent" failure mode that cost an entire campaign with the
- *       recorder — this fails here, in CI, not in Maintainer's session.</li>
+ *       recorder — this fails here, in CI, not in the maintainer's session.</li>
  *   <li><b>Zero red rows on a static known-good scene:</b> the sampler judged against the real baked
  *       mesh must stay silent when nothing is wrong.</li>
  * </ol>

@@ -25,7 +25,7 @@ public class Slabbed implements ModInitializer {
         net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents.DISCONNECT.register(
                 (handler, server) -> com.slabbed.network.PlacementDyCorrectionServer.clearPlayer(handler.player));
         // Recorder break capture (TEST (3)-triage upgrade): the recorder was break-blind — it caused
-        // the "data-destructive downgrade" false alarm, and Maintainer's tower-churn "jumping when I break
+        // the "data-destructive downgrade" false alarm, and the maintainer's tower-churn "jumping when I break
         // things" report left ZERO rows. Observation only: the handler must ALWAYS return true (never
         // cancel the break), and gates on the recorder flag in one volatile read.
         net.fabricmc.fabric.api.event.player.PlayerBlockBreakEvents.BEFORE.register(
@@ -49,7 +49,7 @@ public class Slabbed implements ModInitializer {
     private static void initDevFeatures() {
         registerDevHook("com.slabbed.dev.SlabbedDevCommands", "register");
         registerDevHook("com.slabbed.dev.SlabbedLab", "register");
-        // The /slabrig live-test rig family is DEV-ONLY (Maintainer's release-allowlist ruling: the
+        // The /slabrig live-test rig family is DEV-ONLY (the maintainer's release-allowlist ruling: the
         // ships-in-every-jar standing rule covers /slabdy and /slabdev, NOT the rig). Registration
         // is gated here so none of the rig's unconditional hooks (server tick, lifecycle,
         // entity load/unload, the ALLOW_LOAD spawn veto, reconstruction disk reads and world-save

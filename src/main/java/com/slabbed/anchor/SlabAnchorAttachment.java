@@ -579,20 +579,20 @@ public final class SlabAnchorAttachment {
 
     /**
      * FREEZE-ON-PLACE: locks a piece's height at the moment it is placed so it NEVER autonomously
-     * moves afterwards. Maintainer's law — "a placed block must stay in that spot and not autonomously
+     * moves afterwards. LAW 1 (the placement law) — "a placed block must stay in that spot and not autonomously
      * pop." Server-side only; called from {@code BlockOnPlacedAnchorMixin} (Block#setPlacedBy).
      *
      * <p>If the piece is placed LOWERED (dy &lt; 0) it records an anchor (read as the lowered dy by
      * {@code getYOffsetInner}), so breaking a neighbour / source can no longer pop it back up. If it
      * is placed FLAT (dy ≈ 0) and is a STRUCTURAL piece (ordinary full block or slab) it records a
      * {@link #FROZEN_FLAT_TYPE} marker, so a slab / lowered carrier placed under or beside it later
-     * can no longer pull it down (the exact down-pop Maintainer reported). No-op for decorative followers
+     * can no longer pull it down (the exact down-pop the maintainer reported). No-op for decorative followers
      * (lanterns / torches / hangers / signs) so they keep tracking their supports, and for pieces
      * already anchored or frozen. Natural / setBlockState blocks never call onPlaced, so terrain
      * stays fully geometric.
      */
     /**
-     * WYSIWYG click follow (Maintainer's law): set by the placement-intent mixin when the player places a
+     * WYSIWYG click follow (LAW 1 (the placement law)): set by the placement-intent mixin when the player places a
      * SLAB by clicking a lowered block/slab face whose visible surface should own the new slab height.
      * The placement must then land on that lowered surface (where the crosshair clicked) instead of
      * freezing flat at grid height or merging into the underside. Stores the predicted placement cell;
@@ -645,7 +645,7 @@ public final class SlabAnchorAttachment {
         if (isAnchored(world, pos) || isFrozenFlat(world, pos)) {
             return;
         }
-        // WYSIWYG (Maintainer's law): a SLAB placed by clicking a lowered block's SIDE face must FOLLOW that
+        // WYSIWYG (LAW 1 (the placement law)): a SLAB placed by clicking a lowered block's SIDE face must FOLLOW that
         // lowered surface — it lands where the crosshair clicked, NOT frozen flat at grid height. Anchor it
         // lowered so it both lands correctly AND holds its position if the neighbour is later removed
         // (NEVER-POP-down preserved). This overrides the side-inherited freeze-flat rail below, which only
@@ -663,7 +663,7 @@ public final class SlabAnchorAttachment {
         if (dy < -1.0e-6) {
             // A placed SLAB that reads lowered ONLY because of a lowered SIDE neighbour (slab-lane
             // inheritance), with no genuine lowered support directly below it, must NOT snap down to
-            // that level — Maintainer's NEVER-POP law: a placed block stays where it was put. Freeze it
+            // that level — the maintainer's NEVER-POP law: a placed block stays where it was put. Freeze it
             // FLAT instead of anchoring -0.5 (the reported "snapped slab"). A slab lowered by genuine
             // support BELOW still follows down (anchored -0.5 in the branch below).
             if (SlabSupport.slabLoweringIsSideInheritedOnly(world, pos, state)) {
@@ -675,7 +675,7 @@ public final class SlabAnchorAttachment {
             // support (a -1.0 fence, or a fence on a lowered bottom slab) — STORES that depth via the
             // compound marker so it HOLDS -1.0 when the support is later removed. The regular anchor records
             // only PRESENCE, so without this the post pops UP from its placed -1.0 to the -0.5 floor the
-            // instant the support is broken (Maintainer's "break-pop"). getYOffsetInner's compound sidecar then
+            // instant the support is broken (the maintainer's "break-pop"). getYOffsetInner's compound sidecar then
             // preserves -1.0 across support removal (returns -1.0 for a non-slab below), exactly like a full
             // block; removeAnchor clears it when the post itself is broken (no stale marker). addAnchorUnchecked's
             // own qualifies-gate only covers full blocks, hence this connecting-block extension.
@@ -1867,7 +1867,7 @@ public final class SlabAnchorAttachment {
         // lowered, with no slab/lowered support of its own — a persistent anchor that then
         // (a) sank the block into the ground/air, (b) went stale (it stayed lowered after the
         // source carrier was removed, since the anchor never recomputes), and (c) spread the
-        // lowering further to ITS neighbours (tree-canopy contagion). This is Maintainer's "blocks
+        // lowering further to ITS neighbours (tree-canopy contagion). This is the maintainer's "blocks
         // should not inherit states like this" RED. Lowering for full blocks now comes only from
         // genuine support directly below (a slab, or a lowered full-block column down to a slab)
         // via qualifiesForAnchor / the column walk — never sideways. A piece genuinely

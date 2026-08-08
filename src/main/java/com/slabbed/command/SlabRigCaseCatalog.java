@@ -210,7 +210,7 @@ public final class SlabRigCaseCatalog {
 
     /**
      * Visual pagination packs four consecutive items across four consecutive topologies. Page order
-     * advances topology groups first, then item groups; this gives Maintainer a mixed object/structure grid
+     * advances topology groups first, then item groups; this gives the maintainer a mixed object/structure grid
      * while case identity remains the canonical item-major cross product.
      */
     public static CasePage page(Snapshot snapshot, int page) {

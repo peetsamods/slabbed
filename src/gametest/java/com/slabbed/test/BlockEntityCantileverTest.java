@@ -18,7 +18,7 @@ import net.minecraft.world.level.block.state.properties.SlabType;
  * {@code adjacentLoweredSideMagnitude} / cantilever-BFS readers, so the fix is a block-entity sibling
  * reader {@code adjacentLoweredBlockEntityMagnitude}, not a verbatim cherry-pick).
  *
- * <p>Live bug (Maintainer): "a lowered chest with lowered hoppers next to it — the next horizontally chained
+ * <p>Live bug (the maintainer): "a lowered chest with lowered hoppers next to it — the next horizontally chained
  * hopper places upward into vanilla." {@code getYOffsetInner}'s cantilever lanes structurally excluded
  * {@code EntityBlock} both as SUBJECT ({@code isCantileverFullBlockCandidate} /
  * {@code isCantileverConnectingCandidate} both exclude it) and as a recognised NEIGHBOUR, so a hopper

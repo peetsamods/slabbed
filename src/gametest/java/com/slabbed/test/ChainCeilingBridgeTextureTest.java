@@ -48,7 +48,7 @@ import java.nio.charset.StandardCharsets;
  * bridged chain stays at grid height and the extended model spans the gap to the ceiling
  * (chandelier-style ceiling-mount geometry), a design the suite already pins as the "CONTROL: iron
  * chain under a lowered support keeps its own grid-height chain behavior" case in
- * {@link Slabbed2612RestingDyTest}, and which Maintainer has previously ruled intentional. So the dy is
+ * {@link Slabbed2612RestingDyTest}, and which the maintainer has previously ruled intentional. So the dy is
  * left unchanged; {@link #waxedCopperChainUnderLoweredDoubleStaysBridgedGridHeight} locks that
  * contract in so a future accidental change is caught.
  */
