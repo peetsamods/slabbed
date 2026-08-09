@@ -9,9 +9,13 @@ import net.minecraft.block.BlockState;
 import net.minecraft.block.Blocks;
 import net.minecraft.block.SlabBlock;
 import net.minecraft.block.enums.SlabType;
+import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.test.TestContext;
+import net.minecraft.util.ActionResult;
 import net.minecraft.util.math.BlockPos;
+import net.minecraft.util.math.Direction;
+import net.minecraft.util.math.Vec3d;
 
 /**
  * The shouldSkipOffset CONSUMER SWEEP — the shared-predicate leak class, machine-gated.
@@ -26,8 +30,7 @@ import net.minecraft.util.math.BlockPos;
  * TS-owned SLAB placed in shapes that WOULD lower a vanilla slab must read dy 0.0 from every
  * Slabbed entry point — its offset belongs to TS. The deliberate exceptions (the slab-chain
  * cantilever lane and an explicitly-anchored TS slab, see {@code getYOffset}'s head) build their
- * OWN qualifying shapes and are not these fixtures. A positive control proves the guard does not
- * over-block: a vanilla follower ON a TS surface must still lower — that is the compat feature.
+ * OWN qualifying shapes and are not these fixtures.
  *
  * <p><b>Confirmed exception, live-ruled (maintainer, 2026-08-09):</b> a TS-owned slab placed
  * VERTICALLY on a vanilla bottom slab is one of the deliberate exceptions above, not a leak. Live
@@ -35,6 +38,31 @@ import net.minecraft.util.math.BlockPos;
  * top face — real WYSIWYG seating, not the double-offset stacking this sweep otherwise guards
  * against. {@link #tsOnVanillaBottomSlabAnchorsAndSeatsAtHalfDrop} pins the anchored `dy=-0.5`
  * reading as the correct, intended result for this exact shape.
+ *
+ * <p><b>Root Cause A (2026-08-09, live-confirmed): a PLAIN SOLID FULL BLOCK (e.g. stone) resting
+ * DIRECTLY on a TS bottom slab must stay flush, not anchor/lower.</b> Live-confirmed: stone
+ * placed via a real click on bare TS briefly renders flush (correct) then SNAPS DOWN to
+ * {@code -0.5} once the server's anchor syncs — a LAW 1 violation (a placed block visibly moving
+ * after placement). {@code isSlabSitCandidate} EXPLICITLY excludes plain solid cubes from the
+ * curated "object seats on TS" lane ({@code directCustomSlabSupportDy}) for exactly this reason
+ * (natural-terrain world holes) — so a plain full block was never meant to lower onto TS at all.
+ * The actual leak: {@code hasLoweringSourceInColumnBelow} has an explicit
+ * {@code customSlabSurfaceKind == BOTTOM_LIKE} branch (feeding
+ * {@code qualifiesForColumnLoweredAnchor}) that fires on the FIRST loop iteration — i.e. for a TS
+ * slab found DIRECTLY below, not only deeper in a column — anchoring the full block above it.
+ * {@code hasBottomSlabBelow}, {@code hasSlabInColumn} and {@code slabColumnYOffset} were checked
+ * and are already safe here (their {@code isBottomSlab} calls inherit a guard via
+ * {@code isSupportingSlab}'s {@code shouldSkipSlabSupport} check) — this line's architecture
+ * differs from the 26.x lines' (whose {@code hasBottomSlabBelow} needed the direct fix); the one
+ * genuine gap on this line is narrower.
+ *
+ * <p><b>NOT Root Cause A, confirmed correct behaviour (live-tested 2026-08-09):</b> a STANDING
+ * OBJECT (lantern, torch, etc.) resting directly on a TS bottom slab legitimately reads
+ * {@code -0.5} and looks flush — the intended, working {@code directCustomSlabSupportDy}/
+ * {@code isSlabSitCandidate} compat lane, unrelated to Root Cause A. This class's earlier
+ * "positive control" (a follower must still lower on TS) was right the first time; a subsequent
+ * "correction" briefly flipped it to expect flush before this exact live test disproved that —
+ * see {@link #standingObjectDirectlyOnTsBottomSlabLowersCorrectly}.
  */
 public final class TerrainSlabsGuardSweepTest {
 
@@ -112,11 +140,12 @@ public final class TerrainSlabsGuardSweepTest {
         ctx.complete();
     }
 
-    // ── positive control: the guard must not over-block ──────────────────────────────────────
-    // A vanilla follower ON a TS bottom surface lowering to seat on it IS the compat feature; a
-    // sweep that passed with the guard over-applied would be a false green.
+    // ── positive control, corrected back (live-tested 2026-08-09) ────────────────────────────
+    // A standing object (lantern) resting directly on a TS bottom slab DOES legitimately lower
+    // -0.5 and looks flush — confirmed live. This is the directCustomSlabSupportDy/
+    // isSlabSitCandidate compat lane working as designed; NOT part of Root Cause A.
     @GameTest(structure = "fabric-gametest-api-v1:empty")
-    public void vanillaFollowerOnTsSurfaceStillLowers(TestContext ctx) {
+    public void standingObjectDirectlyOnTsBottomSlabLowersCorrectly(TestContext ctx) {
         ServerWorld w = ctx.getWorld();
         BlockPos ground = ctx.getAbsolutePos(BlockPos.ORIGIN).add(5, 2, 5);
         w.setBlockState(ground, Blocks.STONE.getDefaultState(), Block.NOTIFY_LISTENERS);
@@ -126,8 +155,63 @@ public final class TerrainSlabsGuardSweepTest {
         w.setBlockState(follower, Blocks.LANTERN.getDefaultState(), Block.NOTIFY_LISTENERS);
         double dy = SlabSupport.getYOffset(w, follower, w.getBlockState(follower));
         ctx.assertTrue(dy < -EPS,
-                "CONTROL: a vanilla follower resting on a TS bottom surface must still lower "
-                        + "(the guard protects the TS block's OWN dy, never its followers), got " + dy);
+                "CONTROL (live-confirmed 2026-08-09): a standing object resting directly on a TS "
+                        + "bottom slab must still lower — the working compat lane, distinct from "
+                        + "Root Cause A's plain-solid-cube leak — got dy=" + dy);
+        ctx.complete();
+    }
+
+    // ── Root Cause A, geometric path (unanchored) — a plain solid cube must stay flush ───────
+    // isSlabSitCandidate explicitly excludes plain solid cubes from the standing-object lane
+    // above; a plain full block was never meant to lower onto TS. RED on HEAD today
+    // (hasLoweringSourceInColumnBelow's explicit BOTTOM_LIKE branch fires on the TS slab found
+    // directly below, feeding qualifiesForColumnLoweredAnchor even with no anchor yet recorded —
+    // see getYOffsetInner's shouldOffset/column-walk lane).
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void plainFullBlockDirectlyOnTsBottomSlabStaysFlushUnanchored(TestContext ctx) {
+        ServerWorld w = ctx.getWorld();
+        BlockPos ground = ctx.getAbsolutePos(BlockPos.ORIGIN).add(6, 2, 6);
+        w.setBlockState(ground, Blocks.STONE.getDefaultState(), Block.NOTIFY_LISTENERS);
+        BlockPos ts = ground.up();
+        w.setBlockState(ts, tsBottom(), Block.NOTIFY_LISTENERS);
+        BlockPos above = ts.up();
+        w.setBlockState(above, Blocks.STONE.getDefaultState(), Block.NOTIFY_LISTENERS);
+        double dy = SlabSupport.getYOffset(w, above, w.getBlockState(above));
+        ctx.assertTrue(Math.abs(dy) <= EPS,
+                "ROOT CAUSE A: a plain solid full block resting directly on a TS bottom slab must "
+                        + "stay FLUSH (isSlabSitCandidate explicitly excludes it from the "
+                        + "lowering-object lane) — Slabbed must not add its own -0.5, got dy=" + dy);
+        ctx.complete();
+    }
+
+    // ── Root Cause A, anchor path (real useOn placement) — live-confirmed symptom ────────────
+    // Live-confirmed 2026-08-09: stone placed via a real click on bare TS renders flush briefly,
+    // then SNAPS DOWN to -0.5 once the server's anchor syncs — a LAW 1 violation. RED on HEAD.
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void fullBlockPlacedOnTsBottomSlabMustNotAnchor(TestContext ctx) {
+        ServerWorld w = ctx.getWorld();
+        BlockPos ground = ctx.getAbsolutePos(BlockPos.ORIGIN).add(7, 2, 7);
+        w.setBlockState(ground, Blocks.STONE.getDefaultState(), Block.NOTIFY_LISTENERS);
+        BlockPos ts = ground.up();
+        w.setBlockState(ts, tsBottom(), Block.NOTIFY_LISTENERS);
+        BlockPos above = ts.up();
+        ctx.assertTrue(w.getBlockState(above).isAir(), "fixture: the cell above the TS slab must start as air");
+
+        PlayerEntity player = PlacementHarness.mockPlayerHolding(ctx, ts.north(3), new net.minecraft.item.ItemStack(Blocks.STONE.asItem(), 16));
+        Vec3d hit = new Vec3d(ts.getX() + 0.5, ts.getY() + 0.5, ts.getZ() + 0.5);
+        ActionResult result = PlacementHarness.useHeldItem(w, player, ts, Direction.UP, hit);
+        ctx.assertTrue(result.isAccepted(), "fixture: useOn on the TS slab's up face must place, got " + result);
+
+        BlockState placed = w.getBlockState(above);
+        ctx.assertTrue(placed.isOf(Blocks.STONE),
+                "fixture: stone must land in the cell above the TS slab, got " + placed);
+        ctx.assertTrue(!SlabAnchorAttachment.isAnchored(w, above),
+                "ROOT CAUSE A: a real click placing a full block on a TS bottom slab must NOT "
+                        + "anchor it (TS owns the surface; anchoring double-offsets and produces "
+                        + "the live-reported snap-down), got isAnchored=true");
+        double dy = SlabSupport.getYOffset(w, above, w.getBlockState(above));
+        ctx.assertTrue(Math.abs(dy) <= EPS,
+                "ROOT CAUSE A: the placed block must read dy=0.0 (flush), got dy=" + dy);
         ctx.complete();
     }
 }

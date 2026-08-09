@@ -349,15 +349,28 @@ public final class DyWindowSuite {
      * <p>Every token is {@code 0}, {@code H} or {@code F} — the whole battery lands inside the
      * {@code {-1.0, -0.5, 0.0}} alphabet, which is itself worth pinning: nothing in these 196
      * columns produces an off-alphabet height today.
+     *
+     * <p><b>RE-PINNED (maintainer ruling, live-confirmed 2026-08-09) — Root Cause A.</b>
+     * {@code hasLoweringSourceInColumnBelow}'s explicit Terrain-Slabs {@code BOTTOM_LIKE} branch
+     * was removed: it treated a TS bottom slab as a column lowering source even when found
+     * DIRECTLY below (first loop iteration, not only deeper in a column), anchoring a plain solid
+     * full block placed on bare TS to {@code -0.5} — live-confirmed as a visible snap-down (flush
+     * on the client's first frame, then dropping once the server anchor synced), a LAW 1
+     * violation. Exactly 14 of 588 tokens move, isolated to the
+     * {@code (base=TS-bottom-slab, support=STONE, anchored=true)} rows across all 7 subjects —
+     * every other combination is byte-identical. Both changed tokens per row move {@code H -> 0}
+     * (toward flush), the correct direction: nothing in this battery gained a MORE negative
+     * reading, only lost an unearned one. See {@code TerrainSlabsGuardSweepTest} and
+     * {@code LIVE_LEDGER.md} (private notes) for the live test that found this.
      */
     private static final String PINNED_FINGERPRINT =
-            "00H00H00H00H00H00H00H000000000000000000000000000000000000000000000000000000000000000"
-            + "00000000000000000000000000000000000000000000H00F00H00H00000H00H0HF0HF0HF0HF0HH0HF0HF"
-            + "0FH0FF0FH0FH0FH0FH0FH0HH0HF0HH0HH0H00HH0HH0000000000000000000000HH0HH0HH0HH0HH0HH0HH"
-            + "0HH0HH0HH0HH0HH0HH0HH00H00F00H00H00000H00H00H00H00H00H00H00H00H000000000000000000000"
-            + "000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
-            + "00H00F00H00H00000H00H0HF0HF0HF0HF0HH0HF0HF0FH0FF0FH0FH0FH0FH0FH0HH0HF0HH0HH0H00HH0HH"
-            + "0HH0HH0HH0HH0HH0HH0HH0HH0HH0HH0HH0HH0HH0HH0HH0HH0HH0HH0HH0HH0HH00H00F00H00H00000H00H";
+            "00H00H00H00H00H00H00H00000000000000000000000000000000000000000000000000000000000000000000"
+            + "000000000000000000000000000000000000000H00F00H00H00000H00H0HF0HF0HF0HF0HH0HF0HF0FH0FF0FH0"
+            + "FH0FH0FH0FH0HH0HF0HH0HH0H00HH0HH0000000000000000000000HH0HH0HH0HH0HH0HH0HH0HH0HH0HH0HH0HH"
+            + "0HH0HH00H00F00H00H00000H00H00H00H00H00H00H00H00H00000000000000000000000000000000000000000"
+            + "000000000000000000000000000000000000000000000000000000000000000000H00F00H00H00000H00H0HF0"
+            + "HF0HF0HF0HH0HF0HF0FH0FF0FH0FH0FH0FH0FH0HH0HF0HH0HH0H00HH0HH0000000000000000000000HH0HH0HH"
+            + "0HH0HH0HH0HH0HH0HH0HH0HH0HH0HH0HH00H00F00H00H00000H00H";
 
     /**
      * Courses of anchored bottom slab under every deep-battery column. Four is enough to saturate

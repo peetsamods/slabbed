@@ -1021,14 +1021,21 @@ public final class SlabSupport {
             if (isBottomSlab(cur) || SlabAnchorAttachment.isAnchored(world, cursor)) {
                 return true;
             }
-            // A Terrain Slabs custom BOTTOM_LIKE surface lowers everything stacked above
-            // it just like a vanilla bottom slab. Recognise it here so a block placed on
-            // Terrain Slabs terrain qualifies for a column anchor and keeps its lowered dy
-            // when the block below it is broken (otherwise the live column walk hits the
-            // gap, the block un-lowers, and it jumps up into the block above — the z-fight).
-            if (CompatHooks.customSlabSurfaceKind(cur) == CompatSlabSurfaceKind.BOTTOM_LIKE) {
-                return true;
-            }
+            // ROOT CAUSE A, REMOVED (maintainer ruling, live-confirmed 2026-08-09): this branch
+            // used to treat a Terrain Slabs BOTTOM_LIKE surface as a column lowering source,
+            // reasoning "TS lowers everything stacked above it just like a vanilla bottom slab."
+            // That premise was live-tested and found FALSE for the case that actually matters
+            // here: a PLAIN SOLID FULL BLOCK resting on TS. isSlabSitCandidate already explicitly
+            // excludes plain solid cubes from the one lane where TS legitimately lowers something
+            // onto it (directCustomSlabSupportDy, the curated standing-object compat lane — still
+            // correct, still live-confirmed, untouched by this fix). With this branch present, a
+            // plain block placed via a real click on bare TS anchored -0.5 server-side while the
+            // client's geometric read (this same function, minus this branch) stayed flush — the
+            // disagreement was the live-reported snap-down, a LAW 1 violation. The branch fired on
+            // the FIRST loop iteration (a TS slab found DIRECTLY below), not only deeper in a
+            // column, so it was never only the narrower "deep column" case its comment described.
+            // If a genuine deep-column TS interaction needs its own anchor treatment, it needs its
+            // own live-verified fixture — this removal does not attempt to re-derive one.
             if (cur.isAir() || cur.getBlock() instanceof SlabBlock || isThinTopLayer(cur)) {
                 return false;
             }
