@@ -28,6 +28,13 @@ import net.minecraft.util.math.BlockPos;
  * cantilever lane and an explicitly-anchored TS slab, see {@code getYOffset}'s head) build their
  * OWN qualifying shapes and are not these fixtures. A positive control proves the guard does not
  * over-block: a vanilla follower ON a TS surface must still lower — that is the compat feature.
+ *
+ * <p><b>Confirmed exception, live-ruled (maintainer, 2026-08-09):</b> a TS-owned slab placed
+ * VERTICALLY on a vanilla bottom slab is one of the deliberate exceptions above, not a leak. Live
+ * pass in the dev environment confirmed the TS slab visually seats flush on the vanilla slab's
+ * top face — real WYSIWYG seating, not the double-offset stacking this sweep otherwise guards
+ * against. {@link #tsOnVanillaBottomSlabAnchorsAndSeatsAtHalfDrop} pins the anchored `dy=-0.5`
+ * reading as the correct, intended result for this exact shape.
  */
 public final class TerrainSlabsGuardSweepTest {
 
@@ -78,35 +85,30 @@ public final class TerrainSlabsGuardSweepTest {
         ctx.complete();
     }
 
-    // ── entry point 4: the placement-time anchor qualifier lanes — RED_PENDING_RULING ────────
-    // MEASURED ON HEAD (2026-08-07, first run of this sweep): the onPlaced anchor chain DOES
-    // capture a TS-owned slab placed on a vanilla bottom slab — dy=-0.5, anchored=true. That is
-    // either the deliberate slab-anchor exception at getYOffset's head (the cantilever law,
-    // honoured for anchored TS slabs) extending to the VERTICAL custom-slab-on-vanilla shape, or
-    // it is the open broader-entry leak this sweep exists to catch — and custom-slab-on-vanilla
-    // is an explicitly DEFERRED maintainer decision. Until that ruling, this row is armed only by
-    // -Dslabbed.redCells=true and documents the measured behavior; when armed it asserts the
-    // GUARD reading (dy 0.0) and therefore FAILS on HEAD.
+    // ── entry point 4: the placement-time anchor qualifier lanes — PINNED (maintainer ruling,
+    //    live-confirmed 2026-08-09) ─────────────────────────────────────────────────────────
+    // A TS-owned slab placed VERTICALLY on a vanilla bottom slab IS one of the deliberate
+    // exceptions this class's javadoc names (the "explicitly-anchored TS slab" lane at
+    // getYOffset's head) — not the double-offset leak this sweep otherwise guards against. Live
+    // pass in the dev environment: the TS slab visually seats flush on the vanilla slab's top
+    // face. The onPlaced anchor chain capturing it (dy=-0.5, anchored=true) is therefore CORRECT
+    // WYSIWYG seating, and this row pins that reading rather than guarding against it.
     @GameTest(structure = "fabric-gametest-api-v1:empty")
-    public void tsSlabSurvivesTheOnPlacedAnchorChainUnanchored(TestContext ctx) {
-        if (!Boolean.getBoolean("slabbed.redCells")) {
-            System.out.println("[TS-GUARD] RED_PENDING_RULING skipped — onPlaced anchor chain "
-                    + "captures a TS slab on a vanilla slab (dy=-0.5, anchored=true on HEAD; "
-                    + "custom-slab-on-vanilla ruling deferred; arm with -Dslabbed.redCells=true)");
-            ctx.complete();
-            return;
-        }
+    public void tsOnVanillaBottomSlabAnchorsAndSeatsAtHalfDrop(TestContext ctx) {
         ServerWorld w = ctx.getWorld();
         BlockPos ts = buildTsOnVanillaSlab(ctx);
         BlockState state = w.getBlockState(ts);
         SlabAnchorAttachment.addAnchor(w, ts, state);
         SlabAnchorAttachment.freezeLoweredOnPlace(w, ts, state);
         double dy = SlabSupport.getYOffset(w, ts, w.getBlockState(ts));
-        ctx.assertTrue(Math.abs(dy) <= EPS,
-                "GUARD: after the full onPlaced anchor chain a TS-owned slab must still read dy "
-                        + "0.0 — an anchor lane that captures a TS block re-opens the double-offset "
-                        + "leak the moment anchoring widens, got dy=" + dy
-                        + " (anchored=" + SlabAnchorAttachment.isAnchored(w, ts) + ")");
+        ctx.assertTrue(Math.abs(dy - (-0.5)) <= EPS,
+                "PINNED: a TS-owned slab placed on a vanilla bottom slab must anchor and seat at "
+                        + "dy=-0.5 (live-confirmed correct WYSIWYG seating, maintainer ruling "
+                        + "2026-08-09) — the onPlaced chain must capture this shape, got dy=" + dy);
+        ctx.assertTrue(SlabAnchorAttachment.isAnchored(w, ts),
+                "PINNED: this shape must anchor — LAW 1 requires the height survive a later "
+                        + "neighbour change, and only an anchor (or a stored placement height) "
+                        + "provides that");
         ctx.complete();
     }
 
