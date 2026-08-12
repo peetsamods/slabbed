@@ -94,4 +94,16 @@ if [ -n "$DISCRETION_HITS" ]; then
 $(echo "$DISCRETION_HITS" | sed 's/^/         /' | head -12)"
 fi
 
+# ── S-6b: the COMMIT MESSAGE is a published surface too ──────────────────────────────────────
+# Commit messages ship in public history just like tracked lines, so they use S-6's same pattern.
+MSG_DISCRETION_HITS="$(printf '%s\n' "$MSG" | grep -nE "$DISCRETION_PAT" || true)"
+if [ -n "$MSG_DISCRETION_HITS" ]; then
+  fail "S-6b: the COMMIT MESSAGE contains personal or machine-local data (a personal name, a local
+       username, or an absolute home-directory path). git log is published with the repo, so the
+       message is a tracked surface. Cite decisions as 'maintainer ruling, <date>' and keep paths
+       repo-relative.
+       Offending lines:
+$(echo "$MSG_DISCRETION_HITS" | sed 's/^/         /' | head -12)"
+fi
+
 exit 0
