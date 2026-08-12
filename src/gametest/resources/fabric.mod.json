@@ -27,6 +27,7 @@
                   "com.slabbed.test.NeverPopSuite",
                   "com.slabbed.anchor.AttachmentCapacitySuite",
       "com.slabbed.anchor.PlacementDyStoreTest",
+      "com.slabbed.anchor.DeepDyConsentTest",
       "com.slabbed.test.SmooshUnderTerrainSlabsTest",
       "com.slabbed.test.DySpecificationTest",
       "com.slabbed.test.AuditFixesTest",

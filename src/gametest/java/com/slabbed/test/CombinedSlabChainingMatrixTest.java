@@ -451,7 +451,7 @@ public final class CombinedSlabChainingMatrixTest {
         // is lowered now) while the accumulate law wants -1.5. Recorded vs -1.5, BY_DESIGN.
         //
         // ⚠️ THE STATED CAUSE WAS WRONG, AND STAGE 4 IS WHAT SHOWED IT (2026-08-07). This comment
-        // used to read "which MIN_RESOLVED_DY (-1.0, DY_SPEC.md CS-CAP) forbids on this line by
+        // used to read "which minResolvedDy() (-1.0, DY_SPEC.md CS-CAP) forbids on this line by
         // design". Running the whole matrix with slabbed.deepDyAlphabet=true — cap -2.0, which
         // refuses nothing at -1.5 — leaves this row BYTE-IDENTICAL at -1.0. So the cap is not what
         // holds it: the column is built with setBlockState and takes the GEOMETRIC lane, whose

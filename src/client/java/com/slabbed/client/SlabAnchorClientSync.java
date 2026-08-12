@@ -1,6 +1,7 @@
 package com.slabbed.client;
 
 import com.slabbed.Slabbed;
+import com.slabbed.anchor.DeepDyConsentAttachment;
 import com.slabbed.anchor.SlabAnchorAttachment;
 import com.slabbed.anchor.SlabPlacementDyAttachment;
 import com.slabbed.util.SlabSupport;
@@ -9,6 +10,8 @@ import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientChunkEvents;
+import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientWorldEvents;
+import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.chunk.WorldChunk;
@@ -79,6 +82,45 @@ public final class SlabAnchorClientSync {
         };
 
         ClientChunkEvents.CHUNK_LOAD.register(SlabAnchorClientSync::onChunkLoad);
+        initDeepDyConsent();
+    }
+
+    /**
+     * THE CLIENT LEARNS THE dy CAP FROM THE SERVER AND HAS NO OTHER WAY TO KNOW IT.
+     *
+     * <p>{@link DeepDyConsentAttachment} is a per-world fact that decides where blocks resolve. A
+     * client that guessed it would draw blocks somewhere the server does not have them, then snap
+     * them — the defect fixed at {@code 4e55cc4c}. So the client has exactly one writer for the
+     * cached cap, and the only value it can write is the one that arrived in the synced world
+     * attachment.
+     *
+     * <p>Three cases, all covered:
+     *
+     * <ul>
+     *   <li><b>Integrated server (singleplayer, open-to-LAN).</b> The client does not touch it at
+     *       all: the server in this same JVM already armed the one shared field from the save's own
+     *       stamp, and there is no second value to disagree with.</li>
+     *   <li><b>Remote server.</b> Adopt on world change (absent attachment ⇒ the shipped cap), then
+     *       adopt again when the attachment arrives. Fabric sends a world's attachments from its
+     *       player-join hook, which is enqueued before the first chunk packet, so nothing has been
+     *       meshed by the time the value lands.</li>
+     *   <li><b>Leaving.</b> Reset on disconnect. An ABSENT attachment sends no change, so a client
+     *       coming from a consented world would otherwise carry that cap into a legacy one.</li>
+     * </ul>
+     */
+    private static void initDeepDyConsent() {
+        ClientWorldEvents.AFTER_CLIENT_WORLD_CHANGE.register((client, world) -> {
+            if (client != null && client.isIntegratedServerRunning()) {
+                return;
+            }
+            DeepDyConsentAttachment.installClientListener(world);
+        });
+        ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> {
+            if (client != null && client.isIntegratedServerRunning()) {
+                return;
+            }
+            DeepDyConsentAttachment.resetToLegacyDefault();
+        });
     }
 
     private static void onChunkLoad(net.minecraft.client.world.ClientWorld world, WorldChunk chunk) {

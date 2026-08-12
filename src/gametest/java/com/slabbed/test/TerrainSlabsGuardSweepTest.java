@@ -63,6 +63,10 @@ import net.minecraft.util.math.Vec3d;
  * "positive control" (a follower must still lower on TS) was right the first time; a subsequent
  * "correction" briefly flipped it to expect flush before this exact live test disproved that —
  * see {@link #standingObjectDirectlyOnTsBottomSlabLowersCorrectly}.
+ *
+ * <p>An anchored TS-owned slab is not a horizontal lowering source for an adjacent vanilla slab;
+ * {@link #anchoredTsSlabDoesNotLowerAHorizontallyAdjacentVanillaSlab} pins that boundary without
+ * changing the TS slab's own legitimate anchored height.
  */
 public final class TerrainSlabsGuardSweepTest {
 
@@ -212,6 +216,32 @@ public final class TerrainSlabsGuardSweepTest {
         double dy = SlabSupport.getYOffset(w, above, w.getBlockState(above));
         ctx.assertTrue(Math.abs(dy) <= EPS,
                 "ROOT CAUSE A: the placed block must read dy=0.0 (flush), got dy=" + dy);
+        ctx.complete();
+    }
+
+    // An anchored TS slab may keep its own height, but cannot lower an adjacent vanilla slab.
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void anchoredTsSlabDoesNotLowerAHorizontallyAdjacentVanillaSlab(TestContext ctx) {
+        ServerWorld w = ctx.getWorld();
+        BlockPos ts = buildTsOnVanillaSlab(ctx);
+        SlabAnchorAttachment.addAnchor(w, ts, w.getBlockState(ts));
+        SlabAnchorAttachment.freezeLoweredOnPlace(w, ts, w.getBlockState(ts));
+        ctx.assertTrue(SlabAnchorAttachment.isAnchored(w, ts),
+                "fixture: the TS slab must hold the anchor this test exercises "
+                        + "(the same shape tsOnVanillaBottomSlabAnchorsAndSeatsAtHalfDrop pins)");
+
+        BlockPos subjectGround = ts.down(2).north();
+        w.setBlockState(subjectGround, Blocks.STONE.getDefaultState(), Block.NOTIFY_LISTENERS);
+        BlockPos subject = subjectGround.up(2);
+        ctx.assertTrue(subject.equals(ts.north()), "fixture: the subject slab must be horizontally adjacent to the TS slab");
+        w.setBlockState(subject, Blocks.OAK_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.BOTTOM),
+                Block.NOTIFY_LISTENERS);
+
+        double dy = SlabSupport.getYOffset(w, subject, w.getBlockState(subject));
+        ctx.assertTrue(Math.abs(dy) <= EPS,
+                "a vanilla slab horizontally adjacent to an anchored TS slab and resting on "
+                        + "ordinary flush ground must stay flush; it must not inherit the TS "
+                        + "slab's anchor as a horizontal lowering source, got dy=" + dy);
         ctx.complete();
     }
 }

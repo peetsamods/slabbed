@@ -55,7 +55,7 @@ import java.util.List;
  * through this line's real Yarn {@code useOn} harness (reused from
  * {@link UseOnCombineVsExtendPlacementTest#mockPlayerHolding} /
  * {@link UseOnCombineVsExtendPlacementTest#useHeldItem}). The deep-rest tower subject asserts THIS
- * line's own {@code MIN_RESOLVED_DY} clamp (-1.0, pinned by {@code 76454c6d}/{@code 9e4dffb5}), not
+ * line's own {@code minResolvedDy()} clamp (-1.0, pinned by {@code 76454c6d}/{@code 9e4dffb5}), not
  * the donor's uncapped -1.5.
  *
  * <p>Extending: add a SUBJECT builder or a MUTATION and every existing pairing exercises it — you

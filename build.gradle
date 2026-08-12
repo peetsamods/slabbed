@@ -40,12 +40,16 @@ fabricApi {
 // Gradle keeps `-D` on the daemon JVM, and Loom's run tasks are forked JavaExecs, so the property
 // has to be forwarded explicitly. Loom appends its own args via getJvmArguments().addAll(...), so
 // adding here is additive, not clobbering.
-// ── Stage 4 deep-dy-alphabet toggle ───────────────────────────────────────────────────────────
-// `slabbed.deepDyAlphabet` arms SlabSupport.MIN_RESOLVED_DY = -2.0. Default OFF (maintainer
-// ruling, 2026-08-06): cells with a stored placement height never move, but every cell without one takes
-// the live resolver and would drop half a block on first re-render. Same forwarding problem as the
-// law gate — Gradle keeps `-D` on the daemon JVM and Loom's run tasks are forked JavaExecs — so it
-// is passed through by name here. Run the deep leg with:
+// ── deep-dy-alphabet DEVELOPER OVERRIDE ───────────────────────────────────────────────────────
+// `slabbed.deepDyAlphabet` forces SlabSupport.minResolvedDy() = -2.0 for the whole JVM. The
+// SETTING itself is per-world consent state (com.slabbed.anchor.DeepDyConsentAttachment); this is
+// the override that lets one tree run both suite legs, and it may only ever ARM, never disarm —
+// an unconsented world cannot pull the cap back while the deep leg is running. Default OFF
+// (maintainer ruling, 2026-08-06, and the consent ruling of 2026-08-09): cells with a stored
+// placement height never move, but every cell without one takes the live resolver and would drop
+// half a block on first re-render, so nothing moves unless a world says so. Same forwarding
+// problem as the law gate — Gradle keeps `-D` on the daemon JVM and Loom's run tasks are forked
+// JavaExecs — so it is passed through by name here. Run the deep leg with:
 //     ./gradlew runGameTest -Dslabbed.deepDyAlphabet=true
 tasks.matching { it.name == "runGameTest" }.configureEach {
     jvmArguments.addAll(

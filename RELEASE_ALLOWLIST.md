@@ -110,7 +110,7 @@ jar that lies about its own contents is a release defect even when every entry i
 
 | Entry | Reason |
 | --- | --- |
-| `com/slabbed/anchor/*` | The dy anchor attachments and their chunk-position packet codecs — the feature's data model and its sync wire. |
+| `com/slabbed/anchor/*` | The dy anchor attachments, their chunk-position packet codecs, and the per-world deep-dy consent stamp — the feature's data model and its sync wire. All three are server-authoritative, persistent and synchronized; none writes a file or reaches outside the save. |
 | `com/slabbed/client/model/*` | Offset block-state model and Y-offset emitter — the lowering render path. |
 | `com/slabbed/compat/*` | Compat hooks and the slab-surface-kind enum consumed by third-party slab mods. |
 | `com/slabbed/compat/terrainslabs/*` | Terrain Slabs compat, dual mod-id gated. |

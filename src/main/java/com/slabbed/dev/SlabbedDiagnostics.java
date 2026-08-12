@@ -89,7 +89,7 @@ import java.util.Locale;
  *       {@link #dodoShapePrecondition}); on its own it marked 36 of 55 rows of a measured
  *       recorder run — the mod's entire normal operating envelope — and carried no signal.</li>
  *   <li><b>smooshRisk</b> — a non-air decoration (not a slab, not a full cube) sitting AT the
- *       resolver's floor {@link SlabSupport#MIN_RESOLVED_DY}; the classic double-offset "smoosh"
+ *       resolver's floor {@link SlabSupport#minResolvedDy()}; the classic double-offset "smoosh"
  *       where two systems (e.g. Terrain Slabs' own offset + Slabbed's) both fire and the sum
  *       saturates the clamp. The threshold is READ from the cap, never restated.</li>
  *   <li><b>dyDiscontinuity{Above,Below}</b> — two vertically-adjacent connectable
@@ -453,7 +453,7 @@ public final class SlabbedDiagnostics {
      * A non-air decoration (not slab, not full cube) sitting AT the resolver's floor = the
      * double-offset "smoosh".
      *
-     * <p><b>The threshold is READ from {@link SlabSupport#MIN_RESOLVED_DY}, not written down.</b>
+     * <p><b>The threshold is READ from {@link SlabSupport#minResolvedDy()}, not written down.</b>
      * It used to be the literal {@code -1.0}, which happened to equal the shipped cap; the moment
      * the cap moves to {@code -2.0} a hard {@code -1.0} would fire on every decoration merely
      * lowered past one block — the mod's new normal envelope — and repeat the DODO mistake one
@@ -472,7 +472,7 @@ public final class SlabbedDiagnostics {
             return false;
         }
         boolean decoration = !(state.getBlock() instanceof SlabBlock) && !state.isOpaqueFullCube();
-        return decoration && visualDy <= SlabSupport.MIN_RESOLVED_DY + EPS;
+        return decoration && visualDy <= SlabSupport.minResolvedDy() + EPS;
     }
 
     /** Two vertically-adjacent connectable decorations (chain/lantern) at different dy = gap. */

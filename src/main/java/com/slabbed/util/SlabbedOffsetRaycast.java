@@ -60,7 +60,7 @@ import net.minecraft.world.BlockView;
  * it to a side aim. <b>Change the cap and the radius moves with it, automatically. Change
  * the radius and you have changed which caps this class can honour.</b> The identity the
  * resolver must respect is therefore
- * {@link SlabSupport#MIN_RESOLVED_DY}{@code  >= }{@link #DEEPEST_TARGETABLE_DY} —
+ * {@link SlabSupport#minResolvedDy()}{@code  >= }{@link #DEEPEST_TARGETABLE_DY} —
  * the alphabet may never run deeper than the window that has to click it. Both halves of that
  * identity are now named links rather than restated numbers, and
  * {@code ClampUnificationTest} asserts it, so neither constant can be moved on its own
@@ -72,10 +72,10 @@ import net.minecraft.world.BlockView;
  *
  * <p><b>Slack is deliberate, and it is exactly what the Stage 4 flag closes.</b> With
  * {@code SlabSupport.DEEP_DY_ALPHABET} off — the shipped default —
- * {@code SlabSupport.MIN_RESOLVED_DY} is {@code -1.0} while this window is built for
+ * {@code SlabSupport.minResolvedDy()} is {@code -1.0} while this window is built for
  * {@code -2.0}: the window lands ahead of the alphabet on purpose, so the permanent
  * pick-path cost ships and live-tests by itself rather than entangled with a geometry
- * change. With the flag on, {@code MIN_RESOLVED_DY} IS this field and the two are the same
+ * change. With the flag on, {@code minResolvedDy()} IS this field and the two are the same
  * number by construction. While that slack exists the extra probes
  * are <em>provably inert</em>: with every offset the build can mint confined to
  * {@code [-1.0, 0.0]}, a shape never reaches further than one cell from its owner, so the
@@ -120,7 +120,7 @@ public final class SlabbedOffsetRaycast {
      * window's CONTRACT, stated as a magnitude rather than as a cell count, because the magnitude
      * is the thing anyone has a reason to change.
      *
-     * <p>Ruled {@code -2.0} (maintainer ruling, 2026-08-06). {@link SlabSupport#MIN_RESOLVED_DY}, the
+     * <p>Ruled {@code -2.0} (maintainer ruling, 2026-08-06). {@link SlabSupport#minResolvedDy()}, the
      * deepest offset the resolver will ever PRODUCE, must never be deeper than this value. With
      * {@link SlabSupport#DEEP_DY_ALPHABET} off (the shipped default) it is shallower
      * ({@code -1.0}), which is the deliberate slack described in the class doc; with the flag on it

@@ -427,7 +427,7 @@ public final class AnchorLaneSuite {
     //  * a bottom slab's top face IS half a block below the grid, so a slab resting on it seats there
     //  * whether or not the support is itself sunk. {@link #slabOnFlatBottomSlabSeatsOnItsTopFace} pins
     //  * that plain case here, and {@link #slabTowerLaddersToTheClampThenGaps} pins the stacked ladder
-    //  * including where the {@code MIN_RESOLVED_DY} clamp bites.
+    //  * including where the {@code minResolvedDy()} clamp bites.
     //  *
     //  * <p><b>The scene</b> is the {@code /slabrig} {@code seatMinusOne} shape: a source column beside
     //  * the seat (stone / bottom slab / stone) whose top stone renders {@code -0.5}, making the bottom
@@ -542,10 +542,10 @@ public final class AnchorLaneSuite {
      * placed on the one below through the REAL placement sequence ({@code setBlockState} +
      * {@code SlabAnchorAttachment.addAnchor}, exactly what {@code BlockOnPlacedAnchorMixin.onPlaced}
      * fires for a player click). ASSERTS the resolved dy at every level, <b>including where the
-     * {@code MIN_RESOLVED_DY} (−1.0) clamp bites and vanilla's half-block gap reappears</b>.
+     * {@code minResolvedDy()} (−1.0) clamp bites and vanilla's half-block gap reappears</b>.
      *
      * <p>This is a PIN, not an endorsement: the clamp is deliberately NOT "fixed" here. It exists
-     * because {@code DY_SPEC.md} CS-CAP caps the whole offset set at {@code MIN_RESOLVED_DY} — the
+     * because {@code DY_SPEC.md} CS-CAP caps the whole offset set at {@code minResolvedDy()} — the
      * deepest cell the offset-aware pick raycast window can target — so a deeper tower settles at
      * the cap rather than rendering somewhere unclickable.
      *
@@ -590,7 +590,7 @@ public final class AnchorLaneSuite {
         // height is now derived — saturation index plus three — and taken as the LARGER of that and
         // the historical six, so no course this row has ever built is removed and the deep leg
         // gains the ones it needs.
-        int saturatedIndex = (int) Math.ceil(-SlabSupport.MIN_RESOLVED_DY / 0.5);
+        int saturatedIndex = (int) Math.ceil(-SlabSupport.minResolvedDy() / 0.5);
         BlockPos[] level = new BlockPos[Math.max(6, saturatedIndex + 3)];
         for (int i = 0; i < level.length; i++) {
             level[i] = ground.up(i + 1);
@@ -608,7 +608,7 @@ public final class AnchorLaneSuite {
         for (int i = 4; i < level.length; i++) {
             deep.append(" L").append(i).append('=').append(dy[i]);
         }
-        String ladderDeep = deep + " (cap=" + SlabSupport.MIN_RESOLVED_DY + ")";
+        String ladderDeep = deep + " (cap=" + SlabSupport.minResolvedDy() + ")";
         System.out.println("[STAGE0-B] anchored tower ladder (store live): " + ladderDeep);
 
         // THE LADDER IS AN ARITHMETIC CONSEQUENCE OF THE CAP, not a list of numbers. Course i seats
@@ -618,7 +618,7 @@ public final class AnchorLaneSuite {
         // were, because they carry the reasons; this one states the shape they share and is what
         // makes the row hold at a deeper cap without being rewritten again.
         for (int i = 0; i < level.length; i++) {
-            double expected = Math.max(-0.5 * i, SlabSupport.MIN_RESOLVED_DY);
+            double expected = Math.max(-0.5 * i, SlabSupport.minResolvedDy());
             ctx.assertTrue(Math.abs(dy[i] - expected) <= EPS,
                     "tower L" + i + " must read max(-0.5*" + i + ", cap) = " + expected + ", got "
                             + dy[i] + " — " + ladderDeep);
@@ -634,9 +634,9 @@ public final class AnchorLaneSuite {
         ctx.assertTrue(Math.abs(dy[2] + 1.0) <= EPS,
                 "tower L2 must seat on L1's top face at -1.0 (compounded through the resolver) — "
                         + ladder);
-        ctx.assertTrue(Math.abs(dy[3] - Math.max(-1.5, SlabSupport.MIN_RESOLVED_DY)) <= EPS,
-                "tower L3 PINS THE CLAMP: its raw seat is -1.5, and MIN_RESOLVED_DY ("
-                        + SlabSupport.MIN_RESOLVED_DY + ") either refuses it — reopening a 0.5 "
+        ctx.assertTrue(Math.abs(dy[3] - Math.max(-1.5, SlabSupport.minResolvedDy())) <= EPS,
+                "tower L3 PINS THE CLAMP: its raw seat is -1.5, and minResolvedDy() ("
+                        + SlabSupport.minResolvedDy() + ") either refuses it — reopening a 0.5 "
                         + "vanilla gap above L2 from the fourth course upward — or lets it stand. "
                         + "This is pinned, NOT fixed — the maintainer rules on the tower's appearance from "
                         + "these values — " + ladder);
@@ -657,17 +657,17 @@ public final class AnchorLaneSuite {
         // saturatedIndex is 2 at the shipped -1.0 cap, so this loop still starts at L2's successor
         // — the same courses it has always covered — and follows the cap when the cap moves.
         for (int i = saturatedIndex; i < level.length; i++) {
-            ctx.assertTrue(Math.abs(dy[i] - SlabSupport.MIN_RESOLVED_DY) <= EPS,
-                    "tower L" + i + " must stay at the MIN_RESOLVED_DY clamp ("
-                            + SlabSupport.MIN_RESOLVED_DY + "), NOT fall to the -0.5 "
+            ctx.assertTrue(Math.abs(dy[i] - SlabSupport.minResolvedDy()) <= EPS,
+                    "tower L" + i + " must stay at the minResolvedDy() clamp ("
+                            + SlabSupport.minResolvedDy() + "), NOT fall to the -0.5 "
                             + "depth-exhaustion floor — " + ladderDeep);
             ctx.assertTrue(SlabAnchorAttachment.isAnchored(w, level[i]),
                     "tower L" + i + " renders lowered, so it must RECORD an anchor (never-pop "
                             + "law) — " + ladderDeep);
             double stored = com.slabbed.anchor.SlabPlacementDyAttachment.storedDy(w, level[i]);
-            ctx.assertTrue(Math.abs(stored - SlabSupport.MIN_RESOLVED_DY) <= EPS,
+            ctx.assertTrue(Math.abs(stored - SlabSupport.minResolvedDy()) <= EPS,
                     "tower L" + i + " must carry a STORED placement height of "
-                            + SlabSupport.MIN_RESOLVED_DY + " — that stored fact is exactly what "
+                            + SlabSupport.minResolvedDy() + " — that stored fact is exactly what "
                             + "terminates the seat walk at depth 1 and keeps "
                             + "MAX_SUPPORT_RESOLVE_DEPTH out of reach, got " + stored + " — "
                             + ladderDeep);

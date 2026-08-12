@@ -87,7 +87,7 @@ public final class SlabbedDiagnosticsTest {
 
     /**
      * Same four assertions this cell has always made, with the magnitudes DERIVED from
-     * {@link SlabSupport#MIN_RESOLVED_DY} instead of written as the literal {@code -1.0}.
+     * {@link SlabSupport#minResolvedDy()} instead of written as the literal {@code -1.0}.
      *
      * <p>The literal was not merely untidy: {@code smooshRisk}'s threshold is the resolver's floor,
      * and the alphabet work moves that floor to {@code -2.0}. Written down twice, this cell would
@@ -99,7 +99,7 @@ public final class SlabbedDiagnosticsTest {
         BlockState lantern = Blocks.LANTERN.getDefaultState();
         BlockState oakSlab = Blocks.OAK_SLAB.getDefaultState();
         BlockState stone = Blocks.STONE.getDefaultState();
-        double floor = SlabSupport.MIN_RESOLVED_DY;
+        double floor = SlabSupport.minResolvedDy();
         double oneStepShort = floor / 2.0d;
         ctx.assertTrue(SlabbedDiagnostics.smooshRisk(lantern, floor),
                 "a decoration lowered to the resolver floor (" + floor + ") is a smoosh "
@@ -126,7 +126,7 @@ public final class SlabbedDiagnosticsTest {
      */
     @GameTest(structure = "fabric-gametest-api-v1:empty")
     public void smooshIgnoresAirButStillFiresOnRealDecorations(TestContext ctx) {
-        double floor = SlabSupport.MIN_RESOLVED_DY;
+        double floor = SlabSupport.minResolvedDy();
         ctx.assertTrue(!SlabbedDiagnostics.smooshRisk(Blocks.AIR.getDefaultState(), floor),
                 "an air cell has no geometry to smoosh — it must NOT flag (4 of 6 SMOOSH rows in "
                         + "a recorded live run were air)");

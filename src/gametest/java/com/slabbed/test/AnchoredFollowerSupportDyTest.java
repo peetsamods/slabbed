@@ -132,7 +132,7 @@ public final class AnchoredFollowerSupportDyTest {
     /**
      * CS-CAP guard: a follower standing on a bottom slab that is ITSELF already <b>at the cap</b>
      * resolves a raw seat of {@code cap - 0.5}, which is outside this line's offset set AND outside
-     * the offset-aware pick-raycast window. It must clamp at {@link SlabSupport#MIN_RESOLVED_DY},
+     * the offset-aware pick-raycast window. It must clamp at {@link SlabSupport#minResolvedDy()},
      * not render somewhere unclickable.
      *
      * <p><b>The fixture is DEEPENED to the cap rather than written against {@code -1.0}</b> (Stage
@@ -159,7 +159,7 @@ public final class AnchoredFollowerSupportDyTest {
         // LADDER TO THE CAP. Each further bottom-slab course deepens by half a block until the
         // clamp refuses; the count is a consequence of the cap, never written down.
         StringBuilder ladder = new StringBuilder("intermediate ladder: -1.0");
-        while (slabDy > SlabSupport.MIN_RESOLVED_DY + EPS) {
+        while (slabDy > SlabSupport.minResolvedDy() + EPS) {
             slab = slab.up();
             place(w, slab, bottomSlab(Blocks.BIRCH_SLAB));
             SlabAnchorAttachment.addAnchor(w, slab, w.getBlockState(slab));
@@ -170,9 +170,9 @@ public final class AnchoredFollowerSupportDyTest {
                             + "the cap and this row would spin — " + ladder);
             slabDy = next;
         }
-        ctx.assertTrue(Math.abs(slabDy - SlabSupport.MIN_RESOLVED_DY) <= EPS,
+        ctx.assertTrue(Math.abs(slabDy - SlabSupport.minResolvedDy()) <= EPS,
                 "fixture: the intermediate support must SATURATE at the cap ("
-                        + SlabSupport.MIN_RESOLVED_DY + "), or the follower above it is not handed "
+                        + SlabSupport.minResolvedDy() + "), or the follower above it is not handed "
                         + "a past-the-cap raw seat and this row proves nothing — " + ladder);
 
         double rawSeat = slabDy - 0.5;
@@ -182,13 +182,13 @@ public final class AnchoredFollowerSupportDyTest {
         double topDy = SlabSupport.getYOffset(w, top, w.getBlockState(top));
         // NON-VACUITY, asserted before the property: a raw seat that is not past the cap would let
         // the clamp assertion below pass without the clamp ever running.
-        ctx.assertTrue(rawSeat < SlabSupport.MIN_RESOLVED_DY - EPS,
+        ctx.assertTrue(rawSeat < SlabSupport.minResolvedDy() - EPS,
                 "FIXTURE IS NO LONGER LOAD-BEARING: the raw seat handed to the follower is "
-                        + rawSeat + ", which the cap (" + SlabSupport.MIN_RESOLVED_DY + ") does not "
+                        + rawSeat + ", which the cap (" + SlabSupport.minResolvedDy() + ") does not "
                         + "refuse. Deepen the ladder — do NOT relax the assertion. " + ladder);
-        ctx.assertTrue(Math.abs(topDy - SlabSupport.MIN_RESOLVED_DY) <= EPS,
+        ctx.assertTrue(Math.abs(topDy - SlabSupport.minResolvedDy()) <= EPS,
                 "CS-CAP: a block on a bottom slab already at the cap resolves a raw " + rawSeat
-                        + " seat and must clamp to " + SlabSupport.MIN_RESOLVED_DY + ", got "
+                        + " seat and must clamp to " + SlabSupport.minResolvedDy() + ", got "
                         + topDy + " — " + ladder);
         ctx.complete();
     }
@@ -548,12 +548,12 @@ public final class AnchoredFollowerSupportDyTest {
         // -1.0, which is the number this control has always asserted and still asserts. At the
         // ruled -2.0 cap the same law lets the -1.5 stand, which is the WYSIWYG-correct height:
         // the support's top face is at Y-0.5 and the block above it now genuinely rests there.
-        double expected = Math.max(supportDy - 0.5, SlabSupport.MIN_RESOLVED_DY);
+        double expected = Math.max(supportDy - 0.5, SlabSupport.minResolvedDy());
         double dy = SlabSupport.getYOffset(w, subject, w.getBlockState(subject));
         ctx.assertTrue(Math.abs(dy - expected) <= EPS,
                 "control (recorder a13): an unstored full block on a " + supportDy + " BOTTOM slab "
                         + "seats half a block below it and is refused no deeper than "
-                        + SlabSupport.MIN_RESOLVED_DY + ", so it must read " + expected + ", got "
+                        + SlabSupport.minResolvedDy() + ", so it must read " + expected + ", got "
                         + dy);
         ctx.complete();
     }

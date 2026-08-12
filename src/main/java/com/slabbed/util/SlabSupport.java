@@ -1146,6 +1146,11 @@ public final class SlabSupport {
 
     private static boolean isLoweredSideSlabSource(BlockView world, BlockPos pos, BlockState state) {
         if (state.getBlock() instanceof SlabBlock) {
+            // A custom slab may resolve as lowered for itself, but it must not propagate that
+            // offset horizontally into a neighboring vanilla slab.
+            if (CompatHooks.shouldSkipOffset(state)) {
+                return false;
+            }
             return isVerticallyLoweredSlabSource(world, pos, state);
         }
         if (!state.isSolidBlock(world, pos)) {
@@ -1512,7 +1517,7 @@ public final class SlabSupport {
             //      extra -0.5 to sit flush on a bottom-type surface (else a half-block gap shows
             //      underneath — the vanilla-TOP-slab-on-terrain bug). BOTTOM/DOUBLE slabs and
             //      non-slab objects are unaffected.
-            // The result is capped at MIN_RESOLVED_DY, so deeper niche combos (e.g. a TOP slab on
+            // The result is capped at minResolvedDy(), so deeper niche combos (e.g. a TOP slab on
             // a mixed slab) settle at the cap rather than being drawn where the offset-aware pick
             // window cannot reach them. (The old wording named the window as {C, C.up, C.down};
             // that stopped being true when the window widened to +/-WINDOW_RADIUS on 2026-08-07.
@@ -1535,7 +1540,7 @@ public final class SlabSupport {
             // would answer differently about the same tower. Byte-identical at -1.0: Math.max
             // agrees with the old branch on every input, NaN and -0.0 included.
             // ClampUnificationTest resolves ONE tower down both lanes and asserts one answer.
-            dy = Math.max(dy, MIN_RESOLVED_DY);
+            dy = Math.max(dy, minResolvedDy());
             return dy;
         }
 
@@ -1853,7 +1858,8 @@ public final class SlabSupport {
     }
 
     /**
-     * The system property that arms the deeper offset alphabet. {@code slabbed.deepDyAlphabet}.
+     * The DEVELOPER OVERRIDE that arms the deeper offset alphabet unconditionally.
+     * {@code slabbed.deepDyAlphabet}.
      *
      * <p>Named on the same pattern as this line's other switches ({@code slabbed.lawGate},
      * {@code slabbed.offsetRaycast}, {@code slabbed.serverHitTolerance}), read ONCE at class init
@@ -1861,23 +1867,30 @@ public final class SlabSupport {
      * call. A Gradle daemon {@code -D} does NOT reach a forked JavaExec, so {@code build.gradle}
      * forwards this name into {@code runGameTest} explicitly, exactly as it already does for
      * {@code slabbed.lawGate}.
+     *
+     * <p><b>Since the consent stage this is an OVERRIDE, not the setting.</b> The setting itself is
+     * per-world consent state ({@link com.slabbed.anchor.DeepDyConsentAttachment}); this property
+     * forces the deep leg ON regardless of what any world says, and it is what lets the suite run
+     * both legs from one tree. It is never consulted to turn the alphabet OFF — a world that has
+     * consented stays consented.
      */
     public static final String DEEP_DY_ALPHABET_PROPERTY = "slabbed.deepDyAlphabet";
 
     /**
-     * THE STAGE 4 GATE — is the deeper offset alphabet armed? <b>Default {@code false}: OFF.</b>
+     * THE DEVELOPER OVERRIDE'S VALUE — is the deeper offset alphabet force-armed for this whole
+     * JVM? <b>Default {@code false}.</b>
      *
-     * <p><b>Why a flag at all, given LAW 1.</b> A cell WITH a stored placement height never moves
-     * when this flips — {@code storedDy} is returned verbatim by {@link #anchoredCellDy} and no
-     * cap is consulted on that path. But every cell WITHOUT one takes the LIVE resolver: worlds
-     * saved before the placement store landed ({@code d4f38510}, this dev cycle), worldgen,
-     * {@code /setblock}, {@code /slabrig}, and {@code LAW.md} lanes A and C-F. Those cells would
-     * visibly drop half a block the first time they re-rendered after an update. The maintainer
-     * ruling of 2026-08-06 explicitly DECLINED to call that "acceptable as a repair": no existing
-     * build shifts under anyone without warning. It stays off until there is a migration or
-     * backfill story.
+     * <p><b>Why the alphabet is gated at all, given LAW 1.</b> A cell WITH a stored placement
+     * height never moves when this flips — {@code storedDy} is returned verbatim by
+     * {@link #anchoredCellDy} and no cap is consulted on that path. But every cell WITHOUT one
+     * takes the LIVE resolver: worlds saved before the placement store landed ({@code d4f38510},
+     * this dev cycle), worldgen, {@code /setblock}, {@code /slabrig}, and {@code LAW.md} lanes A
+     * and C-F. Those cells would visibly drop half a block the first time they re-rendered after an
+     * update. The maintainer ruling of 2026-08-06 explicitly DECLINED to call that "acceptable as a
+     * repair": no existing build shifts under anyone without warning. The maintainer ruling of
+     * 2026-08-09 settled how it does reach players — per-world CONSENT, not a silent migration.
      *
-     * <p><b>What OFF guarantees.</b> {@link #MIN_RESOLVED_DY} reads {@link #SHIPPED_MIN_RESOLVED_DY}
+     * <p><b>What OFF guarantees.</b> {@link #minResolvedDy()} reads {@link #SHIPPED_MIN_RESOLVED_DY}
      * and every other constant on this line was already derived from the window contract rather
      * than from the cap (Stages 1-3), so no other value moves. That the OFF leg is unchanged is not
      * asserted, it is MEASURED: {@code ClampUnificationTest}'s 196-column, 588-reading battery must
@@ -1887,8 +1900,8 @@ public final class SlabSupport {
             Boolean.parseBoolean(System.getProperty(DEEP_DY_ALPHABET_PROPERTY, "false"));
 
     /**
-     * The cap every build has shipped to date, and the value {@link #MIN_RESOLVED_DY} keeps while
-     * {@link #DEEP_DY_ALPHABET} is off.
+     * The cap every build has shipped to date, and the value {@link #minResolvedDy()} keeps while
+     * no world has consented and {@link #DEEP_DY_ALPHABET} is off.
      *
      * <p>Kept as a NAMED constant rather than inlined into the conditional so the OFF leg has
      * something to be identical TO: the tests that pin unchanged behaviour compare against this
@@ -1909,7 +1922,7 @@ public final class SlabSupport {
      * {@link SlabbedOffsetRaycast#WINDOW_RADIUS} as {@code ceil(-DEEPEST_TARGETABLE_DY)}. So the
      * standing identity across the two files is
      *
-     * <blockquote>{@code MIN_RESOLVED_DY >= DEEPEST_TARGETABLE_DY}</blockquote>
+     * <blockquote>{@code minResolvedDy() >= DEEPEST_TARGETABLE_DY}</blockquote>
      *
      * the resolver may never PRODUCE a height deeper than the window undertakes to attribute, or
      * the block is drawn somewhere the player cannot aim. Neither constant can be moved on its own
@@ -1922,7 +1935,7 @@ public final class SlabSupport {
      * on its own: the identity is an INEQUALITY and the slack is deliberate. With the flag ON this
      * constant IS {@link SlabbedOffsetRaycast#DEEPEST_TARGETABLE_DY} — not a second copy of
      * {@code -2.0} but the same field read — so the cap and the window cannot be given different
-     * values, and {@code MIN_RESOLVED_DY == -(window radius)} is a DERIVABLE invariant rather than a
+     * values, and {@code minResolvedDy() == -(window radius)} is a DERIVABLE invariant rather than a
      * magic number. That is the maintainer ruling of 2026-08-06 and the whole reason the ruled cap
      * is {@code -2.0} instead of the {@code -1.5} originally asked for: Stage 0 MEASURED the required
      * radius as 1 at {@code -1.0} and 2 at BOTH {@code -1.5} and {@code -2.0}, so stopping at
@@ -1931,6 +1944,18 @@ public final class SlabSupport {
      * <p>Stages 1-3 exist so that this is a ONE-CONSTANT change: the pick window derives its radius
      * from the window contract, the depth budget derives from the same contract, and every site
      * that refuses to go deeper reads this name. Nothing else moves when the flag flips.
+     *
+     * <p><b>WHY THIS IS A METHOD OVER A CACHED FIELD AND NOT A {@code static final}.</b> The
+     * alphabet is no longer a JVM-wide switch: it is per-world consent state, held server-side by
+     * {@link com.slabbed.anchor.DeepDyConsentAttachment}. A {@code static final} derived from a
+     * system property cannot express "this world said yes and that one did not". But this value is
+     * read on the resolver's hot path — the path Stage 1 measured growing 3.06x on the pick alone —
+     * so it may not become a map lookup, an attachment read, or anything else that touches a world
+     * per call. What it is instead: a single {@code volatile double}, written once when a world
+     * loads (and once on the client when the server's value arrives), read here with one load and
+     * no branch, no boxing and no allocation. {@code DeepDyConsentTest} pins that the hot path
+     * performs ZERO authoritative store reads across a whole pick battery — that is the assertion
+     * that fails the day someone "simplifies" this back into a per-call lookup.
      *
      * <p><b>What "every site" means, and why it is now enforced.</b> Two independent lanes can
      * saturate the same tower: the support resolver ({@link #loweredFollowerDy} and the column
@@ -1947,8 +1972,47 @@ public final class SlabSupport {
      * column walk's historical seat constant. Only a site whose job is to REFUSE TO GO DEEPER
      * reads this name.
      */
-    public static final double MIN_RESOLVED_DY =
+    private static volatile double minResolvedDy =
             DEEP_DY_ALPHABET ? SlabbedOffsetRaycast.DEEPEST_TARGETABLE_DY : SHIPPED_MIN_RESOLVED_DY;
+
+    /**
+     * Reads THE CAP. See the field above for what it is and why it is cached rather than resolved.
+     *
+     * <p>One volatile {@code double} load. No branch, no world, no allocation.
+     */
+    public static double minResolvedDy() {
+        return minResolvedDy;
+    }
+
+    /**
+     * Sets the cap for the world this JVM currently has open. <b>Called only by
+     * {@link com.slabbed.anchor.DeepDyConsentAttachment}</b>, on world load (server side) and when
+     * the server's value arrives (client side).
+     *
+     * <p><b>The developer override wins and may only ever arm, never disarm.</b> With
+     * {@code -Dslabbed.deepDyAlphabet=true} the suite's deep leg must exercise the deep cap in
+     * every world including an unconsented one, so this refuses to lower the cap in that mode.
+     * Without the override the value is exactly what the world said.
+     *
+     * <p>The derivation is written HERE, once, and never at a call site: armed, the cap IS
+     * {@link SlabbedOffsetRaycast#DEEPEST_TARGETABLE_DY} — the same field, not a second copy of the
+     * number — so {@code cap == -(window radius)} cannot be written wrong.
+     */
+    public static void armDeepAlphabet(boolean armed) {
+        minResolvedDy = capFor(armed);
+    }
+
+    /**
+     * The derivation on its own, as a PURE function of the consent bit — so a test can exercise
+     * both answers without writing the live cap that every other test in the suite is reading.
+     * That is not a convenience: mutating the cached cap mid-suite would make neighbouring cells
+     * order-dependent, and an order-dependent law suite is a false green waiting to happen.
+     */
+    public static double capFor(boolean armed) {
+        return (armed || DEEP_DY_ALPHABET)
+                ? SlabbedOffsetRaycast.DEEPEST_TARGETABLE_DY
+                : SHIPPED_MIN_RESOLVED_DY;
+    }
 
     /**
      * THE DEEPEST ONE COURSE CAN ADD — the worst-case seat drop a single level of the walk can
@@ -1961,7 +2025,7 @@ public final class SlabSupport {
      * and a budget of {@code ceil(-cap / 0.5)} courses is exactly enough to reach {@code cap}
      * from {@code 0.0}.
      *
-     * <p><b>This is a SHAPE, not a refusal — do NOT move it with {@link #MIN_RESOLVED_DY}</b>,
+     * <p><b>This is a SHAPE, not a refusal — do NOT move it with {@link #minResolvedDy()}</b>,
      * for the reason the column walk's own {@code -1.0} records at length: "half a block of slab
      * top face" is a fact about geometry and stays {@code 0.5} at any cap. It is written in one
      * other place, the half-height arm itself, and the two are pinned together by measurement
@@ -1978,20 +2042,20 @@ public final class SlabSupport {
      * down before {@link #loweredFollowerDy} refuses.
      *
      * <p><b>DERIVED FROM THE CAP, not chosen (Stage 3, 2026-08-07).</b> It used to be a bare
-     * {@code 4} justified by a sentence — "the clamp at {@code MIN_RESOLVED_DY} means two levels
+     * {@code 4} justified by a sentence — "the clamp at {@code minResolvedDy()} means two levels
      * already saturate" — which is a sizing ASSUMPTION about a constant living in another
      * paragraph, and the single most reliable way for the two to drift apart. The budget is now
      * computed the way {@link SlabbedOffsetRaycast#WINDOW_RADIUS} is computed from
      * {@link SlabbedOffsetRaycast#DEEPEST_TARGETABLE_DY} (Stage 1) and the way every clamp site
-     * now reads {@link #MIN_RESOLVED_DY} (Stage 2), so all three move together:
+     * now reads {@link #minResolvedDy()} (Stage 2), so all three move together:
      *
      * <blockquote>{@code ceil(-cap / DEEPEST_SEAT_DROP_PER_COURSE)} courses to SATURATE, {@code + 2}
      * headroom</blockquote>
      *
      * <p><b>Which cap.</b> {@link SlabbedOffsetRaycast#DEEPEST_TARGETABLE_DY}, the deepest height
-     * this build undertakes to make clickable — NOT {@link #MIN_RESOLVED_DY}, the deepest height
+     * this build undertakes to make clickable — NOT {@link #minResolvedDy()}, the deepest height
      * it will currently resolve. The two are an inequality today by design
-     * ({@code MIN_RESOLVED_DY >= DEEPEST_TARGETABLE_DY}); sizing the budget from the deeper of the
+     * ({@code minResolvedDy() >= DEEPEST_TARGETABLE_DY}); sizing the budget from the deeper of the
      * pair means the walk already carries the ruled {@code -2.0} cap before the cap arrives, which
      * is the same "lead the alphabet, ship the cost alone" shape Stage 1 used for the pick window.
      * When Stage 4 closes the inequality this constant does not move — it is already right.
@@ -2027,7 +2091,7 @@ public final class SlabSupport {
      * <p>Floors at {@code -0.5}: when the support resolves to nothing deeper (a flat bottom slab,
      * a persisted anchor whose support was broken away, air, a TOP/DOUBLE slab), every caller
      * keeps the exact value it returned before this resolver existed. Clamped at
-     * {@link #MIN_RESOLVED_DY}.
+     * {@link #minResolvedDy()}.
      *
      * <p>Never calls {@link #getYOffset} — safe inside the {@code IN_GET_Y_OFFSET} guard.
      */
@@ -2075,17 +2139,17 @@ public final class SlabSupport {
         //
         // Invisible at today's cap and provably so — MEASURED, not argued, by Stage 0's B-1 and
         // re-measured by SupportDepthBudgetTest: every consumer of this value either clamps it to
-        // MIN_RESOLVED_DY after subtracting one course's drop, or compares it against a threshold
-        // that -0.5 and MIN_RESOLVED_DY are on the same side of, for as long as
-        // MIN_RESOLVED_DY == -(one course's drop) * 2. It stops being invisible the instant the
+        // minResolvedDy() after subtracting one course's drop, or compares it against a threshold
+        // that -0.5 and minResolvedDy() are on the same side of, for as long as
+        // minResolvedDy() == -(one course's drop) * 2. It stops being invisible the instant the
         // cap moves, which is exactly why it is repaired BEFORE Stage 4 rather than with it.
         if (depth >= MAX_SUPPORT_RESOLVE_DEPTH) {
-            return MIN_RESOLVED_DY;
+            return minResolvedDy();
         }
         double seat = supportSeatDy(world, pos.down(), depth + 1);
         if (Double.isFinite(seat)) {
             if (seat < -0.5 - 1.0e-6) {
-                return Math.max(seat, MIN_RESOLVED_DY);
+                return Math.max(seat, minResolvedDy());
             }
             // FLUSH-SEAT GUARD (live pass 2026-08-05, "interpenetration row"): a
             // seat of exactly 0.0 means the support's top face is AT the grid line (flush solid
@@ -2881,20 +2945,20 @@ public final class SlabSupport {
                 // is strictly deeper than the constant it replaces, so a NaN seat, a flush seat, or
                 // any shallower reading keeps the historical number byte-identical. The BOTTOM arm
                 // is therefore provably unreachable by this change: its constant already equals
-                // MIN_RESOLVED_DY, so nothing can be strictly deeper and survive the clamp.
+                // minResolvedDy(), so nothing can be strictly deeper and survive the clamp.
                 //
                 // THAT LAST SENTENCE IS CONTINGENT ON THE CAP'S VALUE, NOT ON THIS ARM (noted
                 // 2026-08-07, Stage 2). The -1.0 below is a SHAPE — "a bottom slab at -0.5 presents
-                // its top face one full block down" — while MIN_RESOLVED_DY is a REFUSAL. The two
+                // its top face one full block down" — while minResolvedDy() is a REFUSAL. The two
                 // are equal today by coincidence of magnitude only, which is exactly why this
-                // constant must NOT be rewritten to read MIN_RESOLVED_DY: that would move a shape
+                // constant must NOT be rewritten to read minResolvedDy(): that would move a shape
                 // whenever the cap moved. What does change when the cap deepens is the
                 // unreachability argument above — the BOTTOM arm becomes reachable, correctly, and
                 // nothing here needs editing, but do not re-derive "provably unreachable" from it.
                 double historicalDy = isBottomSlab(cur) ? -1.0 : -0.5;
                 double seatDy = supportSeatDy(world, cursor, depth + 1);
                 if (Double.isFinite(seatDy) && seatDy < historicalDy - 1.0e-6) {
-                    return Math.max(seatDy, MIN_RESOLVED_DY);
+                    return Math.max(seatDy, minResolvedDy());
                 }
                 return historicalDy;
             }
@@ -2921,7 +2985,7 @@ public final class SlabSupport {
             // "lowered" and this would answer 0.0, collapsing the caller onto its -0.5 default.
             double standingObjectDy = loweredStandingObjectDy(world, cursor, cur);
             if (Double.isFinite(standingObjectDy)) {
-                return Math.max(standingObjectDy, MIN_RESOLVED_DY);
+                return Math.max(standingObjectDy, minResolvedDy());
             }
             cursor = cursor.down();
         }

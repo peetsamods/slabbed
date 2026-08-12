@@ -26,7 +26,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * The dy cap/window suite — every test of the {@code MIN_RESOLVED_DY} /
+ * The dy cap/window suite — every test of the {@code minResolvedDy()} /
  * {@code DEEPEST_TARGETABLE_DY} / {@code WINDOW_RADIUS} contract in one place: clamp-site
  * unification with its byte-identity fingerprints (both {@code slabbed.deepDyAlphabet} legs),
  * the window-radius characterisation measurements, the depth-budget derivation and its
@@ -42,9 +42,9 @@ public final class DyWindowSuite {
     //  * STAGE 2 — <b>the two clamps are one clamp.</b>
     //  *
     //  * <p>{@code SlabSupport} refuses to resolve a height deeper than
-    //  * {@link SlabSupport#MIN_RESOLVED_DY} in more than one place, and until 2026-08-07 one of those
+    //  * {@link SlabSupport#minResolvedDy()} in more than one place, and until 2026-08-07 one of those
     //  * places did not say so. The support resolver clamps by name
-    //  * ({@code Math.max(seat, MIN_RESOLVED_DY)}); the direct-custom surface lane in
+    //  * ({@code Math.max(seat, minResolvedDy())}); the direct-custom surface lane in
     //  * {@code getYOffsetInner} — the lane a Terrain Slabs surface takes — wrote the magnitude out by
     //  * hand as {@code if (dy < -1.0) dy = -1.0;}. Both answer {@code -1.0} today, so nothing was
     //  * visibly wrong. The defect was latent: move the constant and the anonymous site keeps the old
@@ -78,7 +78,7 @@ public final class DyWindowSuite {
     //  *
     //  * <p><b>{@code -1.5} is the deepest pre-clamp value this build can present to either site</b>, and
     //  * that is a consequence of the clamp itself: every course of a tower is clamped as it resolves, so
-    //  * no support can ever hand its follower a number deeper than {@code MIN_RESOLVED_DY - 0.5}. The
+    //  * no support can ever hand its follower a number deeper than {@code minResolvedDy() - 0.5}. The
     //  * fixture asserts that the tower is deep enough to saturate rather than assuming it, so the day
     //  * the cap moves past {@code -1.5} this cell goes RED and says what to do about it instead of
     //  * passing vacuously.
@@ -112,7 +112,7 @@ public final class DyWindowSuite {
      * own non-vacuity guard said so in as many words when the flag was first armed.
      */
     private static final int SATURATING_OAK_COURSES =
-            (int) Math.ceil(-SlabSupport.MIN_RESOLVED_DY / SEAT_DROP_PER_COURSE);
+            (int) Math.ceil(-SlabSupport.minResolvedDy() / SEAT_DROP_PER_COURSE);
 
     /**
      * The pre-clamp value both lanes are handed by the tower below. Written down because both
@@ -121,7 +121,7 @@ public final class DyWindowSuite {
      * deepest number any support can hand its follower is exactly one course past the cap.
      */
     private static final double RAW_TOWER_DY =
-            SlabSupport.MIN_RESOLVED_DY - SEAT_DROP_PER_COURSE;
+            SlabSupport.minResolvedDy() - SEAT_DROP_PER_COURSE;
 
     // ─────────────────────────────────────────────────────────────────────────────
     // THE STAGE 2 CELL
@@ -133,7 +133,7 @@ public final class DyWindowSuite {
      * <p>Column (bottom to top): stone / {@code terrain_slabs:test_slab} BOTTOM / oak slab
      * ({@code -0.5}) / oak slab, anchored ({@code -1.0}). Two subjects rest on that top course in
      * two identical columns: an oak slab (named clamp) and a crafting table (formerly anonymous
-     * clamp). Both are handed {@code -1.5}; both must report {@link SlabSupport#MIN_RESOLVED_DY}.
+     * clamp). Both are handed {@code -1.5}; both must report {@link SlabSupport#minResolvedDy()}.
      *
      * <p>Mutation-proved: with the cap moved to {@code -2.0} and the direct-custom site left
      * written out by hand, the slab subject reports {@code -1.5} and the crafting table reports
@@ -159,13 +159,13 @@ public final class DyWindowSuite {
         ctx.assertTrue(Math.abs(dy(w, slabGround.up(2)) + 0.5) <= EPS,
                 "premise: the tower's third course must sit at -0.5 on the Terrain Slabs surface, "
                         + "got " + dy(w, slabGround.up(2)));
-        ctx.assertTrue(Math.abs(supportDy - SlabSupport.MIN_RESOLVED_DY) <= EPS,
+        ctx.assertTrue(Math.abs(supportDy - SlabSupport.minResolvedDy()) <= EPS,
                 "premise: the course both subjects rest on must resolve to the cap ("
-                        + SlabSupport.MIN_RESOLVED_DY + ") — that is the number that makes BOTH "
+                        + SlabSupport.minResolvedDy() + ") — that is the number that makes BOTH "
                         + "pre-clamp values " + RAW_TOWER_DY + ", got " + supportDy);
-        ctx.assertTrue(Math.abs(storedSupportDy - SlabSupport.MIN_RESOLVED_DY) <= EPS,
+        ctx.assertTrue(Math.abs(storedSupportDy - SlabSupport.minResolvedDy()) <= EPS,
                 "premise: that course must carry a STORED placement height of "
-                        + SlabSupport.MIN_RESOLVED_DY + ", or the direct-custom lane reads its "
+                        + SlabSupport.minResolvedDy() + ", or the direct-custom lane reads its "
                         + "support through a different arm and the two pre-clamp values stop "
                         + "matching, got " + storedSupportDy);
 
@@ -187,7 +187,7 @@ public final class DyWindowSuite {
         double slabDy = dy(w, slabSubject);
         double tableDy = dy(w, tableSubject);
         String measured = "namedClampLane=" + slabDy + " directCustomLane=" + tableDy
-                + " cap=" + SlabSupport.MIN_RESOLVED_DY + " rawBoth=" + RAW_TOWER_DY;
+                + " cap=" + SlabSupport.minResolvedDy() + " rawBoth=" + RAW_TOWER_DY;
         System.out.println("[STAGE2-CLAMP] " + measured);
 
         // ── THE ASSERTION THIS CELL EXISTS FOR ──────────────────────────────────────────────
@@ -196,25 +196,25 @@ public final class DyWindowSuite {
                         + "lane were handed the same pre-clamp " + RAW_TOWER_DY + " for the same "
                         + "tower and returned different heights, so a Terrain Slabs tower and a "
                         + "vanilla tower now sit at different depths in the same world. Both sites "
-                        + "must read SlabSupport.MIN_RESOLVED_DY — " + measured);
+                        + "must read SlabSupport.minResolvedDy() — " + measured);
 
         // ── NON-VACUITY, asserted AFTER the property so a half-fix reports as a half-fix ─────
         // Order matters: if this guard came first, moving the cap without unifying the sites
         // would abort here and the disagreement above would never be reached — the run would
         // blame the fixture for a real product defect. Assert the property, then prove the
         // assertion was load-bearing.
-        ctx.assertTrue(RAW_TOWER_DY < SlabSupport.MIN_RESOLVED_DY - EPS,
+        ctx.assertTrue(RAW_TOWER_DY < SlabSupport.minResolvedDy() - EPS,
                 "FIXTURE IS NO LONGER LOAD-BEARING: this cell proves the two clamps agree by "
                         + "making both saturate, and the deepest pre-clamp value this build can "
                         + "present is " + RAW_TOWER_DY + ", which is no longer past the cap ("
-                        + SlabSupport.MIN_RESOLVED_DY + "). Add courses to buildTower until the "
+                        + SlabSupport.minResolvedDy() + "). Add courses to buildTower until the "
                         + "raw value is past the new cap, and update RAW_TOWER_DY — do NOT delete "
                         + "this cell, it is what keeps the two clamp sites in step. — " + measured);
 
-        ctx.assertTrue(Math.abs(slabDy - SlabSupport.MIN_RESOLVED_DY) <= EPS,
-                "the support resolver must saturate at MIN_RESOLVED_DY — " + measured);
-        ctx.assertTrue(Math.abs(tableDy - SlabSupport.MIN_RESOLVED_DY) <= EPS,
-                "the direct-custom surface lane must saturate at MIN_RESOLVED_DY, not at a "
+        ctx.assertTrue(Math.abs(slabDy - SlabSupport.minResolvedDy()) <= EPS,
+                "the support resolver must saturate at minResolvedDy() — " + measured);
+        ctx.assertTrue(Math.abs(tableDy - SlabSupport.minResolvedDy()) <= EPS,
+                "the direct-custom surface lane must saturate at minResolvedDy(), not at a "
                         + "magnitude of its own — " + measured);
 
         ctx.complete();
@@ -231,10 +231,10 @@ public final class DyWindowSuite {
      */
     @GameTest(structure = "fabric-gametest-api-v1:empty")
     public void theCapAndTheTargetableDepthCannotMoveApart(TestContext ctx) {
-        double cap = SlabSupport.MIN_RESOLVED_DY;
+        double cap = SlabSupport.minResolvedDy();
         double targetable = SlabbedOffsetRaycast.DEEPEST_TARGETABLE_DY;
         int radius = SlabbedOffsetRaycast.WINDOW_RADIUS;
-        String measured = "MIN_RESOLVED_DY=" + cap + " DEEPEST_TARGETABLE_DY=" + targetable
+        String measured = "minResolvedDy()=" + cap + " DEEPEST_TARGETABLE_DY=" + targetable
                 + " WINDOW_RADIUS=" + radius;
         System.out.println("[STAGE2-IDENTITY] " + measured);
 
@@ -275,14 +275,14 @@ public final class DyWindowSuite {
         String fingerprint = battery(ctx);
         System.out.println("[STAGE2-FINGERPRINT] len=" + fingerprint.length()
                 + " deepDyAlphabet=" + SlabSupport.DEEP_DY_ALPHABET
-                + " cap=" + SlabSupport.MIN_RESOLVED_DY);
+                + " cap=" + SlabSupport.minResolvedDy());
         System.out.println("[STAGE2-FINGERPRINT] " + fingerprint);
 
         ctx.assertTrue(fingerprint.equals(PINNED_FINGERPRINT),
                 "STAGE 2 WAS NOT INERT, or the Stage 4 flag has leaked into a shape it must not "
                         + "reach. The resolver's answers over the 196-column battery differ from "
                         + "the values measured before the clamp sites were unified. Running cap is "
-                        + SlabSupport.MIN_RESOLVED_DY + " (deepDyAlphabet="
+                        + SlabSupport.minResolvedDy() + " (deepDyAlphabet="
                         + SlabSupport.DEEP_DY_ALPHABET + "). First difference at index "
                         + firstDifference(fingerprint, PINNED_FINGERPRINT)
                         + ".\n  pinned   = " + PINNED_FINGERPRINT
@@ -319,7 +319,7 @@ public final class DyWindowSuite {
         boolean deep = SlabSupport.DEEP_DY_ALPHABET;
         String pinned = deep ? PINNED_DEEP_BATTERY_ON : PINNED_DEEP_BATTERY_OFF;
         System.out.println("[STAGE4-DEEPBATTERY] len=" + fingerprint.length()
-                + " deepDyAlphabet=" + deep + " cap=" + SlabSupport.MIN_RESOLVED_DY);
+                + " deepDyAlphabet=" + deep + " cap=" + SlabSupport.minResolvedDy());
         System.out.println("[STAGE4-DEEPBATTERY] " + fingerprint);
 
         ctx.assertTrue(fingerprint.equals(pinned),
@@ -328,7 +328,7 @@ public final class DyWindowSuite {
                         : "THE SHIPPED DEFAULT MOVED. A column deep enough for the cap to bite "
                                 + "answers differently than it did before the Stage 4 flag "
                                 + "existed, which is the leak this flag exists to prevent. ")
-                        + "cap=" + SlabSupport.MIN_RESOLVED_DY + ", first difference at index "
+                        + "cap=" + SlabSupport.minResolvedDy() + ", first difference at index "
                         + firstDifference(fingerprint, pinned)
                         + ".\n  pinned   = " + pinned
                         + "\n  measured = " + fingerprint);
@@ -656,7 +656,7 @@ public final class DyWindowSuite {
     //  * returns it verbatim — that IS LAW 1, and it is the only seam that can put a subject at a
     //  * magnitude the live resolver would clamp away. Every cell below writes the height straight into
     //  * the store with {@code SlabPlacementDyAttachment.record} and hard-asserts that
-    //  * {@code getYOffset} hands it back unchanged. {@code MIN_RESOLVED_DY} is never touched, and no cell
+    //  * {@code getYOffset} hands it back unchanged. {@code minResolvedDy()} is never touched, and no cell
     //  * asks the resolver to PRODUCE a deep value.
     //  *
     //  * <p><b>Three measurements, three answers.</b>
@@ -830,7 +830,7 @@ public final class DyWindowSuite {
 
     /**
      * A-3 — <b>the ruling's derivation, turned into a measurement.</b> The maintainer ruled the cap at
-     * {@code -2.0} rather than {@code -1.5} so that {@code MIN_RESOLVED_DY == -(window radius)}
+     * {@code -2.0} rather than {@code -1.5} so that {@code minResolvedDy() == -(window radius)}
      * stays derivable. This cell measures the required radius for every subject shape at each
      * candidate cap and pins the identity, so the constant is never magic again.
      *
@@ -867,11 +867,11 @@ public final class DyWindowSuite {
         System.out.println("[STAGE0-A] required-radius table:" + table);
 
         ctx.assertTrue(expected[2] == 2,
-                "the identity MIN_RESOLVED_DY == -(window radius) holds at -2.0 with radius 2 —"
+                "the identity minResolvedDy() == -(window radius) holds at -2.0 with radius 2 —"
                         + table);
 
         // INVERTED BY STAGE 1 (was: assertTrue(TODAYS_WINDOW_RADIUS == 1), "which is why
-        // MIN_RESOLVED_DY is -1.0"). The window now stands at the radius the RULED cap needs, ahead
+        // minResolvedDy() is -1.0"). The window now stands at the radius the RULED cap needs, ahead
         // of the alphabet that will use it — so the identity holds as an INEQUALITY during stages
         // 1-3 and closes to equality at Stage 4. Both halves are asserted: the radius is the one
         // the ruled cap derives, and it is not SHALLOWER than the cap the resolver may produce.
@@ -916,7 +916,7 @@ public final class DyWindowSuite {
         // saturation once the cap can be -2.0 (saturation moves from index 2 to index 4). The
         // historical six is a floor, so no course this row ever measured is removed.
         BlockPos[] level =
-                new BlockPos[Math.max(6, (int) Math.ceil(-SlabSupport.MIN_RESOLVED_DY / 0.5) + 3)];
+                new BlockPos[Math.max(6, (int) Math.ceil(-SlabSupport.minResolvedDy() / 0.5) + 3)];
         for (int i = 0; i < level.length; i++) {
             level[i] = ground.up(i + 1);
             w.setBlockState(level[i], bottomSlab(Blocks.OAK_SLAB), Block.NOTIFY_LISTENERS);
@@ -946,12 +946,12 @@ public final class DyWindowSuite {
         // reads -1.0 — the exact assertion this loop has always made. At the ruled -2.0 cap the
         // ladder runs 0.0 / -0.5 / -1.0 / -1.5 / -2.0 / -2.0, which is what MEASUREMENT B becomes.
         for (int i = 2; i < level.length; i++) {
-            double expected = Math.max(-0.5 * i, SlabSupport.MIN_RESOLVED_DY);
+            double expected = Math.max(-0.5 * i, SlabSupport.minResolvedDy());
             ctx.assertTrue(Math.abs(dy[i] - expected) <= EPS,
                     "MEASUREMENT B: pre-store L" + i + " must read max(-0.5*" + i + ", cap) = "
-                            + expected + " (cap " + SlabSupport.MIN_RESOLVED_DY + ") —" + ladder);
+                            + expected + " (cap " + SlabSupport.minResolvedDy() + ") —" + ladder);
         }
-        int saturatedIndex = (int) Math.ceil(-SlabSupport.MIN_RESOLVED_DY / 0.5);
+        int saturatedIndex = (int) Math.ceil(-SlabSupport.minResolvedDy() / 0.5);
         ctx.assertTrue(saturatedIndex < level.length,
                 "fixture: the ladder must be tall enough to SATURATE, or 'pre-store saturates at "
                         + "the clamp' is untested — saturation needs index " + saturatedIndex
@@ -1016,7 +1016,7 @@ public final class DyWindowSuite {
         // max(-0.5*i, cap) ladder as the live read. Written that way at Stage 4 rather than as a
         // literal -1.0; the values at the shipped cap are unchanged.
         for (int i = 2; i < level.length; i++) {
-            double expected = Math.max(-0.5 * i, SlabSupport.MIN_RESOLVED_DY);
+            double expected = Math.max(-0.5 * i, SlabSupport.minResolvedDy());
             double stored = SlabPlacementDyAttachment.storedDy(w, level[i]);
             ctx.assertTrue(Math.abs(stored - expected) <= EPS,
                     "MEASUREMENT B: L" + i + " must carry a STORED height of " + expected
@@ -1031,7 +1031,7 @@ public final class DyWindowSuite {
      * B-3 — <b>at a deep magnitude the CLAMP, not the depth budget, is the binding constraint.</b>
      * A real anchored tower course is given a stored {@code -2.0} (the ruling's proposed cap) and
      * the course above it is asked to seat on it. LAW 1 hands the support its {@code -2.0} back
-     * verbatim; the follower asks for the seat, gets {@code -2.5}, and {@code MIN_RESOLVED_DY}
+     * verbatim; the follower asks for the seat, gets {@code -2.5}, and {@code minResolvedDy()}
      * flattens it to {@code -1.0}. The depth budget is not involved — the walk terminates at depth
      * 1 on the support's stored fact.
      *
@@ -1089,23 +1089,23 @@ public final class DyWindowSuite {
         // measures a 0.5 hole: that shrinkage is exactly what Stage 4 buys, and it is measured here
         // rather than claimed.
         double rawSeat = supportDy - 0.5;
-        double expectedFollower = Math.max(rawSeat, SlabSupport.MIN_RESOLVED_DY);
+        double expectedFollower = Math.max(rawSeat, SlabSupport.minResolvedDy());
         double expectedGap = expectedFollower - rawSeat;
-        ctx.assertTrue(rawSeat < SlabSupport.MIN_RESOLVED_DY - EPS,
+        ctx.assertTrue(rawSeat < SlabSupport.minResolvedDy() - EPS,
                 "FIXTURE IS NO LONGER LOAD-BEARING: the raw seat " + rawSeat + " is not past the "
-                        + "cap (" + SlabSupport.MIN_RESOLVED_DY + "), so this cell would measure no "
+                        + "cap (" + SlabSupport.minResolvedDy() + "), so this cell would measure no "
                         + "clamp at all. Deepen the stored support — do not relax the row.");
         ctx.assertTrue(Math.abs(followerDy - expectedFollower) <= EPS,
-                "MEASUREMENT B: the follower's raw seat is " + rawSeat + " and MIN_RESOLVED_DY ("
-                        + SlabSupport.MIN_RESOLVED_DY + ") flattens it to " + expectedFollower
+                "MEASUREMENT B: the follower's raw seat is " + rawSeat + " and minResolvedDy() ("
+                        + SlabSupport.minResolvedDy() + ") flattens it to " + expectedFollower
                         + ", got " + followerDy + ". The depth budget is not involved: the walk "
                         + "terminated at depth 1 on the support's stored fact.");
         ctx.assertTrue(Math.abs(gap - expectedGap) <= EPS,
                 "MEASUREMENT B: the clamp opens a measured " + gap + "-block hole between a -2.0 "
                         + "support's top face and the block resting on it; at cap "
-                        + SlabSupport.MIN_RESOLVED_DY + " that hole must be " + expectedGap
+                        + SlabSupport.minResolvedDy() + " that hole must be " + expectedGap
                         + ". Stage 4 cannot ship the deeper alphabet without moving "
-                        + "MIN_RESOLVED_DY in the same change.");
+                        + "minResolvedDy() in the same change.");
         ctx.complete();
     }
 
@@ -1416,7 +1416,7 @@ public final class DyWindowSuite {
     //  *
     //  * <h2>⚠️ AND STAGE 3'S OWN FIX TURNS OUT TO HAVE BEEN VALUE-COINCIDENTAL (Stage 4, 2026-08-07)</h2>
     //  *
-    //  * <p>Exhaustion now returns {@code MIN_RESOLVED_DY}, which is right for a DROPPING tower: you may
+    //  * <p>Exhaustion now returns {@code minResolvedDy()}, which is right for a DROPPING tower: you may
     //  * only ever round a truncated descent DOWN. But a PASS-THROUGH stack does not descend, so the
     //  * truthful answer for a truncated pass-through walk is <em>the value the stack is standing on</em>,
     //  * and exhaustion substitutes the cap for it. At the shipped {@code -1.0} cap those two numbers are
@@ -1490,11 +1490,11 @@ public final class DyWindowSuite {
 
         int cap = SlabSupport.MAX_SUPPORT_RESOLVE_DEPTH;
         double targetable = SlabbedOffsetRaycast.DEEPEST_TARGETABLE_DY;
-        double resolved = SlabSupport.MIN_RESOLVED_DY;
+        double resolved = SlabSupport.minResolvedDy();
         String measured = "L0=" + l0 + " L1=" + l1 + " dropPerCourse=" + measuredDropPerCourse
                 + " MAX_SUPPORT_RESOLVE_DEPTH=" + cap
                 + " DEEPEST_TARGETABLE_DY=" + targetable
-                + " MIN_RESOLVED_DY=" + resolved;
+                + " minResolvedDy()=" + resolved;
         System.out.println("[STAGE3-DERIVATION] " + measured);
 
         ctx.assertTrue(Math.abs(l0) <= EPS,
@@ -1511,7 +1511,7 @@ public final class DyWindowSuite {
                         + "drops a different amount than DEEPEST_SEAT_DROP_PER_COURSE says — "
                         + measured);
 
-        // SUFFICIENCY AGAINST THE CAP THAT IS ACTUALLY IN FORCE. MIN_RESOLVED_DY >=
+        // SUFFICIENCY AGAINST THE CAP THAT IS ACTUALLY IN FORCE. minResolvedDy() >=
         // DEEPEST_TARGETABLE_DY is an inequality during Stages 1-3 and closes at Stage 4, so a
         // budget sized for the deeper of the two is necessarily enough for the shallower.
         int neededForTodaysCap = (int) Math.ceil(-resolved / measuredDropPerCourse) + 2;
@@ -1519,7 +1519,7 @@ public final class DyWindowSuite {
                 "the budget must be at least what today's IN-FORCE cap needs (" + neededForTodaysCap
                         + "), got " + cap + " — " + measured);
         ctx.assertTrue(resolved >= targetable - EPS,
-                "the standing identity MIN_RESOLVED_DY >= DEEPEST_TARGETABLE_DY must hold, or the "
+                "the standing identity minResolvedDy() >= DEEPEST_TARGETABLE_DY must hold, or the "
                         + "budget is sized from the wrong end — " + measured);
         ctx.complete();
     }
@@ -1552,7 +1552,7 @@ public final class DyWindowSuite {
         System.out.println("[STAGE3-MONOTONIC] " + ladder);
 
         assertNonIncreasing(ctx, dy, ladder);
-        ctx.assertTrue(Math.abs(dy[courses - 1] - SlabSupport.MIN_RESOLVED_DY) <= EPS,
+        ctx.assertTrue(Math.abs(dy[courses - 1] - SlabSupport.minResolvedDy()) <= EPS,
                 "premise: the top course of a tower this tall must have saturated at the cap, or "
                         + "the tower is not deep enough to reach the budget at all — " + ladder);
         ctx.complete();
@@ -1636,7 +1636,7 @@ public final class DyWindowSuite {
         // production behaviour change that owes its own RED-first pass. See internal-notes row
         // 1o.
         //
-        // WHAT WAS MEASURED. Exhaustion returns MIN_RESOLVED_DY (Stage 3 changed it from a bare
+        // WHAT WAS MEASURED. Exhaustion returns minResolvedDy() (Stage 3 changed it from a bare
         // -0.5 for a good reason: in a DROPPING tower, truncating a descent may only ever round
         // DOWN). But a PASS-THROUGH stack does not descend — every full-height course hands its
         // support's dy up unchanged — so the truthful answer for a truncated pass-through walk is
@@ -1663,14 +1663,14 @@ public final class DyWindowSuite {
                         + "If the exhaustion path has been repaired, delete this branch and let the "
                         + "unconditional pass-through assertion above run in both legs — do not "
                         + "leave a characterisation standing over a fixed defect — " + ladder);
-        ctx.assertTrue(Math.abs(dy[firstDivergent] - SlabSupport.MIN_RESOLVED_DY) <= EPS,
+        ctx.assertTrue(Math.abs(dy[firstDivergent] - SlabSupport.minResolvedDy()) <= EPS,
                 "CHARACTERISED (Stage 4): the first course past the depth budget must read the "
-                        + "exhaustion return, which is MIN_RESOLVED_DY ("
-                        + SlabSupport.MIN_RESOLVED_DY + "); it reads " + dy[firstDivergent]
+                        + "exhaustion return, which is minResolvedDy() ("
+                        + SlabSupport.minResolvedDy() + "); it reads " + dy[firstDivergent]
                         + ". If this is neither the pass-through value nor the cap, the exhaustion "
                         + "path has changed shape and this row no longer describes it — " + ladder);
         for (int i = firstDivergent; i < level.length; i++) {
-            ctx.assertTrue(Math.abs(dy[i] - SlabSupport.MIN_RESOLVED_DY) <= EPS,
+            ctx.assertTrue(Math.abs(dy[i] - SlabSupport.minResolvedDy()) <= EPS,
                     "CHARACTERISED (Stage 4): once the exhaustion value enters a pass-through "
                             + "stack every course above carries it unchanged, so L" + i
                             + " must equal the cap; it reads " + dy[i] + " — " + ladder);
@@ -1779,7 +1779,7 @@ public final class DyWindowSuite {
             lookahead.append(" k=").append(k)
                     .append(" truncatesAtL").append(k - budget)
                     .append(" whoseTruthIs").append(dy[k - budget])
-                    .append(" substituted").append(SlabSupport.MIN_RESOLVED_DY)
+                    .append(" substituted").append(SlabSupport.minResolvedDy())
                     .append(" coursesBelowTheTruncationPoint=").append(k - budget).append(';');
         }
         System.out.println(lookahead);
@@ -1799,9 +1799,9 @@ public final class DyWindowSuite {
                         + "lower its follower by nothing at all — that is what makes it a cliff "
                         + "rather than a legal step. Seat at L" + (cliff - 1) + " allows "
                         + allowed[cliff] + " — " + ladder);
-        ctx.assertTrue(Math.abs(dy[cliff] - SlabSupport.MIN_RESOLVED_DY) <= EPS,
+        ctx.assertTrue(Math.abs(dy[cliff] - SlabSupport.minResolvedDy()) <= EPS,
                 "CHARACTERISED (row 1o): the cliff drops to the exhaustion return, which is "
-                        + "MIN_RESOLVED_DY (" + SlabSupport.MIN_RESOLVED_DY + "); it drops to "
+                        + "minResolvedDy() (" + SlabSupport.minResolvedDy() + "); it drops to "
                         + dy[cliff] + " — " + ladder);
         ctx.assertTrue(cliffs == 1,
                 "CHARACTERISED (row 1o): there must be exactly ONE cliff — the substitution enters "
@@ -1809,7 +1809,7 @@ public final class DyWindowSuite {
                         + " cliffs means the exhaustion path has changed shape and this row no "
                         + "longer describes it — " + ladder);
         for (int i = cliff; i < dy.length; i++) {
-            ctx.assertTrue(Math.abs(dy[i] - SlabSupport.MIN_RESOLVED_DY) <= EPS,
+            ctx.assertTrue(Math.abs(dy[i] - SlabSupport.minResolvedDy()) <= EPS,
                     "CHARACTERISED (row 1o): above the cliff every pass-through course carries the "
                             + "exhaustion value unchanged, so L" + i + " must equal the cap; it "
                             + "reads " + dy[i] + " — " + ladder);
@@ -2059,7 +2059,7 @@ public final class DyWindowSuite {
     private static String format(String shape, BlockPos[] level, double[] dy) {
         StringBuilder sb = new StringBuilder(shape).append(" ladder (budget=")
                 .append(SlabSupport.MAX_SUPPORT_RESOLVE_DEPTH).append(", cap=")
-                .append(SlabSupport.MIN_RESOLVED_DY).append("):");
+                .append(SlabSupport.minResolvedDy()).append("):");
         for (int i = 0; i < level.length; i++) {
             sb.append(" L").append(i).append('=').append(dy[i]);
         }
@@ -2219,7 +2219,7 @@ public final class DyWindowSuite {
                 + " hitsOnCapOrDeeper=" + hitsOnFullLowered + " mismatches=" + mismatches
                 + " recoveries=" + recoveries
                 + " deepDyAlphabet=" + SlabSupport.DEEP_DY_ALPHABET
-                + " cap=" + SlabSupport.MIN_RESOLVED_DY);
+                + " cap=" + SlabSupport.minResolvedDy());
 
         if (SlabSupport.DEEP_DY_ALPHABET) {
             // THE NEUTRALITY PREMISE IS FALSE AT THE DEEP CAP, AND THAT IS THE POINT (Stage 4,
