@@ -94,7 +94,7 @@ jar that lies about its own contents is a release defect even when every entry i
 | `META-INF/MANIFEST.MF` | Jar manifest. Required by the loader; its `Fabric-Loom-Client-Only-Entries` attribute is separately validated against the archive by this same gate. |
 | `LICENSE_slabbed` | The mod's GPL-3.0 licence, copied in by the `jar` block. Mod jar only. |
 | `fabric.mod.json` | Mod descriptor. Required by the loader. |
-| `slabbed.mixins.json` | Main mixin config. Declares the 20 shipped main mixins; referenced from `fabric.mod.json`. |
+| `slabbed.mixins.json` | Main mixin config. Declares the 21 shipped main mixins; referenced from `fabric.mod.json`. |
 | `slabbed.client.mixins.json` | Client mixin config. Declares the 8 shipped client mixins; referenced from `fabric.mod.json`. |
 | `assets/slabbed/**` | The mod's own lang file. Recursive by policy — asset subdirectories are content, not behaviour. |
 
@@ -121,7 +121,7 @@ jar that lies about its own contents is a release defect even when every entry i
 ### Main mixins (class-level; `com/slabbed/mixin/` is a mixed package)
 
 Every row below is declared in `slabbed.mixins.json`. The config and the archive agree exactly:
-19 direct members here plus `torch/TorchBlockMixin`, and the config lists exactly those 20. There is
+20 direct members here plus `torch/TorchBlockMixin`, and the config lists exactly those 21. There is
 no inert, undeclared mixin shipping on this line.
 
 | Entry | Reason |
@@ -135,6 +135,7 @@ no inert, undeclared mixin shipping on this line.
 | `com/slabbed/mixin/DecoratedPotParticleMixin` | Particle origin tracks the lowered block. |
 | `com/slabbed/mixin/FencePaneSlabConnectionMixin` | Fence and pane connection against a lowered slab. |
 | `com/slabbed/mixin/HangingSignAttachedMixin` | Hanging-sign attachment from above. |
+| `com/slabbed/mixin/LeverParticleMixin` | Lever particle origin tracks the frozen visual height. |
 | `com/slabbed/mixin/RedstoneTorchParticleMixin` | Particle origin tracks the lowered block. |
 | `com/slabbed/mixin/RedstoneWireBlockMixin` | Redstone wire connection and support over lowered slabs. |
 | `com/slabbed/mixin/ServerInteractBlockHitToleranceMixin` | Server-side hit tolerance for offset targeting. |

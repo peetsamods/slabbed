@@ -58,9 +58,13 @@
     "fabric-client-gametest": [
       "com.slabbed.test.OffsetRaycastClientGameTest",
       "com.slabbed.test.BsFbUpperFacePerpendicularPlacementClientGameTest",
-      "com.slabbed.test.TerrainSlabsCustomSurfaceClientGameTest"
+      "com.slabbed.test.TerrainSlabsCustomSurfaceClientGameTest",
+      "com.slabbed.test.LeverParticleFrozenAnchorClientGameTest"
     ]
   },
+  "mixins": [
+    "slabbed-lever-particle-test.mixins.json"
+  ],
   "depends": {
     "fabricloader": ">=0.18.1",
     "fabric-gametest-api-v1": "*",

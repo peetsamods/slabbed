@@ -16,6 +16,7 @@
     "CandleParticleMixin",
     "BrewingStandParticleMixin",
     "DecoratedPotParticleMixin",
+    "LeverParticleMixin",
     "RedstoneWireBlockMixin",
     "BlockItemPlacementIntentMixin",
     "ServerInteractBlockHitToleranceMixin",
