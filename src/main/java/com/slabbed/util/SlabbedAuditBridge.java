@@ -61,6 +61,11 @@ public final class SlabbedAuditBridge {
         }
     }
 
+    /** True only when this build contains the dev-only recorder implementation. */
+    public static boolean isRecorderAvailable() {
+        return RECORDER_CLASS != null;
+    }
+
     public static void bootstrapLiveRecorder() {
         if (RECORDER_CLASS == null) {
             return;
@@ -81,6 +86,18 @@ public final class SlabbedAuditBridge {
         } catch (ReflectiveOperationException ignored) {
             return false;
         }
+    }
+
+    /**
+     * Sets the recorder to the requested state without making an already-correct state toggle.
+     * Returns the recorder's resulting state; an absent recorder remains false.
+     */
+    public static boolean setRecorderEnabled(boolean enabled) {
+        if (RECORDER_CLASS == null) {
+            return false;
+        }
+        boolean current = isRecorderEnabled();
+        return current == enabled ? current : toggleRecorder();
     }
 
     /** Display path for the recorder's current log file, or a fallback message if unavailable. */

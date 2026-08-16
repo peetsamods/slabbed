@@ -40,17 +40,20 @@ import static net.fabricmc.fabric.api.client.command.v2.ClientCommandManager.lit
  * when explicitly invoked.
  *
  * <ul>
- *   <li>passive: the on-screen target-dy overlay renders in the UL corner by default
- *       (no command needed), updating live as the crosshair moves.</li>
+ *   <li>passive: the on-screen target-dy overlay is available in the UL corner and updates
+ *       live as the crosshair moves when enabled.</li>
  *   <li>{@code /slabdy} — toggle that overlay off/on.</li>
  *   <li>{@code /slabdy row} — print the current target's full diagnostic dump to chat.</li>
  *   <li>{@code /slabdy use} — perform a real use/place against the current target and
  *       report the block before/after at the expected placement position.</li>
  *   <li>{@code /slabdy record} — toggle the existing, far more capable append-only
- *       placement/targeting recorder (accessed via {@link SlabbedAuditBridge} reflection
- *       since that recorder is a dev-only tool excluded from the release jar — see
- *       build.gradle's pre-release hygiene gate; this command just no-ops gracefully in
- *       a release build instead of failing to load).</li>
+ *       placement/targeting recorder. {@code /slabdy record on} and {@code off} set an
+ *       explicit state for a test session.</li>
+ *   <li>Recorder commands explain when the current build intentionally lacks the dev-only
+ *       recorder instead of reporting a misleading disabled state.</li>
+ *   <li>The recorder is accessed via {@link SlabbedAuditBridge} reflection because it is a
+ *       dev-only tool excluded from the release jar — see build.gradle's pre-release hygiene
+ *       gate.</li>
  * </ul>
  */
 public final class SlabdyClientCommands {
@@ -72,7 +75,10 @@ public final class SlabdyClientCommands {
                                 .executes(SlabdyClientCommands::toggleOverlay)
                                 .then(literal("row").executes(SlabdyClientCommands::runRow))
                                 .then(literal("use").executes(SlabdyClientCommands::runUse))
-                                .then(literal("record").executes(SlabdyClientCommands::runRecord))));
+                                .then(literal("record")
+                                        .executes(SlabdyClientCommands::runRecord)
+                                        .then(literal("on").executes(SlabdyClientCommands::runRecordOn))
+                                        .then(literal("off").executes(SlabdyClientCommands::runRecordOff)))));
         // HudRenderCallback is @Deprecated (and dead) in fabric-rendering-v1 16.x — the reason
         // the overlay never showed. Register through the current HudElementRegistry instead;
         // addLast draws our element after all vanilla HUD elements (on top), every frame.
@@ -193,7 +199,40 @@ public final class SlabdyClientCommands {
     }
 
     private static int runRecord(CommandContext<FabricClientCommandSource> ctx) {
-        boolean nowOn = SlabbedAuditBridge.toggleRecorder();
+        if (!SlabbedAuditBridge.isRecorderAvailable()) {
+            return recorderUnavailable(ctx);
+        }
+        return reportRecorderState(ctx, SlabbedAuditBridge.toggleRecorder());
+    }
+
+    private static int runRecordOn(CommandContext<FabricClientCommandSource> ctx) {
+        return setRecorderState(ctx, true);
+    }
+
+    private static int runRecordOff(CommandContext<FabricClientCommandSource> ctx) {
+        return setRecorderState(ctx, false);
+    }
+
+    private static int setRecorderState(CommandContext<FabricClientCommandSource> ctx, boolean enabled) {
+        if (!SlabbedAuditBridge.isRecorderAvailable()) {
+            return recorderUnavailable(ctx);
+        }
+        boolean nowOn = SlabbedAuditBridge.setRecorderEnabled(enabled);
+        if (nowOn != enabled) {
+            ctx.getSource().sendError(Text.literal("Slabbed recorder could not be set "
+                    + (enabled ? "on" : "off")));
+            return 0;
+        }
+        return reportRecorderState(ctx, nowOn);
+    }
+
+    private static int recorderUnavailable(CommandContext<FabricClientCommandSource> ctx) {
+        ctx.getSource().sendError(Text.literal(
+                "Slabbed recorder is unavailable in this release build; use the branch dev client for recording."));
+        return 0;
+    }
+
+    private static int reportRecorderState(CommandContext<FabricClientCommandSource> ctx, boolean nowOn) {
         ctx.getSource().sendFeedback(Text.literal("Slabbed recorder: "
                 + (nowOn ? "on -> " + SlabbedAuditBridge.recorderLogPathDisplay() : "off")));
         return 1;

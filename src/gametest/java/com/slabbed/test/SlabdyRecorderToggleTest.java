@@ -46,6 +46,28 @@ public final class SlabdyRecorderToggleTest {
         ctx.complete();
     }
 
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void bridgeSetsAnExplicitRecorderState(TestContext ctx) {
+        ctx.assertTrue(SlabbedAuditBridge.isRecorderAvailable(),
+                "the development test environment must contain the recorder implementation");
+        boolean initial = SlabbedAuditBridge.isRecorderEnabled();
+        try {
+            ctx.assertTrue(SlabbedAuditBridge.setRecorderEnabled(true),
+                    "setting the recorder on must leave the bridge on");
+            ctx.assertTrue(SlabbedAuditBridge.isRecorderEnabled(),
+                    "the bridge must report the requested on state");
+
+            boolean afterOff = SlabbedAuditBridge.setRecorderEnabled(false);
+            ctx.assertTrue(!afterOff,
+                    "setting the recorder off must leave the bridge off");
+            ctx.assertTrue(!SlabbedAuditBridge.isRecorderEnabled(),
+                    "the bridge must report the requested off state");
+        } finally {
+            SlabbedAuditBridge.setRecorderEnabled(initial);
+        }
+        ctx.complete();
+    }
+
     /**
      * Regression pin for the runEnded-reset fix. {@code recordShutdown()} sets a
      * permanent {@code runEnded} flag and early-returns once it's set — a SECOND
