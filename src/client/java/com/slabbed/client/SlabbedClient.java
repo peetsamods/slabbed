@@ -13,6 +13,7 @@ public final class SlabbedClient implements ClientModInitializer {
     public void onInitializeClient() {
         SlabSupport.registerChunkRendererRegionDetector(view -> view instanceof ChunkRendererRegion);
         SlabbedModelLoadingPlugin.init();
+        SlabDependentRemeshScheduler.init();
         SlabAnchorClientSync.init();
         SlabdyClientCommands.register();
         BetaNoticeClient.init();

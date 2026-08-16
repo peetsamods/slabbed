@@ -9,7 +9,8 @@
     "ClientPickOffsetRaycastMixin",
     "ItemFrameRenderOffsetMixin",
     "MinecartRenderOffsetMixin",
-    "SlabbedDependentRerenderMixin"
+    "SlabbedDependentRerenderMixin",
+    "WorldRendererImportantRemeshInvoker"
   ],
   "injectors": { "defaultRequire": 1 }
 }

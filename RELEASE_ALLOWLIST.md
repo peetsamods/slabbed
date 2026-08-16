@@ -95,7 +95,7 @@ jar that lies about its own contents is a release defect even when every entry i
 | `LICENSE_slabbed` | The mod's GPL-3.0 licence, copied in by the `jar` block. Mod jar only. |
 | `fabric.mod.json` | Mod descriptor. Required by the loader. |
 | `slabbed.mixins.json` | Main mixin config. Declares the 20 shipped main mixins; referenced from `fabric.mod.json`. |
-| `slabbed.client.mixins.json` | Client mixin config. Declares the 7 shipped client mixins; referenced from `fabric.mod.json`. |
+| `slabbed.client.mixins.json` | Client mixin config. Declares the 8 shipped client mixins; referenced from `fabric.mod.json`. |
 | `assets/slabbed/**` | The mod's own lang file. Recursive by policy — asset subdirectories are content, not behaviour. |
 
 ### Entrypoints
@@ -115,7 +115,7 @@ jar that lies about its own contents is a release defect even when every entry i
 | `com/slabbed/compat/*` | Compat hooks and the slab-surface-kind enum consumed by third-party slab mods. |
 | `com/slabbed/compat/terrainslabs/*` | Terrain Slabs compat, dual mod-id gated. |
 | `com/slabbed/placement/LandingResolver` | Placement-law decision helper used by `BlockItemPlacementIntentMixin` to derive one immutable server height from the player's root aim. It performs no file I/O, registration, rendering or diagnostics. |
-| `com/slabbed/mixin/client/*` | The 7 client mixins declared in `slabbed.client.mixins.json`; every member is a render-offset, cull, remesh or offset-raycast mixin. Non-recursive, so the excluded `mixin/client/recorder/**` cannot creep back under this row. |
+| `com/slabbed/mixin/client/*` | The 8 client mixins declared in `slabbed.client.mixins.json`; every member is a render-offset, cull, remesh or offset-raycast mixin. Non-recursive, so the excluded `mixin/client/recorder/**` cannot creep back under this row. |
 | `com/slabbed/mixin/torch/*` | `TorchBlockMixin` — torch attachment geometry. |
 
 ### Main mixins (class-level; `com/slabbed/mixin/` is a mixed package)
@@ -155,6 +155,7 @@ no inert, undeclared mixin shipping on this line.
 | `com/slabbed/client/BetaNoticeDismissedWorlds` | Per-world "don't show again" store for the beta notice. |
 | `com/slabbed/client/ClientDy` | Client-side dy lookup — the render and collision read path. |
 | `com/slabbed/client/SlabAnchorClientSync` | Receives anchor sync from the server. |
+| `com/slabbed/client/SlabDependentRemeshScheduler` | Coalesces dependent mesh refreshes, drains them under a fixed per-tick budget, and requests the renderer's important rebuild lane. No file or network access. |
 | `com/slabbed/client/SlabbedModelLoadingPlugin` | Installs the offset block-state model. |
 | `com/slabbed/client/SlabbedClientFlags` | Sole member is `GAP_FILL`, read by a `getstatic` in the shipped `SlabbedClient.initGapFillerOverlay()`. Excluding this class while shipping `SlabbedClient` would be a release `NoClassDefFoundError` on client init. Two constants and a private constructor; defaults off. |
 
@@ -181,6 +182,7 @@ None of these four does file I/O, and none allocates per block or per frame.
 | Entry | Reason |
 | --- | --- |
 | `com/slabbed/util/SlabSupport` | Support-surface resolution and the visual Y offset — the core of the feature. |
+| `com/slabbed/util/DependentRemeshQueue` | Pure section-keyed queue policy for coalescing and budgeting client dependent-mesh refreshes. No client, file or network access. |
 | `com/slabbed/util/SlabbedOffsetRaycast` | Offset-aware nearest-hit raycast — the targeting overhaul. |
 | `com/slabbed/util/SlabbedServerHitValidation` | Server-side hit validation for offset placement; the sole consumer of `ServerInteractBlockHitToleranceMixin`'s widened tolerance. |
 | `com/slabbed/util/SlabbedAuditBridge` | The deliberate release-safe boundary, and the reason the excluded harnesses can stay excluded: shipped code (`Slabbed`, `SlabAnchorAttachment`, `BlockItemPlacementIntentMixin`, `SlabdyClientCommands`) calls THIS, never `com.slabbed.dev.audit.**` or `com.slabbed.debug.**` directly, so those packages leave the jar without a single hard link breaking. In a release build `RECORDER_CLASS` resolves to null once at clinit and every method is a null-check return. That single cached resolve — rather than a `Class.forName` per call — is deliberate: `isRecorderEnabled()` is polled every client tick, and per-tick reflection by string name is the exact shape of the lag that has shipped twice on this project. This is architecture keeping diagnostics OUT of the jar, not diagnostics leaking in. |

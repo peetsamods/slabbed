@@ -52,6 +52,7 @@
       "com.slabbed.test.ClientCarpetDyAuthorityTest",
             "com.slabbed.test.NeighborUpdateInvarianceTest",
       "com.slabbed.test.CeilingRoleNotClassnameTest",
+      "com.slabbed.test.DependentRemeshQueueTest",
       "com.slabbed.client.BetaNoticeSuite"
     ],
     "fabric-client-gametest": [

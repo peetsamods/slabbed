@@ -1,6 +1,7 @@
 package com.slabbed.mixin.client;
 
 import com.slabbed.anchor.SlabAnchorAttachment;
+import com.slabbed.client.SlabDependentRemeshScheduler;
 import com.slabbed.compat.CompatHooks;
 import com.slabbed.compat.CompatSlabSurfaceKind;
 import com.slabbed.util.SlabSupport;
@@ -11,7 +12,6 @@ import net.minecraft.client.render.WorldRenderer;
 import net.minecraft.client.world.ClientWorld;
 import net.minecraft.util.math.BlockPos;
 import org.spongepowered.asm.mixin.Mixin;
-import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
@@ -29,15 +29,13 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
  *
  * <p>This pass hooks the vanilla per-block rerender trigger and, when the change
  * sits in a lowering structure, force-schedules an UNCONDITIONAL rerender of the
- * bounded dependent region around it via {@link WorldRenderer#scheduleBlockRenders(int, int, int, int, int, int)}.
- * Render-only; the cheap {@link #slabbed$affectsLoweredDependents} gate keeps it
- * inert outside slab/lowering context so ordinary edits pay nothing.
+ * bounded dependent region around it. Requests are coalesced by section and drained under a
+ * fixed per-tick budget, so a placement burst cannot flood the renderer with duplicate rebuilds.
+ * Render-only; the cheap {@link #slabbed$affectsLoweredDependents} gate keeps it inert outside
+ * slab/lowering context so ordinary edits pay nothing.
  */
 @Mixin(WorldRenderer.class)
 public abstract class SlabbedDependentRerenderMixin {
-
-    @Shadow
-    public abstract void scheduleBlockRenders(int minX, int minY, int minZ, int maxX, int maxY, int maxZ);
 
     @Inject(method = "scheduleBlockRerenderIfNeeded", at = @At("TAIL"))
     private void slabbed$rerenderLoweredDependents(BlockPos pos, BlockState old, BlockState updated, CallbackInfo ci) {
@@ -65,8 +63,7 @@ public abstract class SlabbedDependentRerenderMixin {
         int maxZ = pos.getZ() + 2;
         int minY = pos.getY() - 1;
         int maxY = pos.getY() + SlabSupport.chainRerenderDepth();
-        SlabSupport.refreshVisualYOffsetRegion(world, minX, minY, minZ, maxX, maxY, maxZ);
-        scheduleBlockRenders(minX, minY, minZ, maxX, maxY, maxZ);
+        SlabDependentRemeshScheduler.enqueue(world, minX, minY, minZ, maxX, maxY, maxZ);
     }
 
     private static boolean slabbed$affectsLoweredDependents(ClientWorld world, BlockPos pos, BlockState old, BlockState updated) {

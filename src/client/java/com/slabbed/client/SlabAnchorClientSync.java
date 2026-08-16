@@ -202,19 +202,10 @@ public final class SlabAnchorClientSync {
             int x = mutable.getX();
             int y = mutable.getY();
             int z = mutable.getZ();
-            // UNCONDITIONAL rebuild of the anchored cell + its bounded dependent
-            // column. The synced anchor changes the rendered dy of this cell (and
-            // of column blocks stacked above it) WITHOUT changing any BlockState,
-            // so scheduleBlockRerenderIfNeeded(pos, same, same) no-ops and the
-            // model stays at the stale (un-lowered) height — the visible gap.
-            // scheduleBlockRenders marks the intersecting sections dirty outright.
-            if (mc.world != null) {
-                SlabSupport.refreshVisualYOffsetRegion(
-                        mc.world,
-                        x - 1, y - 1, z - 1,
-                        x + 1, y + SlabSupport.chainRerenderDepth(), z + 1);
-            }
-            mc.worldRenderer.scheduleBlockRenders(
+            // Attachment changes alter model dy without changing BlockState. Queue the affected
+            // region through the same coalesced, bounded scheduler as geometric block changes.
+            SlabDependentRemeshScheduler.enqueue(
+                    mc.world,
                     x - 1, y - 1, z - 1,
                     x + 1, y + SlabSupport.chainRerenderDepth(), z + 1);
             if (SlabAnchorAttachment.TRACE) {
