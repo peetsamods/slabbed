@@ -5,15 +5,19 @@ import static com.slabbed.test.PlacementHarness.useHeldItem;
 
 import com.slabbed.anchor.SlabAnchorAttachment;
 import com.slabbed.anchor.SlabPlacementDyAttachment;
+import com.slabbed.util.SlabSupport;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import net.fabricmc.fabric.api.gametest.v1.GameTest;
 import net.minecraft.block.Block;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.Blocks;
+import net.minecraft.block.ShapeContext;
 import net.minecraft.block.SlabBlock;
 import net.minecraft.block.enums.SlabType;
 import net.minecraft.entity.player.PlayerEntity;
+import net.minecraft.item.BlockItem;
+import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.test.TestContext;
@@ -21,9 +25,12 @@ import net.minecraft.util.ActionResult;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Direction;
 import net.minecraft.util.math.Vec3d;
+import net.minecraft.util.shape.VoxelShape;
 
 /** Real-use coverage for the server's frozen placement-height transaction. */
 public final class PlacementTransactionGameTest {
+
+    private static final double EPSILON = 1.0e-6d;
 
     @GameTest(structure = "fabric-gametest-api-v1:empty")
     public void flatPlacementPublishesExplicitZeroFact(TestContext ctx) {
@@ -161,6 +168,136 @@ public final class PlacementTransactionGameTest {
                 "direct non-block-item callers must retain the legacy flat freeze");
         ctx.assertTrue(Double.isNaN(SlabPlacementDyAttachment.storedDy(world, placed)),
                 "the preserved legacy path must remain distinct from transaction numeric facts");
+        ctx.complete();
+    }
+
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void terrainSlabLiteralSidePlacementUsesActiveLoweredEnvelope(TestContext ctx) {
+        ServerWorld world = ctx.getWorld();
+        BlockPos owner = ctx.getAbsolutePos(new BlockPos(3, 4, 3));
+        BlockPos destination = owner.east();
+        BlockPos fenceContact = destination.north();
+        BlockPos wallContact = destination.south();
+        BlockPos paneContact = destination.east();
+        Item slabItem = TerrainSlabsTestShim.TEST_TS_SLAB_ITEM;
+        Block slab = ((BlockItem) slabItem).getBlock();
+        double minimum = SlabSupport.minResolvedDy();
+
+        for (double ownerDy = -0.5d;
+                ownerDy >= minimum - EPSILON;
+                ownerDy -= 0.5d) {
+            for (SlabType expectedType : new SlabType[]{SlabType.BOTTOM, SlabType.TOP}) {
+                world.setBlockState(owner, Blocks.STRIPPED_BIRCH_WOOD.getDefaultState(), Block.NOTIFY_ALL);
+                world.setBlockState(destination, Blocks.AIR.getDefaultState(), Block.NOTIFY_ALL);
+                world.setBlockState(fenceContact, Blocks.OAK_FENCE.getDefaultState(), Block.NOTIFY_ALL);
+                world.setBlockState(wallContact, Blocks.COBBLESTONE_WALL.getDefaultState(), Block.NOTIFY_ALL);
+                world.setBlockState(paneContact, Blocks.GLASS_PANE.getDefaultState(), Block.NOTIFY_ALL);
+                SlabPlacementDyAttachment.clear(world, owner);
+                SlabPlacementDyAttachment.clear(world, destination);
+                ctx.assertTrue(SlabPlacementDyAttachment.writeBatch(
+                                world, Map.of(owner, Double.doubleToRawLongBits(ownerDy))),
+                        "fixture: the ordinary owner must accept dy " + ownerDy);
+
+                double halfSplit = owner.getY() + ownerDy + 0.5d;
+                double aimY = halfSplit + (expectedType == SlabType.TOP ? 0.25d : -0.25d);
+                PlayerEntity player = mockPlayerHolding(
+                        ctx, owner.north(3), new ItemStack(slabItem, 1));
+                ActionResult result = useHeldItem(world, player, owner, Direction.EAST,
+                        new Vec3d(owner.getX() + 1.0d, aimY, owner.getZ() + 0.5d));
+
+                ctx.assertTrue(result.isAccepted(),
+                        "Terrain Slab side placement must succeed at in-range dy " + ownerDy
+                                + " for " + expectedType + "; got " + result);
+                BlockState placed = world.getBlockState(destination);
+                ctx.assertTrue(placed.isOf(slab)
+                                && placed.contains(SlabBlock.TYPE)
+                                && placed.get(SlabBlock.TYPE) == expectedType,
+                        "the real Terrain Slab item must place the intended half at dy " + ownerDy
+                                + "; got " + placed);
+                ctx.assertTrue(Double.doubleToRawLongBits(
+                                SlabPlacementDyAttachment.storedDy(world, destination))
+                                == Double.doubleToRawLongBits(ownerDy),
+                        "Terrain Slab placement must freeze the immutable owner dy " + ownerDy);
+                ctx.assertTrue(Double.doubleToRawLongBits(
+                                SlabSupport.getYOffset(world, destination, placed))
+                                == Double.doubleToRawLongBits(ownerDy),
+                        "Terrain Slab placement must resolve at its frozen dy " + ownerDy);
+
+                VoxelShape outline = placed.getOutlineShape(world, destination, ShapeContext.absent());
+                double nativeMinY = expectedType == SlabType.TOP ? 0.5d : 0.0d;
+                double nativeMaxY = expectedType == SlabType.TOP ? 1.0d : 0.5d;
+                ctx.assertTrue(!outline.isEmpty()
+                                && Math.abs(outline.getMin(Direction.Axis.Y) - (nativeMinY + ownerDy))
+                                <= EPSILON
+                                && Math.abs(outline.getMax(Direction.Axis.Y) - (nativeMaxY + ownerDy))
+                                <= EPSILON,
+                        "Terrain Slab outline must occupy the frozen visible half at dy " + ownerDy
+                                + "; got [" + (outline.isEmpty() ? "empty" : outline.getMin(Direction.Axis.Y))
+                                + ", " + (outline.isEmpty() ? "empty" : outline.getMax(Direction.Axis.Y))
+                                + "]");
+                ctx.assertTrue(world.getBlockState(fenceContact).isOf(Blocks.OAK_FENCE)
+                                && world.getBlockState(wallContact).isOf(Blocks.COBBLESTONE_WALL)
+                                && world.getBlockState(paneContact).isOf(Blocks.GLASS_PANE),
+                        "legal fence, wall, and pane contacts must survive the admitted placement");
+
+                world.setBlockState(owner, Blocks.AIR.getDefaultState(), Block.NOTIFY_ALL);
+                BlockState afterOwnerRemoval = world.getBlockState(destination);
+                VoxelShape outlineAfterOwnerRemoval = afterOwnerRemoval.getOutlineShape(
+                        world, destination, ShapeContext.absent());
+                ctx.assertTrue(afterOwnerRemoval.equals(placed),
+                        "removing the clicked owner must not replace the placed Terrain Slab");
+                ctx.assertTrue(Double.doubleToRawLongBits(
+                                SlabSupport.getYOffset(world, destination, afterOwnerRemoval))
+                                == Double.doubleToRawLongBits(ownerDy),
+                        "removing the clicked owner must not move the placed Terrain Slab from dy "
+                                + ownerDy);
+                ctx.assertTrue(Double.doubleToRawLongBits(
+                                SlabPlacementDyAttachment.storedDy(world, destination))
+                                == Double.doubleToRawLongBits(ownerDy),
+                        "removing the clicked owner must preserve the Terrain Slab's frozen fact");
+                ctx.assertTrue(!outlineAfterOwnerRemoval.isEmpty()
+                                && Math.abs(outlineAfterOwnerRemoval.getMin(Direction.Axis.Y)
+                                        - outline.getMin(Direction.Axis.Y)) <= EPSILON
+                                && Math.abs(outlineAfterOwnerRemoval.getMax(Direction.Axis.Y)
+                                        - outline.getMax(Direction.Axis.Y)) <= EPSILON,
+                        "removing the clicked owner must preserve the Terrain Slab outline");
+            }
+        }
+        ctx.complete();
+    }
+
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void slabLiteralSidePlacementBelowActiveEnvelopeIsRefused(TestContext ctx) {
+        ServerWorld world = ctx.getWorld();
+        BlockPos owner = ctx.getAbsolutePos(new BlockPos(4, 4, 4));
+        BlockPos destination = owner.east();
+        double ownerDy = SlabSupport.minResolvedDy() - 0.5d;
+        BlockState ownerBefore = Blocks.STRIPPED_BIRCH_WOOD.getDefaultState();
+        BlockState destinationBefore = world.getBlockState(destination);
+
+        for (Item slabItem : new Item[]{Blocks.OAK_SLAB.asItem(), TerrainSlabsTestShim.TEST_TS_SLAB_ITEM}) {
+            world.setBlockState(owner, ownerBefore, Block.NOTIFY_ALL);
+            world.setBlockState(destination, destinationBefore, Block.NOTIFY_ALL);
+            SlabPlacementDyAttachment.clear(world, destination);
+            ctx.assertTrue(SlabPlacementDyAttachment.writeBatch(
+                            world, Map.of(owner, Double.doubleToRawLongBits(ownerDy))),
+                    "fixture: the historical owner height must remain storable below the active envelope");
+            PlayerEntity player = mockPlayerHolding(ctx, owner.north(3), new ItemStack(slabItem, 1));
+            ActionResult result = useHeldItem(world, player, owner, Direction.EAST,
+                    new Vec3d(owner.getX() + 1.0d, owner.getY() + ownerDy + 0.5d,
+                            owner.getZ() + 0.5d));
+
+            ctx.assertTrue(result == ActionResult.FAIL,
+                    "slab placement below the active envelope must return a typed refusal for "
+                            + slabItem + "; got " + result);
+            ctx.assertTrue(world.getBlockState(owner).equals(ownerBefore)
+                            && world.getBlockState(destination).equals(destinationBefore),
+                    "a refused slab placement must not mutate either cell for " + slabItem);
+            ctx.assertTrue(Double.isNaN(SlabPlacementDyAttachment.storedDy(world, destination)),
+                    "a refused slab placement must not publish a destination fact for " + slabItem);
+            ctx.assertTrue(player.getMainHandStack().getCount() == 1,
+                    "a refused slab placement must not consume the held item " + slabItem);
+        }
         ctx.complete();
     }
 }

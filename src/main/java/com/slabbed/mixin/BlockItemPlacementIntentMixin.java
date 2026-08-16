@@ -5,6 +5,8 @@ import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import com.slabbed.Slabbed;
 import com.slabbed.anchor.SlabPlacementDyAttachment;
+import com.slabbed.compat.CompatHooks;
+import com.slabbed.compat.CompatSlabSurfaceKind;
 import com.slabbed.placement.LandingResolver;
 import com.slabbed.util.SlabSupport;
 import com.slabbed.util.SlabbedAuditBridge;
@@ -70,6 +72,9 @@ public abstract class BlockItemPlacementIntentMixin {
             ROOT_AIM.set(LandingResolver.captureAim(context));
         }
         try {
+            if (depth == 0 && slabbed$refusesOutOfEnvelopeSlabPlacement()) {
+                return ActionResult.FAIL;
+            }
             return original.call(context);
         } finally {
             if (depth == 0) {
@@ -214,7 +219,10 @@ public abstract class BlockItemPlacementIntentMixin {
         World world = frame.actualContext.getWorld();
         BlockPos primary = frame.actualContext.getBlockPos().toImmutable();
         BlockState finalState = world.getBlockState(primary);
-        if (finalState.isAir() || LandingResolver.compatOwnsFinalState(finalState)) {
+        boolean loweredCustomSlabPlacement = slabbed$requiresLoweredCustomSlabFact(
+                frame.rootAim, finalState);
+        if (finalState.isAir()
+                || (LandingResolver.compatOwnsFinalState(finalState) && !loweredCustomSlabPlacement)) {
             frame.pending = Map.of();
             return;
         }
@@ -242,6 +250,8 @@ public abstract class BlockItemPlacementIntentMixin {
                 && prior.priorState().get(SlabBlock.TYPE) != SlabType.DOUBLE;
         if (sameCellSlabUpgrade && prior.priorFact().present()) {
             rawBits = prior.priorFact().rawBits();
+        } else if (loweredCustomSlabPlacement) {
+            rawBits = Double.doubleToRawLongBits(frame.rootAim.ownerVisibleDy());
         } else {
             LandingResolver.Family family = LandingResolver.classify(finalState);
             LandingResolver.PlacementResolution resolution = LandingResolver.resolve(
@@ -261,6 +271,22 @@ public abstract class BlockItemPlacementIntentMixin {
             pending.put(pos.toImmutable(), rawBits);
         }
         frame.pending = Map.copyOf(pending);
+    }
+
+    /**
+     * A custom slab placed beside a frozen ordinary owner keeps the transaction's immutable
+     * landing height even though the destination supplies its own slab model.
+     */
+    private static boolean slabbed$requiresLoweredCustomSlabFact(
+            LandingResolver.PlacementAim aim,
+            BlockState finalState
+    ) {
+        return aim != null
+                && finalState != null
+                && finalState.getBlock() instanceof SlabBlock
+                && CompatHooks.customSlabSurfaceKind(finalState) != CompatSlabSurfaceKind.NONE
+                && aim.clickedFace().getAxis().isHorizontal()
+                && slabbed$isSupportedLoweredHalfStep(aim.ownerVisibleDy());
     }
 
     private static List<BlockPos> slabbed$validatedGroup(
@@ -312,6 +338,29 @@ public abstract class BlockItemPlacementIntentMixin {
 
     private static final double UP_FACE_EDGE_BAND = 0.20d;
     private static final double LOWERED_VISUAL_BOUNDARY_EPSILON = 1.0e-6d;
+
+    /** A slab cannot mint a new permanent height below the active targeting envelope. */
+    private boolean slabbed$refusesOutOfEnvelopeSlabPlacement() {
+        BlockItem self = (BlockItem) (Object) this;
+        BlockState heldState = self.getBlock().getDefaultState();
+        if (!(heldState.getBlock() instanceof SlabBlock)
+                && CompatHooks.customSlabSurfaceKind(heldState) == CompatSlabSurfaceKind.NONE) {
+            return false;
+        }
+        LandingResolver.PlacementAim aim = ROOT_AIM.get();
+        return aim != null
+                && Double.isFinite(aim.ownerVisibleDy())
+                && aim.ownerVisibleDy() < SlabSupport.minResolvedDy();
+    }
+
+    private static boolean slabbed$isSupportedLoweredHalfStep(double yOffset) {
+        double doubledYOffset = yOffset * 2.0d;
+        return Double.isFinite(yOffset)
+                && yOffset <= -0.5d
+                && yOffset >= SlabSupport.minResolvedDy()
+                && Math.abs(doubledYOffset - Math.rint(doubledYOffset))
+                        <= LOWERED_VISUAL_BOUNDARY_EPSILON;
+    }
 
     private static Direction slabbed$inferLoweredSideFromUpFaceHit(Vec3d hitPos, BlockPos targetPos) {
         double localX = hitPos.x - targetPos.getX();
@@ -452,13 +501,13 @@ public abstract class BlockItemPlacementIntentMixin {
         BlockPos targetPos = context.getBlockPos();
         BlockState targetState = context.getWorld().getBlockState(targetPos);
         boolean targetIsSolid = targetState.isSolidBlock(context.getWorld(), targetPos);
+        double yOffset = SlabSupport.getVisualYOffset(context.getWorld(), targetPos, targetState);
         boolean targetIsLoweredSlab = itemIsSlab
                 && targetState.getBlock() instanceof SlabBlock
-                && SlabSupport.getVisualYOffset(context.getWorld(), targetPos, targetState) == -0.5d;
+                && slabbed$isSupportedLoweredHalfStep(yOffset);
         boolean targetAcceptsLoweredSidePlacement = targetIsSolid || targetIsLoweredSlab;
         boolean targetHasBlockEntity = targetState.getBlock() instanceof BlockEntityProvider;
         boolean targetIsCraftingTable = targetState.getBlock() instanceof CraftingTableBlock;
-        double yOffset = SlabSupport.getVisualYOffset(context.getWorld(), targetPos, targetState);
         boolean ordinaryLoweredFullBlockGuard = targetIsSolid
                 && !targetHasBlockEntity
                 && !targetIsCraftingTable
@@ -547,7 +596,7 @@ public abstract class BlockItemPlacementIntentMixin {
                     hitDescriptor);
             return context;
         }
-        if (yOffset != -0.5d) {
+        if (!slabbed$isSupportedLoweredHalfStep(yOffset)) {
             slabbed$recordRemapAttempt(
                     context,
                     itemEligible,
@@ -558,7 +607,7 @@ public abstract class BlockItemPlacementIntentMixin {
                     yOffset,
                     ordinaryLoweredFullBlockGuard,
                     false,
-                    "y_offset_not_-0.5",
+                    "y_offset_not_supported_half_step",
                     null,
                     effectiveSide,
                     hitDescriptor);
@@ -617,23 +666,14 @@ public abstract class BlockItemPlacementIntentMixin {
             return context;
         }
 
-        // Decide BOTTOM vs TOP from the *original* hit Y relative to the lowered
-        // FB visual half-split. Lowered FB visual spans world Y ∈
-        // [targetPos.y - 0.5, targetPos.y + 0.5], so targetPos.y is the half-line.
-        //   originalHitPos.y < targetPos.y  → lower visual half  → BS-FB-0.5S (BOTTOM)
-        //   originalHitPos.y > targetPos.y  → upper visual half  → BS-FB-1S  (TOP)
-        // Edge-band UP hits that land exactly on the lowered visual upper boundary
-        // (targetPos.y + 0.5) remain player-facing 0.5S side-placement intent;
-        // keep that boundary in BOTTOM while preserving true upper-half hits
-        // such as targetPos.y + 0.25 as TOP.
-        // The remapped Y is then clamped just inside the matching half so that
-        // vanilla SlabBlock.getPlacementState's `hit.y - placePos.y <= 0.5`
-        // discriminator picks the desired SlabType. (placePos.y == targetPos.y
-        // because the side offset is horizontal.)
-        double loweredVisualUpperBoundary = targetPos.getY() + 0.5d;
+        // Select the slab half from the immutable visible hit, then encode only that half into
+        // the synthetic in-cell hit used by vanilla's placement-state decision.
+        double loweredVisualHalfSplit = targetPos.getY() + yOffset + 0.5d;
+        double loweredVisualUpperBoundary = targetPos.getY() + yOffset + 1.0d;
         boolean exactLoweredVisualBoundary = Math.abs(originalHitPos.y - loweredVisualUpperBoundary)
                 <= LOWERED_VISUAL_BOUNDARY_EPSILON;
-        boolean upperHalfIntent = originalHitPos.y >= targetPos.getY() && !exactLoweredVisualBoundary;
+        boolean upperHalfIntent = originalHitPos.y >= loweredVisualHalfSplit
+                && !exactLoweredVisualBoundary;
         double remappedY = upperHalfIntent
                 ? targetPos.getY() + 0.501d   // > 0.5 → vanilla → TOP
                 : targetPos.getY() + 0.499d;  // ≤ 0.5 → vanilla → BOTTOM

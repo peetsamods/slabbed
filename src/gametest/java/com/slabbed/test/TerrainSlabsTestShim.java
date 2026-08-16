@@ -4,6 +4,8 @@ import net.fabricmc.api.ModInitializer;
 import net.minecraft.block.AbstractBlock;
 import net.minecraft.block.Block;
 import net.minecraft.block.SlabBlock;
+import net.minecraft.item.BlockItem;
+import net.minecraft.item.Item;
 import net.minecraft.registry.Registries;
 import net.minecraft.registry.Registry;
 import net.minecraft.registry.RegistryKey;
@@ -32,10 +34,14 @@ public final class TerrainSlabsTestShim implements ModInitializer {
 
     public static final RegistryKey<Block> TEST_TS_SLAB_KEY =
             RegistryKey.of(RegistryKeys.BLOCK, TEST_TS_SLAB_ID);
+    public static final RegistryKey<Item> TEST_TS_SLAB_ITEM_KEY =
+            RegistryKey.of(RegistryKeys.ITEM, TEST_TS_SLAB_ID);
 
     /** Namespace-matched stand-in for a real (modern) Terrain Slabs slab surface. */
     public static final Block TEST_TS_SLAB =
             new SlabBlock(AbstractBlock.Settings.create().strength(1.0f).registryKey(TEST_TS_SLAB_KEY));
+    public static final Item TEST_TS_SLAB_ITEM =
+            new BlockItem(TEST_TS_SLAB, new Item.Settings().registryKey(TEST_TS_SLAB_ITEM_KEY));
 
     /**
      * Legacy-namespace stand-in ({@code terrainslabs:grass_slab}) so the existing
@@ -54,6 +60,7 @@ public final class TerrainSlabsTestShim implements ModInitializer {
     @Override
     public void onInitialize() {
         Registry.register(Registries.BLOCK, TEST_TS_SLAB_KEY, TEST_TS_SLAB);
+        Registry.register(Registries.ITEM, TEST_TS_SLAB_ITEM_KEY, TEST_TS_SLAB_ITEM);
         Registry.register(Registries.BLOCK, LEGACY_TS_SLAB_KEY, LEGACY_TS_SLAB);
     }
 }
