@@ -114,6 +114,7 @@ jar that lies about its own contents is a release defect even when every entry i
 | `com/slabbed/client/model/*` | Offset block-state model and Y-offset emitter — the lowering render path. |
 | `com/slabbed/compat/*` | Compat hooks and the slab-surface-kind enum consumed by third-party slab mods. |
 | `com/slabbed/compat/terrainslabs/*` | Terrain Slabs compat, dual mod-id gated. |
+| `com/slabbed/placement/LandingResolver` | Placement-law decision helper used by `BlockItemPlacementIntentMixin` to derive one immutable server height from the player's root aim. It performs no file I/O, registration, rendering or diagnostics. |
 | `com/slabbed/mixin/client/*` | The 7 client mixins declared in `slabbed.client.mixins.json`; every member is a render-offset, cull, remesh or offset-raycast mixin. Non-recursive, so the excluded `mixin/client/recorder/**` cannot creep back under this row. |
 | `com/slabbed/mixin/torch/*` | `TorchBlockMixin` — torch attachment geometry. |
 

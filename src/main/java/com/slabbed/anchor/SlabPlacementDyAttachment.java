@@ -5,6 +5,9 @@ import com.mojang.serialization.codecs.RecordCodecBuilder;
 import com.slabbed.Slabbed;
 import it.unimi.dsi.fastutil.longs.Long2ByteOpenHashMap;
 import it.unimi.dsi.fastutil.longs.LongArrayList;
+import java.util.LinkedHashMap;
+import java.util.Map;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.ToDoubleFunction;
 import java.util.stream.IntStream;
 import java.util.stream.LongStream;
@@ -29,12 +32,10 @@ import net.minecraft.world.chunk.WorldChunk;
  * that the neighbour edit may have just destroyed. Presence protection cannot protect a value.
  * This attachment stores the value.
  *
- * <p>SCOPE, deliberately narrow. A fact is written only where {@link SlabAnchorAttachment#addAnchor}
- * decides a cell has earned an anchor, and only when the height it resolves to at that moment is
- * lowered. Cells with no anchor are untouched and keep deriving live exactly as before; the flat
- * half of the law stays with {@link SlabAnchorAttachment#FROZEN_FLAT_TYPE}. This is NOT the frozen
- * height architecture — no master switch, no stable-flat rule, no old-world migration. It gives the
- * cells that already have presence protection their magnitude too, and nothing else.
+ * <p>A fact may be written after vanilla completes a block-item placement. That transaction uses
+ * the immutable placement aim, publishes every linked cell together, and records flat zero just as
+ * explicitly as a lowered value. Legacy anchor callers retain their narrower behavior outside a
+ * captured block-item transaction.
  *
  * <p>OLD WORLDS ARE THE ABSENT CASE, BY CONSTRUCTION. A world saved before this attachment existed
  * simply has no such attachment, so {@link #storedDy} answers {@link Double#NaN} and every caller
@@ -90,6 +91,11 @@ public final class SlabPlacementDyAttachment {
     /** One WARN per session when a chunk saturates, not one per click there. */
     private static volatile boolean budgetReported = false;
 
+    private static final ThreadLocal<Integer> BLOCK_ITEM_TRANSACTION_DEPTH =
+            ThreadLocal.withInitial(() -> 0);
+    private static final AtomicLong LEGACY_RECORD_PUBLICATIONS_DURING_TRANSACTION = new AtomicLong();
+    private static final AtomicLong LEGACY_FLAT_PUBLICATIONS_DURING_TRANSACTION = new AtomicLong();
+
     private static final Identifier PLACEMENT_DY_ID = Identifier.of(Slabbed.MOD_ID, "placement_dy");
 
     /**
@@ -136,6 +142,37 @@ public final class SlabPlacementDyAttachment {
 
     // ── server-side mutation ──────────────────────────────────────────
 
+    public static void beginBlockItemTransaction() {
+        BLOCK_ITEM_TRANSACTION_DEPTH.set(BLOCK_ITEM_TRANSACTION_DEPTH.get() + 1);
+    }
+
+    public static void endBlockItemTransaction() {
+        int depth = BLOCK_ITEM_TRANSACTION_DEPTH.get();
+        if (depth <= 1) {
+            BLOCK_ITEM_TRANSACTION_DEPTH.remove();
+        } else {
+            BLOCK_ITEM_TRANSACTION_DEPTH.set(depth - 1);
+        }
+    }
+
+    public static boolean blockItemTransactionActive() {
+        return BLOCK_ITEM_TRANSACTION_DEPTH.get() > 0;
+    }
+
+    public static long legacyRecordPublicationsDuringTransaction() {
+        return LEGACY_RECORD_PUBLICATIONS_DURING_TRANSACTION.get();
+    }
+
+    public static long legacyFlatPublicationsDuringTransaction() {
+        return LEGACY_FLAT_PUBLICATIONS_DURING_TRANSACTION.get();
+    }
+
+    public static void noteLegacyFlatPublication() {
+        if (blockItemTransactionActive()) {
+            LEGACY_FLAT_PUBLICATIONS_DURING_TRANSACTION.incrementAndGet();
+        }
+    }
+
     /**
      * Records {@code dy} as the placement height of {@code pos}. Server-side only. No-op when the
      * height is not exactly representable on the stored grid, or when the chunk's encoded size
@@ -146,6 +183,11 @@ public final class SlabPlacementDyAttachment {
      */
     public static boolean record(World world, BlockPos pos, double dy) {
         if (world == null || world.isClient() || pos == null) {
+            return false;
+        }
+        // Vanilla has not finished the captured placement yet. The transaction publishes the
+        // final state and every linked cell together after this legacy hook returns.
+        if (blockItemTransactionActive()) {
             return false;
         }
         int quantised = quantise(dy);
@@ -187,12 +229,104 @@ public final class SlabPlacementDyAttachment {
             }
             return false;
         }
+        if (blockItemTransactionActive()) {
+            LEGACY_RECORD_PUBLICATIONS_DURING_TRANSACTION.incrementAndGet();
+        }
         chunk.setAttached(PLACEMENT_DY_TYPE, facts);
         if (SlabAnchorAttachment.TRACE) {
             Slabbed.LOGGER.info("[PLACEMENT_DY] store pos={} dy={} chunk={} facts={}",
                     pos.toShortString(), dy, chunk.getPos(), facts.size());
         }
         return true;
+    }
+
+    /**
+     * Publishes one placement operation as an all-or-nothing batch.
+     *
+     * <p>Every value is validated and every affected chunk is checked against the sync budget
+     * before the first attachment is changed. This is the transaction boundary used by linked
+     * placements: a door, bed, or other multi-cell object cannot acquire only part of its frozen
+     * height state.
+     *
+     * @param rawBitsByPos exact {@link Double#doubleToRawLongBits(double)} values by final cell
+     * @return true when the complete batch was already present or was published; false when no
+     *         part of the batch was accepted
+     */
+    public static boolean writeBatch(World world, Map<BlockPos, Long> rawBitsByPos) {
+        if (world == null || world.isClient() || rawBitsByPos == null || rawBitsByPos.isEmpty()) {
+            return false;
+        }
+
+        LinkedHashMap<WorldChunk, Long2ByteOpenHashMap> originals = new LinkedHashMap<>();
+        LinkedHashMap<WorldChunk, Long2ByteOpenHashMap> candidates = new LinkedHashMap<>();
+        for (Map.Entry<BlockPos, Long> entry : rawBitsByPos.entrySet()) {
+            BlockPos pos = entry.getKey();
+            Long rawBits = entry.getValue();
+            if (pos == null || rawBits == null) {
+                return false;
+            }
+            int quantised = quantise(Double.longBitsToDouble(rawBits));
+            if (quantised == UNREPRESENTABLE) {
+                return false;
+            }
+            WorldChunk chunk = world.getChunk(pos.getX() >> 4, pos.getZ() >> 4);
+            if (chunk == null) {
+                return false;
+            }
+            if (!candidates.containsKey(chunk)) {
+                Long2ByteOpenHashMap existing = chunk.getAttached(PLACEMENT_DY_TYPE);
+                originals.put(chunk, existing == null ? null : new Long2ByteOpenHashMap(existing));
+                candidates.put(chunk,
+                        existing == null ? new Long2ByteOpenHashMap() : new Long2ByteOpenHashMap(existing));
+            }
+            candidates.get(chunk).put(pos.asLong(), (byte) quantised);
+        }
+
+        for (Map.Entry<WorldChunk, Long2ByteOpenHashMap> entry : candidates.entrySet()) {
+            if (ChunkPositionDyMapPacketCodec.encodedByteLength(entry.getValue())
+                    > SYNC_SAFE_ENCODED_BYTES) {
+                reportBudgetOnce(entry.getKey(), entry.getValue().size());
+                return false;
+            }
+        }
+
+        LinkedHashMap<WorldChunk, Boolean> changed = new LinkedHashMap<>();
+        try {
+            for (Map.Entry<WorldChunk, Long2ByteOpenHashMap> entry : candidates.entrySet()) {
+                WorldChunk chunk = entry.getKey();
+                Long2ByteOpenHashMap original = originals.get(chunk);
+                boolean differs = original == null || !original.equals(entry.getValue());
+                changed.put(chunk, differs);
+                if (differs) {
+                    chunk.setAttached(PLACEMENT_DY_TYPE, entry.getValue());
+                }
+            }
+        } catch (RuntimeException failure) {
+            for (Map.Entry<WorldChunk, Boolean> entry : changed.entrySet()) {
+                if (!entry.getValue()) {
+                    continue;
+                }
+                Long2ByteOpenHashMap original = originals.get(entry.getKey());
+                if (original == null || original.isEmpty()) {
+                    entry.getKey().removeAttached(PLACEMENT_DY_TYPE);
+                } else {
+                    entry.getKey().setAttached(PLACEMENT_DY_TYPE, original);
+                }
+            }
+            Slabbed.LOGGER.warn("[PLACEMENT_DY] placement batch rolled back", failure);
+            return false;
+        }
+        return true;
+    }
+
+    private static void reportBudgetOnce(WorldChunk chunk, int attemptedSize) {
+        if (!budgetReported) {
+            budgetReported = true;
+            Slabbed.LOGGER.warn(
+                    "[PLACEMENT_DY] chunk {} reached the attachment sync budget at {} stored "
+                            + "heights; the placement batch was not published",
+                    chunk.getPos(), attemptedSize);
+        }
     }
 
     /** Clears any stored placement height at {@code pos}. Server-side only. */
@@ -263,6 +397,41 @@ public final class SlabPlacementDyAttachment {
     /** True if {@code pos} carries a stored placement height. */
     public static boolean hasStoredDy(BlockView world, BlockPos pos) {
         return !Double.isNaN(storedDy(world, pos));
+    }
+
+    /** Exact presence and value snapshot for same-cell upgrades. */
+    public record PlacementDyFact(boolean present, long rawBits) {
+        private static final PlacementDyFact ABSENT =
+                new PlacementDyFact(false, Double.doubleToRawLongBits(Double.NaN));
+
+        public static PlacementDyFact absent() {
+            return ABSENT;
+        }
+
+        public static PlacementDyFact present(double value) {
+            return new PlacementDyFact(true, Double.doubleToRawLongBits(value));
+        }
+
+        public double valueOrNaN() {
+            return present ? Double.longBitsToDouble(rawBits) : Double.NaN;
+        }
+    }
+
+    /** Direct backing read used to preserve the exact fact during same-cell upgrades. */
+    public static PlacementDyFact rawFact(BlockView world, BlockPos pos) {
+        if (pos == null) {
+            return PlacementDyFact.absent();
+        }
+        double value;
+        if (!(world instanceof World w)) {
+            value = clientPlacementDyLookup == null
+                    ? Double.NaN
+                    : clientPlacementDyLookup.applyAsDouble(pos);
+        } else {
+            WorldChunk chunk = w.getChunk(pos.getX() >> 4, pos.getZ() >> 4);
+            value = chunk == null ? Double.NaN : lookup(chunk, pos);
+        }
+        return Double.isNaN(value) ? PlacementDyFact.absent() : PlacementDyFact.present(value);
     }
 
     // ── quantisation ──────────────────────────────────────────────────

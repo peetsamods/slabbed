@@ -273,6 +273,12 @@ public final class SlabAnchorAttachment {
                 || state.isAir() || !state.getFluidState().isEmpty()) {
             return;
         }
+        // A captured BlockItem placement is finalized by the atomic placement transaction after
+        // vanilla has published every final cell. Preserve the older hook for direct/non-BlockItem
+        // callers, but do not let it create a second height authority inside that transaction.
+        if (SlabPlacementDyAttachment.blockItemTransactionActive()) {
+            return;
+        }
         if (isAnchored(world, pos) || isFrozenFlat(world, pos)) {
             return;
         }
@@ -317,6 +323,7 @@ public final class SlabAnchorAttachment {
         LongOpenHashSet set = existing == null ? new LongOpenHashSet() : new LongOpenHashSet(existing);
         if (set.add(pos.asLong())) {
             // setAttached triggers persistence + auto-sync for synced attachments.
+            SlabPlacementDyAttachment.noteLegacyFlatPublication();
             chunk.setAttached(FROZEN_FLAT_TYPE, set);
             if (TRACE) {
                 Slabbed.LOGGER.info("[ANCHOR] frozen_flat add pos={} chunk={} setSize={}",

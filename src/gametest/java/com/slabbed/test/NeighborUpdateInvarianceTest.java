@@ -270,9 +270,11 @@ public final class NeighborUpdateInvarianceTest {
                 ctx.assertTrue(Math.abs(d) <= EPS,
                         "premise: the control must be placed FLAT (the dormant source must still "
                                 + "be dormant), got " + d);
-                ctx.assertTrue(SlabAnchorAttachment.isFrozenFlat(w, subject),
-                        "premise: this row's protection IS freezeLoweredOnPlace's FROZEN_FLAT "
-                                + "marker — without the marker the row proves nothing");
+                ctx.assertTrue(Double.doubleToRawLongBits(SlabPlacementDyAttachment.storedDy(w, subject))
+                                == Double.doubleToRawLongBits(0.0d),
+                        "premise: the control needs an explicit frozen 0.0 placement fact");
+                ctx.assertTrue(!SlabAnchorAttachment.isFrozenFlat(w, subject),
+                        "premise: the transaction fact must be the sole height authority");
                 return subject;
             }),
             // #2 — control: a flat-placed SLAB, held flat under the candle's own mutation.
@@ -314,9 +316,11 @@ public final class NeighborUpdateInvarianceTest {
                 ctx.assertTrue(Math.abs(d) <= EPS,
                         "premise: the control must be placed FLAT (the dormant source must still "
                                 + "be dormant), got " + d);
-                ctx.assertTrue(SlabAnchorAttachment.isFrozenFlat(w, subject),
-                        "premise: this row's protection IS freezeLoweredOnPlace's FROZEN_FLAT "
-                                + "marker — without the marker the row proves nothing");
+                ctx.assertTrue(Double.doubleToRawLongBits(SlabPlacementDyAttachment.storedDy(w, subject))
+                                == Double.doubleToRawLongBits(0.0d),
+                        "premise: the control needs an explicit frozen 0.0 placement fact");
+                ctx.assertTrue(!SlabAnchorAttachment.isFrozenFlat(w, subject),
+                        "premise: the transaction fact must be the sole height authority");
                 return subject;
             }),
             // #3 — an anchored full block on a real, anchored -1.0 support (translated equivalent of

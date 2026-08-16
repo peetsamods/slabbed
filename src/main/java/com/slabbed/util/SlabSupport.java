@@ -563,6 +563,8 @@ public final class SlabSupport {
 
     /** Recursion guard: prevents StackOverflow when isSolidBlock triggers getOutlineShape → getYOffset. */
     private static final ThreadLocal<Boolean> IN_GET_Y_OFFSET = ThreadLocal.withInitial(() -> Boolean.FALSE);
+    private static final ThreadLocal<Boolean> IGNORE_STORED_PLACEMENT_DY =
+            ThreadLocal.withInitial(() -> Boolean.FALSE);
 
     /**
      * ROLE, NOT CLASSNAME: true iff the block at {@code pos} — <em>in this state, right now</em> —
@@ -853,6 +855,23 @@ public final class SlabSupport {
             return getYOffsetInner(world, pos, state);
         } finally {
             IN_GET_Y_OFFSET.set(Boolean.FALSE);
+        }
+    }
+
+    /**
+     * Computes the placement-time height without reading the cell's prior frozen value.
+     *
+     * <p>This is only for the transaction that has just let vanilla publish a final state. Normal
+     * rendering, targeting, collision, and gameplay reads must use {@link #getYOffset} so the
+     * frozen value remains authoritative.
+     */
+    public static double getUnstoredYOffset(BlockView world, BlockPos pos, BlockState state) {
+        boolean previous = IGNORE_STORED_PLACEMENT_DY.get();
+        IGNORE_STORED_PLACEMENT_DY.set(Boolean.TRUE);
+        try {
+            return getYOffset(world, pos, state);
+        } finally {
+            IGNORE_STORED_PLACEMENT_DY.set(previous);
         }
     }
 
@@ -1388,9 +1407,11 @@ public final class SlabSupport {
         // Absence is still indistinguishable from the behaviour that shipped: with no fact this
         // falls through to the identical lanes below, which is the migration-safety contract every
         // world saved before the store existed relies on.
-        double placedDy = SlabPlacementDyAttachment.storedDy(world, pos);
-        if (!Double.isNaN(placedDy)) {
-            return placedDy;
+        if (!IGNORE_STORED_PLACEMENT_DY.get()) {
+            double placedDy = SlabPlacementDyAttachment.storedDy(world, pos);
+            if (!Double.isNaN(placedDy)) {
+                return placedDy;
+            }
         }
         // Slab-on-offset-block: a slab placed on top of a solid block that sits on a bottom slab
         // inherits the same -0.5 dy so the stack stays visually continuous (no gap).

@@ -1,25 +1,314 @@
 package com.slabbed.mixin;
 
+import com.llamalad7.mixinextras.injector.wrapmethod.WrapMethod;
+import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
+import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
+import com.slabbed.Slabbed;
+import com.slabbed.anchor.SlabPlacementDyAttachment;
+import com.slabbed.placement.LandingResolver;
 import com.slabbed.util.SlabSupport;
 import com.slabbed.util.SlabbedAuditBridge;
+import java.util.ArrayDeque;
+import java.util.ArrayList;
+import java.util.Deque;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import net.minecraft.block.BedBlock;
 import net.minecraft.block.Block;
 import net.minecraft.block.BlockEntityProvider;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.CraftingTableBlock;
 import net.minecraft.block.SlabBlock;
+import net.minecraft.block.enums.DoubleBlockHalf;
+import net.minecraft.block.enums.SlabType;
+import net.minecraft.entity.LivingEntity;
 import net.minecraft.item.BlockItem;
+import net.minecraft.item.ItemStack;
 import net.minecraft.item.ItemPlacementContext;
 import net.minecraft.item.ItemUsageContext;
+import net.minecraft.state.property.Properties;
+import net.minecraft.util.ActionResult;
 import net.minecraft.util.hit.BlockHitResult;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Direction;
 import net.minecraft.util.math.Vec3d;
+import net.minecraft.world.World;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.ModifyArg;
 
 @Mixin(BlockItem.class)
 public abstract class BlockItemPlacementIntentMixin {
+
+    private static final ThreadLocal<Integer> ROOT_USE_DEPTH = ThreadLocal.withInitial(() -> 0);
+    private static final ThreadLocal<LandingResolver.PlacementAim> ROOT_AIM = new ThreadLocal<>();
+    private static final ThreadLocal<Deque<PlacementFrame>> PLACEMENT_FRAMES =
+            ThreadLocal.withInitial(ArrayDeque::new);
+
+    private record CellSnapshot(BlockState priorState, SlabPlacementDyAttachment.PlacementDyFact priorFact) {
+    }
+
+    private static final class PlacementFrame {
+        final LandingResolver.PlacementAim rootAim;
+        final LinkedHashMap<BlockPos, CellSnapshot> snapshots = new LinkedHashMap<>();
+        ItemPlacementContext actualContext;
+        Map<BlockPos, Long> pending = Map.of();
+        boolean actualTargetSeen;
+        boolean pendingComputed;
+
+        PlacementFrame(LandingResolver.PlacementAim rootAim) {
+            this.rootAim = rootAim;
+        }
+    }
+
+    @WrapMethod(method = "useOnBlock(Lnet/minecraft/item/ItemUsageContext;)Lnet/minecraft/util/ActionResult;")
+    private ActionResult slabbed$captureRootAim(ItemUsageContext context, Operation<ActionResult> original) {
+        int depth = ROOT_USE_DEPTH.get();
+        ROOT_USE_DEPTH.set(depth + 1);
+        if (depth == 0) {
+            ROOT_AIM.set(LandingResolver.captureAim(context));
+        }
+        try {
+            return original.call(context);
+        } finally {
+            if (depth == 0) {
+                ROOT_AIM.remove();
+                ROOT_USE_DEPTH.remove();
+            } else {
+                ROOT_USE_DEPTH.set(depth);
+            }
+        }
+    }
+
+    @WrapMethod(method = "place(Lnet/minecraft/item/ItemPlacementContext;)Lnet/minecraft/util/ActionResult;")
+    private ActionResult slabbed$placementTransaction(
+            ItemPlacementContext context,
+            Operation<ActionResult> original
+    ) {
+        PlacementFrame frame = new PlacementFrame(ROOT_AIM.get());
+        Deque<PlacementFrame> frames = PLACEMENT_FRAMES.get();
+        frames.push(frame);
+        SlabPlacementDyAttachment.beginBlockItemTransaction();
+        try {
+            ActionResult result = original.call(context);
+            if (result != null && result.isAccepted()) {
+                if (frame.actualTargetSeen && frame.pendingComputed) {
+                    slabbed$publish(frame);
+                } else {
+                    Slabbed.LOGGER.warn(
+                            "[PLACEMENT] accepted placement had incomplete capture target={} pending={}",
+                            frame.actualTargetSeen, frame.pendingComputed);
+                }
+            }
+            return result;
+        } finally {
+            SlabPlacementDyAttachment.endBlockItemTransaction();
+            frames.pop();
+            if (frames.isEmpty()) {
+                PLACEMENT_FRAMES.remove();
+            }
+        }
+    }
+
+    @WrapOperation(
+            method = "place(Lnet/minecraft/item/ItemPlacementContext;)Lnet/minecraft/util/ActionResult;",
+            at = @At(value = "INVOKE",
+                    target = "Lnet/minecraft/item/BlockItem;getPlacementContext(Lnet/minecraft/item/ItemPlacementContext;)Lnet/minecraft/item/ItemPlacementContext;")
+    )
+    private ItemPlacementContext slabbed$captureActualContext(
+            BlockItem instance,
+            ItemPlacementContext context,
+            Operation<ItemPlacementContext> original
+    ) {
+        ItemPlacementContext actual = original.call(instance, context);
+        PlacementFrame frame = slabbed$currentFrame();
+        if (frame != null && actual != null) {
+            frame.actualContext = actual;
+            frame.actualTargetSeen = true;
+        }
+        return actual;
+    }
+
+    @WrapOperation(
+            method = "place(Lnet/minecraft/item/ItemPlacementContext;)Lnet/minecraft/util/ActionResult;",
+            at = @At(value = "INVOKE",
+                    target = "Lnet/minecraft/item/BlockItem;getPlacementState(Lnet/minecraft/item/ItemPlacementContext;)Lnet/minecraft/block/BlockState;")
+    )
+    private BlockState slabbed$snapshotFinalCandidates(
+            BlockItem instance,
+            ItemPlacementContext context,
+            Operation<BlockState> original
+    ) {
+        BlockState placementState = original.call(instance, context);
+        PlacementFrame frame = slabbed$currentFrame();
+        if (frame != null && placementState != null) {
+            frame.actualContext = context;
+            frame.actualTargetSeen = true;
+            slabbed$snapshotCandidates(frame, context, placementState);
+        }
+        return placementState;
+    }
+
+    @WrapOperation(
+            method = "place(Lnet/minecraft/item/ItemPlacementContext;)Lnet/minecraft/util/ActionResult;",
+            at = @At(value = "INVOKE",
+                    target = "Lnet/minecraft/item/ItemStack;decrementUnlessCreative(ILnet/minecraft/entity/LivingEntity;)V")
+    )
+    private void slabbed$computeBeforeConsume(
+            ItemStack stack,
+            int amount,
+            LivingEntity entity,
+            Operation<Void> original
+    ) {
+        PlacementFrame frame = slabbed$currentFrame();
+        if (frame != null) {
+            try {
+                slabbed$computePending(frame);
+            } catch (RuntimeException failure) {
+                frame.pending = Map.of();
+                frame.pendingComputed = true;
+                Slabbed.LOGGER.warn("[PLACEMENT] height capture failed closed", failure);
+            }
+        }
+        original.call(stack, amount, entity);
+    }
+
+    private static PlacementFrame slabbed$currentFrame() {
+        Deque<PlacementFrame> frames = PLACEMENT_FRAMES.get();
+        return frames.isEmpty() ? null : frames.peek();
+    }
+
+    private static void slabbed$snapshotCandidates(
+            PlacementFrame frame,
+            ItemPlacementContext context,
+            BlockState placementState
+    ) {
+        ArrayList<BlockPos> positions = new ArrayList<>();
+        BlockPos primary = context.getBlockPos().toImmutable();
+        positions.add(primary);
+        if (placementState.contains(Properties.DOUBLE_BLOCK_HALF)) {
+            positions.add(primary.up());
+            positions.add(primary.down());
+        }
+        if (placementState.getBlock() instanceof BedBlock || placementState.contains(Properties.BED_PART)) {
+            positions.add(primary.north());
+            positions.add(primary.south());
+            positions.add(primary.west());
+            positions.add(primary.east());
+        }
+        for (BlockPos pos : positions) {
+            BlockPos immutable = pos.toImmutable();
+            frame.snapshots.putIfAbsent(immutable, new CellSnapshot(
+                    context.getWorld().getBlockState(immutable),
+                    SlabPlacementDyAttachment.rawFact(context.getWorld(), immutable)));
+        }
+    }
+
+    private static void slabbed$computePending(PlacementFrame frame) {
+        frame.pendingComputed = true;
+        if (!frame.actualTargetSeen || frame.actualContext == null) {
+            frame.pending = Map.of();
+            return;
+        }
+        World world = frame.actualContext.getWorld();
+        BlockPos primary = frame.actualContext.getBlockPos().toImmutable();
+        BlockState finalState = world.getBlockState(primary);
+        if (finalState.isAir() || LandingResolver.compatOwnsFinalState(finalState)) {
+            frame.pending = Map.of();
+            return;
+        }
+
+        List<BlockPos> group = slabbed$validatedGroup(frame, world, primary, finalState);
+        boolean paired = finalState.contains(Properties.DOUBLE_BLOCK_HALF)
+                || (finalState.getBlock() instanceof BedBlock && finalState.contains(Properties.BED_PART));
+        if (paired && group.isEmpty()) {
+            frame.pending = Map.of();
+            Slabbed.LOGGER.warn("[PLACEMENT] malformed linked placement at {}; publishing no height", primary);
+            return;
+        }
+        if (group.isEmpty()) {
+            group = List.of(primary);
+        }
+
+        long rawBits;
+        CellSnapshot prior = frame.snapshots.get(primary);
+        boolean sameCellSlabUpgrade = finalState.getBlock() instanceof SlabBlock
+                && finalState.contains(SlabBlock.TYPE)
+                && finalState.get(SlabBlock.TYPE) == SlabType.DOUBLE
+                && prior != null
+                && prior.priorState().getBlock() == finalState.getBlock()
+                && prior.priorState().contains(SlabBlock.TYPE)
+                && prior.priorState().get(SlabBlock.TYPE) != SlabType.DOUBLE;
+        if (sameCellSlabUpgrade && prior.priorFact().present()) {
+            rawBits = prior.priorFact().rawBits();
+        } else {
+            LandingResolver.Family family = LandingResolver.classify(finalState);
+            LandingResolver.PlacementResolution resolution = LandingResolver.resolve(
+                    frame.rootAim, primary, finalState, family);
+            double dy = resolution == null
+                    ? SlabSupport.getUnstoredYOffset(world, primary, finalState)
+                    : resolution.landingDy();
+            if (!Double.isFinite(dy)) {
+                frame.pending = Map.of();
+                return;
+            }
+            rawBits = Double.doubleToRawLongBits(dy);
+        }
+
+        LinkedHashMap<BlockPos, Long> pending = new LinkedHashMap<>();
+        for (BlockPos pos : group) {
+            pending.put(pos.toImmutable(), rawBits);
+        }
+        frame.pending = Map.copyOf(pending);
+    }
+
+    private static List<BlockPos> slabbed$validatedGroup(
+            PlacementFrame frame,
+            World world,
+            BlockPos primary,
+            BlockState state
+    ) {
+        if (state.contains(Properties.DOUBLE_BLOCK_HALF)) {
+            DoubleBlockHalf half = state.get(Properties.DOUBLE_BLOCK_HALF);
+            BlockPos partnerPos = half == DoubleBlockHalf.LOWER ? primary.up() : primary.down();
+            BlockState partner = world.getBlockState(partnerPos);
+            if (!frame.snapshots.containsKey(partnerPos)
+                    || partner.getBlock() != state.getBlock()
+                    || !partner.contains(Properties.DOUBLE_BLOCK_HALF)
+                    || partner.get(Properties.DOUBLE_BLOCK_HALF) == half) {
+                return List.of();
+            }
+            return primary.asLong() <= partnerPos.asLong()
+                    ? List.of(primary, partnerPos)
+                    : List.of(partnerPos, primary);
+        }
+        if (state.getBlock() instanceof BedBlock && state.contains(Properties.BED_PART)) {
+            BlockPos partnerPos = primary.offset(BedBlock.getOppositePartDirection(state));
+            BlockState partner = world.getBlockState(partnerPos);
+            if (!frame.snapshots.containsKey(partnerPos)
+                    || partner.getBlock() != state.getBlock()
+                    || !partner.contains(Properties.BED_PART)
+                    || partner.get(Properties.BED_PART) == state.get(Properties.BED_PART)
+                    || !primary.equals(partnerPos.offset(BedBlock.getOppositePartDirection(partner)))) {
+                return List.of();
+            }
+            return primary.asLong() <= partnerPos.asLong()
+                    ? List.of(primary, partnerPos)
+                    : List.of(partnerPos, primary);
+        }
+        return List.of(primary);
+    }
+
+    private static void slabbed$publish(PlacementFrame frame) {
+        if (frame.pending.isEmpty() || frame.actualContext == null) {
+            return;
+        }
+        World world = frame.actualContext.getWorld();
+        if (!world.isClient()) {
+            SlabPlacementDyAttachment.writeBatch(world, frame.pending);
+        }
+    }
 
     private static final double UP_FACE_EDGE_BAND = 0.20d;
     private static final double LOWERED_VISUAL_BOUNDARY_EPSILON = 1.0e-6d;
