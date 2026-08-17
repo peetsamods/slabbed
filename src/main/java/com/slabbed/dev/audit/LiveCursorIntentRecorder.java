@@ -166,8 +166,8 @@ public final class LiveCursorIntentRecorder {
     }
 
     /** Classifies only the numeric client/server settlement component. */
-    public static String classifyClientServerDy(double clientDy, double serverDy) {
-        if (!Double.isFinite(clientDy) || !Double.isFinite(serverDy)) {
+    public static String classifyClientServerDy(boolean samePlacementCell, double clientDy, double serverDy) {
+        if (!samePlacementCell || !Double.isFinite(clientDy) || !Double.isFinite(serverDy)) {
             return "NOT_RUN";
         }
         return Math.abs(clientDy - serverDy) <= 1.0e-6d ? "PASS" : "RED";
@@ -767,13 +767,17 @@ public final class LiveCursorIntentRecorder {
 
         ActionFrame client = "CLIENT".equals(frame.side) ? frame : peer.frame;
         ActionFrame server = "SERVER".equals(frame.side) ? frame : peer.frame;
-        String dyVerdict = classifyClientServerDy(client.dyPlaceAfter, server.dyPlaceAfter);
+        boolean samePlacementCell = client.placePos.equals(server.placePos);
+        String dyVerdict = classifyClientServerDy(
+                samePlacementCell,
+                client.dyPlaceAfter,
+                server.dyPlaceAfter);
         client.peerDyPlaceAfter = server.dyPlaceAfter;
         server.peerDyPlaceAfter = client.dyPlaceAfter;
         client.clientServerDyVerdict = dyVerdict;
         server.clientServerDyVerdict = dyVerdict;
 
-        if (!client.placePos.equals(server.placePos)
+        if (!samePlacementCell
                 || !safe(client.placeAfterState).equals(safe(server.placeAfterState))) {
             writeClientServerMismatch(client, server, "clientServerPlacePosMismatch",
                     "client/server placement result split"

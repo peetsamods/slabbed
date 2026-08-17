@@ -154,12 +154,14 @@ public final class SlabdyRecorderToggleTest {
 
     @GameTest(structure = "fabric-gametest-api-v1:empty")
     public void placementVerdictRequiresDyAndVisualSettlementEvidence(TestContext ctx) {
-        ctx.assertTrue("RED".equals(LiveCursorIntentRecorder.classifyClientServerDy(-0.5d, -1.0d)),
+        ctx.assertTrue("RED".equals(LiveCursorIntentRecorder.classifyClientServerDy(true, -0.5d, -1.0d)),
                 "any finite client/server dy split must be RED, regardless of the placed item");
-        ctx.assertTrue("PASS".equals(LiveCursorIntentRecorder.classifyClientServerDy(-0.5d, -0.5d)),
+        ctx.assertTrue("PASS".equals(LiveCursorIntentRecorder.classifyClientServerDy(true, -0.5d, -0.5d)),
                 "matching finite dy values may pass the numeric component");
-        ctx.assertTrue("NOT_RUN".equals(LiveCursorIntentRecorder.classifyClientServerDy(Double.NaN, -0.5d)),
+        ctx.assertTrue("NOT_RUN".equals(LiveCursorIntentRecorder.classifyClientServerDy(true, Double.NaN, -0.5d)),
                 "missing dy evidence must stay NOT_RUN instead of reading as agreement");
+        ctx.assertTrue("NOT_RUN".equals(LiveCursorIntentRecorder.classifyClientServerDy(false, -0.5d, -1.0d)),
+                "dy values from different placement cells must not be compared as settlement evidence");
 
         ctx.assertTrue("INCONCLUSIVE".equals(LiveCursorIntentRecorder.reducePlacementVerdict(
                         false, "PASS", "NOT_RUN")),
