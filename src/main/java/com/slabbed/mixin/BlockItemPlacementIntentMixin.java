@@ -228,12 +228,14 @@ public abstract class BlockItemPlacementIntentMixin {
         BlockPos primary = frame.actualContext.getBlockPos().toImmutable();
         BlockState finalState = world.getBlockState(primary);
         boolean authoredCustomSlabPlacement = slabbed$isAuthoredCustomSlabFinal(finalState);
+        boolean terrainOwnedOnTopObject = slabbed$terrainOwnsOnTopObject(frame.rootAim, finalState);
         frame.clientPredictionEligible = authoredCustomSlabPlacement
                 || frame.rootAim != null
                 && CompatHooks.customSlabSurfaceKind(frame.rootAim.ownerState())
                 != CompatSlabSurfaceKind.NONE;
         if (finalState.isAir()
-                || (LandingResolver.compatOwnsFinalState(finalState) && !authoredCustomSlabPlacement)) {
+                || ((LandingResolver.compatOwnsFinalState(finalState) || terrainOwnedOnTopObject)
+                && !authoredCustomSlabPlacement)) {
             frame.pending = Map.of();
             return;
         }
@@ -287,6 +289,17 @@ public abstract class BlockItemPlacementIntentMixin {
         return finalState != null
                 && finalState.getBlock() instanceof SlabBlock
                 && CompatHooks.customSlabSurfaceKind(finalState) != CompatSlabSurfaceKind.NONE;
+    }
+
+    private static boolean slabbed$terrainOwnsOnTopObject(
+            LandingResolver.PlacementAim aim,
+            BlockState finalState
+    ) {
+        return aim != null
+                && aim.clickedFace() == Direction.UP
+                && CompatHooks.customSlabSurfaceKind(aim.ownerState())
+                == CompatSlabSurfaceKind.BOTTOM_LIKE
+                && CompatHooks.terrainSlabsHandlesObjectOffset(finalState);
     }
 
     private static List<BlockPos> slabbed$validatedGroup(

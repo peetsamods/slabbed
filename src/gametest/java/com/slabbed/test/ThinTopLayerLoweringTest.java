@@ -1,5 +1,6 @@
 package com.slabbed.test;
 
+import com.slabbed.compat.CompatHooks;
 import com.slabbed.util.SlabSupport;
 import net.fabricmc.fabric.api.gametest.v1.GameTest;
 import net.minecraft.block.Block;
@@ -289,19 +290,9 @@ public final class ThinTopLayerLoweringTest {
         ctx.complete();
     }
 
-    /**
-     * RED — <b>maintainer ruling reverses this cell as well.</b> It previously asserted {@code dy ==
-     * 0.0} for a snow layer on a Terrain Slabs {@code BOTTOM_LIKE} surface. It is the third
-     * SUBJECT-side site ({@code isDirectCustomSlabSupportSubject}); leaving it behind would be the
-     * shared-predicate half-fix trap, with snow lowering on vanilla slabs but floating on TS terrain
-     * in the maintainer's own TS-enabled setup.
-     *
-     * <p>NOTE for the live pass: this is the ONE arrangement where the old DODO argument still has
-     * teeth, because Terrain Slabs makes half-height surfaces out of natural terrain WORLD-WIDE. See
-     * internal-notes entry 1k.
-     */
+    /** Terrain Slabs' registry owns snow's one half-step; Slabbed must contribute zero more. */
     @GameTest(structure = "fabric-gametest-api-v1:empty")
-    public void snowLayerOnTerrainSlabsSurfaceSeatsOnItsTopFace(TestContext ctx) {
+    public void snowLayerOnTerrainSlabsSurfaceUsesTerrainOwnedOffsetOnly(TestContext ctx) {
         ServerWorld w = ctx.getWorld();
         BlockPos surface = ctx.getAbsolutePos(BlockPos.ORIGIN).add(6, 2, 4);
         place(w, surface, TerrainSlabsTestShim.TEST_TS_SLAB.getDefaultState()
@@ -309,10 +300,12 @@ public final class ThinTopLayerLoweringTest {
 
         BlockPos subject = surface.up();
         place(w, subject, Blocks.SNOW.getDefaultState());
+        ctx.assertTrue(CompatHooks.terrainSlabsHandlesObjectOffset(w.getBlockState(subject)),
+                "fixture: Terrain Slabs OnTopHelper must own the snow layer offset");
         double dy = SlabSupport.getYOffset(w, subject, w.getBlockState(subject));
-        ctx.assertTrue(Math.abs(dy + 0.5) <= EPS,
-                "a snow LAYER on a Terrain Slabs BOTTOM_LIKE surface must seat at -0.5, got " + dy
-                        + " — isDirectCustomSlabSupportSubject still excludes it by property");
+        ctx.assertTrue(Math.abs(dy) <= EPS,
+                "Slabbed must contribute 0.0 when Terrain Slabs owns snow's -0.5 on-top offset; got "
+                        + dy);
         ctx.complete();
     }
 

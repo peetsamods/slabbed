@@ -1,5 +1,6 @@
 package com.slabbed.test;
 
+import com.slabbed.anchor.SlabPlacementDyAttachment;
 import com.slabbed.compat.CompatHooks;
 import com.slabbed.compat.CompatSlabSurfaceKind;
 import com.slabbed.util.SlabSupport;
@@ -8,10 +9,15 @@ import net.minecraft.block.BlockState;
 import net.minecraft.block.Blocks;
 import net.minecraft.block.SlabBlock;
 import net.minecraft.block.enums.SlabType;
+import net.minecraft.entity.player.PlayerEntity;
 import net.fabricmc.fabric.api.gametest.v1.GameTest;
+import net.minecraft.item.ItemStack;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.test.TestContext;
+import net.minecraft.util.ActionResult;
 import net.minecraft.util.math.BlockPos;
+import net.minecraft.util.math.Direction;
+import net.minecraft.util.math.Vec3d;
 
 /**
  * 0.3.0-beta.2 hotfix verification: the Terrain Slabs compat must activate against the MODERN
@@ -34,6 +40,39 @@ public final class TerrainSlabsHotfixTest {
         CompatSlabSurfaceKind kind = CompatHooks.customSlabSurfaceKind(tsBottomSlab());
         ctx.assertTrue(kind == CompatSlabSurfaceKind.BOTTOM_LIKE,
                 "terrain_slabs:test_slab[type=bottom] must classify BOTTOM_LIKE (mod-id fix), got " + kind);
+        ctx.complete();
+    }
+
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void terrainSlabsObjectOffsetCapabilityUsesUpstreamAuthority(TestContext ctx) {
+        ctx.assertTrue(CompatHooks.terrainSlabsHandlesObjectOffset(Blocks.DANDELION.getDefaultState()),
+                "PlantBlock family must use Terrain Slabs' own on-top offset authority");
+        ctx.assertTrue(CompatHooks.terrainSlabsHandlesObjectOffset(Blocks.SNOW.getDefaultState()),
+                "registry-owned snow must use Terrain Slabs' own on-top offset authority");
+        ctx.assertTrue(!CompatHooks.terrainSlabsHandlesObjectOffset(Blocks.TORCH.getDefaultState()),
+                "torch is not Terrain-owned and must use Slabbed's floor-seat transaction");
+        ctx.assertTrue(!CompatHooks.terrainSlabsHandlesObjectOffset(Blocks.STONE.getDefaultState()),
+                "ordinary full blocks are player-authored transaction subjects, not OnTop objects");
+        ctx.complete();
+    }
+
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void terrainCapabilityDoesNotStealPlantPlacementOnOrdinarySupport(TestContext ctx) {
+        ServerWorld w = ctx.getWorld();
+        BlockPos ground = ctx.getAbsolutePos(BlockPos.ORIGIN).add(2, 2, 2);
+        BlockPos plant = ground.up();
+        w.setBlockState(ground, Blocks.DIRT.getDefaultState(), Block.NOTIFY_LISTENERS);
+        PlayerEntity player = PlacementHarness.mockPlayerHolding(
+                ctx, ground.north(3), new ItemStack(Blocks.DANDELION.asItem(), 1));
+        Vec3d hit = new Vec3d(ground.getX() + 0.5d, ground.getY() + 1.0d, ground.getZ() + 0.5d);
+
+        ActionResult result = PlacementHarness.useHeldItem(w, player, ground, Direction.UP, hit);
+
+        ctx.assertTrue(result.isAccepted(), "dandelion placement on ordinary dirt must succeed");
+        ctx.assertTrue(w.getBlockState(plant).isOf(Blocks.DANDELION), "the dandelion must be placed");
+        double stored = SlabPlacementDyAttachment.storedDy(w, plant);
+        ctx.assertTrue(Double.doubleToRawLongBits(stored) == Double.doubleToRawLongBits(0.0d),
+                "Terrain capability must not steal a non-Terrain placement transaction; got " + stored);
         ctx.complete();
     }
 

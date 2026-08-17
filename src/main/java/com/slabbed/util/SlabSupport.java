@@ -2852,6 +2852,9 @@ public final class SlabSupport {
         if (state == null
                 || state.isAir()
                 || state.getBlock() instanceof SlabBlock && !isVanillaDirectCustomSlabSubject(state)
+                || CompatHooks.terrainSlabsHandlesObjectOffset(state)
+                && CompatHooks.customSlabSurfaceKind(getBlockStateOrNull(world, pos.down()))
+                == CompatSlabSurfaceKind.BOTTOM_LIKE
                 // NOTE (2026-08-06, second ruling): no snow exclusion here either. All three
                 // SUBJECT-side sites dropped it together — leaving one behind would be the
                 // shared-predicate half-fix trap, with snow lowering on a vanilla slab but floating

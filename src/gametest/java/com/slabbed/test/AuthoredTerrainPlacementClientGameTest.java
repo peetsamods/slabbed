@@ -155,8 +155,77 @@ public final class AuthoredTerrainPlacementClientGameTest implements FabricClien
             requireDy("vanilla-on-Terrain immediate prediction", secondImmediatePrediction.get(), -1.0d);
             requireDy("vanilla-on-Terrain synchronized fact", secondAuthoritativeDy.get(), -1.0d);
             requireAbsent("vanilla-on-Terrain prediction after sync", secondPredictionAfterSync.get());
+            runFloorTorchPredictionProof(ctx, singleplayer, terrainSlab);
             System.out.println("[AUTHORED_TERRAIN_CLIENT] GREEN immediate_and_synced_heights_match");
         }
+    }
+
+    private static void runFloorTorchPredictionProof(
+            ClientGameTestContext ctx,
+            TestSingleplayerContext singleplayer,
+            Block terrainSlab
+    ) {
+        BlockPos ground = new BlockPos(4, 199, 0);
+        BlockPos terrainSupport = ground.up();
+        BlockPos torchPos = terrainSupport.up();
+        AtomicReference<String> resultText = new AtomicReference<>("not_run");
+        AtomicReference<Double> immediateDy = new AtomicReference<>(Double.NaN);
+        AtomicReference<Double> immediatePrediction = new AtomicReference<>(Double.NaN);
+        AtomicReference<Double> authoritativeDy = new AtomicReference<>(Double.NaN);
+        AtomicReference<Double> predictionAfterSync = new AtomicReference<>(Double.NaN);
+
+        singleplayer.getServer().runOnServer(server -> {
+            var world = server.getOverworld();
+            world.setBlockState(ground, Blocks.STONE.getDefaultState(), Block.NOTIFY_LISTENERS);
+            world.setBlockState(terrainSupport,
+                    terrainSlab.getDefaultState().with(SlabBlock.TYPE, SlabType.BOTTOM),
+                    Block.NOTIFY_LISTENERS);
+            world.setBlockState(torchPos, Blocks.AIR.getDefaultState(), Block.NOTIFY_LISTENERS);
+            if (!server.getPlayerManager().getPlayerList().isEmpty()) {
+                var player = server.getPlayerManager().getPlayerList().get(0);
+                positionPlayer(player, terrainSupport);
+                player.setStackInHand(Hand.MAIN_HAND, new ItemStack(Blocks.TORCH.asItem(), 1));
+            }
+        });
+        ctx.waitTick();
+        singleplayer.getClientWorld().waitForChunksRender();
+
+        ctx.runOnClient(mc -> {
+            if (mc.player == null || mc.world == null || mc.interactionManager == null) {
+                resultText.set("client_unavailable");
+                return;
+            }
+            positionPlayer(mc.player, terrainSupport);
+            mc.player.setStackInHand(Hand.MAIN_HAND, new ItemStack(Blocks.TORCH.asItem(), 1));
+            BlockHitResult hit = new BlockHitResult(
+                    new Vec3d(terrainSupport.getX() + 0.5d, terrainSupport.getY() + 0.5d,
+                            terrainSupport.getZ() + 0.5d),
+                    Direction.UP,
+                    terrainSupport,
+                    false);
+            ActionResult result = mc.interactionManager.interactBlock(mc.player, Hand.MAIN_HAND, hit);
+            resultText.set(result.toString());
+            BlockState placed = mc.world.getBlockState(torchPos);
+            immediateDy.set(SlabSupport.getVisualYOffset(mc.world, torchPos, placed));
+            immediatePrediction.set(ClientPlacementDyPrediction.lookup(torchPos));
+        });
+
+        waitTicks(ctx, 4);
+        singleplayer.getClientWorld().waitForChunksRender();
+        ctx.runOnClient(mc -> {
+            if (mc.world != null) {
+                authoritativeDy.set(SlabPlacementDyAttachment.lookup(
+                        mc.world.getChunk(torchPos.getX() >> 4, torchPos.getZ() >> 4),
+                        torchPos));
+                predictionAfterSync.set(ClientPlacementDyPrediction.lookup(torchPos));
+            }
+        });
+
+        requireAccepted("torch-on-Terrain placement", resultText.get());
+        requireDy("torch-on-Terrain immediate visual", immediateDy.get(), -0.5d);
+        requireDy("torch-on-Terrain immediate prediction", immediatePrediction.get(), -0.5d);
+        requireDy("torch-on-Terrain synchronized fact", authoritativeDy.get(), -0.5d);
+        requireAbsent("torch-on-Terrain prediction after sync", predictionAfterSync.get());
     }
 
     private static void waitTicks(ClientGameTestContext ctx, int count) {

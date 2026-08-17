@@ -1,6 +1,7 @@
 package com.slabbed.test;
 
 import com.slabbed.anchor.SlabAnchorAttachment;
+import com.slabbed.anchor.SlabPlacementDyAttachment;
 import com.slabbed.compat.CompatHooks;
 import com.slabbed.util.SlabSupport;
 import net.fabricmc.fabric.api.gametest.v1.GameTest;
@@ -39,22 +40,12 @@ import net.minecraft.util.math.Vec3d;
  * against. {@link #tsOnVanillaBottomSlabAnchorsAndSeatsAtHalfDrop} pins the anchored `dy=-0.5`
  * reading as the correct, intended result for this exact shape.
  *
- * <p><b>Root Cause A (2026-08-09, live-confirmed): a PLAIN SOLID FULL BLOCK (e.g. stone) resting
- * DIRECTLY on a TS bottom slab must stay flush, not anchor/lower.</b> Live-confirmed: stone
- * placed via a real click on bare TS briefly renders flush (correct) then SNAPS DOWN to
- * {@code -0.5} once the server's anchor syncs — a LAW 1 violation (a placed block visibly moving
- * after placement). {@code isSlabSitCandidate} EXPLICITLY excludes plain solid cubes from the
- * curated "object seats on TS" lane ({@code directCustomSlabSupportDy}) for exactly this reason
- * (natural-terrain world holes) — so a plain full block was never meant to lower onto TS at all.
- * The actual leak: {@code hasLoweringSourceInColumnBelow} has an explicit
- * {@code customSlabSurfaceKind == BOTTOM_LIKE} branch (feeding
- * {@code qualifiesForColumnLoweredAnchor}) that fires on the FIRST loop iteration — i.e. for a TS
- * slab found DIRECTLY below, not only deeper in a column — anchoring the full block above it.
- * {@code hasBottomSlabBelow}, {@code hasSlabInColumn} and {@code slabColumnYOffset} were checked
- * and are already safe here (their {@code isBottomSlab} calls inherit a guard via
- * {@code isSupportingSlab}'s {@code shouldSkipSlabSupport} check) — this line's architecture
- * differs from the 26.x lines' (whose {@code hasBottomSlabBelow} needed the direct fix); the one
- * genuine gap on this line is narrower.
+ * <p><b>AUTHORSHIP BOUNDARY (maintainer ruling, 2026-08-17):</b> a plain opaque cube written by
+ * worldgen or {@code setBlockState} stays flush so the natural-terrain world-hole guard remains
+ * intact. The same cube placed by a player on a BOTTOM-like Terrain surface is different: the
+ * placement transaction owns an explicit numeric fact and seats it at the visible top plane,
+ * {@code -0.5}, without widening Terrain anchor propagation. The stored number lets model,
+ * collision and culling distinguish authored construction from unauthored terrain.
  *
  * <p><b>NOT Root Cause A, confirmed correct behaviour (live-tested 2026-08-09):</b> a STANDING
  * OBJECT (lantern, torch, etc.) resting directly on a TS bottom slab legitimately reads
@@ -165,12 +156,46 @@ public final class TerrainSlabsGuardSweepTest {
         ctx.complete();
     }
 
-    // ── Root Cause A, geometric path (unanchored) — a plain solid cube must stay flush ───────
-    // isSlabSitCandidate explicitly excludes plain solid cubes from the standing-object lane
-    // above; a plain full block was never meant to lower onto TS. RED on HEAD today
-    // (hasLoweringSourceInColumnBelow's explicit BOTTOM_LIKE branch fires on the TS slab found
-    // directly below, feeding qualifiesForColumnLoweredAnchor even with no anchor yet recorded —
-    // see getYOffsetInner's shouldOffset/column-walk lane).
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void floorObjectsPlacedOnTsBottomSlabPublishHalfSeat(TestContext ctx) {
+        ServerWorld w = ctx.getWorld();
+        BlockPos ground = ctx.getAbsolutePos(BlockPos.ORIGIN).add(4, 2, 4);
+        BlockPos ts = ground.up();
+        BlockPos placedPos = ts.up();
+        w.setBlockState(ground, Blocks.STONE.getDefaultState(), Block.NOTIFY_LISTENERS);
+        w.setBlockState(ts, tsBottom(), Block.NOTIFY_LISTENERS);
+
+        for (Block block : new Block[]{Blocks.TORCH, Blocks.LANTERN, Blocks.REPEATER, Blocks.COMPARATOR}) {
+            w.setBlockState(placedPos, Blocks.AIR.getDefaultState(), Block.NOTIFY_LISTENERS);
+            SlabPlacementDyAttachment.clear(w, placedPos);
+            PlayerEntity player = PlacementHarness.mockPlayerHolding(
+                    ctx, ts.north(3), new net.minecraft.item.ItemStack(block.asItem(), 1));
+            Vec3d hit = new Vec3d(ts.getX() + 0.5, ts.getY() + 0.5, ts.getZ() + 0.5);
+
+            ActionResult result = PlacementHarness.useHeldItem(w, player, ts, Direction.UP, hit);
+
+            ctx.assertTrue(result.isAccepted(),
+                    "floor-supported placement on Terrain bottom slab must succeed for " + block
+                            + "; got " + result);
+            ctx.assertTrue(w.getBlockState(placedPos).isOf(block),
+                    "the expected floor-supported block must occupy the destination for " + block);
+            double stored = SlabPlacementDyAttachment.storedDy(w, placedPos);
+            ctx.assertTrue(Double.doubleToRawLongBits(stored)
+                            == Double.doubleToRawLongBits(-0.5d),
+                    "player-authored floor object on Terrain dy=0 must freeze at -0.5 for "
+                            + block + "; got " + stored);
+            double visual = SlabSupport.getYOffset(w, placedPos, w.getBlockState(placedPos));
+            ctx.assertTrue(Math.abs(visual - (-0.5d)) <= EPS,
+                    "floor object must visibly seat on the Terrain bottom slab for " + block
+                            + "; got dy=" + visual);
+        }
+        ctx.complete();
+    }
+
+    // ── Unauthored geometric path — a plain solid terrain cube must stay flush ───────────────
+    // isSlabSitCandidate excludes unauthored opaque cubes from the standing-object lane. With no
+    // placement fact this remains the natural-terrain world-hole guard; the player-authored row
+    // below is distinguished only by its transaction-owned numeric fact.
     @GameTest(structure = "fabric-gametest-api-v1:empty")
     public void plainFullBlockDirectlyOnTsBottomSlabStaysFlushUnanchored(TestContext ctx) {
         ServerWorld w = ctx.getWorld();
@@ -182,17 +207,14 @@ public final class TerrainSlabsGuardSweepTest {
         w.setBlockState(above, Blocks.STONE.getDefaultState(), Block.NOTIFY_LISTENERS);
         double dy = SlabSupport.getYOffset(w, above, w.getBlockState(above));
         ctx.assertTrue(Math.abs(dy) <= EPS,
-                "ROOT CAUSE A: a plain solid full block resting directly on a TS bottom slab must "
-                        + "stay FLUSH (isSlabSitCandidate explicitly excludes it from the "
-                        + "lowering-object lane) — Slabbed must not add its own -0.5, got dy=" + dy);
+                "an unauthored plain full block above Terrain must stay flush for world-hole safety; "
+                        + "got dy=" + dy);
         ctx.complete();
     }
 
-    // ── Root Cause A, anchor path (real useOn placement) — live-confirmed symptom ────────────
-    // Live-confirmed 2026-08-09: stone placed via a real click on bare TS renders flush briefly,
-    // then SNAPS DOWN to -0.5 once the server's anchor syncs — a LAW 1 violation. RED on HEAD.
+    // ── Player-authored path — the transaction stores the visible half-seat without an anchor ─
     @GameTest(structure = "fabric-gametest-api-v1:empty")
-    public void fullBlockPlacedOnTsBottomSlabMustNotAnchor(TestContext ctx) {
+    public void playerAuthoredFullBlockOnTsBottomSlabPublishesHalfSeat(TestContext ctx) {
         ServerWorld w = ctx.getWorld();
         BlockPos ground = ctx.getAbsolutePos(BlockPos.ORIGIN).add(7, 2, 7);
         w.setBlockState(ground, Blocks.STONE.getDefaultState(), Block.NOTIFY_LISTENERS);
@@ -210,12 +232,20 @@ public final class TerrainSlabsGuardSweepTest {
         ctx.assertTrue(placed.isOf(Blocks.STONE),
                 "fixture: stone must land in the cell above the TS slab, got " + placed);
         ctx.assertTrue(!SlabAnchorAttachment.isAnchored(w, above),
-                "ROOT CAUSE A: a real click placing a full block on a TS bottom slab must NOT "
-                        + "anchor it (TS owns the surface; anchoring double-offsets and produces "
-                        + "the live-reported snap-down), got isAnchored=true");
+                "a transaction-owned numeric height must not widen Terrain anchor propagation");
+        double stored = SlabPlacementDyAttachment.storedDy(w, above);
+        ctx.assertTrue(Double.doubleToRawLongBits(stored) == Double.doubleToRawLongBits(-0.5d),
+                "player-authored full block on Terrain dy=0 must freeze at -0.5; got " + stored);
         double dy = SlabSupport.getYOffset(w, above, w.getBlockState(above));
-        ctx.assertTrue(Math.abs(dy) <= EPS,
-                "ROOT CAUSE A: the placed block must read dy=0.0 (flush), got dy=" + dy);
+        ctx.assertTrue(Math.abs(dy - (-0.5d)) <= EPS,
+                "player-authored full block must seat on the Terrain bottom slab; got dy=" + dy);
+
+        w.setBlockState(ts, Blocks.AIR.getDefaultState(), Block.NOTIFY_ALL);
+        ctx.assertTrue(w.getBlockState(above).isOf(Blocks.STONE),
+                "removing the authored support must not replace the full block");
+        double afterRemoval = SlabSupport.getYOffset(w, above, w.getBlockState(above));
+        ctx.assertTrue(Math.abs(afterRemoval - (-0.5d)) <= EPS,
+                "the stored authored height must survive later support removal; got " + afterRemoval);
         ctx.complete();
     }
 

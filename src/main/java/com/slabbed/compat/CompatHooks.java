@@ -37,6 +37,14 @@ public final class CompatHooks {
         return false;
     }
 
+    /** Returns true when Terrain Slabs already offsets this on-top object. */
+    public static boolean terrainSlabsHandlesObjectOffset(BlockState state) {
+        if (isModLoaded(TerrainSlabsCompat.MOD_ID) || isModLoaded(TerrainSlabsCompat.LEGACY_MOD_ID)) {
+            return TerrainSlabsCompat.handlesObjectOffset(state);
+        }
+        return false;
+    }
+
     /**
      * Named compat-only slab surface role for direct object support decisions.
      */

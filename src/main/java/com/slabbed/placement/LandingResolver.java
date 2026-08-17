@@ -94,7 +94,8 @@ public final class LandingResolver {
     /** A compatibility-owned state keeps its native behavior unless the transaction authors it. */
     public static boolean compatOwnsFinalState(BlockState state) {
         return state != null
-                && (CompatHooks.shouldSkipOffset(state) || CompatHooks.shouldSkipSlabSupport(state));
+                && (CompatHooks.shouldSkipOffset(state)
+                || CompatHooks.shouldSkipSlabSupport(state));
     }
 
     public static PlacementResolution resolve(
@@ -109,7 +110,9 @@ public final class LandingResolver {
                 || compatOwnsFinalState(finalState) && !authoredCompatSlabFinal) {
             return null;
         }
-        if (family != Family.SLAB && compatOwnsFinalState(aim.ownerState())) {
+        if (family != Family.SLAB
+                && aim.clickedFace() != Direction.UP
+                && compatOwnsFinalState(aim.ownerState())) {
             return Double.isFinite(aim.ownerVisibleDy())
                     ? new PlacementResolution(actualTarget, aim.ownerVisibleDy(), false)
                     : null;
