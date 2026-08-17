@@ -57,8 +57,8 @@ public final class LiveCursorIntentRecorder {
     // command (/slabdy record), never a JVM flag they'd have to know about in advance.
     private static volatile boolean enabled = Boolean.getBoolean("slabbed.liveCursorIntentRecorder");
     private static final String DIR_PROPERTY = "slabbed.liveCursorIntentRecorderDir";
-    private static final String SCHEMA_VERSION = "5";
-    private static final String RECORDER_VERSION = "5-target-reason-full-block-predicates-slab-top-dy";
+    private static final String SCHEMA_VERSION = "6";
+    private static final String RECORDER_VERSION = "6-strict-settlement-verdict-terminal-flush";
     private static final String RUN_ID = UUID.randomUUID().toString();
     private static final String[] RED_COUNTERS = {
             "same_cell_double_combine",
@@ -69,6 +69,7 @@ public final class LiveCursorIntentRecorder {
             "rawFinalTargetVsInteractionHitMismatch",
             "finalTargetPlacementSemanticMismatch",
             "clientServerPlacePosMismatch",
+            "clientServerPlacementDyMismatch",
             "loweredDyLostAfterDoubleTarget",
             "slabTopOnLoweredSupportDyLost",
             "targetScanNoRescueCandidate",
@@ -82,6 +83,8 @@ public final class LiveCursorIntentRecorder {
             "sessionRows",
             "actionRows",
             "mismatchRows",
+            "actionSnapshotWrites",
+            "actionSnapshotWriteFailures",
             "summaryWrites",
             "summaryWriteFailures",
             "manifestWrites",
@@ -162,6 +165,38 @@ public final class LiveCursorIntentRecorder {
         return outputDir == null ? "not started" : outputDir.toAbsolutePath().toString();
     }
 
+    /** Classifies only the numeric client/server settlement component. */
+    public static String classifyClientServerDy(double clientDy, double serverDy) {
+        if (!Double.isFinite(clientDy) || !Double.isFinite(serverDy)) {
+            return "NOT_RUN";
+        }
+        return Math.abs(clientDy - serverDy) <= 1.0e-6d ? "PASS" : "RED";
+    }
+
+    /** A placement is green only when every required settlement component has passed. */
+    public static String reducePlacementVerdict(
+            boolean componentRed,
+            String clientServerDyVerdict,
+            String visualSettlementVerdict
+    ) {
+        if (componentRed
+                || "RED".equals(clientServerDyVerdict)
+                || "RED".equals(visualSettlementVerdict)) {
+            return "RED";
+        }
+        if ("PASS".equals(clientServerDyVerdict) && "PASS".equals(visualSettlementVerdict)) {
+            return "GREEN";
+        }
+        return "INCONCLUSIVE";
+    }
+
+    /** Dev-only health read used to pin recorder write frequency. */
+    public static int healthCounterForTest(String key) {
+        synchronized (LiveCursorIntentRecorder.class) {
+            return HEALTH.getOrDefault(key, 0);
+        }
+    }
+
     public static void bootstrap() {
         if (!enabled) {
             return;
@@ -199,8 +234,7 @@ public final class LiveCursorIntentRecorder {
                     "dir", outputDir.toAbsolutePath().toString(),
                     "health", compactMap(HEALTH),
                     "redCounters", compactMap(COUNTERS)));
-            writeActionsSnapshot();
-            writeSummary();
+            flushSnapshots();
         }
     }
 
@@ -330,7 +364,6 @@ public final class LiveCursorIntentRecorder {
                 }
                 writeSession("client_interact_return", frame, "CLIENT", fields(
                         "result", safe(result)));
-                writeActionsSnapshot();
             }
             CURRENT.remove();
         }
@@ -365,8 +398,6 @@ public final class LiveCursorIntentRecorder {
             if (frame.placePos != null) {
                 compareClientServer(frame);
             }
-            writeActionsSnapshot();
-            writeSummary();
         }
     }
 
@@ -409,7 +440,7 @@ public final class LiveCursorIntentRecorder {
                 frame.serverReturnRecorded = true;
                 writeSession("server_interact_return", frame, "SERVER", fields(
                         "serverReturn", "true"));
-                writeActionsSnapshot();
+                flushSnapshots();
             }
             CURRENT.remove();
         }
@@ -597,9 +628,7 @@ public final class LiveCursorIntentRecorder {
                     "result", frame.actionResult,
                     "postSettleNeighborhood", frame.neighborhood));
             classifyPlacement(frame);
-            writeActionsSnapshot();
             compareClientServer(frame);
-            writeSummary();
         }
     }
 
@@ -726,17 +755,55 @@ public final class LiveCursorIntentRecorder {
         if (frame.sequence == null || frame.placePos == null) {
             return;
         }
-        PlacementSummary summary = new PlacementSummary(frame.actionId, frame.sequence, frame.side, frame.placePos, frame.placeAfterState);
+        PlacementSummary summary = new PlacementSummary(frame);
         Map<Integer, PlacementSummary> own = "CLIENT".equals(frame.side) ? CLIENT_PLACE_BY_SEQUENCE : SERVER_PLACE_BY_SEQUENCE;
         Map<Integer, PlacementSummary> other = "CLIENT".equals(frame.side) ? SERVER_PLACE_BY_SEQUENCE : CLIENT_PLACE_BY_SEQUENCE;
         own.put(frame.sequence, summary);
         PlacementSummary peer = other.get(frame.sequence);
-        if (peer != null && (!summary.placePos.equals(peer.placePos) || !safe(summary.afterState).equals(safe(peer.afterState)))) {
-            writeMismatch(frame, "clientServerPlacePosMismatch",
-                    "client/server placement result split peerSide=" + peer.side
-                            + " peerPlacePos=" + pos(peer.placePos)
-                            + " peerAfterState=" + safe(peer.afterState));
+        if (peer == null) {
+            frame.refreshFinalVerdict();
+            return;
         }
+
+        ActionFrame client = "CLIENT".equals(frame.side) ? frame : peer.frame;
+        ActionFrame server = "SERVER".equals(frame.side) ? frame : peer.frame;
+        String dyVerdict = classifyClientServerDy(client.dyPlaceAfter, server.dyPlaceAfter);
+        client.peerDyPlaceAfter = server.dyPlaceAfter;
+        server.peerDyPlaceAfter = client.dyPlaceAfter;
+        client.clientServerDyVerdict = dyVerdict;
+        server.clientServerDyVerdict = dyVerdict;
+
+        if (!client.placePos.equals(server.placePos)
+                || !safe(client.placeAfterState).equals(safe(server.placeAfterState))) {
+            writeClientServerMismatch(client, server, "clientServerPlacePosMismatch",
+                    "client/server placement result split"
+                            + " clientPlacePos=" + pos(client.placePos)
+                            + " serverPlacePos=" + pos(server.placePos)
+                            + " clientAfterState=" + safe(client.placeAfterState)
+                            + " serverAfterState=" + safe(server.placeAfterState));
+        }
+        if ("RED".equals(dyVerdict)) {
+            writeClientServerMismatch(client, server, "clientServerPlacementDyMismatch",
+                    "client/server placement dy split"
+                            + " clientDy=" + formatDouble(client.dyPlaceAfter)
+                            + " serverDy=" + formatDouble(server.dyPlaceAfter));
+        }
+        client.refreshFinalVerdict();
+        server.refreshFinalVerdict();
+    }
+
+    private static void writeClientServerMismatch(
+            ActionFrame client,
+            ActionFrame server,
+            String counter,
+            String detail
+    ) {
+        client.componentRed = true;
+        server.componentRed = true;
+        client.refreshFinalVerdict();
+        server.refreshFinalVerdict();
+        String logicalKey = "logical|" + counter + "|" + server.sequence + "|" + server.actionId;
+        writeMismatchWithKey(server, counter, detail, logicalKey);
     }
 
     private static ActionFrame requireFrame(String side) {
@@ -771,11 +838,20 @@ public final class LiveCursorIntentRecorder {
             rows++;
         }
         setHealth("actionRows", rows);
-        writeAtomic(actionsPath, sb.toString(), "actions");
+        if (writeAtomic(actionsPath, sb.toString(), "actions")) {
+            incHealth("actionSnapshotWrites");
+        } else {
+            incHealth("actionSnapshotWriteFailures");
+        }
+    }
+
+    private static void flushSnapshots() {
+        writeActionsSnapshot();
+        writeSummary();
     }
 
     private static String actionHeader() {
-        return "row\tactionId\tsequence\tside\thand\theldItem\tfinalTarget\tinteractionHit\tpacketHit\tcontextHitPos\tcontextSide\tplacePos\tbeforeState\tslabPlacementState\tafterState\tafterSlabType\tdyHit\tdyPlaceAfter\tremapMode\teffectiveFace\tremapAccepted\tactionResult\n";
+        return "row\tactionId\tsequence\tside\thand\theldItem\tfinalTarget\tinteractionHit\tpacketHit\tcontextHitPos\tcontextSide\tplacePos\tbeforeState\tslabPlacementState\tafterState\tafterSlabType\tdyHit\tdyPlaceAfter\tremapMode\teffectiveFace\tremapAccepted\tactionResult\tpeerDyPlaceAfter\tclientServerDyVerdict\tvisualSettlementVerdict\tfinalVerdict\n";
     }
 
     private static void appendActionRow(StringBuilder sb, ActionFrame frame) {
@@ -803,7 +879,11 @@ public final class LiveCursorIntentRecorder {
                 .append(tsv(frame.remapMode)).append('\t')
                 .append(tsv(safe(frame.remapEffectiveSide))).append('\t')
                 .append(tsv(Boolean.toString(frame.remapAccepted))).append('\t')
-                .append(tsv(frame.actionResult))
+                .append(tsv(frame.actionResult)).append('\t')
+                .append(tsv(formatDouble(frame.peerDyPlaceAfter))).append('\t')
+                .append(tsv(frame.clientServerDyVerdict)).append('\t')
+                .append(tsv(frame.visualSettlementVerdict)).append('\t')
+                .append(tsv(frame.finalVerdict))
                 .append('\n');
     }
 
@@ -814,6 +894,14 @@ public final class LiveCursorIntentRecorder {
                 + (frame == null ? "" : pos(frame.contextHitPos)) + "|"
                 + (frame == null ? "" : pos(frame.placePos)) + "|"
                 + detail;
+        writeMismatchWithKey(frame, counter, detail, key);
+    }
+
+    private static void writeMismatchWithKey(ActionFrame frame, String counter, String detail, String key) {
+        if (frame != null) {
+            frame.componentRed = true;
+            frame.refreshFinalVerdict();
+        }
         if (!MISMATCH_KEYS.add(key)) {
             return;
         }
@@ -860,6 +948,8 @@ public final class LiveCursorIntentRecorder {
     }
 
     private static void writeSummary() {
+        int previousSummaryWrites = HEALTH.getOrDefault("summaryWrites", 0);
+        setHealth("summaryWrites", previousSummaryWrites + 1);
         Instant now = Instant.now();
         String counters = compactMap(COUNTERS);
         String health = compactMap(HEALTH);
@@ -895,9 +985,8 @@ public final class LiveCursorIntentRecorder {
         }
         boolean jsonWritten = writeAtomic(summaryJsonPath, json, "summary_json");
         boolean markdownWritten = writeAtomic(summaryPath, sb.toString(), "summary");
-        if (jsonWritten && markdownWritten) {
-            incHealth("summaryWrites");
-        } else {
+        if (!jsonWritten || !markdownWritten) {
+            setHealth("summaryWrites", previousSummaryWrites);
             incHealth("summaryWriteFailures");
         }
     }
@@ -1353,6 +1442,11 @@ public final class LiveCursorIntentRecorder {
         double dyHit = Double.NaN;
         double dyPlaceBefore = Double.NaN;
         double dyPlaceAfter = Double.NaN;
+        double peerDyPlaceAfter = Double.NaN;
+        String clientServerDyVerdict = "NOT_RUN";
+        String visualSettlementVerdict = "NOT_RUN";
+        String finalVerdict = "INCONCLUSIVE";
+        boolean componentRed;
         boolean canReplaceExisting;
         String actionResult = "";
         String neighborhood = "";
@@ -1367,6 +1461,13 @@ public final class LiveCursorIntentRecorder {
 
         boolean shouldWriteActionRow() {
             return placementResultRecorded || clientReturnRecorded || serverReturnRecorded;
+        }
+
+        void refreshFinalVerdict() {
+            finalVerdict = reducePlacementVerdict(
+                    componentRed,
+                    clientServerDyVerdict,
+                    visualSettlementVerdict);
         }
     }
 
@@ -1385,12 +1486,6 @@ public final class LiveCursorIntentRecorder {
     ) {
     }
 
-    private record PlacementSummary(
-            String actionId,
-            int sequence,
-            String side,
-            BlockPos placePos,
-            String afterState
-    ) {
+    private record PlacementSummary(ActionFrame frame) {
     }
 }

@@ -152,6 +152,67 @@ public final class SlabdyRecorderToggleTest {
         ctx.complete();
     }
 
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void placementVerdictRequiresDyAndVisualSettlementEvidence(TestContext ctx) {
+        ctx.assertTrue("RED".equals(LiveCursorIntentRecorder.classifyClientServerDy(-0.5d, -1.0d)),
+                "any finite client/server dy split must be RED, regardless of the placed item");
+        ctx.assertTrue("PASS".equals(LiveCursorIntentRecorder.classifyClientServerDy(-0.5d, -0.5d)),
+                "matching finite dy values may pass the numeric component");
+        ctx.assertTrue("NOT_RUN".equals(LiveCursorIntentRecorder.classifyClientServerDy(Double.NaN, -0.5d)),
+                "missing dy evidence must stay NOT_RUN instead of reading as agreement");
+
+        ctx.assertTrue("INCONCLUSIVE".equals(LiveCursorIntentRecorder.reducePlacementVerdict(
+                        false, "PASS", "NOT_RUN")),
+                "numeric dy agreement without visual settlement evidence must not become GREEN");
+        ctx.assertTrue("RED".equals(LiveCursorIntentRecorder.reducePlacementVerdict(
+                        false, "RED", "NOT_RUN")),
+                "a dy split must dominate missing visual evidence");
+        ctx.assertTrue("GREEN".equals(LiveCursorIntentRecorder.reducePlacementVerdict(
+                        false, "PASS", "PASS")),
+                "GREEN requires every currently required component to pass");
+        ctx.complete();
+    }
+
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void interactionFlushesSnapshotsOnlyAtServerTerminal(TestContext ctx) {
+        boolean initial = LiveCursorIntentRecorder.isEnabled();
+        if (!initial) {
+            LiveCursorIntentRecorder.toggle();
+        }
+
+        try {
+            int actionSnapshotsBefore = LiveCursorIntentRecorder.healthCounterForTest("actionSnapshotWrites");
+            int summariesBefore = LiveCursorIntentRecorder.healthCounterForTest("summaryWrites");
+            int sequence = 1_600_000_001;
+
+            LiveCursorIntentRecorder.recordClientInteract(null, net.minecraft.util.Hand.MAIN_HAND, null);
+            LiveCursorIntentRecorder.recordPacketSequence(net.minecraft.util.Hand.MAIN_HAND, null, sequence);
+            LiveCursorIntentRecorder.recordClientInteractResult(null);
+            ctx.assertTrue(
+                    LiveCursorIntentRecorder.healthCounterForTest("actionSnapshotWrites") == actionSnapshotsBefore,
+                    "client start, packet correlation, and client return must not rewrite the whole action ledger");
+            ctx.assertTrue(LiveCursorIntentRecorder.healthCounterForTest("summaryWrites") == summariesBefore,
+                    "client start, packet correlation, and client return must not rewrite both summaries");
+
+            LiveCursorIntentRecorder.recordServerInteract(null, net.minecraft.util.Hand.MAIN_HAND, null, sequence);
+            ctx.assertTrue(
+                    LiveCursorIntentRecorder.healthCounterForTest("actionSnapshotWrites") == actionSnapshotsBefore,
+                    "server start is not a terminal flush point");
+            LiveCursorIntentRecorder.recordServerInteractResult(sequence);
+
+            ctx.assertTrue(
+                    LiveCursorIntentRecorder.healthCounterForTest("actionSnapshotWrites") == actionSnapshotsBefore + 1,
+                    "one logical server interaction must produce exactly one action snapshot");
+            ctx.assertTrue(LiveCursorIntentRecorder.healthCounterForTest("summaryWrites") == summariesBefore + 1,
+                    "one logical server interaction must produce exactly one summary flush");
+        } finally {
+            if (LiveCursorIntentRecorder.isEnabled() != initial) {
+                LiveCursorIntentRecorder.toggle();
+            }
+        }
+        ctx.complete();
+    }
+
     /**
      * The recorder's five mixins were moved OUT of slabbed.mixins.json / slabbed.client.mixins.json
      * and into slabbed.recorder(.client).mixins.json, which fabric.mod.json does not reference and
