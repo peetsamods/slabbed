@@ -67,6 +67,32 @@ public final class LandingResolver {
                 ownerState.canReplace(new ItemPlacementContext(context)));
     }
 
+    /**
+     * Aim reconstruction for a placement whose cell was RELOCATED by the item's own placement
+     * context (a multi-cell walk away from the clicked cell). The relocated context's hit sits
+     * at the destination cell with the walk direction as its face, so the walk's SOURCE cell —
+     * the destination's neighbor against that face — is the aim owner. The destination then
+     * seats via the same arithmetic {@link #resolve} applies to a direct aim on that source: a
+     * flush source yields a flush destination, and a lowered source yields its own recorded dy,
+     * so a relocated stack follows the real column seat instead of the stale pre-relocation aim.
+     */
+    public static PlacementAim captureRelocatedAim(ItemPlacementContext context) {
+        World world = context.getWorld();
+        Direction walkFace = context.getSide();
+        BlockPos ownerPos = context.getBlockPos().offset(walkFace.getOpposite());
+        BlockState ownerState = world.getBlockState(ownerPos);
+        double ownerVisibleDy = ownerState.isAir()
+                ? 0.0d
+                : visibleOwnerDy(world, ownerPos, ownerState);
+        return new PlacementAim(
+                ownerPos,
+                ownerState,
+                ownerVisibleDy,
+                walkFace,
+                context.getHitPos(),
+                false);
+    }
+
     public static Family classify(BlockState placedState) {
         if (placedState == null || placedState.isAir()) {
             return Family.UNSUPPORTED;

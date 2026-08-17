@@ -261,7 +261,8 @@ public abstract class BlockItemPlacementIntentMixin {
         } else {
             LandingResolver.Family family = LandingResolver.classify(finalState);
             LandingResolver.PlacementResolution resolution = LandingResolver.resolve(
-                    frame.rootAim, primary, finalState, family, authoredCustomSlabPlacement);
+                    slabbed$aimForResolve(frame, primary), primary, finalState, family,
+                    authoredCustomSlabPlacement);
             double dy = resolution == null
                     ? SlabSupport.getUnstoredYOffset(world, primary, finalState)
                     : resolution.landingDy();
@@ -277,6 +278,28 @@ public abstract class BlockItemPlacementIntentMixin {
             pending.put(pos.toImmutable(), rawBits);
         }
         frame.pending = Map.copyOf(pending);
+    }
+
+    /**
+     * The root aim is valid evidence about the placement cell only while that cell is the aim's
+     * own cell or its clicked-face neighbor. An item's own placement-context override may
+     * RELOCATE the placement several cells away (a multi-cell walk); the discriminator is that
+     * observed relocation, never the item's class. A relocated placement rebuilds its aim from
+     * the relocated context itself so {@link LandingResolver#resolve} sees a self-consistent
+     * aim/cell pair; every non-relocated placement keeps the root aim untouched.
+     */
+    private static LandingResolver.PlacementAim slabbed$aimForResolve(
+            PlacementFrame frame,
+            BlockPos primary
+    ) {
+        LandingResolver.PlacementAim aim = frame.rootAim;
+        if (aim == null
+                || frame.actualContext == null
+                || primary.equals(aim.ownerPos())
+                || primary.equals(aim.ownerPos().offset(aim.clickedFace()))) {
+            return aim;
+        }
+        return LandingResolver.captureRelocatedAim(frame.actualContext);
     }
 
     /** A player-authored custom slab final joins the same immutable transaction as vanilla slabs. */
