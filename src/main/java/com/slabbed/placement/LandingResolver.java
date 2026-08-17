@@ -111,7 +111,7 @@ public final class LandingResolver {
             return null;
         }
         if (family != Family.SLAB
-                && aim.clickedFace() != Direction.UP
+                && aim.clickedFace().getAxis().isHorizontal()
                 && compatOwnsFinalState(aim.ownerState())) {
             return Double.isFinite(aim.ownerVisibleDy())
                     ? new PlacementResolution(actualTarget, aim.ownerVisibleDy(), false)

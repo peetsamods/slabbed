@@ -1329,26 +1329,26 @@ public final class SlabSupport {
     /**
      * Rendered dy for an always-ceiling-hung decoration, decided SOLELY by the support directly
      * ABOVE — never by any block below — so it cannot be dragged down by a carrier lower in the
-     * column. Under a LOWERED non-skip-offset support (vanilla slab or full block) it follows that
-     * support's lowered dy (a TOP slab adds the +0.5 raised-attach baseline so it sits flush, not
-     * 0.5 too low). A Terrain Slabs slab renders FLUSH, so it is never treated as a lowered
-     * support (the {@code shouldSkipOffset} guard) — a hanger beneath a flush TS slab stays flush
-     * even with a carrier lower in the column (e.g. a lantern placed beneath bridging the downward
-     * walk to a slab below). Under a normal top-like ceiling (directly or via a chain of
-     * ceiling-attached blocks) it floats +0.5, mirroring the pre-existing tail ceiling lanes;
-     * otherwise flush. Uses only the recursion-safe lowered-support mirrors (never re-enters
-     * {@link #getYOffset}), so it is safe inside the {@code IN_GET_Y_OFFSET} guard.
+     * column. Under a lowered authored support it follows the immutable support dy (a TOP slab
+     * adds the +0.5 raised-attach baseline so it sits flush, not 0.5 too low). An unstored custom
+     * slab stays in its compatibility owner's native coordinate space. Under a normal top-like
+     * ceiling (directly or via a chain of ceiling-attached blocks) it floats +0.5, mirroring the
+     * existing tail ceiling lanes; otherwise flush. Uses only the recursion-safe lowered-support
+     * mirrors (never re-enters {@link #getYOffset}), so it is safe inside the
+     * {@code IN_GET_Y_OFFSET} guard.
      */
     private static double ceilingHungDecorationDy(BlockView world, BlockPos pos, BlockState state) {
         BlockPos supportPos = pos.up();
         BlockState above = world.getBlockState(supportPos);
-        if (!CompatHooks.shouldSkipOffset(above)) {
+        boolean authoredCustomSupport = CompatHooks.shouldSkipOffset(above)
+                && SlabPlacementDyAttachment.hasStoredDy(world, supportPos);
+        if (!CompatHooks.shouldSkipOffset(above) || authoredCustomSupport) {
             double slabSupportDy = loweredSlabUndersideSupportDy(world, supportPos, above);
             if (Double.isFinite(slabSupportDy) && slabSupportDy < -1.0e-6) {
                 // A TOP slab's underside sits half a block higher than a hanger's natural
                 // attach (support.y+1.5 vs hanger.y+1), so the hanger keeps its +0.5
                 // raised-attach baseline on top of the slab's lowering.
-                return isTopSlab(above) ? slabSupportDy + 0.5 : slabSupportDy;
+                return hasRaisedSlabUnderside(above) ? slabSupportDy + 0.5 : slabSupportDy;
             }
             double fullBlockSupportDy = loweredFullHeightSupportDy(world, supportPos, above);
             if (Double.isFinite(fullBlockSupportDy) && fullBlockSupportDy < -1.0e-6) {
@@ -1599,7 +1599,7 @@ public final class SlabSupport {
                 // A TOP slab's underside sits half a block higher than a hanger's
                 // natural attach (support.y+1.5 vs hanger.y+1), so the hanger keeps
                 // its +0.5 raised-attach baseline on top of the slab's lowering.
-                return isTopSlab(supportState) ? slabSupportDy + 0.5 : slabSupportDy;
+                return hasRaisedSlabUnderside(supportState) ? slabSupportDy + 0.5 : slabSupportDy;
             }
             double fullBlockSupportDy = loweredFullHeightSupportDy(world, supportPos, supportState);
             if (Double.isFinite(fullBlockSupportDy) && fullBlockSupportDy < -1.0e-6) {
@@ -1843,18 +1843,13 @@ public final class SlabSupport {
                 || !state.getFluidState().isEmpty()) {
             return Double.NaN;
         }
-        // Terrain Slabs owns its own vertical offset and renders its slabs FLUSH (shouldSkipOffset).
-        // A hanger under, or an object standing on, a TS slab must NOT follow a Slabbed -0.5 — the
-        // same invariant ceilingHungDecorationDy enforces via its !shouldSkipOffset guard (~line
-        // 878, which is why a hanging SIGN stays flush under a TS slab). Folded INTO this shared
-        // helper, not into one caller: BOTH consumers — the isLoweredUndersideHangerOwner hanger
-        // lane (~1086) AND the object-standing-on-a-TOP/DOUBLE-slab lane (~1180) — call it with no
-        // guard, so guarding one would leave the other exposed ([[slabbed-shared-predicate-half-fix-trap]]).
-        // MUST precede the cache short-circuit: this session's L8/L10 anchor-widening made a
-        // cantilevered TS slab anchorable, so its own -0.5 visual dy is now cached and would leak
-        // through here. Regression fixed live-reported 2026-07-04 (lantern-under-TS gap).
+        // Unstored custom slabs keep their compatibility owner's native coordinate space. Once a
+        // custom slab has an authored placement fact, that immutable height is the shared support
+        // authority for every underside consumer. This check precedes the visual cache so native
+        // and authored custom slabs cannot be conflated by a derived value.
         if (CompatHooks.shouldSkipOffset(state)) {
-            return 0.0;
+            double stored = SlabPlacementDyAttachment.storedDy(world, pos);
+            return Double.isFinite(stored) ? stored : 0.0;
         }
         Double cachedDy = cachedClientVisualYOffset(pos);
         if (cachedDy != null) {
@@ -1877,6 +1872,14 @@ public final class SlabSupport {
             return -0.5;
         }
         return 0.0;
+    }
+
+    private static boolean hasRaisedSlabUnderside(BlockState state) {
+        CompatSlabSurfaceKind customKind = CompatHooks.customSlabSurfaceKind(state);
+        if (customKind != CompatSlabSurfaceKind.NONE) {
+            return customKind == CompatSlabSurfaceKind.TOP_LIKE;
+        }
+        return isTopSlab(state);
     }
 
     /**
