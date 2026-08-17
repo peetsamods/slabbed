@@ -58,7 +58,6 @@ public abstract class BlockItemPlacementIntentMixin {
         Map<BlockPos, Long> pending = Map.of();
         boolean actualTargetSeen;
         boolean pendingComputed;
-        boolean clientPredictionEligible;
         boolean clientPredictionPublished;
 
         PlacementFrame(LandingResolver.PlacementAim rootAim) {
@@ -229,10 +228,6 @@ public abstract class BlockItemPlacementIntentMixin {
         BlockState finalState = world.getBlockState(primary);
         boolean authoredCustomSlabPlacement = slabbed$isAuthoredCustomSlabFinal(finalState);
         boolean terrainOwnedOnTopObject = slabbed$terrainOwnsOnTopObject(frame.rootAim, finalState);
-        frame.clientPredictionEligible = authoredCustomSlabPlacement
-                || frame.rootAim != null
-                && CompatHooks.customSlabSurfaceKind(frame.rootAim.ownerState())
-                != CompatSlabSurfaceKind.NONE;
         if (finalState.isAir()
                 || ((LandingResolver.compatOwnsFinalState(finalState) || terrainOwnedOnTopObject)
                 && !authoredCustomSlabPlacement)) {
@@ -352,8 +347,7 @@ public abstract class BlockItemPlacementIntentMixin {
     private static void slabbed$publishClientPrediction(PlacementFrame frame) {
         if (frame.pending.isEmpty()
                 || frame.actualContext == null
-                || !frame.actualContext.getWorld().isClient()
-                || !frame.clientPredictionEligible) {
+                || !frame.actualContext.getWorld().isClient()) {
             return;
         }
         frame.clientPredictionPublished = SlabPlacementDyAttachment.publishClientPrediction(frame.pending);

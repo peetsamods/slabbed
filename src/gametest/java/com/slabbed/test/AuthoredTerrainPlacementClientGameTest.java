@@ -156,8 +156,91 @@ public final class AuthoredTerrainPlacementClientGameTest implements FabricClien
             requireDy("vanilla-on-Terrain synchronized fact", secondAuthoritativeDy.get(), -1.0d);
             requireAbsent("vanilla-on-Terrain prediction after sync", secondPredictionAfterSync.get());
             runFloorTorchPredictionProof(ctx, singleplayer, terrainSlab);
+            runOrdinaryFullBlockPredictionProof(ctx, singleplayer);
             System.out.println("[AUTHORED_TERRAIN_CLIENT] GREEN immediate_and_synced_heights_match");
         }
+    }
+
+    private static void runOrdinaryFullBlockPredictionProof(
+            ClientGameTestContext ctx,
+            TestSingleplayerContext singleplayer
+    ) {
+        BlockPos owner = new BlockPos(8, 200, 0);
+        BlockPos destination = owner.east();
+        double expectedDy = SlabSupport.minResolvedDy() <= -1.5d ? -1.5d : -1.0d;
+        AtomicReference<String> resultText = new AtomicReference<>("not_run");
+        AtomicReference<Double> immediateDy = new AtomicReference<>(Double.NaN);
+        AtomicReference<Double> immediatePrediction = new AtomicReference<>(Double.NaN);
+        AtomicReference<Double> authoritativeDy = new AtomicReference<>(Double.NaN);
+        AtomicReference<Double> predictionAfterSync = new AtomicReference<>(Double.NaN);
+        AtomicReference<Double> afterOwnerRemovalDy = new AtomicReference<>(Double.NaN);
+
+        singleplayer.getServer().runOnServer(server -> {
+            var world = server.getOverworld();
+            world.setBlockState(owner, Blocks.STONE.getDefaultState(), Block.NOTIFY_LISTENERS);
+            world.setBlockState(destination, Blocks.AIR.getDefaultState(), Block.NOTIFY_LISTENERS);
+            SlabPlacementDyAttachment.clear(world, destination);
+            if (!SlabPlacementDyAttachment.writeBatch(
+                    world, java.util.Map.of(owner, Double.doubleToRawLongBits(expectedDy)))) {
+                throw new AssertionError("fixture: authored ordinary owner height must publish");
+            }
+            if (!server.getPlayerManager().getPlayerList().isEmpty()) {
+                var player = server.getPlayerManager().getPlayerList().get(0);
+                positionPlayerForSidePlacement(player, owner, expectedDy);
+                player.setStackInHand(Hand.MAIN_HAND, new ItemStack(Blocks.STRIPPED_OAK_WOOD.asItem(), 1));
+            }
+        });
+        waitTicks(ctx, 4);
+        singleplayer.getClientWorld().waitForChunksRender();
+
+        ctx.runOnClient(mc -> {
+            if (mc.player == null || mc.world == null || mc.interactionManager == null) {
+                resultText.set("client_unavailable");
+                return;
+            }
+            positionPlayerForSidePlacement(mc.player, owner, expectedDy);
+            mc.player.setStackInHand(Hand.MAIN_HAND, new ItemStack(Blocks.STRIPPED_OAK_WOOD.asItem(), 1));
+            BlockHitResult hit = new BlockHitResult(
+                    new Vec3d(owner.getX() + 1.0d, owner.getY() + expectedDy + 0.5d,
+                            owner.getZ() + 0.5d),
+                    Direction.EAST,
+                    owner,
+                    false);
+            ActionResult result = mc.interactionManager.interactBlock(mc.player, Hand.MAIN_HAND, hit);
+            resultText.set(result.toString());
+            BlockState placed = mc.world.getBlockState(destination);
+            immediateDy.set(SlabSupport.getVisualYOffset(mc.world, destination, placed));
+            immediatePrediction.set(ClientPlacementDyPrediction.lookup(destination));
+        });
+
+        waitTicks(ctx, 4);
+        singleplayer.getClientWorld().waitForChunksRender();
+        ctx.runOnClient(mc -> {
+            if (mc.world != null) {
+                authoritativeDy.set(SlabPlacementDyAttachment.lookup(
+                        mc.world.getChunk(destination.getX() >> 4, destination.getZ() >> 4),
+                        destination));
+                predictionAfterSync.set(ClientPlacementDyPrediction.lookup(destination));
+            }
+        });
+
+        singleplayer.getServer().runOnServer(server ->
+                server.getOverworld().setBlockState(owner, Blocks.AIR.getDefaultState(), Block.NOTIFY_LISTENERS));
+        waitTicks(ctx, 2);
+        singleplayer.getClientWorld().waitForChunksRender();
+        ctx.runOnClient(mc -> {
+            if (mc.world != null) {
+                afterOwnerRemovalDy.set(SlabSupport.getVisualYOffset(
+                        mc.world, destination, mc.world.getBlockState(destination)));
+            }
+        });
+
+        requireAccepted("ordinary full-block side placement", resultText.get());
+        requireDy("ordinary full-block immediate visual", immediateDy.get(), expectedDy);
+        requireDy("ordinary full-block immediate prediction", immediatePrediction.get(), expectedDy);
+        requireDy("ordinary full-block synchronized fact", authoritativeDy.get(), expectedDy);
+        requireAbsent("ordinary full-block prediction after sync", predictionAfterSync.get());
+        requireDy("ordinary full-block height after owner removal", afterOwnerRemovalDy.get(), expectedDy);
     }
 
     private static void runFloorTorchPredictionProof(
@@ -240,6 +323,21 @@ public final class AuthoredTerrainPlacementClientGameTest implements FabricClien
                 target.getY() + 0.5d - player.getStandingEyeHeight(),
                 target.getZ() - 2.5d,
                 0.0f,
+                0.0f);
+        player.setVelocity(Vec3d.ZERO);
+    }
+
+    private static void positionPlayerForSidePlacement(
+            net.minecraft.entity.player.PlayerEntity player,
+            BlockPos target,
+            double dy
+    ) {
+        double eyeY = target.getY() + dy + 0.5d;
+        player.refreshPositionAndAngles(
+                target.getX() - 2.5d,
+                eyeY - player.getStandingEyeHeight(),
+                target.getZ() + 0.5d,
+                -90.0f,
                 0.0f);
         player.setVelocity(Vec3d.ZERO);
     }
