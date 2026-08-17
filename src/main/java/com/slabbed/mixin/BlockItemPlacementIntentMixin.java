@@ -353,7 +353,6 @@ public abstract class BlockItemPlacementIntentMixin {
         frame.clientPredictionPublished = SlabPlacementDyAttachment.publishClientPrediction(frame.pending);
     }
 
-    private static final double UP_FACE_EDGE_BAND = 0.20d;
     private static final double LOWERED_VISUAL_BOUNDARY_EPSILON = 1.0e-6d;
 
     /** A slab cannot mint a new permanent height below the active targeting envelope. */
@@ -389,36 +388,6 @@ public abstract class BlockItemPlacementIntentMixin {
                 && yOffset >= SlabSupport.minResolvedDy()
                 && Math.abs(doubledYOffset - Math.rint(doubledYOffset))
                         <= LOWERED_VISUAL_BOUNDARY_EPSILON;
-    }
-
-    private static Direction slabbed$inferLoweredSideFromUpFaceHit(Vec3d hitPos, BlockPos targetPos) {
-        double localX = hitPos.x - targetPos.getX();
-        double localZ = hitPos.z - targetPos.getZ();
-        if (localX < 0.0d || localX > 1.0d || localZ < 0.0d || localZ > 1.0d) {
-            return null;
-        }
-
-        double distWest = localX;
-        double distEast = 1.0d - localX;
-        double distNorth = localZ;
-        double distSouth = 1.0d - localZ;
-
-        double min = distWest;
-        Direction nearest = Direction.WEST;
-        if (distEast < min) {
-            min = distEast;
-            nearest = Direction.EAST;
-        }
-        if (distNorth < min) {
-            min = distNorth;
-            nearest = Direction.NORTH;
-        }
-        if (distSouth < min) {
-            min = distSouth;
-            nearest = Direction.SOUTH;
-        }
-
-        return min <= UP_FACE_EDGE_BAND ? nearest : null;
     }
 
     private static boolean slabbed$isOrdinaryFullBlockPlacementItem(BlockItem item, ItemUsageContext context) {
@@ -543,17 +512,6 @@ public abstract class BlockItemPlacementIntentMixin {
                 && yOffset == -0.5d;
         Direction effectiveSide = originalSide;
         String hitDescriptor = originalSide.getAxis().isHorizontal() ? "horizontal_face" : "none";
-        // Only slab items treat a hit near the EDGE of a lowered block's top
-        // face as perpendicular side-placement intent. Ordinary full blocks
-        // keep UP/top placement for edge clicks; actual horizontal-face clicks
-        // still use the side-placement lane below.
-        if (itemIsSlab && originalSide == Direction.UP) {
-            Direction inferred = slabbed$inferLoweredSideFromUpFaceHit(originalHitPos, targetPos);
-            if (inferred != null) {
-                effectiveSide = inferred;
-                hitDescriptor = "up_face_edge";
-            }
-        }
 
         boolean faceHorizontal = effectiveSide.getAxis().isHorizontal();
         if (!faceHorizontal) {
@@ -663,38 +621,6 @@ public abstract class BlockItemPlacementIntentMixin {
             return context;
         }
 
-        // An up-face-edge INFERENCE (not a literal horizontal click — see
-        // slabbed$inferLoweredSideFromUpFaceHit / commit 80ac7737) that lands on an
-        // EXISTING slab of the SAME material unconditionally COMBINES to a DOUBLE in
-        // vanilla's own SlabBlock.getPlacementState, regardless of click Y (confirmed via
-        // the real 1.21.11 bytecode: once ItemPlacementContext.getBlockPos() routes to
-        // that neighbour cell — because canReplace on the ORIGINAL target failed —
-        // getPlacementState's `blockState.isOf(this)` branch combines unconditionally,
-        // with no half/Y check at all). The up-face-edge heuristic exists so a player can
-        // place a NEW slab beside a lowered one when an ambiguous top-face click is
-        // clicked near its edge; it was never meant to silently merge into an unrelated
-        // pre-existing slab a few cells over (the live "gap + ghost-face DODO" bug —
-        // same_cell_double_combine, already flagged by the recorder). Only suppress the
-        // INFERRED case here: a literal, deliberate horizontal click against an occupied
-        // neighbour keeps vanilla's normal combine behaviour untouched.
-        if (itemIsSlab && "up_face_edge".equals(hitDescriptor) && sidePlaceState.isOf(self.getBlock())) {
-            slabbed$recordRemapAttempt(
-                    context,
-                    itemEligible,
-                    true,
-                    targetIsSolid,
-                    targetHasBlockEntity,
-                    targetIsCraftingTable,
-                    yOffset,
-                    ordinaryLoweredFullBlockGuard,
-                    false,
-                    "up_face_edge_would_combine_existing_slab",
-                    null,
-                    effectiveSide,
-                    hitDescriptor);
-            return context;
-        }
-
         // Select the slab half from the immutable visible hit, then encode only that half into
         // the synthetic in-cell hit used by vanilla's placement-state decision.
         double loweredVisualHalfSplit = targetPos.getY() + yOffset + 0.5d;
@@ -714,43 +640,6 @@ public abstract class BlockItemPlacementIntentMixin {
                 context.hitsInsideBlock(),
                 false
         );
-
-        // SECOND, distinct failure surface from the "neighbour already occupied" guard
-        // above: even when the inferred side-neighbour is EMPTY, the (effectiveSide,
-        // remappedY) pair this method just built can STILL make vanilla's OWN
-        // ItemPlacementContext construction decide the ORIGINAL clicked slab itself is
-        // replaceable (canReplaceExisting=true — getBlockPos() resolves back to
-        // targetPos, never routing to the adjacent cell at all). That is ALSO an
-        // unwanted same-cell combine: it happens directly on the block the player's
-        // crosshair landed on, regardless of what the neighbour holds (live repro:
-        // an up-face-edge click on a lowered TOP slab combined it to DOUBLE in place
-        // instead of placing a new slab in the adjacent cell — same_cell_double_combine
-        // again, a different trigger than the first guard). The up-face-edge heuristic
-        // exists ONLY to redirect an ambiguous top-face-edge click into "place beside";
-        // it must never modify the clicked block itself. Ask vanilla's own construction
-        // directly (constructing a throwaway, read-only ItemPlacementContext) rather
-        // than re-deriving SlabBlock's canReplace arithmetic a second time.
-        if (itemIsSlab && "up_face_edge".equals(hitDescriptor)) {
-            ItemPlacementContext probe = new ItemPlacementContext(new ItemUsageContext(
-                    context.getWorld(), context.getPlayer(), context.getHand(), context.getStack(), remappedHit));
-            if (probe.getBlockPos().equals(targetPos)) {
-                slabbed$recordRemapAttempt(
-                        context,
-                        itemEligible,
-                        true,
-                        targetIsSolid,
-                        targetHasBlockEntity,
-                        targetIsCraftingTable,
-                        yOffset,
-                        ordinaryLoweredFullBlockGuard,
-                        false,
-                        "up_face_edge_would_modify_clicked_slab",
-                        null,
-                        effectiveSide,
-                        hitDescriptor);
-                return context;
-            }
-        }
 
         slabbed$recordRemapAttempt(
                 context,
