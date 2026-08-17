@@ -37,6 +37,7 @@ public final class SlabAnchorClientSync {
     }
 
     public static void init() {
+        ClientPlacementDyPrediction.init();
         // Bridge: chunk render paths receive ChunkRendererRegion (not a World) and cannot
         // access chunk attachments.  Register a client-world fallback so anchor queries
         // from the model render path resolve correctly after a supporting BS is broken.
@@ -169,6 +170,12 @@ public final class SlabAnchorClientSync {
         // would ever mark the section dirty.
         chunk.<Long2ByteOpenHashMap>onAttachedSet(SlabPlacementDyAttachment.PLACEMENT_DY_TYPE)
                 .register((oldFacts, newFacts) -> {
+                    if (oldFacts != null) {
+                        ClientPlacementDyPrediction.clearPacked(oldFacts.keySet());
+                    }
+                    if (newFacts != null) {
+                        ClientPlacementDyPrediction.clearPacked(newFacts.keySet());
+                    }
                     MinecraftClient mc = MinecraftClient.getInstance();
                     if (mc.worldRenderer == null) {
                         return;

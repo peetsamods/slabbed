@@ -55,15 +55,9 @@ public final class LandingResolver {
         World world = context.getWorld();
         BlockPos ownerPos = context.getBlockPos().toImmutable();
         BlockState ownerState = world.getBlockState(ownerPos);
-        double ownerVisibleDy;
-        if (ownerState.isAir()) {
-            ownerVisibleDy = 0.0d;
-        } else if (compatOwnsFinalState(ownerState)) {
-            double frozen = SlabPlacementDyAttachment.storedDy(world, ownerPos);
-            ownerVisibleDy = Double.isFinite(frozen) ? frozen : 0.0d;
-        } else {
-            ownerVisibleDy = visibleOwnerDy(world, ownerPos, ownerState);
-        }
+        double ownerVisibleDy = ownerState.isAir()
+                ? 0.0d
+                : visibleOwnerDy(world, ownerPos, ownerState);
         return new PlacementAim(
                 ownerPos,
                 ownerState,
@@ -97,7 +91,7 @@ public final class LandingResolver {
         return placedState.isOpaqueFullCube() ? Family.FULL_BLOCK : Family.OBJECT;
     }
 
-    /** A compatibility-owned final state remains under its existing placement authority. */
+    /** A compatibility-owned state keeps its native behavior unless the transaction authors it. */
     public static boolean compatOwnsFinalState(BlockState state) {
         return state != null
                 && (CompatHooks.shouldSkipOffset(state) || CompatHooks.shouldSkipSlabSupport(state));
@@ -107,16 +101,15 @@ public final class LandingResolver {
             PlacementAim aim,
             BlockPos actualTarget,
             BlockState finalState,
-            Family family
+            Family family,
+            boolean authoredCompatSlabFinal
     ) {
         if (aim == null || actualTarget == null || finalState == null || finalState.isAir()
-                || family == Family.UNSUPPORTED || compatOwnsFinalState(finalState)) {
+                || family == Family.UNSUPPORTED
+                || compatOwnsFinalState(finalState) && !authoredCompatSlabFinal) {
             return null;
         }
-        // A compatibility-owned clicked surface keeps its existing visible plane. The placement
-        // transaction may freeze that result, but must not reinterpret the owner's native slab
-        // geometry and introduce a second offset.
-        if (compatOwnsFinalState(aim.ownerState())) {
+        if (family != Family.SLAB && compatOwnsFinalState(aim.ownerState())) {
             return Double.isFinite(aim.ownerVisibleDy())
                     ? new PlacementResolution(actualTarget, aim.ownerVisibleDy(), false)
                     : null;
@@ -168,7 +161,7 @@ public final class LandingResolver {
     }
 
     public static double visibleOwnerDy(BlockView world, BlockPos ownerPos, BlockState ownerState) {
-        if (ownerState == null || ownerState.isAir() || compatOwnsFinalState(ownerState)) {
+        if (ownerState == null || ownerState.isAir()) {
             return 0.0d;
         }
         double stored = SlabPlacementDyAttachment.storedDy(world, ownerPos);

@@ -836,6 +836,7 @@ public final class SlabSupport {
         // SLABS only (not every shouldSkipOffset block) — this is specifically the slab-chain
         // cantilever law, not a blanket exemption from "TS owns this block's offset".
         if (CompatHooks.shouldSkipOffset(state)
+                && !SlabPlacementDyAttachment.hasStoredDy(world, pos)
                 && !isAdjacentCustomSideSlabLowered(world, pos, state)
                 && !(state.getBlock() instanceof SlabBlock && SlabAnchorAttachment.isAnchored(world, pos))) {
             return 0.0;

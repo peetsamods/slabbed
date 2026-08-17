@@ -8,6 +8,7 @@ import it.unimi.dsi.fastutil.longs.LongArrayList;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.Consumer;
 import java.util.function.ToDoubleFunction;
 import java.util.stream.IntStream;
 import java.util.stream.LongStream;
@@ -87,6 +88,15 @@ public final class SlabPlacementDyAttachment {
      * would disagree — the exact split this project treats as a first-class defect.
      */
     public static ToDoubleFunction<BlockPos> clientPlacementDyLookup = null;
+
+    /** Client-only transient prediction lookup; authoritative synchronized facts always win. */
+    public static ToDoubleFunction<BlockPos> clientPredictedPlacementDyLookup = null;
+
+    /** Client-only bridge that publishes the immutable transaction result before the first mesh. */
+    public static Consumer<Map<BlockPos, Long>> clientPredictionPublisher = null;
+
+    /** Client-only bridge used when the captured placement fails after publishing a prediction. */
+    public static Consumer<Iterable<BlockPos>> clientPredictionClearer = null;
 
     /** One WARN per session when a chunk saturates, not one per click there. */
     private static volatile boolean budgetReported = false;
@@ -357,9 +367,11 @@ public final class SlabPlacementDyAttachment {
     // ── shared query ──────────────────────────────────────────────────
 
     /**
-     * The placement height stored for {@code pos}, or {@link Double#NaN} when there is none.
+     * The authoritative placement height for {@code pos}, or the bounded client prediction while
+     * its synchronized fact is still in flight; {@link Double#NaN} when neither exists.
      *
-     * <p>Safe on both server and client (the client mirror arrives by attachment sync). A
+     * <p>Safe on both server and client (the authoritative client mirror arrives by attachment
+     * sync and always outranks prediction). A
      * {@link BlockView} that is not a full {@link World} defers to
      * {@link #clientPlacementDyLookup}, so the chunk mesh path sees the same fact as outline and
      * raycast.
@@ -369,13 +381,36 @@ public final class SlabPlacementDyAttachment {
             return Double.NaN;
         }
         if (!(world instanceof World w)) {
-            return clientPlacementDyLookup == null ? Double.NaN : clientPlacementDyLookup.applyAsDouble(pos);
+            double synced = clientPlacementDyLookup == null
+                    ? Double.NaN
+                    : clientPlacementDyLookup.applyAsDouble(pos);
+            return Double.isFinite(synced) || clientPredictedPlacementDyLookup == null
+                    ? synced
+                    : clientPredictedPlacementDyLookup.applyAsDouble(pos);
         }
         WorldChunk chunk = w.getChunk(pos.getX() >> 4, pos.getZ() >> 4);
         if (chunk == null) {
             return Double.NaN;
         }
-        return lookup(chunk, pos);
+        double synced = lookup(chunk, pos);
+        if (Double.isFinite(synced) || !w.isClient() || clientPredictedPlacementDyLookup == null) {
+            return synced;
+        }
+        return clientPredictedPlacementDyLookup.applyAsDouble(pos);
+    }
+
+    public static boolean publishClientPrediction(Map<BlockPos, Long> rawBitsByPos) {
+        if (clientPredictionPublisher == null || rawBitsByPos == null || rawBitsByPos.isEmpty()) {
+            return false;
+        }
+        clientPredictionPublisher.accept(Map.copyOf(rawBitsByPos));
+        return true;
+    }
+
+    public static void clearClientPrediction(Iterable<BlockPos> positions) {
+        if (clientPredictionClearer != null && positions != null) {
+            clientPredictionClearer.accept(positions);
+        }
     }
 
     /** Chunk-level lookup, shared by {@link #storedDy} and the client render-path bridge. */
@@ -422,15 +457,7 @@ public final class SlabPlacementDyAttachment {
         if (pos == null) {
             return PlacementDyFact.absent();
         }
-        double value;
-        if (!(world instanceof World w)) {
-            value = clientPlacementDyLookup == null
-                    ? Double.NaN
-                    : clientPlacementDyLookup.applyAsDouble(pos);
-        } else {
-            WorldChunk chunk = w.getChunk(pos.getX() >> 4, pos.getZ() >> 4);
-            value = chunk == null ? Double.NaN : lookup(chunk, pos);
-        }
+        double value = storedDy(world, pos);
         return Double.isNaN(value) ? PlacementDyFact.absent() : PlacementDyFact.present(value);
     }
 

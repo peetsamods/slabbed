@@ -155,6 +155,7 @@ no inert, undeclared mixin shipping on this line.
 | `com/slabbed/client/BetaNoticeSessionGate` | Per-session gate for the beta notice. |
 | `com/slabbed/client/BetaNoticeDismissedWorlds` | Per-world "don't show again" store for the beta notice. |
 | `com/slabbed/client/ClientDy` | Client-side dy lookup — the render and collision read path. |
+| `com/slabbed/client/ClientPlacementDyPrediction` | Bounded client mirror of the shared placement transaction, used only until the matching synchronized server fact arrives. It computes no independent height, writes no attachment/file/network data, and clears on sync, rejection/state mismatch, timeout, world change or disconnect. |
 | `com/slabbed/client/SlabAnchorClientSync` | Receives anchor sync from the server. |
 | `com/slabbed/client/SlabDependentRemeshScheduler` | Coalesces dependent mesh refreshes, drains them under a fixed per-tick budget, and requests the renderer's important rebuild lane. No file or network access. |
 | `com/slabbed/client/SlabbedModelLoadingPlugin` | Installs the offset block-state model. |

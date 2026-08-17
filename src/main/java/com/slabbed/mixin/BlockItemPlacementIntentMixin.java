@@ -58,6 +58,8 @@ public abstract class BlockItemPlacementIntentMixin {
         Map<BlockPos, Long> pending = Map.of();
         boolean actualTargetSeen;
         boolean pendingComputed;
+        boolean clientPredictionEligible;
+        boolean clientPredictionPublished;
 
         PlacementFrame(LandingResolver.PlacementAim rootAim) {
             this.rootAim = rootAim;
@@ -95,9 +97,11 @@ public abstract class BlockItemPlacementIntentMixin {
         Deque<PlacementFrame> frames = PLACEMENT_FRAMES.get();
         frames.push(frame);
         SlabPlacementDyAttachment.beginBlockItemTransaction();
+        boolean accepted = false;
         try {
             ActionResult result = original.call(context);
-            if (result != null && result.isAccepted()) {
+            accepted = result != null && result.isAccepted();
+            if (accepted) {
                 if (frame.actualTargetSeen && frame.pendingComputed) {
                     slabbed$publish(frame);
                 } else {
@@ -108,6 +112,9 @@ public abstract class BlockItemPlacementIntentMixin {
             }
             return result;
         } finally {
+            if (!accepted && frame.clientPredictionPublished) {
+                SlabPlacementDyAttachment.clearClientPrediction(frame.pending.keySet());
+            }
             SlabPlacementDyAttachment.endBlockItemTransaction();
             frames.pop();
             if (frames.isEmpty()) {
@@ -170,6 +177,7 @@ public abstract class BlockItemPlacementIntentMixin {
         if (frame != null) {
             try {
                 slabbed$computePending(frame);
+                slabbed$publishClientPrediction(frame);
             } catch (RuntimeException failure) {
                 frame.pending = Map.of();
                 frame.pendingComputed = true;
@@ -219,10 +227,13 @@ public abstract class BlockItemPlacementIntentMixin {
         World world = frame.actualContext.getWorld();
         BlockPos primary = frame.actualContext.getBlockPos().toImmutable();
         BlockState finalState = world.getBlockState(primary);
-        boolean loweredCustomSlabPlacement = slabbed$requiresLoweredCustomSlabFact(
-                frame.rootAim, finalState);
+        boolean authoredCustomSlabPlacement = slabbed$isAuthoredCustomSlabFinal(finalState);
+        frame.clientPredictionEligible = authoredCustomSlabPlacement
+                || frame.rootAim != null
+                && CompatHooks.customSlabSurfaceKind(frame.rootAim.ownerState())
+                != CompatSlabSurfaceKind.NONE;
         if (finalState.isAir()
-                || (LandingResolver.compatOwnsFinalState(finalState) && !loweredCustomSlabPlacement)) {
+                || (LandingResolver.compatOwnsFinalState(finalState) && !authoredCustomSlabPlacement)) {
             frame.pending = Map.of();
             return;
         }
@@ -250,12 +261,10 @@ public abstract class BlockItemPlacementIntentMixin {
                 && prior.priorState().get(SlabBlock.TYPE) != SlabType.DOUBLE;
         if (sameCellSlabUpgrade && prior.priorFact().present()) {
             rawBits = prior.priorFact().rawBits();
-        } else if (loweredCustomSlabPlacement) {
-            rawBits = Double.doubleToRawLongBits(frame.rootAim.ownerVisibleDy());
         } else {
             LandingResolver.Family family = LandingResolver.classify(finalState);
             LandingResolver.PlacementResolution resolution = LandingResolver.resolve(
-                    frame.rootAim, primary, finalState, family);
+                    frame.rootAim, primary, finalState, family, authoredCustomSlabPlacement);
             double dy = resolution == null
                     ? SlabSupport.getUnstoredYOffset(world, primary, finalState)
                     : resolution.landingDy();
@@ -273,20 +282,11 @@ public abstract class BlockItemPlacementIntentMixin {
         frame.pending = Map.copyOf(pending);
     }
 
-    /**
-     * A custom slab placed beside a frozen ordinary owner keeps the transaction's immutable
-     * landing height even though the destination supplies its own slab model.
-     */
-    private static boolean slabbed$requiresLoweredCustomSlabFact(
-            LandingResolver.PlacementAim aim,
-            BlockState finalState
-    ) {
-        return aim != null
-                && finalState != null
+    /** A player-authored custom slab final joins the same immutable transaction as vanilla slabs. */
+    private static boolean slabbed$isAuthoredCustomSlabFinal(BlockState finalState) {
+        return finalState != null
                 && finalState.getBlock() instanceof SlabBlock
-                && CompatHooks.customSlabSurfaceKind(finalState) != CompatSlabSurfaceKind.NONE
-                && aim.clickedFace().getAxis().isHorizontal()
-                && slabbed$isSupportedLoweredHalfStep(aim.ownerVisibleDy());
+                && CompatHooks.customSlabSurfaceKind(finalState) != CompatSlabSurfaceKind.NONE;
     }
 
     private static List<BlockPos> slabbed$validatedGroup(
@@ -336,6 +336,16 @@ public abstract class BlockItemPlacementIntentMixin {
         }
     }
 
+    private static void slabbed$publishClientPrediction(PlacementFrame frame) {
+        if (frame.pending.isEmpty()
+                || frame.actualContext == null
+                || !frame.actualContext.getWorld().isClient()
+                || !frame.clientPredictionEligible) {
+            return;
+        }
+        frame.clientPredictionPublished = SlabPlacementDyAttachment.publishClientPrediction(frame.pending);
+    }
+
     private static final double UP_FACE_EDGE_BAND = 0.20d;
     private static final double LOWERED_VISUAL_BOUNDARY_EPSILON = 1.0e-6d;
 
@@ -348,9 +358,21 @@ public abstract class BlockItemPlacementIntentMixin {
             return false;
         }
         LandingResolver.PlacementAim aim = ROOT_AIM.get();
-        return aim != null
-                && Double.isFinite(aim.ownerVisibleDy())
-                && aim.ownerVisibleDy() < SlabSupport.minResolvedDy();
+        if (aim == null || !Double.isFinite(aim.ownerVisibleDy())) {
+            return false;
+        }
+        BlockPos previewTarget = aim.replacementSameCell()
+                ? aim.ownerPos()
+                : aim.ownerPos().offset(aim.clickedFace());
+        boolean authoredCustomSlab = slabbed$isAuthoredCustomSlabFinal(heldState);
+        LandingResolver.PlacementResolution preview = LandingResolver.resolve(
+                aim,
+                previewTarget,
+                heldState,
+                LandingResolver.classify(heldState),
+                authoredCustomSlab);
+        double proposedDy = preview == null ? aim.ownerVisibleDy() : preview.landingDy();
+        return proposedDy < SlabSupport.minResolvedDy() - LOWERED_VISUAL_BOUNDARY_EPSILON;
     }
 
     private static boolean slabbed$isSupportedLoweredHalfStep(double yOffset) {

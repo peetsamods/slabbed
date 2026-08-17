@@ -172,6 +172,156 @@ public final class PlacementTransactionGameTest {
     }
 
     @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void terrainSlabPlacedVerticallyOnVanillaSlabPublishesMinusHalf(TestContext ctx) {
+        ServerWorld world = ctx.getWorld();
+        BlockPos vanillaSlab = ctx.getAbsolutePos(new BlockPos(2, 2, 2));
+        BlockPos terrainSlab = vanillaSlab.up();
+        world.setBlockState(vanillaSlab.down(), Blocks.STONE.getDefaultState(), Block.NOTIFY_ALL);
+        world.setBlockState(vanillaSlab,
+                Blocks.OAK_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.BOTTOM),
+                Block.NOTIFY_ALL);
+        ctx.assertTrue(SlabSupport.getVisualYOffset(
+                        world, vanillaSlab, world.getBlockState(vanillaSlab)) == 0.0d,
+                "fixture: the supported vanilla bottom slab must be flat");
+        Item terrainItem = TerrainSlabsTestShim.TEST_TS_SLAB_ITEM;
+        PlayerEntity player = mockPlayerHolding(
+                ctx, vanillaSlab.north(3), new ItemStack(terrainItem, 1));
+
+        ActionResult result = useHeldItem(world, player, vanillaSlab, Direction.UP,
+                new Vec3d(vanillaSlab.getX() + 0.5d, vanillaSlab.getY() + 0.5d,
+                        vanillaSlab.getZ() + 0.5d));
+
+        ctx.assertTrue(result.isAccepted(),
+                "Terrain Slab placement on the vanilla slab must succeed; result=" + result
+                        + " destination=" + world.getBlockState(terrainSlab));
+        ctx.assertTrue(world.getBlockState(terrainSlab).isOf(((BlockItem) terrainItem).getBlock()),
+                "the actual Terrain Slab item must occupy the vertical destination cell");
+        assertStoredDy(ctx, world, terrainSlab, -0.5d,
+                "vertical Terrain Slab placement on a vanilla bottom slab");
+        ctx.complete();
+    }
+
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void vanillaSlabAboveAuthoredTerrainSlabPublishesMinusOne(TestContext ctx) {
+        ServerWorld world = ctx.getWorld();
+        BlockPos vanillaBase = ctx.getAbsolutePos(new BlockPos(5, 2, 2));
+        BlockPos terrainMiddle = vanillaBase.up();
+        BlockPos vanillaTop = terrainMiddle.up();
+        world.setBlockState(vanillaBase.down(), Blocks.STONE.getDefaultState(), Block.NOTIFY_ALL);
+        world.setBlockState(vanillaBase,
+                Blocks.OAK_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.BOTTOM),
+                Block.NOTIFY_ALL);
+        Item terrainItem = TerrainSlabsTestShim.TEST_TS_SLAB_ITEM;
+        PlayerEntity terrainPlayer = mockPlayerHolding(
+                ctx, vanillaBase.north(3), new ItemStack(terrainItem, 1));
+        ActionResult terrainResult = useHeldItem(world, terrainPlayer, vanillaBase, Direction.UP,
+                new Vec3d(vanillaBase.getX() + 0.5d, vanillaBase.getY() + 0.5d,
+                        vanillaBase.getZ() + 0.5d));
+        ctx.assertTrue(terrainResult.isAccepted(), "fixture: authored Terrain Slab must place");
+
+        PlayerEntity vanillaPlayer = mockPlayerHolding(
+                ctx, terrainMiddle.north(3), new ItemStack(Blocks.OAK_SLAB.asItem(), 1));
+        ActionResult vanillaResult = useHeldItem(world, vanillaPlayer, terrainMiddle, Direction.UP,
+                new Vec3d(terrainMiddle.getX() + 0.5d, terrainMiddle.getY(),
+                        terrainMiddle.getZ() + 0.5d));
+
+        ctx.assertTrue(vanillaResult.isAccepted(), "vanilla slab placement above Terrain Slab must succeed");
+        ctx.assertTrue(world.getBlockState(vanillaTop).isOf(Blocks.OAK_SLAB),
+                "the vanilla slab must occupy the cell above the Terrain Slab");
+        assertStoredDy(ctx, world, terrainMiddle, -0.5d,
+                "authored Terrain Slab in the middle course");
+        assertStoredDy(ctx, world, vanillaTop, -1.0d,
+                "vanilla slab above an authored lowered Terrain Slab");
+        ctx.complete();
+    }
+
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void terrainSlabAboveLoweredVanillaBlockPublishesMinusHalf(TestContext ctx) {
+        ServerWorld world = ctx.getWorld();
+        BlockPos vanillaSlab = ctx.getAbsolutePos(new BlockPos(2, 2, 2));
+        BlockPos vanillaBlock = vanillaSlab.up();
+        BlockPos terrainTop = vanillaBlock.up();
+        world.setBlockState(vanillaSlab.down(), Blocks.STONE.getDefaultState(), Block.NOTIFY_ALL);
+        world.setBlockState(vanillaSlab,
+                Blocks.OAK_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.BOTTOM),
+                Block.NOTIFY_ALL);
+        PlayerEntity blockPlayer = mockPlayerHolding(
+                ctx, vanillaSlab.north(3), new ItemStack(Blocks.STRIPPED_OAK_WOOD.asItem(), 1));
+        ActionResult blockResult = useHeldItem(world, blockPlayer, vanillaSlab, Direction.UP,
+                new Vec3d(vanillaSlab.getX() + 0.5d, vanillaSlab.getY() + 0.5d,
+                        vanillaSlab.getZ() + 0.5d));
+        ctx.assertTrue(blockResult.isAccepted(), "fixture: lowered vanilla block must place");
+        assertStoredDy(ctx, world, vanillaBlock, -0.5d, "lowered vanilla block support");
+
+        Item terrainItem = TerrainSlabsTestShim.TEST_TS_SLAB_ITEM;
+        PlayerEntity terrainPlayer = mockPlayerHolding(
+                ctx, vanillaBlock.north(3), new ItemStack(terrainItem, 1));
+        ActionResult terrainResult = useHeldItem(world, terrainPlayer, vanillaBlock, Direction.UP,
+                new Vec3d(vanillaBlock.getX() + 0.5d, vanillaBlock.getY() + 0.5d,
+                        vanillaBlock.getZ() + 0.5d));
+
+        ctx.assertTrue(terrainResult.isAccepted(), "Terrain Slab placement on the lowered block must succeed");
+        ctx.assertTrue(world.getBlockState(terrainTop).isOf(((BlockItem) terrainItem).getBlock()),
+                "the actual Terrain Slab item must occupy the top destination cell");
+        assertStoredDy(ctx, world, terrainTop, -0.5d,
+                "Terrain Slab above a lowered full-height vanilla support");
+        ctx.complete();
+    }
+
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void perpendicularTerrainSlabInheritsAuthoredTerrainDy(TestContext ctx) {
+        ServerWorld world = ctx.getWorld();
+        BlockPos vanillaBase = ctx.getAbsolutePos(new BlockPos(2, 2, 2));
+        BlockPos terrainOwner = vanillaBase.up();
+        BlockPos terrainSide = terrainOwner.east();
+        world.setBlockState(vanillaBase.down(), Blocks.STONE.getDefaultState(), Block.NOTIFY_ALL);
+        world.setBlockState(vanillaBase,
+                Blocks.OAK_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.BOTTOM),
+                Block.NOTIFY_ALL);
+        Item terrainItem = TerrainSlabsTestShim.TEST_TS_SLAB_ITEM;
+        PlayerEntity verticalPlayer = mockPlayerHolding(
+                ctx, vanillaBase.north(3), new ItemStack(terrainItem, 1));
+        ActionResult verticalResult = useHeldItem(world, verticalPlayer, vanillaBase, Direction.UP,
+                new Vec3d(vanillaBase.getX() + 0.5d, vanillaBase.getY() + 0.5d,
+                        vanillaBase.getZ() + 0.5d));
+        ctx.assertTrue(verticalResult.isAccepted(), "fixture: authored Terrain Slab owner must place");
+
+        PlayerEntity sidePlayer = mockPlayerHolding(
+                ctx, terrainOwner.north(3), new ItemStack(terrainItem, 1));
+        ActionResult sideResult = useHeldItem(world, sidePlayer, terrainOwner, Direction.EAST,
+                new Vec3d(terrainOwner.getX() + 1.0d, terrainOwner.getY() - 0.25d,
+                        terrainOwner.getZ() + 0.5d));
+
+        ctx.assertTrue(sideResult.isAccepted(), "perpendicular Terrain Slab placement must succeed");
+        BlockState sideState = world.getBlockState(terrainSide);
+        ctx.assertTrue(sideState.isOf(((BlockItem) terrainItem).getBlock())
+                        && sideState.contains(SlabBlock.TYPE)
+                        && sideState.get(SlabBlock.TYPE) == SlabType.BOTTOM,
+                "the perpendicular Terrain Slab must occupy the intended lower visible half");
+        assertStoredDy(ctx, world, terrainOwner, -0.5d,
+                "authored Terrain Slab side-placement owner");
+        assertStoredDy(ctx, world, terrainSide, -0.5d,
+                "perpendicular Terrain Slab destination");
+
+        world.setBlockState(terrainOwner, Blocks.AIR.getDefaultState(), Block.NOTIFY_ALL);
+        assertStoredDy(ctx, world, terrainSide, -0.5d,
+                "perpendicular Terrain Slab after owner removal");
+        ctx.complete();
+    }
+
+    private static void assertStoredDy(
+            TestContext ctx,
+            ServerWorld world,
+            BlockPos pos,
+            double expected,
+            String label
+    ) {
+        double stored = SlabPlacementDyAttachment.storedDy(world, pos);
+        ctx.assertTrue(Double.doubleToRawLongBits(stored) == Double.doubleToRawLongBits(expected),
+                label + " must publish immutable dy=" + expected + "; got " + stored);
+    }
+
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
     public void terrainSlabLiteralSidePlacementUsesActiveLoweredEnvelope(TestContext ctx) {
         ServerWorld world = ctx.getWorld();
         BlockPos owner = ctx.getAbsolutePos(new BlockPos(3, 4, 3));
@@ -297,6 +447,42 @@ public final class PlacementTransactionGameTest {
                     "a refused slab placement must not publish a destination fact for " + slabItem);
             ctx.assertTrue(player.getMainHandStack().getCount() == 1,
                     "a refused slab placement must not consume the held item " + slabItem);
+        }
+        ctx.complete();
+    }
+
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void verticalSlabCourseBelowActiveEnvelopeIsRefused(TestContext ctx) {
+        ServerWorld world = ctx.getWorld();
+        BlockPos owner = ctx.getAbsolutePos(new BlockPos(2, 3, 2));
+        BlockPos destination = owner.up();
+        BlockState ownerState = TerrainSlabsTestShim.TEST_TS_SLAB.getDefaultState()
+                .with(SlabBlock.TYPE, SlabType.BOTTOM);
+        double ownerDy = SlabSupport.minResolvedDy();
+
+        for (Item slabItem : new Item[]{Blocks.OAK_SLAB.asItem()}) {
+            world.setBlockState(owner, ownerState, Block.NOTIFY_ALL);
+            world.setBlockState(destination, Blocks.AIR.getDefaultState(), Block.NOTIFY_ALL);
+            SlabPlacementDyAttachment.clear(world, destination);
+            ctx.assertTrue(SlabPlacementDyAttachment.writeBatch(
+                            world, Map.of(owner, Double.doubleToRawLongBits(ownerDy))),
+                    "fixture: the authored custom owner must carry the active minimum dy");
+            PlayerEntity player = mockPlayerHolding(ctx, owner.north(3), new ItemStack(slabItem, 1));
+
+            ActionResult result = useHeldItem(world, player, owner, Direction.UP,
+                    new Vec3d(owner.getX() + 0.5d, owner.getY() + ownerDy + 0.5d,
+                            owner.getZ() + 0.5d));
+
+            ctx.assertTrue(result == ActionResult.FAIL,
+                    "a new vertical bottom-slab course below the active envelope must be refused for "
+                            + slabItem + "; got " + result);
+            ctx.assertTrue(world.getBlockState(owner).equals(ownerState)
+                            && world.getBlockState(destination).isAir(),
+                    "typed refusal must leave the owner and destination cells unchanged for " + slabItem);
+            ctx.assertTrue(Double.isNaN(SlabPlacementDyAttachment.storedDy(world, destination)),
+                    "typed refusal must publish no destination height for " + slabItem);
+            ctx.assertTrue(player.getMainHandStack().getCount() == 1,
+                    "typed refusal must not consume " + slabItem);
         }
         ctx.complete();
     }
