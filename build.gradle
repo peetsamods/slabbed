@@ -75,6 +75,13 @@ tasks.matching { it.name == "runGameTest" }.configureEach {
 // Client-proof arming flags: same daemon-vs-forked-JVM forwarding problem as above, for the
 // property-gated fabric-client-gametest proofs. Without this a -D on the command line never
 // reaches the client JVM, so an "armed" client run silently proves nothing.
+//
+// The last three are not arming flags but the discriminators an armed client proof needs:
+// slabbed.serverHitTolerance is the server hit-validation kill switch, so a client proof whose
+// use packet is dropped or refused can be A/B-ed against plain vanilla validation, and the
+// live-cursor recorder pair redirects that run's evidence without editing this file. They are
+// forwarded here for the same reason as the arming flags — otherwise the documented A/B command
+// changes nothing and the run reports a verdict for the wrong configuration.
 tasks.matching { it.name == "runClientGameTest" }.configureEach {
     [
             "slabbed.authoredTerrainPlacementProof",
@@ -82,6 +89,9 @@ tasks.matching { it.name == "runClientGameTest" }.configureEach {
             "slabbed.a7a8LoweredSideSlabNoCombineProof",
             "slabbed.terrainSlabsCustomSurfaceRedOnly",
             "slabbed.terrainSlabsCustomSurfaceVisualProof",
+            "slabbed.serverHitTolerance",
+            "slabbed.liveCursorIntentRecorder",
+            "slabbed.liveCursorIntentRecorderDir",
     ].each { prop ->
         jvmArguments.addAll(
                 providers.systemProperty(prop)
