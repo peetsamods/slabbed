@@ -65,17 +65,35 @@ final class BetaNoticeSessionGate {
      * this.
      */
     static boolean isAlphaOrBetaVersion(String version) {
+        return preReleaseWord(version) != null;
+    }
+
+    /**
+     * The word this build should call its own pre-release stage in the notice — {@code "alpha"} or
+     * {@code "beta"}, or {@code null} when the version carries neither.
+     *
+     * <p>Derived from the same qualifier the gate above reads, for the same stated reason: there
+     * must be no second copy to forget to update. The gate already followed the version while the
+     * notice text was still the literal word "beta", so {@code 0.5.1-alpha.1} greeted players by
+     * calling itself a beta — the exact drift the version-derived design existed to prevent, just
+     * one field further along (maintainer ruling, 2026-08-18). Adding a qualifier now decides both
+     * whether the notice appears AND what it says.
+     */
+    static String preReleaseWord(String version) {
         if (version == null) {
-            return false;
+            return null;
         }
         int build = version.indexOf('+');
         String withoutBuildMetadata = build >= 0 ? version.substring(0, build) : version;
         int dash = withoutBuildMetadata.indexOf('-');
         if (dash < 0) {
-            return false;
+            return null;
         }
         String qualifier = withoutBuildMetadata.substring(dash + 1).toLowerCase(Locale.ROOT);
-        return qualifier.contains("alpha") || qualifier.contains("beta");
+        if (qualifier.contains("alpha")) {
+            return "alpha";
+        }
+        return qualifier.contains("beta") ? "beta" : null;
     }
 
     /** Test-only: clears session state so gametests don't leak state into each other. */

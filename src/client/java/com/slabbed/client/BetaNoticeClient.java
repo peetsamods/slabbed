@@ -55,8 +55,12 @@ public final class BetaNoticeClient {
                 return;
             }
             BetaNoticeSessionGate.markShown(worldKey);
+            // The stage word follows the version, exactly like the gate that got us here; a
+            // hard-coded word is what let an alpha build call itself a beta.
+            String stage = BetaNoticeSessionGate.preReleaseWord(currentModVersion());
             client.player.sendMessage(
-                    Text.literal("Slabbed is in beta — expect some rough edges while it's being developed. ")
+                    Text.literal("Slabbed is in " + (stage == null ? "pre-release" : stage)
+                                    + " — expect some rough edges while it's being developed. ")
                             .formatted(Formatting.GRAY, Formatting.ITALIC)
                             .append(Text.literal("[Don't show again]")
                                     .formatted(Formatting.GRAY, Formatting.UNDERLINE)

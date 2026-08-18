@@ -132,6 +132,26 @@ public final class BetaNoticeSuite {
         ctx.complete();
     }
 
+    // THE THIRD BUG (maintainer ruling, 2026-08-18): the GATE followed the version, but the notice
+    // TEXT was still the literal word "beta", so 0.5.1-alpha.1 greeted players by calling itself a
+    // beta. Same drift as the second bug, one field further along. The stage word is now derived
+    // from the same qualifier, so a version can no longer disagree with what the notice says.
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void theNoticeCallsItselfWhateverTheVersionSays(TestContext ctx) {
+        ctx.assertTrue("alpha".equals(BetaNoticeSessionGate.preReleaseWord("0.5.1-alpha.1+1.21.11")),
+                "the shipped alpha must call itself an alpha — this is the reported bug, got "
+                        + BetaNoticeSessionGate.preReleaseWord("0.5.1-alpha.1+1.21.11"));
+        ctx.assertTrue("beta".equals(BetaNoticeSessionGate.preReleaseWord("0.5.0-beta.8")),
+                "a beta must still call itself a beta");
+        ctx.assertTrue("beta".equals(BetaNoticeSessionGate.preReleaseWord("1.0.0-BETA")),
+                "the stage word is normalized, not echoed verbatim");
+        ctx.assertTrue(BetaNoticeSessionGate.preReleaseWord("0.5.1") == null,
+                "a version with no qualifier has no stage word, and shows no notice at all");
+        ctx.assertTrue(BetaNoticeSessionGate.preReleaseWord("0.5.1+beta-build") == null,
+                "build metadata must not supply a stage word either");
+        ctx.complete();
+    }
+
     // A release candidate is not "in beta", and the notice's text says exactly that. Pinned so
     // that widening the predicate has to be a deliberate edit to the notice text as well.
     @GameTest(structure = "fabric-gametest-api-v1:empty")
