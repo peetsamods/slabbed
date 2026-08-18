@@ -141,12 +141,12 @@ public final class SlabSupport {
      * Returns true if the block at {@code pos} is a slab whose top face can provide support.
      */
     public static boolean isSupportingSlab(WorldView world, BlockPos pos) {
-        return isSupportingSlab(world.getBlockState(pos));
+        return isSupportingSlab(getBlockStateOrAir(world, pos));
     }
 
     /** Overload for BlockView contexts (shapes). */
     public static boolean isSupportingSlab(BlockView world, BlockPos pos) {
-        return isSupportingSlab(world.getBlockState(pos));
+        return isSupportingSlab(getBlockStateOrAir(world, pos));
     }
 
     /**
@@ -200,7 +200,7 @@ public final class SlabSupport {
 
     /** True if the block at {@code posAbove} is a top or double slab that can provide ceiling support. */
     public static boolean isCeilingSupportBottomSurface(WorldView world, BlockPos posAbove) {
-        BlockState stateAbove = world.getBlockState(posAbove);
+        BlockState stateAbove = getBlockStateOrAir(world, posAbove);
         if (isTopLikeCeilingSurface(stateAbove)) {
             return true;
         }
@@ -213,7 +213,7 @@ public final class SlabSupport {
 
     /** Overload for shape/world views. */
     public static boolean isCeilingSupportBottomSurface(BlockView world, BlockPos posAbove) {
-        BlockState stateAbove = world.getBlockState(posAbove);
+        BlockState stateAbove = getBlockStateOrAir(world, posAbove);
         if (isTopLikeCeilingSurface(stateAbove)) {
             return true;
         }
@@ -255,7 +255,7 @@ public final class SlabSupport {
         BlockPos supportPos = pos.down();
         if (state.contains(Properties.DOUBLE_BLOCK_HALF)
                 && state.get(Properties.DOUBLE_BLOCK_HALF) == DoubleBlockHalf.UPPER) {
-            BlockState lowerState = world.getBlockState(pos.down());
+            BlockState lowerState = getBlockStateOrAir(world, pos.down());
             if (lowerState.getBlock() != state.getBlock()
                     || !lowerState.contains(Properties.DOUBLE_BLOCK_HALF)
                     || lowerState.get(Properties.DOUBLE_BLOCK_HALF) != DoubleBlockHalf.LOWER) {
@@ -548,13 +548,13 @@ public final class SlabSupport {
      * Primary query: should this slab top face count as solid support.
      */
     public static boolean canTreatAsSolidTopFace(WorldView world, BlockPos pos) {
-        BlockState state = world.getBlockState(pos);
+        BlockState state = getBlockStateOrAir(world, pos);
         return isSupportingSlab(state) || isDirectObjectSupportSurface(world, pos, state);
     }
 
     /** Overload for shape/world views. */
     public static boolean canTreatAsSolidTopFace(BlockView world, BlockPos pos) {
-        BlockState state = world.getBlockState(pos);
+        BlockState state = getBlockStateOrAir(world, pos);
         return isSupportingSlab(state) || isDirectObjectSupportSurface(world, pos, state);
     }
 
@@ -741,7 +741,7 @@ public final class SlabSupport {
         // also get -0.5 DOWN. Use isCeilingAttached here (safe, no shape calcs)
         // since shouldOffset is called from paths outside the recursion guard.
         if (isCeilingAttached(world, pos, state)
-                && isTopLikeCeilingSurface(world.getBlockState(pos.up()))) {
+                && isTopLikeCeilingSurface(getBlockStateOrAir(world, pos.up()))) {
             return false;
         }
 
@@ -750,7 +750,7 @@ public final class SlabSupport {
         if (isCeilingAttached(world, pos, state)) {
             BlockPos cursor = pos.up();
             for (int i = 0; i < MAX_CHAIN_DEPTH; i++) {
-                BlockState cur = world.getBlockState(cursor);
+                BlockState cur = getBlockStateOrAir(world, cursor);
                 if (isTopLikeCeilingSurface(cur)) {
                     return false;
                 }
@@ -796,7 +796,7 @@ public final class SlabSupport {
         if (state.contains(Properties.DOUBLE_BLOCK_HALF)) {
             DoubleBlockHalf half = state.get(Properties.DOUBLE_BLOCK_HALF);
             if (half == DoubleBlockHalf.UPPER) {
-                return isBottomSlab(world.getBlockState(pos.down(2)));
+                return isBottomSlab(getBlockStateOrAir(world, pos.down(2)));
             }
             return hasBottomSlabBelow(world, pos);
         }
@@ -1202,7 +1202,7 @@ public final class SlabSupport {
         if (Double.isFinite(ownDy) && ownDy < -1.0e-6) {
             return true;
         }
-        return world.getBlockState(pos.down()).isAir() && isAdjacentToLoweredSupport(world, pos);
+        return getBlockStateOrAir(world, pos.down()).isAir() && isAdjacentToLoweredSupport(world, pos);
     }
 
     private static boolean isVerticallyLoweredSlabSource(BlockView world, BlockPos pos, BlockState state) {
@@ -1304,7 +1304,7 @@ public final class SlabSupport {
             return true;
         }
         BlockPos belowPos = pos.down();
-        BlockState below = world.getBlockState(belowPos);
+        BlockState below = getBlockStateOrAir(world, belowPos);
         return SlabAnchorAttachment.isAnchored(world, pos)
                 || hasLoweredNonSlabTopSupport(world, belowPos, below)
                 || isAdjacentSideSlabLowered(world, pos, state);
@@ -1351,7 +1351,7 @@ public final class SlabSupport {
      */
     private static double ceilingHungDecorationDy(BlockView world, BlockPos pos, BlockState state) {
         BlockPos supportPos = pos.up();
-        BlockState above = world.getBlockState(supportPos);
+        BlockState above = getBlockStateOrAir(world, supportPos);
         boolean authoredCustomSupport = CompatHooks.shouldSkipOffset(above)
                 && SlabPlacementDyAttachment.hasStoredDy(world, supportPos);
         if (!CompatHooks.shouldSkipOffset(above) || authoredCustomSupport) {
@@ -1369,7 +1369,7 @@ public final class SlabSupport {
         }
         BlockPos cursor = supportPos;
         for (int i = 0; i < MAX_CHAIN_DEPTH; i++) {
-            BlockState cur = world.getBlockState(cursor);
+            BlockState cur = getBlockStateOrAir(world, cursor);
             // L4: a TS support is never a lowering top-like ceiling (else +0.5 smooshes the hanger
             // up into the flush TS block). Same invariant as the getYOffsetInner walks below.
             if (isLoweringTopLikeCeiling(cur)) {
@@ -1444,7 +1444,7 @@ public final class SlabSupport {
                 return 0.0;
             }
             BlockPos belowPos = pos.down();
-            BlockState below = world.getBlockState(belowPos);
+            BlockState below = getBlockStateOrAir(world, belowPos);
             if (hasLoweredNonSlabTopSupport(world, belowPos, below)
                     || hasLoweredSlabSupport(world, belowPos, below)) {
                 // GEOMETRIC MIRROR of the anchored slab branch above — same flat-constant defect,
@@ -1507,12 +1507,12 @@ public final class SlabSupport {
         // getYOffset) means a refilled block lowers on the very first client frame instead
         // of un-lowering and z-fighting the anchored block above until its own anchor syncs.
         if (!(state.getBlock() instanceof SlabBlock)
-                && world.getBlockState(pos.down()).isAir()) {
+                && getBlockStateOrAir(world, pos.down()).isAir()) {
             boolean isBlockEntitySubject = state.getBlock() instanceof BlockEntityProvider;
             boolean solidSubject = !isBlockEntitySubject && state.isSolidBlock(world, pos);
             if (solidSubject) {
                 BlockPos abovePos = pos.up();
-                BlockState above = world.getBlockState(abovePos);
+                BlockState above = getBlockStateOrAir(world, abovePos);
                 if (!(above.getBlock() instanceof SlabBlock)
                         && com.slabbed.anchor.SlabAnchorAttachment.isAnchored(world, abovePos)) {
                     return -0.5;
@@ -1582,7 +1582,7 @@ public final class SlabSupport {
             // Compound case: non-slab block above a bottom slab that is itself an adjacent-side
             // slab lowered by -0.5.  The block must drop an additional -0.5 to align with the
             // slab's visual top surface, for a total of -1.0.
-            BlockState belowSlab = world.getBlockState(pos.down());
+            BlockState belowSlab = getBlockStateOrAir(world, pos.down());
             if (isBottomSlab(belowSlab) && isAdjacentSideSlabLowered(world, pos.down(), belowSlab)) {
                 return -1.0;
             }
@@ -1605,7 +1605,7 @@ public final class SlabSupport {
         // and never call getYOffset (safe inside the IN_GET_Y_OFFSET guard).
         if (isLoweredUndersideHangerOwner(state)) {
             BlockPos supportPos = pos.up();
-            BlockState supportState = world.getBlockState(supportPos);
+            BlockState supportState = getBlockStateOrAir(world, supportPos);
             double slabSupportDy = loweredSlabUndersideSupportDy(world, supportPos, supportState);
             if (Double.isFinite(slabSupportDy) && slabSupportDy < -1.0e-6) {
                 // A TOP slab's underside sits half a block higher than a hanger's
@@ -1653,7 +1653,7 @@ public final class SlabSupport {
         // above), so the common render path pays nothing; returns NaN/0.0 for a non-lowered
         // support so flush cases stay untouched.
         BlockPos sitSupportPos = pos.down();
-        BlockState sitSupport = world.getBlockState(sitSupportPos);
+        BlockState sitSupport = getBlockStateOrAir(world, sitSupportPos);
         double sitSupportDy = loweredFullHeightSupportDy(world, sitSupportPos, sitSupport);
         if (Double.isFinite(sitSupportDy) && sitSupportDy < -1.0e-6) {
             return sitSupportDy;
@@ -1685,7 +1685,7 @@ public final class SlabSupport {
             }
         }
 
-        BlockState above = world.getBlockState(pos.up());
+        BlockState above = getBlockStateOrAir(world, pos.up());
 
         // direct: ceiling-attached blocks (lantern, chain, dripstone, cave vine, top trapdoor,
         // bell/lever/button) directly under a top slab. A TS surface is EXCLUDED via
@@ -1701,7 +1701,7 @@ public final class SlabSupport {
         if (isCeilingAttached(world, pos, state)) {
             BlockPos cursor = pos.up();
             for (int i = 0; i < MAX_CHAIN_DEPTH; i++) {
-                BlockState cur = world.getBlockState(cursor);
+                BlockState cur = getBlockStateOrAir(world, cursor);
                 if (isLoweringTopLikeCeiling(cur)) {
                     return 0.5;
                 }
@@ -1875,7 +1875,7 @@ public final class SlabSupport {
             return anchoredCellDy(world, pos, 0);
         }
         BlockPos belowPos = pos.down();
-        BlockState below = world.getBlockState(belowPos);
+        BlockState below = getBlockStateOrAir(world, belowPos);
         if (hasLoweredNonSlabTopSupport(world, belowPos, below)
                 || hasLoweredSlabSupport(world, belowPos, below)) {
             return loweredFollowerDy(world, pos, 0);
@@ -2562,7 +2562,7 @@ public final class SlabSupport {
             return directCustomDy;
         }
         if (shouldOffset(world, pos, state)) {
-            BlockState belowSlab = world.getBlockState(pos.down());
+            BlockState belowSlab = getBlockStateOrAir(world, pos.down());
             if (isBottomSlab(belowSlab) && isAdjacentSideSlabLowered(world, pos.down(), belowSlab)) {
                 return -1.0;
             }
@@ -2634,7 +2634,7 @@ public final class SlabSupport {
      * Redstone dust support surface — treat slab tops like valid ground for placement/survival.
      */
     public static boolean isRedstoneSupportTopSurface(BlockView world, BlockPos pos) {
-        BlockState state = world.getBlockState(pos);
+        BlockState state = getBlockStateOrAir(world, pos);
 
         if (state.isSideSolidFullSquare(world, pos, Direction.UP)) {
             return true;
@@ -3046,6 +3046,19 @@ public final class SlabSupport {
             cursor = cursor.down();
         }
         return 0.0;
+    }
+
+    /**
+     * Region-boundary-safe read: beyond a chunk-render region's bounds the lookup ENDS, answering
+     * air — the same bounded-lookup remedy the renderer-boundary crash fix established, held in
+     * ONE accessor so no walk or probe can crash a mesh worker by wandering past the region edge
+     * (a Terrain-slab-dense chunk makes the side-contagion walk reach it routinely). Real worlds
+     * never throw here, so gameplay reads are unchanged, and a non-region out-of-bounds still
+     * rethrows so genuine defects surface.
+     */
+    private static BlockState getBlockStateOrAir(BlockView world, BlockPos pos) {
+        BlockState state = getBlockStateOrNull(world, pos);
+        return state == null ? Blocks.AIR.getDefaultState() : state;
     }
 
     private static BlockState getBlockStateOrNull(BlockView world, BlockPos pos) {
