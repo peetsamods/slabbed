@@ -86,6 +86,9 @@ import java.util.concurrent.atomic.AtomicReference;
  */
 public final class SlabbedLabClientGameTest implements FabricClientGameTest {
 
+    /** Tick budget for the integrated server to consume a synthetic click's use packet. */
+    private static final int SERVER_SETTLE_TICKS = 20;
+
     /**
      * Fixed high-altitude fixture origin — guaranteed all-air in any world type
      * (superflat, default, or void).
@@ -2154,37 +2157,22 @@ public final class SlabbedLabClientGameTest implements FabricClientGameTest {
                 false,
                 false);
 
-        singleplayer.getServer().runOnServer(server -> {
-            if (!server.getPlayerManager().getPlayerList().isEmpty()) {
-                var player = server.getPlayerManager().getPlayerList().get(0);
-                player.refreshPositionAndAngles(
-                        slabFullPos.getX() + 2.5,
-                        slabFullPos.getY() + 0.5 - 1.62,
-                        slabFullPos.getZ() + 0.5,
-                        90.0f,
-                        0.0f);
-                player.setVelocity(Vec3d.ZERO);
-            }
-        });
-        ctx.waitTick();
+        stageBothSidesForClick(ctx, singleplayer, testId,
+                slabFullPos.getX() + 2.5, slabFullPos.getY() + 0.5, slabFullPos.getZ() + 0.5,
+                90.0f, 0.0f, Items.STONE_SLAB);
 
         ctx.runOnClient(mc -> {
             if (mc.player == null || mc.world == null || mc.interactionManager == null) {
                 slabVerdict.set("BLOCKED: client unavailable for slab upper-face placement");
                 return;
             }
-            mc.player.refreshPositionAndAngles(
-                    slabFullPos.getX() + 2.5,
-                    slabFullPos.getY() + 0.5 - mc.player.getStandingEyeHeight(),
-                    slabFullPos.getZ() + 0.5,
-                    90.0f,
-                    0.0f);
-            mc.player.setStackInHand(Hand.MAIN_HAND, new ItemStack(Items.STONE_SLAB, 8));
             ActionResult result = mc.interactionManager.interactBlock(mc.player, Hand.MAIN_HAND, slabUpperFaceHit);
             slabActionResult.set(result.toString());
         });
         ctx.waitTick();
         singleplayer.getClientWorld().waitForChunksRender();
+
+        assertServerBackedPlacement(ctx, singleplayer, testId, slabFullPos, slabFullPos.up(), slabSidePos);
 
         ctx.runOnClient(mc -> {
             if (mc.world == null) {
@@ -2235,40 +2223,22 @@ public final class SlabbedLabClientGameTest implements FabricClientGameTest {
                 false,
                 false);
 
-        singleplayer.getServer().runOnServer(server -> {
-            if (!server.getPlayerManager().getPlayerList().isEmpty()) {
-                var player = server.getPlayerManager().getPlayerList().get(0);
-                player.setStackInHand(
-                        Hand.MAIN_HAND,
-                        new ItemStack(Items.STONE, 8));
-                player.refreshPositionAndAngles(
-                        blockFullPos.getX() + 2.5,
-                        blockFullPos.getY() + 0.5 - 1.62,
-                        blockFullPos.getZ() + 0.5,
-                        90.0f,
-                        0.0f);
-                player.setVelocity(Vec3d.ZERO);
-            }
-        });
-        ctx.waitTick();
+        stageBothSidesForClick(ctx, singleplayer, testId,
+                blockFullPos.getX() + 2.5, blockFullPos.getY() + 0.5, blockFullPos.getZ() + 0.5,
+                90.0f, 0.0f, Items.STONE);
 
         ctx.runOnClient(mc -> {
             if (mc.player == null || mc.world == null || mc.interactionManager == null) {
                 blockVerdict.set("BLOCKED: client unavailable for block upper-face placement");
                 return;
             }
-            mc.player.refreshPositionAndAngles(
-                    blockFullPos.getX() + 2.5,
-                    blockFullPos.getY() + 0.5 - mc.player.getStandingEyeHeight(),
-                    blockFullPos.getZ() + 0.5,
-                    90.0f,
-                    0.0f);
-            mc.player.setStackInHand(Hand.MAIN_HAND, new ItemStack(Items.STONE, 8));
             ActionResult result = mc.interactionManager.interactBlock(mc.player, Hand.MAIN_HAND, blockUpperFaceHit);
             blockActionResult.set(result.toString());
         });
         ctx.waitTick();
         singleplayer.getClientWorld().waitForChunksRender();
+
+        assertServerBackedPlacement(ctx, singleplayer, testId, blockFullPos, blockFullPos.up(), blockSidePos);
 
         ctx.runOnClient(mc -> {
             if (mc.world == null) {
@@ -2431,25 +2401,19 @@ public final class SlabbedLabClientGameTest implements FabricClientGameTest {
                 false,
                 false);
 
-        syncServerPlayerForSouthSide(singleplayer, lowerFullPos, terrainSlabBlock);
-        ctx.waitTick();
+        stageClientForSouthSideClick(ctx, singleplayer, lowerFullPos, terrainSlabBlock);
         ctx.runOnClient(mc -> {
             if (mc.player == null || mc.world == null || mc.interactionManager == null) {
                 lowerVerdict.set("BLOCKED: client unavailable for terrain lower-half side placement");
                 return;
             }
-            mc.player.refreshPositionAndAngles(
-                    lowerFullPos.getX() + 0.5,
-                    lowerFullPos.getY() + 0.5 - mc.player.getStandingEyeHeight(),
-                    lowerFullPos.getZ() + 2.5,
-                    180.0f,
-                    0.0f);
-            mc.player.setStackInHand(Hand.MAIN_HAND, new ItemStack(terrainSlabBlock, 8));
             ActionResult result = mc.interactionManager.interactBlock(mc.player, Hand.MAIN_HAND, lowerHalfHit);
             lowerActionResult.set(result.toString());
         });
         ctx.waitTick();
         singleplayer.getClientWorld().waitForChunksRender();
+
+        assertServerBackedPlacement(ctx, singleplayer, testId, lowerFullPos, lowerPlacePos);
 
         ctx.runOnClient(mc -> {
             if (mc.world == null) {
@@ -2481,25 +2445,19 @@ public final class SlabbedLabClientGameTest implements FabricClientGameTest {
                 false,
                 false);
 
-        syncServerPlayerForSouthSide(singleplayer, upperFullPos, terrainSlabBlock);
-        ctx.waitTick();
+        stageClientForSouthSideClick(ctx, singleplayer, upperFullPos, terrainSlabBlock);
         ctx.runOnClient(mc -> {
             if (mc.player == null || mc.world == null || mc.interactionManager == null) {
                 upperVerdict.set("BLOCKED: client unavailable for terrain upper-half side placement");
                 return;
             }
-            mc.player.refreshPositionAndAngles(
-                    upperFullPos.getX() + 0.5,
-                    upperFullPos.getY() + 0.5 - mc.player.getStandingEyeHeight(),
-                    upperFullPos.getZ() + 2.5,
-                    180.0f,
-                    0.0f);
-            mc.player.setStackInHand(Hand.MAIN_HAND, new ItemStack(terrainSlabBlock, 8));
             ActionResult result = mc.interactionManager.interactBlock(mc.player, Hand.MAIN_HAND, upperHalfHit);
             upperActionResult.set(result.toString());
         });
         ctx.waitTick();
         singleplayer.getClientWorld().waitForChunksRender();
+
+        assertServerBackedPlacement(ctx, singleplayer, testId, upperFullPos, upperPlacePos);
 
         ctx.runOnClient(mc -> {
             if (mc.world == null) {
@@ -2581,24 +2539,172 @@ public final class SlabbedLabClientGameTest implements FabricClientGameTest {
         }
     }
 
-    private static void syncServerPlayerForSouthSide(
+    /**
+     * Client-authoritative pre-click staging for a south-facing synthetic click.
+     *
+     * <p>Vanilla exempts the singleplayer HOST from movement validation, so the server player
+     * mirrors the client's movement packets: a server-side teleport is overwritten by the very
+     * next client move, and the creative client likewise pushes ITS held stack to the server.
+     * Position and arm the CLIENT, then yield ticks so both syncs land, so the use packet reaches
+     * ServerPlayNetworkHandler with an in-reach server player actually holding the item. Do not
+     * move this staging into the click lambda — that is what lets onPlayerInteractBlock's reach
+     * check drop the packet silently while the client's predicted ghost reads back as a false
+     * GREEN.
+     */
+    private static void stageClientForSouthSideClick(
+            ClientGameTestContext ctx,
             TestSingleplayerContext singleplayer,
             BlockPos fullPos,
-            Block terrainSlabBlock
+            Block heldBlock
+    ) {
+        stageBothSidesForClick(ctx, singleplayer, "south-side-click",
+                fullPos.getX() + 0.5, fullPos.getY() + 0.5, fullPos.getZ() + 2.5,
+                180.0f, 0.0f, heldBlock.asItem());
+    }
+
+    /**
+     * Stages the CLIENT and the SERVER player at the SAME eye position before a synthetic click.
+     *
+     * <p>Staging only one side is what breaks these proofs, in both directions. A server-only
+     * teleport is overwritten by the host's next movement packet (the host is exempt from movement
+     * validation) and the creative client's inventory push empties the server hand. But a
+     * client-only teleport across any real distance is REJECTED — vanilla logs "moved wrongly" and
+     * snaps the player back to where the server still has them, so the click fires from the wrong
+     * place and silently lands nothing. Setting both sides to the same spot leaves the server a
+     * zero-delta movement packet to validate, so nothing is rejected and nothing is overwritten.
+     * Staging inside the click lambda hides the whole problem: it clicks before any of this can be
+     * validated, so the client's predicted ghost is all the readback ever sees.
+     */
+    private static void stageBothSidesForClick(
+            ClientGameTestContext ctx,
+            TestSingleplayerContext singleplayer,
+            String testId,
+            double eyeX,
+            double eyeY,
+            double eyeZ,
+            float yaw,
+            float pitch,
+            net.minecraft.item.Item held
     ) {
         singleplayer.getServer().runOnServer(server -> {
-            if (!server.getPlayerManager().getPlayerList().isEmpty()) {
-                var player = server.getPlayerManager().getPlayerList().get(0);
-                player.refreshPositionAndAngles(
-                        fullPos.getX() + 0.5,
-                        fullPos.getY() + 0.5 - 1.62,
-                        fullPos.getZ() + 2.5,
-                        180.0f,
-                        0.0f);
-                player.setVelocity(Vec3d.ZERO);
-                player.setStackInHand(Hand.MAIN_HAND, new ItemStack(terrainSlabBlock, 8));
+            if (server.getPlayerManager().getPlayerList().isEmpty()) {
+                throw new RuntimeException("[" + testId + "] server player list empty for click staging");
             }
+            var player = server.getPlayerManager().getPlayerList().get(0);
+            player.refreshPositionAndAngles(eyeX, eyeY - player.getStandingEyeHeight(), eyeZ, yaw, pitch);
+            player.setVelocity(Vec3d.ZERO);
+            player.setStackInHand(Hand.MAIN_HAND, new ItemStack(held, 8));
         });
+        ctx.runOnClient(mc -> {
+            if (mc.player == null) {
+                throw new RuntimeException("[" + testId + "] client player unavailable for click staging");
+            }
+            mc.player.refreshPositionAndAngles(eyeX, eyeY - mc.player.getStandingEyeHeight(), eyeZ, yaw, pitch);
+            mc.player.setVelocity(Vec3d.ZERO);
+            mc.player.setStackInHand(Hand.MAIN_HAND, new ItemStack(held, 8));
+        });
+        ctx.waitTick();
+        ctx.waitTick();
+    }
+
+    /**
+     * Binds a synthetic-click proof to SERVER truth at every cell whose contents it claims.
+     *
+     * <p>{@code ClientPlayerInteractionManager.interactBlock} predicts the placement in the CLIENT
+     * world before the use packet is answered, and {@code onPlayerInteractBlock} drops an
+     * out-of-reach, out-of-tolerance, or teleport-pending packet WITHOUT a resync — so the
+     * predicted ghost survives in the client world and a client-only readback cannot tell a
+     * working packet lane from a dropped one. Any proof that reads a placement outcome from
+     * {@code mc.world} must first prove the SERVER agrees; do not weaken this back to a
+     * client-only assertion.
+     */
+    static void assertServerBackedPlacement(
+            ClientGameTestContext ctx,
+            TestSingleplayerContext singleplayer,
+            String testId,
+            BlockPos... cells
+    ) {
+        String mismatches = settleServerAgainstClient(ctx, singleplayer, testId, cells);
+        if (!mismatches.isEmpty()) {
+            throw new RuntimeException("[" + testId + "] RED: after " + SERVER_SETTLE_TICKS
+                    + " settling ticks the SERVER world still disagrees with the CLIENT readback, so this"
+                    + " proof's verdict came from the client's predicted ghost rather than a placement the"
+                    + " server actually made:" + mismatches);
+        }
+    }
+
+    /**
+     * Ticks until the SERVER world has caught up with the click, and reports what still differs.
+     *
+     * <p>{@code ctx.waitTick()} is a CLIENT tick, NOT a client to server to world barrier: measured
+     * on the underside-placement lanes, the server cell is still air one tick after a synthetic
+     * click and holds the placement from the second tick on. Sampling the server once at tick one
+     * therefore produces a flaky RED that reads exactly like a prediction ghost. Settling first
+     * keeps the guard honest in the other direction too — a use packet that is genuinely dropped or
+     * refused never settles, so it still fails once the budget runs out. Do not replace the budget
+     * with a fixed single tick.
+     *
+     * @return an empty string once every cell agrees, otherwise a description of what differs.
+     */
+    static String settleServerAgainstClient(
+            ClientGameTestContext ctx,
+            TestSingleplayerContext singleplayer,
+            String testId,
+            BlockPos... cells
+    ) {
+        AtomicReference<BlockState[]> clientStates = new AtomicReference<>();
+        AtomicReference<double[]> clientDys = new AtomicReference<>();
+        AtomicReference<BlockState[]> serverStates = new AtomicReference<>();
+        AtomicReference<double[]> serverDys = new AtomicReference<>();
+        String mismatches = "";
+
+        for (int attempt = 0; attempt <= SERVER_SETTLE_TICKS; attempt++) {
+            ctx.runOnClient(mc -> {
+                if (mc.world == null) {
+                    throw new RuntimeException("[" + testId + "] client world unavailable for server-truth binding");
+                }
+                BlockState[] states = new BlockState[cells.length];
+                double[] dys = new double[cells.length];
+                for (int i = 0; i < cells.length; i++) {
+                    states[i] = mc.world.getBlockState(cells[i]);
+                    dys[i] = SlabSupport.getYOffset(mc.world, cells[i], states[i]);
+                }
+                clientStates.set(states);
+                clientDys.set(dys);
+            });
+
+            singleplayer.getServer().runOnServer(server -> {
+                var world = server.getOverworld();
+                BlockState[] states = new BlockState[cells.length];
+                double[] dys = new double[cells.length];
+                for (int i = 0; i < cells.length; i++) {
+                    states[i] = world.getBlockState(cells[i]);
+                    dys[i] = SlabSupport.getYOffset(world, cells[i], states[i]);
+                }
+                serverStates.set(states);
+                serverDys.set(dys);
+            });
+
+            StringBuilder differences = new StringBuilder();
+            for (int i = 0; i < cells.length; i++) {
+                BlockState clientState = clientStates.get()[i];
+                BlockState serverState = serverStates.get()[i];
+                double clientDy = clientDys.get()[i];
+                double serverDy = serverDys.get()[i];
+                if (clientState != serverState || Math.abs(clientDy - serverDy) >= 1.0e-6) {
+                    differences.append(" ").append(cells[i].toShortString())
+                            .append("{client=").append(clientState).append(" dy=").append(clientDy)
+                            .append(" | server=").append(serverState).append(" dy=").append(serverDy)
+                            .append("}");
+                }
+            }
+            mismatches = differences.toString();
+            if (mismatches.isEmpty()) {
+                return "";
+            }
+            ctx.waitTick();
+        }
+        return mismatches;
     }
 
     private static String visualYRange(net.minecraft.world.BlockView world, BlockPos pos, BlockState state) {

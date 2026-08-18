@@ -493,29 +493,36 @@ public final class TerrainSlabsCustomSurfaceClientGameTest implements FabricClie
     ) {
         singleplayer.getServer().runOnServer(server -> {
             if (!server.getPlayerManager().getPlayerList().isEmpty()) {
-                var player = server.getPlayerManager().getPlayerList().get(0);
-                player.refreshPositionAndAngles(
-                        supportPos.getX() + 0.5d,
-                        supportPos.getY() - 1.25d,
-                        supportPos.getZ() + 1.75d,
-                        180.0f,
-                        -35.0f);
-                player.setStackInHand(Hand.MAIN_HAND, new ItemStack(Items.LANTERN, 4));
+                server.getPlayerManager().getPlayerList().get(0)
+                        .setStackInHand(Hand.MAIN_HAND, new ItemStack(Items.LANTERN, 4));
             }
         });
-        ctx.waitTick();
+        // Client-authoritative staging, BEFORE the click lambda. The singleplayer HOST is exempt
+        // from movement validation, so a server-side teleport is overwritten by the client's next
+        // movement packet and the creative client's inventory push empties the server hand; the
+        // use packet would then be dropped at the reach check with no resync, leaving only the
+        // client's predicted ghost for the readback to confirm. Yield ticks so both syncs land.
         ctx.runOnClient(mc -> {
-            if (mc.world == null || mc.player == null || mc.interactionManager == null) {
+            if (mc.player == null) {
                 probeRef.set(UndersidePlacementProbe.notReady());
                 return;
             }
-            mc.player.setStackInHand(Hand.MAIN_HAND, new ItemStack(Items.LANTERN, 4));
             mc.player.refreshPositionAndAngles(
                     supportPos.getX() + 0.5d,
                     supportPos.getY() - 1.25d,
                     supportPos.getZ() + 1.75d,
                     180.0f,
                     -35.0f);
+            mc.player.setVelocity(Vec3d.ZERO);
+            mc.player.setStackInHand(Hand.MAIN_HAND, new ItemStack(Items.LANTERN, 4));
+        });
+        ctx.waitTick();
+        ctx.waitTick();
+        ctx.runOnClient(mc -> {
+            if (mc.world == null || mc.player == null || mc.interactionManager == null) {
+                probeRef.set(UndersidePlacementProbe.notReady());
+                return;
+            }
             BlockHitResult hit = undersideRaycast(mc, supportPos);
             String actionResult = "SKIPPED_" + hit.getType();
             BlockPos placementContextPos = null;
@@ -553,6 +560,28 @@ public final class TerrainSlabsCustomSurfaceClientGameTest implements FabricClie
                     candidateCanPlaceAt,
                     candidateWorldCanPlace));
         });
+        ctx.waitTick();
+        // SERVER-truth readback. The click lane predicts the lantern in the CLIENT world, and
+        // onPlayerInteractBlock drops a refused, out-of-reach, or teleport-pending use packet
+        // WITHOUT a resync, so every client-side placed/hanging/dy field this probe carries can
+        // describe a ghost the server never made. The lane reds on the SERVER cell, not the
+        // prediction; do not drop these fields back to client-only reads.
+        final BlockPos lanternPos = supportPos.down();
+        // One client tick is not a client-to-server barrier: the server cell is still air a tick
+        // after the click and holds the placement from the next one. Settle first so a slow but
+        // real placement is not reported as a ghost; a genuinely dropped or refused packet never
+        // settles, so it still reaches the lane as air.
+        SlabbedLabClientGameTest.settleServerAgainstClient(
+                ctx, singleplayer, "terrain_slabs_custom_surface_underside_placement", lanternPos);
+        AtomicReference<BlockState> serverLanternState = new AtomicReference<>();
+        AtomicReference<Double> serverLanternDy = new AtomicReference<>(Double.NaN);
+        singleplayer.getServer().runOnServer(server -> {
+            var world = server.getOverworld();
+            BlockState placed = world.getBlockState(lanternPos);
+            serverLanternState.set(placed);
+            serverLanternDy.set(SlabSupport.getYOffset(world, lanternPos, placed));
+        });
+        probeRef.set(probeRef.get().withServerTruth(serverLanternState.get(), serverLanternDy.get()));
     }
 
     private static BlockHitResult undersideRaycast(MinecraftClient mc, BlockPos supportPos) {
@@ -614,6 +643,10 @@ public final class TerrainSlabsCustomSurfaceClientGameTest implements FabricClie
                 + " candidateHanging=" + placementProbe.candidateHanging()
                 + " candidateCanPlaceAt=" + placementProbe.candidateCanPlaceAt()
                 + " candidateWorldCanPlace=" + placementProbe.candidateWorldCanPlace()
+                + " serverLanternState=" + placementProbe.serverLanternState()
+                + " serverPlacedLantern=" + placementProbe.serverPlacedLantern()
+                + " serverHanging=" + placementProbe.serverHanging()
+                + " serverLanternDy=" + placementProbe.serverLanternDy()
                 + " expectedCustomKind=" + expectedCustomKind
                 + " expectedLanternDy=" + expectedLanternDy
                 + " expectedUndersideFullSquare=true"
@@ -642,6 +675,12 @@ public final class TerrainSlabsCustomSurfaceClientGameTest implements FabricClie
                 !placedLantern ? "hanging_lantern_item_not_placed" : null,
                 placedLantern && !hanging ? "lantern_not_hanging" : null,
                 mismatch("lantern_dy_mismatch", lanternDy, expectedLanternDy),
+                // SERVER truth: a client-only readback confirms the interaction manager's own
+                // prediction, which survives a dropped or refused use packet with no resync.
+                !placementProbe.serverPlacedLantern() ? "server_hanging_lantern_item_not_placed" : null,
+                placementProbe.serverPlacedLantern() && !placementProbe.serverHanging()
+                        ? "server_lantern_not_hanging" : null,
+                mismatch("server_lantern_dy_mismatch", placementProbe.serverLanternDy(), expectedLanternDy),
                 !undersideFullSquare ? "underside_full_square_false" : null,
                 !undersideSmallSquare ? "underside_small_square_false" : null,
                 ceilingSupport != expectedCeilingSupport ? "ceiling_support_bottom_surface_mismatch" : null,
@@ -1348,18 +1387,37 @@ public final class TerrainSlabsCustomSurfaceClientGameTest implements FabricClie
             boolean candidateLantern,
             boolean candidateHanging,
             boolean candidateCanPlaceAt,
-            boolean candidateWorldCanPlace
+            boolean candidateWorldCanPlace,
+            String serverLanternState,
+            boolean serverPlacedLantern,
+            boolean serverHanging,
+            double serverLanternDy
     ) {
         private static UndersidePlacementProbe notRun() {
             return new UndersidePlacementProbe(
                     "NOT_RUN", HitResult.Type.MISS, null, null, null,
-                    null, false, false, false, false, false, false);
+                    null, false, false, false, false, false, false,
+                    "NOT_READ", false, false, Double.NaN);
         }
 
         private static UndersidePlacementProbe notReady() {
             return new UndersidePlacementProbe(
                     "CLIENT_NOT_READY", HitResult.Type.MISS, null, null, null,
-                    null, false, false, false, false, false, false);
+                    null, false, false, false, false, false, false,
+                    "NOT_READ", false, false, Double.NaN);
+        }
+
+        /** Replaces the client-only view with one that also carries what the SERVER world holds. */
+        private UndersidePlacementProbe withServerTruth(BlockState serverState, double serverDy) {
+            boolean placed = serverState != null && serverState.isOf(Blocks.LANTERN);
+            boolean hanging = placed
+                    && serverState.contains(Properties.HANGING)
+                    && serverState.get(Properties.HANGING);
+            return new UndersidePlacementProbe(
+                    actionResult, hitType, hitBlockPos, hitSide, hitVec,
+                    placementContextPos, placementCanPlace, placementCanReplaceExisting,
+                    candidateLantern, candidateHanging, candidateCanPlaceAt, candidateWorldCanPlace,
+                    String.valueOf(serverState), placed, hanging, serverDy);
         }
 
         private static UndersidePlacementProbe from(
@@ -1386,7 +1444,11 @@ public final class TerrainSlabsCustomSurfaceClientGameTest implements FabricClie
                     candidateLantern,
                     candidateHanging,
                     candidateCanPlaceAt,
-                    candidateWorldCanPlace);
+                    candidateWorldCanPlace,
+                    "NOT_READ",
+                    false,
+                    false,
+                    Double.NaN);
         }
     }
 

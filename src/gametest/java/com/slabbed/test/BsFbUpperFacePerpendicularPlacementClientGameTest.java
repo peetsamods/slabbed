@@ -96,10 +96,14 @@ public final class BsFbUpperFacePerpendicularPlacementClientGameTest implements 
         final BlockPos secondSideSlab = firstSideSlab.south();
 
         AtomicReference<String> actionResult = new AtomicReference<>("not_run");
-        AtomicReference<String> firstStateText = new AtomicReference<>("not_read");
-        AtomicReference<String> secondStateText = new AtomicReference<>("not_read");
+        AtomicReference<BlockState> firstState = new AtomicReference<>();
+        AtomicReference<BlockState> secondState = new AtomicReference<>();
         AtomicReference<Double> firstDy = new AtomicReference<>(Double.NaN);
         AtomicReference<Double> secondDy = new AtomicReference<>(Double.NaN);
+        AtomicReference<BlockState> serverFirstState = new AtomicReference<>();
+        AtomicReference<BlockState> serverSecondState = new AtomicReference<>();
+        AtomicReference<Double> serverFirstDy = new AtomicReference<>(Double.NaN);
+        AtomicReference<Double> serverSecondDy = new AtomicReference<>(Double.NaN);
 
         singleplayer.getServer().runOnServer(server -> {
             var world = server.getOverworld();
@@ -115,20 +119,38 @@ public final class BsFbUpperFacePerpendicularPlacementClientGameTest implements 
                     Block.NOTIFY_LISTENERS);
             world.setBlockState(secondSideSlab, Blocks.AIR.getDefaultState(), Block.NOTIFY_LISTENERS);
             world.setBlockState(secondSideSlab.up(), Blocks.AIR.getDefaultState(), Block.NOTIFY_LISTENERS);
-            if (!server.getPlayerManager().getPlayerList().isEmpty()) {
-                var player = server.getPlayerManager().getPlayerList().get(0);
-                player.refreshPositionAndAngles(
-                        loweredFull.getX() + 0.5,
-                        loweredFull.getY() + 0.5 - 1.62,
-                        loweredFull.getZ() + 3.5,
-                        180.0f,
-                        0.0f);
-                player.setVelocity(Vec3d.ZERO);
-                player.setStackInHand(Hand.MAIN_HAND, new ItemStack(Items.OAK_SLAB, 8));
+            if (server.getPlayerManager().getPlayerList().isEmpty()) {
+                throw new RuntimeException("singleplayer server player list empty for a7/a8 lowered side-slab proof");
             }
+            server.getPlayerManager().getPlayerList().get(0)
+                    .setStackInHand(Hand.MAIN_HAND, new ItemStack(Items.OAK_SLAB, 8));
         });
         ctx.waitTick();
         singleplayer.getClientWorld().waitForChunksRender();
+
+        // Client-authoritative staging, BEFORE the click. Vanilla exempts the singleplayer HOST
+        // from movement validation, so the server player mirrors the client's movement packets —
+        // a server-side teleport is overwritten by the very next client move, and the creative
+        // client likewise pushes ITS held stack to the server. Positioning/arming the CLIENT
+        // first and then yielding ticks lets both syncs land, so the use packet reaches
+        // ServerPlayNetworkHandler with an in-reach server player actually holding the slab.
+        // (Staging inside the click lambda is what let onPlayerInteractBlock's reach check drop
+        // the packet silently while the client's predicted ghost read back as a false GREEN.)
+        ctx.runOnClient(mc -> {
+            if (mc.player == null) {
+                throw new RuntimeException("client player unavailable for a7/a8 staging");
+            }
+            mc.player.refreshPositionAndAngles(
+                    loweredFull.getX() + 0.5,
+                    loweredFull.getY() + 0.5 - mc.player.getStandingEyeHeight(),
+                    loweredFull.getZ() + 3.5,
+                    180.0f,
+                    0.0f);
+            mc.player.setVelocity(Vec3d.ZERO);
+            mc.player.setStackInHand(Hand.MAIN_HAND, new ItemStack(Items.OAK_SLAB, 8));
+        });
+        ctx.waitTick();
+        ctx.waitTick();
 
         final BlockHitResult outwardSideHit = new BlockHitResult(
                 new Vec3d(
@@ -144,19 +166,30 @@ public final class BsFbUpperFacePerpendicularPlacementClientGameTest implements 
             if (mc.player == null || mc.world == null || mc.interactionManager == null) {
                 throw new RuntimeException("client unavailable for a7/a8 lowered side-slab proof");
             }
-            mc.player.refreshPositionAndAngles(
-                    loweredFull.getX() + 0.5,
-                    loweredFull.getY() + 0.5 - mc.player.getStandingEyeHeight(),
-                    loweredFull.getZ() + 3.5,
-                    180.0f,
-                    0.0f);
-            mc.player.setVelocity(Vec3d.ZERO);
-            mc.player.setStackInHand(Hand.MAIN_HAND, new ItemStack(Items.OAK_SLAB, 8));
             ActionResult result = mc.interactionManager.interactBlock(mc.player, Hand.MAIN_HAND, outwardSideHit);
             actionResult.set(result.toString());
         });
         ctx.waitTick();
         singleplayer.getClientWorld().waitForChunksRender();
+
+        // SERVER-truth readback FIRST. The client lane predicts the placement locally and that
+        // ghost survives in the client world even when the server silently drops the use packet
+        // (reach/tolerance/teleport-pending all return without a resync), so a client-only
+        // readback cannot distinguish a working packet lane from a dropped one.
+        // A single waitTick does not guarantee the integrated server has consumed the use packet,
+        // so settle first — otherwise this readback can sample the server before the placement
+        // lands and report a ghost that is not one. A dropped packet never settles.
+        SlabbedLabClientGameTest.settleServerAgainstClient(
+                ctx, singleplayer, "a7-a8-lowered-side-slab-no-combine", firstSideSlab, secondSideSlab);
+        singleplayer.getServer().runOnServer(server -> {
+            var world = server.getOverworld();
+            BlockState first = world.getBlockState(firstSideSlab);
+            BlockState second = world.getBlockState(secondSideSlab);
+            serverFirstState.set(first);
+            serverSecondState.set(second);
+            serverFirstDy.set(SlabSupport.getYOffset(world, firstSideSlab, first));
+            serverSecondDy.set(SlabSupport.getYOffset(world, secondSideSlab, second));
+        });
 
         ctx.runOnClient(mc -> {
             if (mc.world == null) {
@@ -164,33 +197,44 @@ public final class BsFbUpperFacePerpendicularPlacementClientGameTest implements 
             }
             BlockState first = mc.world.getBlockState(firstSideSlab);
             BlockState second = mc.world.getBlockState(secondSideSlab);
-            firstStateText.set(first.toString());
-            secondStateText.set(second.toString());
+            firstState.set(first);
+            secondState.set(second);
             firstDy.set(SlabSupport.getYOffset(mc.world, firstSideSlab, first));
             secondDy.set(SlabSupport.getYOffset(mc.world, secondSideSlab, second));
-
-            String proof = "[a7-a8-lowered-side-slab-no-combine] result=" + actionResult.get()
-                    + " first=" + first + " firstDy=" + firstDy.get()
-                    + " second=" + second + " secondDy=" + secondDy.get();
-            System.out.println(proof);
-
-            if (!first.isOf(Blocks.OAK_SLAB)
-                    || !first.contains(SlabBlock.TYPE)
-                    || first.get(SlabBlock.TYPE) != SlabType.TOP) {
-                throw new RuntimeException(proof
-                        + " RED: first side slab must remain a single TOP slab, not same-cell combine");
-            }
-            if (!second.isOf(Blocks.OAK_SLAB)
-                    || !second.contains(SlabBlock.TYPE)
-                    || second.get(SlabBlock.TYPE) != SlabType.TOP) {
-                throw new RuntimeException(proof
-                        + " RED: outward side click must place a TOP oak slab in the next side cell");
-            }
-            if (!approx(firstDy.get(), -0.5d) || !approx(secondDy.get(), -0.5d)) {
-                throw new RuntimeException(proof
-                        + " RED: lowered side-slab lane must preserve dy=-0.5 across both slabs");
-            }
         });
+
+        String proof = "[a7-a8-lowered-side-slab-no-combine] result=" + actionResult.get()
+                + " first=" + firstState.get() + " firstDy=" + firstDy.get()
+                + " second=" + secondState.get() + " secondDy=" + secondDy.get()
+                + " serverFirst=" + serverFirstState.get() + " serverFirstDy=" + serverFirstDy.get()
+                + " serverSecond=" + serverSecondState.get() + " serverSecondDy=" + serverSecondDy.get();
+        System.out.println(proof);
+
+        if (!isSingleTopOakSlab(serverFirstState.get())) {
+            throw new RuntimeException(proof
+                    + " RED: SERVER first side slab must remain a single TOP slab, not same-cell combine");
+        }
+        if (!isSingleTopOakSlab(serverSecondState.get())) {
+            throw new RuntimeException(proof
+                    + " RED: SERVER world did not gain the extended TOP slab — the client->packet->server"
+                    + " lane dropped or refused the placement (client prediction alone cannot green this proof)");
+        }
+        if (!approx(serverFirstDy.get(), -0.5d) || !approx(serverSecondDy.get(), -0.5d)) {
+            throw new RuntimeException(proof
+                    + " RED: SERVER lowered side-slab lane must preserve dy=-0.5 across both slabs");
+        }
+        if (!isSingleTopOakSlab(firstState.get())) {
+            throw new RuntimeException(proof
+                    + " RED: first side slab must remain a single TOP slab, not same-cell combine");
+        }
+        if (!isSingleTopOakSlab(secondState.get())) {
+            throw new RuntimeException(proof
+                    + " RED: outward side click must place a TOP oak slab in the next side cell");
+        }
+        if (!approx(firstDy.get(), -0.5d) || !approx(secondDy.get(), -0.5d)) {
+            throw new RuntimeException(proof
+                    + " RED: lowered side-slab lane must preserve dy=-0.5 across both slabs");
+        }
 
         System.out.println("[a7-a8-lowered-side-slab-no-combine] => GREEN");
     }
@@ -536,6 +580,13 @@ public final class BsFbUpperFacePerpendicularPlacementClientGameTest implements 
 
     private static boolean approx(double a, double b) {
         return Math.abs(a - b) < 1.0e-6;
+    }
+
+    private static boolean isSingleTopOakSlab(BlockState state) {
+        return state != null
+                && state.isOf(Blocks.OAK_SLAB)
+                && state.contains(SlabBlock.TYPE)
+                && state.get(SlabBlock.TYPE) == SlabType.TOP;
     }
 
     private static float yawFromDirection(Vec3d dir) {
