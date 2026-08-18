@@ -4,6 +4,46 @@ All notable, player-facing changes are listed here. Slabbed ships a separate fil
 Minecraft version; entries note which versions/loaders a change applies to. For the exact
 latest file, see [Modrinth](https://modrinth.com/mod/slabbed) or
 [CurseForge](https://www.curseforge.com/minecraft/mc-mods/slabbed).
+See LAW.md — this doc does not redefine the law.
+
+## [0.5.1-alpha.1] — 1.21.11 (Fabric) — 2026-08-17
+
+Alpha: the placement core was rebuilt around heights that are computed once, at placement, and
+then frozen. Automated coverage is extensive (387 gametests plus client proofs); items below note
+their proof level.
+
+### Fixed
+- **Placement heights are frozen at placement time, atomically, for every block item.** Where a
+  block lands is where it stays; later neighbor or support edits can never move it. This is the
+  core 0.5.1 change and closes the long-standing pop/snap family. *(Gametest-enforced; support
+  removal, reload, and full-restart persistence live-confirmed in the dev client.)*
+- **Fixed a client crash while meshing chunks on Terrain-slab-dense terrain.** A support walk
+  could read past the renderer's region boundary on a mesh worker; every resolver read is now
+  bounded, ending the lookup at the region edge. *(Live-reproduced and live-confirmed.)*
+- **Scaffolding works with Slabbed installed again**
+  ([#65](https://github.com/peetsamods/slabbed/issues/65)): side-click stacking lands on top of
+  the column, placing upward from inside scaffolding no longer creates an invisible untargetable
+  block, and stacking on a lowered column follows the column's real seat. *(Gametest-proven
+  through the real item path.)*
+- **Placing a block into a replaceable cell (grass, ferns, flowers, one-layer snow) no longer
+  records a wrong height** a full cell up or down, and same-item merges (candles, sea pickles,
+  snow layers) preserve the cell's recorded height instead of re-deriving it. *(Gametest-proven.)*
+- **Slab top-edge and corner clicks place on top of the slab.** *(Live-confirmed.)*
+- **Improved Terrain Slabs compatibility:** player-placed Terrain slab heights are preserved and
+  continue lowered surfaces at the same depth; floor objects (torches, levers, repeaters,
+  comparators) seat on Terrain slab surfaces; hanging objects follow Terrain underside planes;
+  Terrain-Slabs-owned vegetation and snow get exactly one offset — Terrain Slabs' own — over
+  both natural and player-placed Terrain surfaces. *(Core rows live-confirmed in the dev client
+  with the original Terrain Slabs 3.3.0; the rest gametest-proven.)*
+- **Lever particles align with the lever's frozen height.** *(Gametest-proven.)*
+- **Vanilla redstone wire connections on lowered supports repaired**, with the piston-circuit
+  stability replay ([#57](https://github.com/peetsamods/slabbed/issues/57)) covered by gametests.
+- **Client meshes for height-dependent blocks rebuild promptly and in a bounded, coalesced way.**
+
+### Notes
+- The supported player height floor remains **−1.0** (one full block down). A deeper range exists
+  for development and testing only, behind explicit opt-in, and is not supported player behavior.
+- `/slabdy` (the diagnostic overlay) ships in every build and is **off** by default.
 
 ## [0.5.0-beta.8] — 1.21.11 (Fabric) — 2026-07-12
 

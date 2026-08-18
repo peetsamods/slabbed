@@ -58,12 +58,20 @@ Other partial blocks (stairs, fences, walls, trapdoors, panes) are intentionally
 With **[Countered's Terrain Slabs](https://modrinth.com/mod/countereds-terrain-slabs)** installed, terrain slabs become first-class support:
 
 - Blocks, objects (lanterns, torches, chains), and vanilla slabs placed on Terrain Slabs surfaces lower to sit flush, forming continuous "combined slab" surfaces.
+- Player-placed Terrain slabs keep their exact placed height, and a Terrain slab placed onto an
+  already-lowered vanilla block continues the surface at the same depth.
+- Terrain-Slabs-owned surface details (its own vegetation and snow seating) get exactly one
+  offset — Terrain Slabs' own — never a second one from Slabbed.
 - Completely **optional** and runtime-gated — Slabbed runs exactly the same when Terrain Slabs is not installed.
+
+Compatibility is **improved** in this line, not yet complete.
 
 **Known limitations:**
 
 - A *custom* (Terrain Slabs) slab placed directly **on top of** a vanilla slab doesn't lower yet. The reverse — a vanilla slab on top of a Terrain Slabs slab — works.
 - Very tall (3+) combined-slab towers cap how far they lower, on purpose, to keep block targeting reliable.
+- Combined lowering the player can rely on ends at one full block down (−1.0). Deeper placement
+  exists only as opt-in development behavior and is not supported player behavior.
 
 ## Still rough
 
@@ -92,12 +100,14 @@ The most useful reports include:
 
 **Tip — the `/slabdy` overlay.** Every build includes a lightweight diagnostic overlay that
 shows, in a screen corner, the exact height offset of whatever block your crosshair is on. It is
-on by default; type `/slabdy` to toggle it. Including that readout in a bug report pins down a
+off by default; type `/slabdy` to toggle it on. Including that readout in a bug report pins down a
 visual-offset issue far faster than a screenshot alone.
 
 ## Status
 
-Slabbed is currently in **beta**. Behavior expands carefully — category by category, by proven behavior.
+Slabbed is currently in **alpha** (pre-release). The 0.5.1 line rebuilds the placement core
+around heights that are computed once, at placement, and then frozen — expect rough edges while
+that settles. Behavior expands carefully — category by category, by proven behavior.
 
 ## License
 
