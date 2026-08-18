@@ -55,6 +55,7 @@
       "com.slabbed.test.DependentRemeshQueueTest",
       "com.slabbed.test.ScaffoldingColumnPlacementSuite",
       "com.slabbed.test.ReplaceableCellPlacementSuite",
+      "com.slabbed.test.TerrainOwnedOnTopConsistencySuite",
       "com.slabbed.client.BetaNoticeSuite"
     ],
     "fabric-client-gametest": [

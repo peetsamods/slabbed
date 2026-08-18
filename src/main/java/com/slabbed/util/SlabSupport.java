@@ -725,6 +725,18 @@ public final class SlabSupport {
             return false;
         }
 
+        // A Terrain-Slabs-owned on-top object over a BOTTOM_LIKE Terrain surface gets exactly ONE
+        // offset — Terrain Slabs' own — so this column gate must answer false for it whether the
+        // surface below is native or AUTHORED. An authored Terrain slab carries a stored height
+        // and a placement anchor, and without this consult the column walk read that anchor as a
+        // lowering source and double-offset the object by -0.5 (an ownership answer that depended
+        // on surface authorship). Not a block-class exclusion: ownership is asked of Terrain
+        // Slabs' own on-top authority, and every non-owned object keeps every lane
+        // (TerrainOwnedOnTopConsistencySuite pins both sides).
+        if (isTerrainOwnedOnTopObject(world, pos, state)) {
+            return false;
+        }
+
         // blocks under a top slab that get +0.5 UP via getYOffset should not
         // also get -0.5 DOWN. Use isCeilingAttached here (safe, no shape calcs)
         // since shouldOffset is called from paths outside the recursion guard.
@@ -2849,15 +2861,31 @@ public final class SlabSupport {
         return false;
     }
 
+    /**
+     * True iff Terrain Slabs OWNS the on-top offset of the object at {@code pos}: the object is
+     * one Terrain Slabs' own on-top authority claims (vegetation, snow) and it rests directly on
+     * a BOTTOM_LIKE Terrain surface. Such an object gets exactly ONE offset — Terrain Slabs' own
+     * — so every Slabbed contribution lane must answer ZERO for it, over a NATIVE surface
+     * (worldgen-shaped, no facts) and over an AUTHORED one (player-placed, stored height,
+     * anchored) alike: the ownership answer must not depend on surface authorship. This is the
+     * SAME predicate pair as the placement transaction's fact-minting gate
+     * ({@code BlockItemPlacementIntentMixin}'s Terrain-owned check), held in ONE place with its
+     * direct-support consumer so the live lanes and the transaction cannot drift apart (the
+     * shared-predicate law).
+     */
+    private static boolean isTerrainOwnedOnTopObject(BlockView world, BlockPos pos, BlockState state) {
+        return CompatHooks.terrainSlabsHandlesObjectOffset(state)
+                && CompatHooks.customSlabSurfaceKind(getBlockStateOrNull(world, pos.down()))
+                == CompatSlabSurfaceKind.BOTTOM_LIKE;
+    }
+
     private static boolean isDirectCustomSlabSupportSubject(BlockView world, BlockPos pos, BlockState state) {
         Block block = state == null ? null : state.getBlock();
         boolean kelpFamily = block instanceof KelpBlock || block instanceof KelpPlantBlock;
         if (state == null
                 || state.isAir()
                 || state.getBlock() instanceof SlabBlock && !isVanillaDirectCustomSlabSubject(state)
-                || CompatHooks.terrainSlabsHandlesObjectOffset(state)
-                && CompatHooks.customSlabSurfaceKind(getBlockStateOrNull(world, pos.down()))
-                == CompatSlabSurfaceKind.BOTTOM_LIKE
+                || isTerrainOwnedOnTopObject(world, pos, state)
                 // NOTE (2026-08-06, second ruling): no snow exclusion here either. All three
                 // SUBJECT-side sites dropped it together — leaving one behind would be the
                 // shared-predicate half-fix trap, with snow lowering on a vanilla slab but floating
