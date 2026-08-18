@@ -61,11 +61,10 @@ import net.minecraft.util.math.Vec3d;
  * </ul>
  *
  * <p>The -1.0 lane (vanilla TOP slab on a Terrain Slabs bottom, visual dy = -1.0, see
- * {@code OffsetRaycastTargetingTest#vanillaTopSlabOnTerrainLowersFull}) is intentionally NOT
- * here: the intent-mixin gate is {@code getVisualYOffset == -0.5d} exactly, so the raw-fraction
- * misdecision persists there and the cell is RED on HEAD. It lives below as a RED_PENDING_RULING row,
- * skipped unless armed with {@code -Dslabbed.redCells=true}, until the maintainer rules on the
- * -1.0 gate fix (widen the intent-mixin gate vs port the dy-corrected canReplace fraction).
+ * {@code OffsetRaycastTargetingTest#vanillaTopSlabOnTerrainLowersFull}) lives below as an
+ * always-on row: the slab-lane remap gate now spans the supported envelope
+ * ({@code isSupportedLoweredHalfStep}), so the visible-face click EXTENDS as aimed and the row
+ * pins that supported dy=-1.0 behavior on every default run.
  */
 public final class UseOnPlacementSuite {
 
@@ -346,31 +345,21 @@ public final class UseOnPlacementSuite {
         ctx.complete();
     }
 
-    // ═══ RED_PENDING_RULING: the -1.0 combine-vs-extend lane ═══
-    // Formerly the deliberately-UNREGISTERED UseOnMinusOneLoweredCombineVsExtendRedTest; now a
-    // registered row armed only by -Dslabbed.redCells=true, so the RED inventory is visible in
-    // the suite instead of hidden in an unregistered file. THE GAP (code- and run-verified): the
-    // intent-mixin remap gate is getVisualYOffset == -0.5 EXACTLY, so a vanilla TOP slab on a
-    // Terrain Slabs bottom (visual dy -1.0) falls through unremapped to vanilla canReplace's raw
-    // fraction and COMBINES where the player visibly aimed to EXTEND. Sibling lines fixed the
-    // full dy range (forge1201 dy-corrected canReplace mixin; cleanpub fc608690); the production
-    // fix here is a maintainer decision. Armed on current HEAD: FAILS with the clicked cell
-    // reading OAK_SLAB[DOUBLE]. Both fixes must keep the -0.5 lane above green.
-    private static final String RED_CELLS_PROPERTY = "slabbed.redCells";
-
+    // ═══ The -1.0 combine-vs-extend lane (always-on; promoted from a flag-armed row) ═══
+    // Formerly a RED_PENDING_RULING row armed by -Dslabbed.redCells=true while the intent-mixin
+    // remap gate was getVisualYOffset == -0.5 EXACTLY and the lane combined where the player
+    // aimed to extend. The slab-lane gate now spans the supported envelope
+    // (isSupportedLoweredHalfStep: -0.5 down to minResolvedDy), the lane extends as aimed, and
+    // this row runs on every default build so supported dy=-1.0 behavior can never silently
+    // defer again. Do not re-add a flag gate here — a supported-floor row that self-skips is a
+    // vacuous pass. The full-block remap arm still demands exactly -0.5; that lane is tracked
+    // separately and is not this row's subject.
 
     // -1.0 lane: vanilla TOP slab on a Terrain Slabs bottom (visual dy -1.0, visible span
     // [Y-0.5, Y]). Click its west face on the VISIBLE geometry (raw fraction -0.1,
     // dy-corrected 0.9). WYSIWYG intent: EXTEND sideways, stay TYPE=TOP.
-    // Current HEAD: no remap (gate == -0.5) → vanilla raw fraction → COMBINE → DOUBLE. RED.
     @GameTest(structure = "fabric-gametest-api-v1:empty")
     public void useOnMinusOneLoweredTopSlabSideClickExtendsInsteadOfCombining(TestContext ctx) {
-        if (!Boolean.getBoolean(RED_CELLS_PROPERTY)) {
-            System.out.println("[USEON] RED_PENDING_RULING skipped — minusOne.loweredTopSlab.sideClick "
-                    + "(arm with -Dslabbed.redCells=true; RED on HEAD until the -1.0 gate ruling)");
-            ctx.complete();
-            return;
-        }
         ServerWorld world = ctx.getWorld();
         BlockPos origin = ctx.getAbsolutePos(BlockPos.ORIGIN);
 
