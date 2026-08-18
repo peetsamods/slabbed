@@ -30,6 +30,8 @@ public final class AuthoredTerrainPlacementClientGameTest implements FabricClien
     @Override
     public void runTest(ClientGameTestContext ctx) {
         if (!Boolean.getBoolean(ENABLED_PROPERTY)) {
+            System.out.println("[AUTHORED_TERRAIN_CLIENT] skipped — arm with -D"
+                    + ENABLED_PROPERTY + "=true");
             return;
         }
         if (!FabricLoader.getInstance().isModLoaded(TerrainSlabsCompat.MOD_ID)) {

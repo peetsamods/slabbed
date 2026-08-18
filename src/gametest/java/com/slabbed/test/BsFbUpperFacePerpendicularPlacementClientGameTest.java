@@ -45,6 +45,8 @@ public final class BsFbUpperFacePerpendicularPlacementClientGameTest implements 
         boolean fullProof = Boolean.getBoolean(ENABLED_PROPERTY);
         boolean a7a8Proof = Boolean.getBoolean(A7_A8_PROPERTY);
         if (!fullProof && !a7a8Proof) {
+            System.out.println("[BSFB_CLIENT] skipped — arm with -D" + ENABLED_PROPERTY
+                    + "=true and/or -D" + A7_A8_PROPERTY + "=true");
             return;
         }
 

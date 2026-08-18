@@ -81,6 +81,8 @@ public final class TerrainSlabsCustomSurfaceClientGameTest implements FabricClie
     @Override
     public void runTest(ClientGameTestContext ctx) {
         if (!Boolean.getBoolean(RED_ONLY_PROPERTY)) {
+            System.out.println("TERRAIN_SLABS_CUSTOM_SURFACE skipped — arm with -D"
+                    + RED_ONLY_PROPERTY + "=true");
             return;
         }
         if (!FabricLoader.getInstance().isModLoaded(TerrainSlabsCompat.MOD_ID)) {

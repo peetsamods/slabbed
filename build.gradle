@@ -72,6 +72,25 @@ tasks.matching { it.name == "runGameTest" }.configureEach {
     finalizedBy("verifyGameTestCount")
 }
 
+// Client-proof arming flags: same daemon-vs-forked-JVM forwarding problem as above, for the
+// property-gated fabric-client-gametest proofs. Without this a -D on the command line never
+// reaches the client JVM, so an "armed" client run silently proves nothing.
+tasks.matching { it.name == "runClientGameTest" }.configureEach {
+    [
+            "slabbed.authoredTerrainPlacementProof",
+            "slabbed.bsfbUpperFacePerpendicularProof",
+            "slabbed.a7a8LoweredSideSlabNoCombineProof",
+            "slabbed.terrainSlabsCustomSurfaceRedOnly",
+            "slabbed.terrainSlabsCustomSurfaceVisualProof",
+    ].each { prop ->
+        jvmArguments.addAll(
+                providers.systemProperty(prop)
+                        .map { v -> ["-D" + prop + "=" + v] }
+                        .orElse([])
+        )
+    }
+}
+
 // ── Suite-count gate ─────────────────────────────────────────────────────────────────────────
 // A stale persisted world in build/run/gameTest can silently drop tests while still reporting
 // BUILD SUCCESSFUL (observed live: 166 reported, ~65 lost, no warning). A green run is therefore
