@@ -904,7 +904,15 @@ public final class SlabSupport {
         }
         if (isClientWorld(world)) {
             double dy = getYOffset(world, pos, state);
-            putClientVisualYOffset(pos, dy);
+            // The cache may only hold values a REAL resolution produced. While this thread is
+            // already resolving some other cell (the re-entrancy guard is active), a shape read
+            // of a probed cell lands here and the getYOffset above answered the guard's 0.0 —
+            // not this cell's dy. Publishing that transient answer poisons the render-worker
+            // read path for the probed cell (drawn flush while lowered).
+            // VisualDyCacheReentrantPublishClientGameTest pins this.
+            if (!IN_GET_Y_OFFSET.get()) {
+                putClientVisualYOffset(pos, dy);
+            }
             return dy;
         }
         Double cached = cachedClientVisualYOffset(pos);

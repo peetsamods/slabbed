@@ -64,7 +64,8 @@
       "com.slabbed.test.AuthoredTerrainPlacementClientGameTest",
       "com.slabbed.test.TerrainSlabsCustomSurfaceClientGameTest",
       "com.slabbed.test.LeverParticleFrozenAnchorClientGameTest",
-      "com.slabbed.test.VisualDyCacheWorldChangeClientGameTest"
+      "com.slabbed.test.VisualDyCacheWorldChangeClientGameTest",
+      "com.slabbed.test.VisualDyCacheReentrantPublishClientGameTest"
     ]
   },
   "mixins": [

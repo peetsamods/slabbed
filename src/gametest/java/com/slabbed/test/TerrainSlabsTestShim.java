@@ -57,10 +57,31 @@ public final class TerrainSlabsTestShim implements ModInitializer {
     public static final Block LEGACY_TS_SLAB =
             new SlabBlock(AbstractBlock.Settings.create().strength(1.0f).registryKey(LEGACY_TS_SLAB_KEY));
 
+    /**
+     * Full-cube block with DYNAMIC bounds and the default collision path — the stand-in for the
+     * modded-block class (Terrain Slabs terrain among them) whose states carry no vanilla shape
+     * cache. Solidity probes of such a state compute through
+     * {@code getCollisionShape → getOutlineShape} at RUNTIME, so they reach the Slabbed outline
+     * mixin — and, from inside an active dy resolution, re-enter the visual-dy entry point.
+     * Static-bounds vanilla blocks answer solidity from the state cache and never take that path,
+     * which is why this shim block exists.
+     * {@code VisualDyCacheReentrantPublishClientGameTest} is its consumer.
+     */
+    public static final Identifier DYNAMIC_SHAPE_BLOCK_ID =
+            Identifier.of("slabbed_gametest", "dynamic_shape_block");
+
+    public static final RegistryKey<Block> DYNAMIC_SHAPE_BLOCK_KEY =
+            RegistryKey.of(RegistryKeys.BLOCK, DYNAMIC_SHAPE_BLOCK_ID);
+
+    public static final Block DYNAMIC_SHAPE_BLOCK =
+            new Block(AbstractBlock.Settings.create().strength(1.0f).dynamicBounds()
+                    .registryKey(DYNAMIC_SHAPE_BLOCK_KEY));
+
     @Override
     public void onInitialize() {
         Registry.register(Registries.BLOCK, TEST_TS_SLAB_KEY, TEST_TS_SLAB);
         Registry.register(Registries.ITEM, TEST_TS_SLAB_ITEM_KEY, TEST_TS_SLAB_ITEM);
         Registry.register(Registries.BLOCK, LEGACY_TS_SLAB_KEY, LEGACY_TS_SLAB);
+        Registry.register(Registries.BLOCK, DYNAMIC_SHAPE_BLOCK_KEY, DYNAMIC_SHAPE_BLOCK);
     }
 }
