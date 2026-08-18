@@ -12,6 +12,24 @@ Alpha: the placement core was rebuilt around heights that are computed once, at 
 then frozen. Automated coverage is extensive (387 gametests plus client proofs); items below note
 their proof level.
 
+### ⚠️ Upgrading an existing 0.5.0-beta.8 world — some blocks will shift down half a block
+
+Slabbed now lets a block rest lower in three cases where it previously stayed flush. Blocks placed
+before this version carry no saved height, so they follow the new rule the first time they load:
+
+- a **carpet** resting directly on a bottom slab
+- **powder snow** resting directly on a bottom slab
+- a **top slab** resting directly on a bottom slab
+
+Each of these now sits half a block lower than it did on beta.8. Nothing is deleted or relocated —
+the blocks stay in the same places, they just render and collide half a block down, matching how
+the same build looks if you make it today. Anything you place from this version onward records its
+height as you place it and will not move afterward.
+
+Measured directly by resolving identical unstored layouts on both builds: three of thirteen legacy
+layouts differ, all by −0.5, all in the direction of lowering. If you have a beta.8 build that
+depends on those blocks staying flush, back it up before upgrading.
+
 ### Fixed
 - **Placement heights are frozen at placement time, atomically, for every block item.** Where a
   block lands is where it stays; later neighbor or support edits can never move it. This is the
