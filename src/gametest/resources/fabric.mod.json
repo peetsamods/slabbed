@@ -63,7 +63,8 @@
       "com.slabbed.test.BsFbUpperFacePerpendicularPlacementClientGameTest",
       "com.slabbed.test.AuthoredTerrainPlacementClientGameTest",
       "com.slabbed.test.TerrainSlabsCustomSurfaceClientGameTest",
-      "com.slabbed.test.LeverParticleFrozenAnchorClientGameTest"
+      "com.slabbed.test.LeverParticleFrozenAnchorClientGameTest",
+      "com.slabbed.test.VisualDyCacheWorldChangeClientGameTest"
     ]
   },
   "mixins": [

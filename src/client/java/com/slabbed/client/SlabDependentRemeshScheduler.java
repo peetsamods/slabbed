@@ -4,6 +4,8 @@ import com.slabbed.mixin.client.WorldRendererImportantRemeshInvoker;
 import com.slabbed.util.DependentRemeshQueue;
 import com.slabbed.util.SlabSupport;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
+import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientWorldEvents;
+import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.world.ClientWorld;
 
@@ -18,6 +20,15 @@ public final class SlabDependentRemeshScheduler {
 
     public static void init() {
         ClientTickEvents.END_CLIENT_TICK.register(SlabDependentRemeshScheduler::drain);
+        // The shared visual-dy cache is keyed by packed BlockPos with no world discriminator,
+        // so it MUST be emptied whenever the client world changes or goes away — a retained
+        // entry is indistinguishable from the same coordinates in the new world, and the
+        // render-region read path prefers it over a fresh computation.
+        // VisualDyCacheWorldChangeClientGameTest pins this.
+        ClientWorldEvents.AFTER_CLIENT_WORLD_CHANGE.register(
+                (client, world) -> SlabSupport.clearVisualYOffsetCache());
+        ClientPlayConnectionEvents.DISCONNECT.register(
+                (handler, client) -> SlabSupport.clearVisualYOffsetCache());
     }
 
     public static void enqueue(
