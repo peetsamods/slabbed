@@ -73,7 +73,7 @@ public abstract class BlockItemPlacementIntentMixin {
             ROOT_AIM.set(LandingResolver.captureAim(context));
         }
         try {
-            if (depth == 0 && slabbed$refusesOutOfEnvelopeSlabPlacement()) {
+            if (depth == 0 && slabbed$refusesOutOfEnvelopeSlabPlacement(context)) {
                 return ActionResult.FAIL;
             }
             return original.call(context);
@@ -256,12 +256,22 @@ public abstract class BlockItemPlacementIntentMixin {
                 && prior.priorState().getBlock() == finalState.getBlock()
                 && prior.priorState().contains(SlabBlock.TYPE)
                 && prior.priorState().get(SlabBlock.TYPE) != SlabType.DOUBLE;
+        // A same-cell merge GROWS the occupant in place (a second candle or sea pickle, an extra
+        // snow layer, an added vine face): the block survives as itself, so an existing stored
+        // height fact survives byte-identically. Re-deriving here would let a merge click move a
+        // placed block's height, which LAW 1 forbids. Behavior-keyed: the discriminator is the
+        // observed same-block growth in the placed cell, never an item or block class list.
+        boolean sameCellMergeGrowth = prior != null
+                && !prior.priorState().isAir()
+                && prior.priorState().getBlock() == finalState.getBlock();
         if (sameCellSlabUpgrade && prior.priorFact().present()) {
+            rawBits = prior.priorFact().rawBits();
+        } else if (sameCellMergeGrowth && prior.priorFact().present()) {
             rawBits = prior.priorFact().rawBits();
         } else {
             LandingResolver.Family family = LandingResolver.classify(finalState);
             LandingResolver.PlacementResolution resolution = LandingResolver.resolve(
-                    slabbed$aimForResolve(frame, primary), primary, finalState, family,
+                    world, slabbed$aimForResolve(frame, primary), primary, finalState, family,
                     authoredCustomSlabPlacement);
             double dy = resolution == null
                     ? SlabSupport.getUnstoredYOffset(world, primary, finalState)
@@ -379,7 +389,7 @@ public abstract class BlockItemPlacementIntentMixin {
     private static final double LOWERED_VISUAL_BOUNDARY_EPSILON = 1.0e-6d;
 
     /** A slab cannot mint a new permanent height below the active targeting envelope. */
-    private boolean slabbed$refusesOutOfEnvelopeSlabPlacement() {
+    private boolean slabbed$refusesOutOfEnvelopeSlabPlacement(ItemUsageContext context) {
         BlockItem self = (BlockItem) (Object) this;
         BlockState heldState = self.getBlock().getDefaultState();
         if (!(heldState.getBlock() instanceof SlabBlock)
@@ -395,6 +405,7 @@ public abstract class BlockItemPlacementIntentMixin {
                 : aim.ownerPos().offset(aim.clickedFace());
         boolean authoredCustomSlab = slabbed$isAuthoredCustomSlabFinal(heldState);
         LandingResolver.PlacementResolution preview = LandingResolver.resolve(
+                context.getWorld(),
                 aim,
                 previewTarget,
                 heldState,

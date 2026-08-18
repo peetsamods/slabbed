@@ -125,13 +125,15 @@ public final class LandingResolver {
     }
 
     public static PlacementResolution resolve(
+            BlockView world,
             PlacementAim aim,
             BlockPos actualTarget,
             BlockState finalState,
             Family family,
             boolean authoredCompatSlabFinal
     ) {
-        if (aim == null || actualTarget == null || finalState == null || finalState.isAir()
+        if (world == null || aim == null || actualTarget == null || finalState == null
+                || finalState.isAir()
                 || family == Family.UNSUPPORTED
                 || compatOwnsFinalState(finalState) && !authoredCompatSlabFinal) {
             return null;
@@ -159,6 +161,29 @@ public final class LandingResolver {
                 && aim.replacementSameCell()
                 && aim.ownerPos().equals(actualTarget)) {
             return new PlacementResolution(actualTarget, aim.ownerVisibleDy(), true);
+        }
+
+        // FLUSH WINS (maintainer ruling, 2026-08-17): a placement that lands in its own aim cell
+        // REPLACED that cell's occupant (vanilla canReplace — plants, one-layer snow, same-item
+        // decoration merges not claimed by a branch above). The replaced occupant contributes no
+        // plane of its own, so the seat is the REAL support surface below the cell — the same
+        // arithmetic an upward column walk applies from that support. The owner-relative
+        // arithmetic below this guard describes a NEIGHBOR relationship and must never see
+        // owner == target: its plane offsets degenerate by a whole cell there (+1.0 on an
+        // UP-face click, -1.0 on a DOWN-face click), and the minted value would freeze
+        // permanently. Behavior-keyed: the discriminator is the observed same-cell placement,
+        // never a block class.
+        if (actualTarget.equals(aim.ownerPos())) {
+            BlockPos supportPos = actualTarget.down();
+            BlockState supportState = world.getBlockState(supportPos);
+            double supportDy = supportState.isAir()
+                    ? 0.0d
+                    : visibleOwnerDy(world, supportPos, supportState);
+            double replacedSeat = supportPos.getY() + supportDy + topPlaneOffset(supportState)
+                    - actualTarget.getY();
+            return Double.isFinite(replacedSeat)
+                    ? new PlacementResolution(actualTarget, replacedSeat, false)
+                    : null;
         }
 
         boolean insideOwnerColumn = actualTarget.getX() == aim.ownerPos().getX()
