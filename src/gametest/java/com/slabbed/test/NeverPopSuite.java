@@ -414,6 +414,41 @@ public final class NeverPopSuite {
         ctx.complete();
     }
 
+    /**
+     * GitHub #67 ("pots falling when breaking the blocks beneath them"): a pot must survive its
+     * support being broken, because vanilla FlowerPotBlock/DecoratedPotBlock never override
+     * canPlaceAt (the inherited AbstractBlock default is always true), so neither ever requires
+     * support or self-destructs on a neighbour update. Reuses the lowered-column pot fixture; the
+     * support broken here is the cell directly beneath the pot, not the slab beneath that.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void potSurvivesWhenItsSupportIsBroken(TestContext ctx) {
+        ServerWorld w = ctx.getWorld();
+        BlockPos pot = buildPotOnLoweredColumn(ctx, 4, 4, true);
+        BlockPos support = pot.down();
+
+        double dyBefore = SlabSupport.getYOffset(w, pot, w.getBlockState(pot));
+        ctx.assertTrue(Math.abs(dyBefore + 0.5) <= EPS,
+                "fixture: the placed pot must start at -0.5, got " + dyBefore);
+
+        // Break the block directly beneath the pot with a real neighbour update, exactly like the
+        // other never-pop "remove support" rows in this suite.
+        w.setBlockState(support, Blocks.AIR.getDefaultState(), Block.NOTIFY_LISTENERS);
+
+        BlockState potAfterState = w.getBlockState(pot);
+        ctx.assertTrue(potAfterState.isOf(Blocks.FLOWER_POT),
+                "#67: a pot must survive its support breaking (vanilla FlowerPotBlock has no "
+                        + "canPlaceAt override, so it never needs support); found " + potAfterState
+                        + " at " + pot + " instead of flower_pot");
+
+        double dyAfter = SlabSupport.getYOffset(w, pot, w.getBlockState(pot));
+        ctx.assertTrue(Math.abs(dyAfter - dyBefore) <= EPS,
+                "#67: the surviving pot's height must not change when its support breaks. Was "
+                        + dyBefore + ", now " + dyAfter
+                        + " [potAnchored=" + SlabAnchorAttachment.isAnchored(w, pot) + "]");
+        ctx.complete();
+    }
+
     // ------------------------------------------------------------------------
 
     /**
