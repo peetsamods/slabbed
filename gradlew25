@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Slabbed 26.1.2 needs Java 25 (the MC named jar is class version 69; Java 21 javac fails with
+# Slabbed 26.2 needs Java 25 (the MC named jar is class version 69; Java 21 javac fails with
 # "cannot access BlockState / class file has wrong version 69.0, should be 65.0"). The committed
 # gradle.properties deliberately does NOT pin a machine-specific java.home, so plain `./gradlew`
 # uses your shell default — which on this machine is Java 21 → build failure.
