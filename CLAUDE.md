@@ -3,15 +3,22 @@
 Rules for ANY coding agent working in this repo (Claude, Codex, or otherwise). AGENTS.md is an
 identical copy for tools that read that name; edit both together.
 
-## The two laws
+## The laws
 
 1. **LAW 1 — placement is permanent.** Read `LAW.md` before touching anything in the placement or
    height-resolution path. `LAW.md` is supreme; no other doc may redefine it. Its enforcement is
    `NeighborUpdateInvarianceTest` (the S-2 gate), which is **blocking by default** — a violation
    fails the build. `-Dslabbed.lawGate=false` downgrades to a printed inventory and is only for
-   fixing a deliberate new RED forward, never for landing one.
+   fixing a deliberate new RED forward, never for landing one. A green S-2 row proves nothing
+   unless a mutation provably reaches that subject — every new subject names its mutation in a
+   comment.
 
-2. **The discretion law (maintainer ruling, 2026-08-07) — this repo is public and stays
+2. **LAW 2 — everything can lower (maintainer ruling, 2026-08-06).** Eligibility follows
+   **geometry** — whether the support actually presents a lowered top face — never a block-class
+   allow-list, a namespace string, or anchor-set membership. "This block type is excluded" is not a
+   reason; it is the bug. Hazards are excluded **by behaviour, not by classname**.
+
+3. **The discretion law (maintainer ruling, 2026-08-07) — this repo is public and stays
    impersonal.** No personal names, no machine-local usernames or absolute home-directory paths,
    no session/recorder identifiers, and no development-diary narrative in ANY tracked file —
    source comments included. Cite decisions as "maintainer ruling, \<date\>". The commit hook's
