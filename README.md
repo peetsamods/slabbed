@@ -41,5 +41,5 @@ Use `docs/process/LIVE_DRIVE_PREFLIGHT.md` before a live session, and
 
 ## License and feedback
 
-Slabbed is licensed under **MIT**. Report bugs or ideas at
-<https://github.com/joolbits/slabbed/issues>.
+Slabbed is licensed under **GPL-3.0-only** — see [LICENSE](LICENSE). Report bugs or ideas at
+<https://github.com/peetsamods/slabbed/issues>.
