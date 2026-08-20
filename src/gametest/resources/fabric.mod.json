@@ -42,6 +42,7 @@
       "com.slabbed.test.LanternUnderTerrainSlabsHangerTest",
             "com.slabbed.test.SlabHeightStepCullTest",
             "com.slabbed.test.AnchoredFollowerSupportDyTest",
+      "com.slabbed.test.SupportDepthBudgetExhaustionTest",
       "com.slabbed.test.FlushSeatGuardTest",
                         "com.slabbed.test.DyWindowSuite",
             "com.slabbed.test.RendererRegionBoundsGuardTest",

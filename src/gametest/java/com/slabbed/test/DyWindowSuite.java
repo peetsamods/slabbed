@@ -1425,10 +1425,18 @@ public final class DyWindowSuite {
     //  * exhaustion point, the exact mirror of the pop Stage 3 removed. Monotonicity still holds (sinking
     //  * is downward), which is why it needs its own assertion.
     //  *
-    //  * <p><b>Characterised, not fixed</b> — see internal-notes 1o. The OFF leg keeps
-    //  * the strict pass-through equality unchanged; the deep leg pins the substitution and asserts it is
-    //  * a sink rather than a pop. Repairing it is a production change to {@code loweredFollowerDy}'s
-    //  * exhaustion return and owes its own RED-first pass over both tower shapes at both caps.
+    //  * <p><b>✅ CLOSED (maintainer ruling, 2026-08-19) — and the repair was not a better exhaustion
+    //  * VALUE.</b> The paragraph above is kept because its diagnosis was right while its search for a
+    //  * correct substitute was the wrong question: no constant can be right, because the fact that
+    //  * decides a pass-through tower's height sits arbitrarily far below the truncated frame — which
+    //  * is exactly what {@code identicalTruncationFramesWouldNeedDifferentExhaustionValues} proves,
+    //  * and still proves. What was actually wrong is that the budget was being SPENT by a course that
+    //  * descends nothing. It now belongs to descent alone — {@code supportSeatDy}'s half-height arm
+    //  * spends it, the full-height arm does not — so a pass-through tower never exhausts it and never
+    //  * needs a substitute at all. {@code SlabSupport.MAX_SUPPORT_WALK_STEPS} keeps the walk finite on
+    //  * its own terms and answers the {@code -0.5} floor, because a walk that spent no descent has no
+    //  * depth to report. Both deep-leg characterisation branches were deleted per the instruction
+    //  * their own failure messages carried, and both rows now run ENFORCING at every cap.
     //  *
     //  * <h2>Fixtures are PRE-STORE by construction</h2>
     //  *
@@ -1578,6 +1586,14 @@ public final class DyWindowSuite {
      * <p>This is why the exhaustion return had to become the cap rather than the floor: exhaustion
      * means "at least this deep, and I stopped counting", and the only safe direction to round a
      * walk you truncated is DOWN.
+     *
+     * <p><b>RED AGAIN IN THE DEEP LEG, for the mirror reason, until 2026-08-19.</b> That exhaustion
+     * value is right for a DROPPING tower and wrong for this one, which descends nothing — so the
+     * stack SANK a full block at the exhaustion point instead of popping up half of one, and the
+     * two numbers were only equal at the shipped cap. The repair was not a third value: the budget
+     * stopped being charged to courses that do not descend, so this shape no longer exhausts it.
+     * The assertion below is unconditional again as a result — if it ever needs a leg-specific
+     * branch, the budget is being spent by something that goes nowhere.
      */
     @GameTest(structure = "fabric-gametest-api-v1:empty")
     public void passThroughTowerPastTheBudgetNeverRises(TestContext ctx) {
@@ -1616,70 +1632,14 @@ public final class DyWindowSuite {
         assertNonIncreasing(ctx, dy, ladder);
 
         // ── AND THE VALUE: a pass-through course reads exactly what it is standing on ───────
-        if (!SlabSupport.DEEP_DY_ALPHABET) {
-            for (int i = 3; i < level.length; i++) {
-                ctx.assertTrue(Math.abs(dy[i] - dy[2]) <= EPS,
-                        "a full-height support passes its dy through UNCHANGED, so every course of "
-                                + "this stack must read what the first one reads (" + dy[2] + "); L"
-                                + i + " reads " + dy[i] + ". A course that differs is the depth "
-                                + "budget leaking into the answer — " + ladder);
-            }
-            ctx.complete();
-            return;
-        }
-
-        // ── THE DEEP LEG: STAGE 3'S EXHAUSTION FIX WAS VALUE-COINCIDENTAL AT THE SHIPPED CAP ──
-        //
-        // ⚠️ CHARACTERISATION, NOT ENDORSEMENT. This is a REAL residual found by arming Stage 4's
-        // flag, reported rather than patched, and it is deliberately NOT fixed here: repairing it
-        // means changing loweredFollowerDy's exhaustion return, which is Stage 3's site and a
-        // production behaviour change that owes its own RED-first pass. See internal-notes row
-        // 1o.
-        //
-        // WHAT WAS MEASURED. Exhaustion returns minResolvedDy() (Stage 3 changed it from a bare
-        // -0.5 for a good reason: in a DROPPING tower, truncating a descent may only ever round
-        // DOWN). But a PASS-THROUGH stack does not descend — every full-height course hands its
-        // support's dy up unchanged — so the truthful answer for a truncated pass-through walk is
-        // the value the stack is standing on, and exhaustion substitutes the cap for it. At the
-        // shipped -1.0 cap those two numbers are THE SAME (the base of this fixture is at -1.0), so
-        // Stage 3 measured green and the substitution was invisible. At the ruled -2.0 cap they
-        // differ by a full block and the stack SINKS at the exhaustion point — the exact mirror of
-        // the pop Stage 3 removed, in the other direction.
-        //
-        // The MONOTONICITY invariant above still holds (sinking is downward, and a course may
-        // always resolve deeper than its support), which is why this needs its own assertion.
-        int firstDivergent = -1;
         for (int i = 3; i < level.length; i++) {
-            if (Math.abs(dy[i] - dy[2]) > EPS) {
-                firstDivergent = i;
-                break;
-            }
+            ctx.assertTrue(Math.abs(dy[i] - dy[2]) <= EPS,
+                    "a full-height support passes its dy through UNCHANGED, so every course of "
+                            + "this stack must read what the first one reads (" + dy[2] + "); L"
+                            + i + " reads " + dy[i] + ". A course that differs is the depth "
+                            + "budget leaking into the answer — " + ladder);
         }
-        System.out.println("[STAGE4-PASSTHROUGH] firstDivergentCourse=" + firstDivergent
-                + " passThroughValue=" + dy[2] + " " + ladder);
 
-        ctx.assertTrue(firstDivergent > 0,
-                "the deep leg was expected to REPRODUCE the exhaustion substitution and did not. "
-                        + "If the exhaustion path has been repaired, delete this branch and let the "
-                        + "unconditional pass-through assertion above run in both legs — do not "
-                        + "leave a characterisation standing over a fixed defect — " + ladder);
-        ctx.assertTrue(Math.abs(dy[firstDivergent] - SlabSupport.minResolvedDy()) <= EPS,
-                "CHARACTERISED (Stage 4): the first course past the depth budget must read the "
-                        + "exhaustion return, which is minResolvedDy() ("
-                        + SlabSupport.minResolvedDy() + "); it reads " + dy[firstDivergent]
-                        + ". If this is neither the pass-through value nor the cap, the exhaustion "
-                        + "path has changed shape and this row no longer describes it — " + ladder);
-        for (int i = firstDivergent; i < level.length; i++) {
-            ctx.assertTrue(Math.abs(dy[i] - SlabSupport.minResolvedDy()) <= EPS,
-                    "CHARACTERISED (Stage 4): once the exhaustion value enters a pass-through "
-                            + "stack every course above carries it unchanged, so L" + i
-                            + " must equal the cap; it reads " + dy[i] + " — " + ladder);
-        }
-        ctx.assertTrue(dy[firstDivergent] < dy[firstDivergent - 1] - EPS,
-                "CHARACTERISED (Stage 4): the substitution must be a SINK, not a pop. L"
-                        + firstDivergent + " reading shallower than the course below it would be "
-                        + "the never-pop violation Stage 3 removed, returning at a deeper cap — "
-                        + ladder);
         ctx.complete();
     }
 
@@ -1710,12 +1670,13 @@ public final class DyWindowSuite {
      * found are the SAME defect seen from either end, and a repair that trades one for the other
      * must not be able to read as green here.
      *
-     * <h2>⚠️ RED IN THE DEEP LEG TODAY — see internal-notes 1o</h2>
+     * <h2>✅ WAS RED IN THE DEEP LEG UNTIL 2026-08-19</h2>
      *
      * <p>Measured with {@code slabbed.deepDyAlphabet=true}: {@code L6 = -1.0}, {@code L7 = -2.0},
      * across a pass-through seat whose own arm may lower nothing at all — a full-block cliff where
-     * the band allows zero. The OFF leg keeps the band ENFORCING; the deep leg characterises the
-     * one known cliff and pins its position, its magnitude, and the fact that there is exactly one.
+     * the band allows zero. The cliff was the depth budget being spent by courses that descend
+     * nothing; the budget now belongs to descent alone, so no course of this tower truncates and
+     * the band runs ENFORCING in both legs.
      *
      * <p><b>And the cell MEASURES why no exhaustion return value can close it.</b> The walk for
      * course {@code k} truncates at course {@code k - MAX_SUPPORT_RESOLVE_DEPTH}, and the value it
@@ -1723,7 +1684,9 @@ public final class DyWindowSuite {
      * BELOW the truncation point, {@code k - MAX_SUPPORT_RESOLVE_DEPTH} of them. That distance
      * grows with every course added to the stack, so the printed table below is the evidence that
      * the information the exhaustion path is missing is not one lookahead away, or two, but
-     * unboundedly many. Reported, not patched.
+     * unboundedly many. That measurement is what ruled out repairing this by choosing a better
+     * exhaustion value, and it is why the repair instead stopped the budget from being spent by a
+     * course that descends nothing — see {@code SlabSupport.MAX_SUPPORT_WALK_STEPS}.
      */
     @GameTest(structure = "fabric-gametest-api-v1:empty")
     public void passThroughTowerNeverCliffsPastWhatItsSeatCanLower(TestContext ctx) {
@@ -1757,72 +1720,16 @@ public final class DyWindowSuite {
         assertNonIncreasing(ctx, dy, ladder);
 
         double[] allowed = allowedDropPerCourse(w, level);
-        if (!SlabSupport.DEEP_DY_ALPHABET) {
-            assertWithinOneSeatsDrop(ctx, dy, allowed, ladder);
-            ctx.complete();
-            return;
-        }
+        assertWithinOneSeatsDrop(ctx, dy, allowed, ladder);
 
-        // ── THE DEEP LEG: CHARACTERISED, NOT ENDORSED (internal-notes row 1o) ─────────────
-        int cliff = -1;
-        int cliffs = 0;
-        for (int i = 1; i < dy.length; i++) {
-            if (dy[i] < dy[i - 1] - allowed[i] - EPS) {
-                cliffs++;
-                if (cliff < 0) {
-                    cliff = i;
-                }
-            }
-        }
-        StringBuilder lookahead = new StringBuilder("[STAGE5-LOOKAHEAD]");
-        for (int k = budget + 1; k < level.length; k++) {
-            lookahead.append(" k=").append(k)
-                    .append(" truncatesAtL").append(k - budget)
-                    .append(" whoseTruthIs").append(dy[k - budget])
-                    .append(" substituted").append(SlabSupport.minResolvedDy())
-                    .append(" coursesBelowTheTruncationPoint=").append(k - budget).append(';');
-        }
-        System.out.println(lookahead);
-
-        ctx.assertTrue(cliff > 0,
-                "the deep leg was expected to REPRODUCE the exhaustion cliff and did not. If the "
-                        + "exhaustion path has been repaired, delete this branch and let the band "
-                        + "run enforcing in both legs — do not leave a characterisation standing "
-                        + "over a fixed defect — " + ladder);
-        ctx.assertTrue(cliff == budget + 1,
-                "CHARACTERISED (row 1o): the cliff must appear at the first course whose walk "
-                        + "truncates, L" + (budget + 1) + "; it appears at L" + cliff + ". A "
-                        + "different position means the budget is being spent differently than "
-                        + "one unit per course — " + ladder);
-        ctx.assertTrue(Math.abs(allowed[cliff]) <= EPS,
-                "CHARACTERISED (row 1o): the cliff must land on a PASS-THROUGH seat, which may "
-                        + "lower its follower by nothing at all — that is what makes it a cliff "
-                        + "rather than a legal step. Seat at L" + (cliff - 1) + " allows "
-                        + allowed[cliff] + " — " + ladder);
-        ctx.assertTrue(Math.abs(dy[cliff] - SlabSupport.minResolvedDy()) <= EPS,
-                "CHARACTERISED (row 1o): the cliff drops to the exhaustion return, which is "
-                        + "minResolvedDy() (" + SlabSupport.minResolvedDy() + "); it drops to "
-                        + dy[cliff] + " — " + ladder);
-        ctx.assertTrue(cliffs == 1,
-                "CHARACTERISED (row 1o): there must be exactly ONE cliff — the substitution enters "
-                        + "once and every course above carries it unchanged. " + cliffs
-                        + " cliffs means the exhaustion path has changed shape and this row no "
-                        + "longer describes it — " + ladder);
-        for (int i = cliff; i < dy.length; i++) {
-            ctx.assertTrue(Math.abs(dy[i] - SlabSupport.minResolvedDy()) <= EPS,
-                    "CHARACTERISED (row 1o): above the cliff every pass-through course carries the "
-                            + "exhaustion value unchanged, so L" + i + " must equal the cap; it "
-                            + "reads " + dy[i] + " — " + ladder);
-        }
-        // AND THE OTHER DIRECTION, ENFORCING EVEN HERE: whatever the exhaustion path does, it may
-        // never make a course read SHALLOWER than what its own seat hands it. This is Stage 3's
-        // pop, and it stays RED-able in the deep leg — the sink above is characterised, the pop
-        // never is.
+        // AND THE OTHER DIRECTION: whatever the exhaustion path does, it may never make a course
+        // read SHALLOWER than what its own seat hands it. This is Stage 3's pop, and it stays
+        // RED-able at every cap.
         for (int i = 1; i < dy.length; i++) {
             ctx.assertTrue(dy[i] <= dy[i - 1] + EPS,
                     "L" + i + " (" + dy[i] + ") reads SHALLOWER than the course it rests on, L"
                             + (i - 1) + " (" + dy[i - 1] + ") — Stage 3's pop, returning at the "
-                            + "deeper cap. This direction is never characterised — " + ladder);
+                            + "deeper cap — " + ladder);
         }
         ctx.complete();
     }
@@ -1907,7 +1814,7 @@ public final class DyWindowSuite {
                 "the whole point of this cell: two frames the exhaustion path cannot tell apart "
                         + "must nevertheless resolve to different heights. They read the same ("
                         + dyA + "), so the fixture no longer separates them and the impossibility "
-                        + "argument in internal-notes row 1o has lost its evidence — " + measured);
+                        + "argument against a constant exhaustion value has lost its evidence — " + measured);
 
         // ── AND THE FACT THAT SEPARATES THEM IS ONE FURTHER LEVEL DOWN ──────────────────────
         ctx.assertTrue(Math.abs(seatDyA - seatDyB) > EPS,

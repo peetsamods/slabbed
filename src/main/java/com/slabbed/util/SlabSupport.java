@@ -1434,7 +1434,7 @@ public final class SlabSupport {
                 // returns the height this slab was PLACED at when the store has it, and otherwise
                 // resolves from the support's ACTUAL rendered top face exactly as before
                 // (live-reported 0.5 floating gap for a slab placed on a support already at -1.0).
-                return anchoredCellDy(world, pos, 0);
+                return anchoredCellDy(world, pos, 0, 0);
             }
             // FREEZE-ON-PLACE: a slab locked FLAT at placement stays at 0 — a lowered carrier
             // placed beside/under it later can no longer make it inherit a lowered position
@@ -1450,7 +1450,7 @@ public final class SlabSupport {
                 // GEOMETRIC MIRROR of the anchored slab branch above — same flat-constant defect,
                 // folded into the same resolver so the two lanes can never disagree again (the
                 // rig's follower_on_minus_one read birch_slab=-0.5 here with no anchor at all).
-                return loweredFollowerDy(world, pos, 0);
+                return loweredFollowerDy(world, pos, 0, 0);
             }
             // Adjacent-side-slab alignment: a bottom or double slab placed at the side of a
             // lowered full block must visually inherit the lowered -0.5 dy so model/outline/
@@ -1481,7 +1481,7 @@ public final class SlabSupport {
             // loweredFollowerDy is recursion-safe and floors at -0.5, so every other anchor case
             // (block on a plain slab, persisted anchor after its slab was broken, column /
             // adjacent / below-anchored) is unchanged.
-            double anchorDy = anchoredCellDy(world, pos, 0);
+            double anchorDy = anchoredCellDy(world, pos, 0, 0);
             if (com.slabbed.anchor.SlabAnchorAttachment.TRACE) {
                 String side = (world instanceof net.minecraft.world.World w && w.isClient()) ? "CLIENT" : "SERVER";
                 Slabbed.LOGGER.info("[ANCHOR] dy applied side={} pos={} state={} dy={}",
@@ -1872,13 +1872,13 @@ public final class SlabSupport {
         // adjacency case below stays a flat -0.5: that is a SIDE relationship, and the resolver
         // reads the support BELOW.
         if (SlabAnchorAttachment.isAnchored(world, pos)) {
-            return anchoredCellDy(world, pos, 0);
+            return anchoredCellDy(world, pos, 0, 0);
         }
         BlockPos belowPos = pos.down();
         BlockState below = getBlockStateOrAir(world, belowPos);
         if (hasLoweredNonSlabTopSupport(world, belowPos, below)
                 || hasLoweredSlabSupport(world, belowPos, below)) {
-            return loweredFollowerDy(world, pos, 0);
+            return loweredFollowerDy(world, pos, 0, 0);
         }
         if (isAdjacentSideSlabLowered(world, pos, state)) {
             return -0.5;
@@ -2105,11 +2105,42 @@ public final class SlabSupport {
      * {@code 2 + 2 = 4} exactly, which is why this is a re-derivation of the existing number and
      * not a new one.
      *
-     * <p>Still the hard stop that keeps a pathological column from walking forever — the budget is
-     * larger, never absent.
+     * <p><b>This bounds DESCENT, and only descent (2026-08-19).</b> A unit is spent by
+     * {@link #supportSeatDy}'s half-height arm, which deepens; the full-height arm passes its
+     * support's height through and spends nothing, because it goes nowhere. What keeps the walk
+     * finite regardless is {@link #MAX_SUPPORT_WALK_STEPS}. Do not re-merge the two: the exhaustion
+     * answer below is {@link #minResolvedDy()} precisely because reaching it PROVES a descent this
+     * deep, and a counter that also ticks for pass-through courses cannot prove it.
      */
     public static final int MAX_SUPPORT_RESOLVE_DEPTH =
             (int) Math.ceil(-SlabbedOffsetRaycast.DEEPEST_TARGETABLE_DY / DEEPEST_SEAT_DROP_PER_COURSE) + 2;
+
+    /**
+     * THE WALK BOUND — how many CELLS the support walk may visit, as distinct from how many
+     * COURSES it may descend ({@link #MAX_SUPPORT_RESOLVE_DEPTH}).
+     *
+     * <p><b>Why the two had to be separated (maintainer ruling, 2026-08-19).</b> The depth budget
+     * is sized on the assumption that every unit it spends buys {@link #DEEPEST_SEAT_DROP_PER_COURSE}
+     * of descent, and its exhaustion arm answers {@link #minResolvedDy()} on exactly that ground —
+     * "at least this deep, and I stopped counting". Only {@link #supportSeatDy}'s half-height arm
+     * behaves that way. The FULL-HEIGHT arm passes its support's height through UNCHANGED, which is
+     * what makes a stack of blocks on a lowered block one continuous tower instead of a staircase,
+     * and it used to spend the same unit while descending nothing. A tower of full-height courses
+     * therefore drained the whole budget without going anywhere, and the first course past it was
+     * handed the cap: MEASURED at the seventh course of a continuous tower, drawn and clicked half
+     * a block inside its own support at the shipped cap and a block and a half inside it with the
+     * deeper alphabet armed. The budget now belongs to descent alone, and this bound is what keeps
+     * a pass-through chain finite.
+     *
+     * <p><b>It is a TERMINATION AND COST bound, not a geometric claim</b> — nothing about the world
+     * changes at cell 64, which is why its exhaustion answers the {@code -0.5} floor rather than
+     * the cap: a walk that has spent no descent budget has seen no evidence of depth to report.
+     * The walk descends one cell per step, so this is also, read plainly, how tall a continuous
+     * lowered tower resolves correctly. Sized to cover ordinary building while keeping the
+     * worst-case per-cell work bounded and far below world height — this project has shipped a
+     * per-block hot-path cost regression twice, so the walk may be long but may never be unbounded.
+     */
+    public static final int MAX_SUPPORT_WALK_STEPS = 64;
 
     /**
      * THE SUPPORT-DY RESOLVER — the single source of truth for "how far down does a block sit
@@ -2151,15 +2182,15 @@ public final class SlabSupport {
      * bottom-slab support mirror). If one answered from the store and another from the live walk,
      * the two would disagree about the same cell — the split this file has already paid for.
      */
-    private static double anchoredCellDy(BlockView world, BlockPos pos, int depth) {
+    private static double anchoredCellDy(BlockView world, BlockPos pos, int depth, int steps) {
         double stored = SlabPlacementDyAttachment.storedDy(world, pos);
         if (!Double.isNaN(stored)) {
             return stored;
         }
-        return loweredFollowerDy(world, pos, depth);
+        return loweredFollowerDy(world, pos, depth, steps);
     }
 
-    private static double loweredFollowerDy(BlockView world, BlockPos pos, int depth) {
+    private static double loweredFollowerDy(BlockView world, BlockPos pos, int depth, int steps) {
         // NO FACTS AT ALL keeps the historical -0.5 floor. A null world or pos is not "the tower
         // is deeper than I looked" — it is "there is nothing here to look at", the same condition
         // as the NaN seat at the bottom of this method, and it must answer the same way.
@@ -2183,7 +2214,15 @@ public final class SlabSupport {
         if (depth >= MAX_SUPPORT_RESOLVE_DEPTH) {
             return minResolvedDy();
         }
-        double seat = supportSeatDy(world, pos.down(), depth + 1);
+        // WALK BOUND EXHAUSTED — a DIFFERENT condition with a different honest answer. The arm
+        // above ran out of DESCENT and may say so; this one ran out of CELLS while descending
+        // nothing, so it has no depth to report and keeps the -0.5 floor, the same answer a NaN
+        // seat gets for the same reason. Charging the two to one counter is what let a pass-through
+        // tower claim the cap; see MAX_SUPPORT_WALK_STEPS.
+        if (steps >= MAX_SUPPORT_WALK_STEPS) {
+            return -0.5;
+        }
+        double seat = supportSeatDy(world, pos.down(), depth, steps + 1);
         if (Double.isFinite(seat)) {
             if (seat < -0.5 - 1.0e-6) {
                 return Math.max(seat, minResolvedDy());
@@ -2251,12 +2290,12 @@ public final class SlabSupport {
      * <p>Returns {@link Double#NaN} for a support that is none of these (air, a non-solid object,
      * a cantilever-lowered block), leaving the caller on its pre-existing {@code -0.5} floor.
      */
-    private static double supportSeatDy(BlockView world, BlockPos supportPos, int depth) {
+    private static double supportSeatDy(BlockView world, BlockPos supportPos, int depth, int steps) {
         BlockState support = getBlockStateOrNull(world, supportPos);
         if (support == null || support.isAir()) {
             return Double.NaN;
         }
-        double bottomSlabDy = loweredBottomSlabSupportDy(world, supportPos, depth);
+        double bottomSlabDy = loweredBottomSlabSupportDy(world, supportPos, depth + 1, steps);
         if (!Double.isNaN(bottomSlabDy)) {
             return bottomSlabDy - 0.5;
         }
@@ -2269,7 +2308,7 @@ public final class SlabSupport {
         // presentsCellTopAsTopFace are false, cull/outline maxY = 0.5). The reject is kept on the
         // wrapper for the UNDERSIDE and lowering-source consumers, which ask a different question
         // about the same block; see loweredFullHeightSupportDy.
-        double fullBlockDy = cellTopSupportDy(world, supportPos, support, depth);
+        double fullBlockDy = cellTopSupportDy(world, supportPos, support, depth, steps);
         if (!Double.isNaN(fullBlockDy)) {
             return fullBlockDy;
         }
@@ -2481,11 +2520,11 @@ public final class SlabSupport {
      * {@code birch_fence} at {@code -1.0}). See {@link #presentsCellTopAsTopFace}.
      */
     private static double loweredFullHeightSupportDy(BlockView world, BlockPos pos, BlockState state) {
-        return loweredFullHeightSupportDy(world, pos, state, 0);
+        return loweredFullHeightSupportDy(world, pos, state, 0, 0);
     }
 
     private static double loweredFullHeightSupportDy(BlockView world, BlockPos pos, BlockState state,
-                                                     int depth) {
+                                                     int depth, int steps) {
         // THE SLAB REJECT LIVES HERE, ON THE WRAPPER, AND NOWHERE ELSE. Its four remaining callers
         // do NOT ask the top-face question this method's body answers:
         //   * the two hanger lanes (ceilingHungDecorationDy, getYOffsetInner's underside-hanger
@@ -2508,7 +2547,7 @@ public final class SlabSupport {
         if (state != null && state.getBlock() instanceof SlabBlock) {
             return Double.NaN;
         }
-        return cellTopSupportDy(world, pos, state, depth);
+        return cellTopSupportDy(world, pos, state, depth, steps);
     }
 
     /**
@@ -2532,7 +2571,7 @@ public final class SlabSupport {
      * took.
      */
     private static double cellTopSupportDy(BlockView world, BlockPos pos, BlockState state,
-                                           int depth) {
+                                           int depth, int steps) {
         if (world == null || pos == null || state == null
                 || state.isAir()
                 || !state.getFluidState().isEmpty()
@@ -2555,7 +2594,7 @@ public final class SlabSupport {
             // An anchor records THAT this block was placed on a lowered surface, not HOW FAR down
             // it went. anchoredCellDy supplies the stored placement height when there is one, and
             // otherwise resolves from this block's own support exactly as before.
-            return anchoredCellDy(world, pos, depth);
+            return anchoredCellDy(world, pos, depth, steps);
         }
         double directCustomDy = directCustomSlabSupportDy(world, pos, state);
         if (!Double.isNaN(directCustomDy)) {
@@ -2566,7 +2605,7 @@ public final class SlabSupport {
             if (isBottomSlab(belowSlab) && isAdjacentSideSlabLowered(world, pos.down(), belowSlab)) {
                 return -1.0;
             }
-            double columnDy = slabColumnYOffset(world, pos, depth);
+            double columnDy = slabColumnYOffset(world, pos, depth, steps);
             if (columnDy != 0.0) {
                 return columnDy;
             }
@@ -2814,10 +2853,10 @@ public final class SlabSupport {
      * so callers (which gate on {@code < -1e-6}) leave the flush case untouched.
      */
     private static double loweredBottomSlabSupportDy(BlockView world, BlockPos supportPos) {
-        return loweredBottomSlabSupportDy(world, supportPos, 0);
+        return loweredBottomSlabSupportDy(world, supportPos, 0, 0);
     }
 
-    private static double loweredBottomSlabSupportDy(BlockView world, BlockPos supportPos, int depth) {
+    private static double loweredBottomSlabSupportDy(BlockView world, BlockPos supportPos, int depth, int steps) {
         BlockState s = getBlockStateOrNull(world, supportPos);
         if (s == null
                 || !(s.getBlock() instanceof SlabBlock)
@@ -2830,7 +2869,7 @@ public final class SlabSupport {
             // Same anchor-is-not-a-height correction as loweredFullHeightSupportDy: an
             // anchored bottom slab may itself sit deeper than -0.5, and its own placement height
             // wins when the store has it.
-            return anchoredCellDy(world, supportPos, depth);
+            return anchoredCellDy(world, supportPos, depth, steps);
         }
         double directCustomDy = directCustomSlabSupportDy(world, supportPos, s);
         if (Double.isFinite(directCustomDy) && directCustomDy < -1.0e-6) {
@@ -2966,10 +3005,10 @@ public final class SlabSupport {
     }
 
     private static double slabColumnYOffset(BlockView world, BlockPos pos) {
-        return slabColumnYOffset(world, pos, 0);
+        return slabColumnYOffset(world, pos, 0, 0);
     }
 
-    private static double slabColumnYOffset(BlockView world, BlockPos pos, int depth) {
+    private static double slabColumnYOffset(BlockView world, BlockPos pos, int depth, int steps) {
         BlockPos cursor = pos.down();
         for (int i = 0; i < MAX_CHAIN_DEPTH; i++) {
             BlockState cur = getBlockStateOrNull(world, cursor);
@@ -3012,7 +3051,7 @@ public final class SlabSupport {
                 // unreachability argument above — the BOTTOM arm becomes reachable, correctly, and
                 // nothing here needs editing, but do not re-derive "provably unreachable" from it.
                 double historicalDy = isBottomSlab(cur) ? -1.0 : -0.5;
-                double seatDy = supportSeatDy(world, cursor, depth + 1);
+                double seatDy = supportSeatDy(world, cursor, depth, steps + 1);
                 if (Double.isFinite(seatDy) && seatDy < historicalDy - 1.0e-6) {
                     return Math.max(seatDy, minResolvedDy());
                 }
@@ -3026,7 +3065,7 @@ public final class SlabSupport {
                 // itself render deeper than -0.5, and whatever stacks on it takes its ACTUAL top
                 // face. Same helper as the other anchor lanes, so a stored placement height is
                 // seen here too; floors at -0.5.
-                return anchoredCellDy(world, cursor, depth);
+                return anchoredCellDy(world, cursor, depth, steps);
             }
             if (cur.isAir() || cur.getBlock() instanceof SlabBlock || isThinTopLayer(cur)) {
                 return 0.0;

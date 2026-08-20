@@ -6,6 +6,32 @@ latest file, see [Modrinth](https://modrinth.com/mod/slabbed) or
 [CurseForge](https://www.curseforge.com/minecraft/mc-mods/slabbed).
 See LAW.md — this doc does not redefine the law.
 
+## [0.5.2-alpha.1] — 1.21.11 (Fabric) — unreleased
+
+In development. Entries land here as they are proved.
+
+### Fixed
+
+- **A tall stack of blocks in a lowered hole no longer sinks into itself part-way up.** Blocks
+  resting on a lowered block sit at the same depth as the block under them, all the way up — but
+  past the seventh course, an older block (one carrying no saved height, so any build made before
+  0.5.1-alpha.1) stopped inheriting that depth and dropped to the deepest height the version
+  allows, sinking half a block into the block it stands on. It is drawn and clicked at the sunken
+  height, so a tall column read as visibly broken from the seventh block up. Fixed at the root:
+  the resolver's depth budget is spent only by a support that actually lowers its neighbour, so a
+  straight stack — which lowers nothing, it just passes the depth along — no longer runs out of
+  budget at all. *(Proved by a failing test first, at both height limits; the whole suite is green
+  at both.)*
+
+### ⚠️ Upgrading a world built on 0.5.1-alpha.1 or earlier — some tall stacks move back up
+
+Blocks placed before 0.5.1-alpha.1 carry no saved height, so they follow the current rule each time
+they load. If such a build has **more than six blocks stacked in a lowered hole**, everything from
+the seventh block up was sitting half a block too low (a block and a half too low in a world using
+the deeper height range). Those blocks now line up with the rest of the stack — they move **up**,
+back to where the column reads as straight. Nothing is deleted or relocated. Anything placed from
+0.5.1-alpha.1 onward records its own height and is unaffected.
+
 ## [0.5.1-alpha.1] — 1.21.11 (Fabric) — 2026-08-18
 
 The largest update this line has shipped — 116 commits since 0.5.0-beta.8. The placement core was
