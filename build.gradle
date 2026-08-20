@@ -355,6 +355,57 @@ tasks.named("compileGametestJava") {
     dependsOn(tasks.named("verifyRig2GametestRegistration"))
 }
 
+// ── Anti-false-green: the reported suite count must match tools/expected-gametest-count.py ──────
+// A stale build/run/gameTest silently drops tests and still prints BUILD SUCCESSFUL. The count check
+// existed as a script and as a documented instruction, but NOTHING executed it — so the one gate that
+// catches a silent drop only ran when a human remembered. This wires it into runGameTest itself.
+//
+// Absence of the count line is RED, not a pass: a run that reports no count is never proof.
+def slabbedReportedGameTestCount = new java.util.concurrent.atomic.AtomicInteger(-1)
+
+def slabbedExpectedGameTestCount = { File repoRoot ->
+    def process = new ProcessBuilder("python3", "tools/expected-gametest-count.py")
+            .directory(repoRoot)
+            .redirectErrorStream(true)
+            .start()
+    def output = process.inputStream.text
+    if (process.waitFor() != 0) {
+        throw new GradleException("verifyGameTestCount: the expected-count script failed:\n" + output)
+    }
+    def matched = (output =~ /expected suite count (\d+)/)
+    if (!matched) {
+        throw new GradleException(
+                "verifyGameTestCount: could not read an expected count from the script. It said:\n" + output)
+    }
+    return matched[0][1] as int
+}
+
+tasks.matching { it.name == "runGameTest" }.configureEach { gameTestTask ->
+    gameTestTask.logging.addStandardOutputListener({ CharSequence chunk ->
+        def matcher = (chunk =~ /All (\d+) required tests passed/)
+        while (matcher.find()) {
+            slabbedReportedGameTestCount.set(Integer.parseInt(matcher.group(1)))
+        }
+    } as StandardOutputListener)
+
+    gameTestTask.doLast {
+        def expected = slabbedExpectedGameTestCount(rootDir)
+        def reported = slabbedReportedGameTestCount.get()
+        if (reported < 0) {
+            throw new GradleException(
+                    "verifyGameTestCount: runGameTest printed no \"All N required tests passed\" line, so "
+                            + "nothing proves the suite ran. Treat this as RED.")
+        }
+        if (reported != expected) {
+            throw new GradleException(
+                    "verifyGameTestCount: reported ${reported} but expected ${expected}. A green with the "
+                            + "wrong count is a false green. If reported is lower, a stale run dir most "
+                            + "likely dropped tests: rm -rf build/run/gameTest and re-run.")
+        }
+        logger.lifecycle("verifyGameTestCount: ${reported} tests ran, matching the expected ${expected}.")
+    }
+}
+
 // Jar-identity stamp: a jar must be traceable to its exact commit from its own bytes. Two different
 // artifacts have shipped self-identifying as the same fabric.mod.json version, and a live session was
 // once analyzed against the wrong build. Read at runtime by com.slabbed.util.BuildStamp.
