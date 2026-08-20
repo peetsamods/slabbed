@@ -8,7 +8,9 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.AABB;
 
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.function.Supplier;
 
@@ -43,7 +45,6 @@ public final class FrozenDySceneFixture {
      * @return the number of facts written
      */
     public static int authorScene(GameTestHelper helper) {
-        ServerLevel level = helper.getLevel();
         AABB bounds = helper.getBounds();
         int minX = (int) Math.floor(bounds.minX);
         int minY = (int) Math.floor(bounds.minY);
@@ -52,28 +53,48 @@ public final class FrozenDySceneFixture {
         int maxY = (int) Math.ceil(bounds.maxY) - 1;
         int maxZ = (int) Math.ceil(bounds.maxZ) - 1;
 
+        List<BlockPos> cells = new ArrayList<>();
+        for (int x = minX; x <= maxX; x++) {
+            for (int y = minY; y <= maxY; y++) {
+                for (int z = minZ; z <= maxZ; z++) {
+                    cells.add(new BlockPos(x, y, z));
+                }
+            }
+        }
+        return authorCells(helper.getLevel(), cells);
+    }
+
+    /**
+     * {@link #authorScene} for a caller that has no {@link GameTestHelper} and names its scene cells
+     * explicitly — a client gametest, which reaches the server through {@code runOnServer} and has no
+     * structure bounds to walk.
+     *
+     * <p>Same contract in both directions: air and already-factted cells are skipped, so the call is
+     * idempotent and never overwrites a real {@code useOn} placement, and every published value is
+     * taken with the frozen store forced OFF so no cell's height can depend on another cell's
+     * already-published fact. Order of {@code cells} therefore does not affect the result.
+     *
+     * @return the number of facts written
+     */
+    public static int authorCells(ServerLevel level, Iterable<BlockPos> cells) {
         Map<BlockPos, Long> pending = new LinkedHashMap<>();
         boolean previous = SlabAnchorAttachment.FROZEN_DY_ENABLED;
         SlabAnchorAttachment.FROZEN_DY_ENABLED = false;
         try {
-            for (int x = minX; x <= maxX; x++) {
-                for (int y = minY; y <= maxY; y++) {
-                    for (int z = minZ; z <= maxZ; z++) {
-                        BlockPos pos = new BlockPos(x, y, z);
-                        BlockState state = level.getBlockState(pos);
-                        if (state.isAir()) {
-                            continue;
-                        }
-                        if (!Double.isNaN(SlabAnchorAttachment.storedPlacementDy(level, pos))) {
-                            continue;
-                        }
-                        double dy = SlabSupport.getUnstoredYOffset(level, pos, state);
-                        if (!Double.isFinite(dy)) {
-                            continue;
-                        }
-                        pending.put(pos, Double.doubleToRawLongBits(dy));
-                    }
+            for (BlockPos cell : cells) {
+                BlockPos pos = cell.immutable();
+                BlockState state = level.getBlockState(pos);
+                if (state.isAir()) {
+                    continue;
                 }
+                if (!Double.isNaN(SlabAnchorAttachment.storedPlacementDy(level, pos))) {
+                    continue;
+                }
+                double dy = SlabSupport.getUnstoredYOffset(level, pos, state);
+                if (!Double.isFinite(dy)) {
+                    continue;
+                }
+                pending.put(pos, Double.doubleToRawLongBits(dy));
             }
         } finally {
             SlabAnchorAttachment.FROZEN_DY_ENABLED = previous;

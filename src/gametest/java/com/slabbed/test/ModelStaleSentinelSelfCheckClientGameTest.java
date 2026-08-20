@@ -1,5 +1,6 @@
 package com.slabbed.test;
 
+import com.slabbed.Slabbed;
 import com.slabbed.util.SlabModelStaleSentinel;
 import com.slabbed.util.SlabSupport;
 import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
@@ -33,6 +34,14 @@ import java.util.List;
  */
 public final class ModelStaleSentinelSelfCheckClientGameTest implements FabricClientGameTest {
 
+    /**
+     * Positive execution evidence. The client suite has no per-entrypoint count gate the way the server
+     * suite does, so an entrypoint that never runs is indistinguishable from one that passed: the task
+     * simply reports success. Every client entrypoint emits this on its success path, and a green run is
+     * proof only when the log carries one line per {@code fabric-client-gametest} entry.
+     */
+    private static final String CLIENT_GAMETEST_PASS = "CLIENT_GAMETEST | ModelStaleSentinelSelfCheckClientGameTest | PASS";
+
     private static final double EPS = 1.0e-4;
 
     @Override
@@ -62,6 +71,11 @@ public final class ModelStaleSentinelSelfCheckClientGameTest implements FabricCl
                 world.setBlock(support,
                         Blocks.OAK_SLAB.defaultBlockState().setValue(SlabBlock.TYPE, SlabType.BOTTOM), 3);
                 world.setBlock(torch, Blocks.TORCH.defaultBlockState(), 3);
+                // setBlock publishes no placement fact, so under the shipped frozen-ON store both cells
+                // would read the missing-fact stable-flat 0.0 and the premise below would break before
+                // the instrument is exercised. Author the fact each cell would carry had it been placed
+                // at the height it reads, so the scene reads identically with the store on and off.
+                FrozenDySceneFixture.authorCells(world, List.of(support, torch));
             });
             ctx.waitTicks(10);
             sp.getClientLevel().waitForChunksRender();
@@ -79,8 +93,13 @@ public final class ModelStaleSentinelSelfCheckClientGameTest implements FabricCl
                 });
 
                 // Poke the section AFTER arming so the resulting rebuild's emitQuads runs armed.
-                sp.getServer().runOnServer(server ->
-                        server.overworld().setBlock(poke, Blocks.GLASS.defaultBlockState(), 3));
+                sp.getServer().runOnServer(server -> {
+                    var world = server.overworld();
+                    world.setBlock(poke, Blocks.GLASS.defaultBlockState(), 3);
+                    // Same reason as the scene above: the zero-red sweep judges every cell it can see,
+                    // so the poke must carry its own fact rather than a missing-fact 0.0.
+                    FrozenDySceneFixture.authorCells(world, List.of(poke));
+                });
                 ctx.waitTicks(15);
                 sp.getClientLevel().waitForChunksRender();
 
@@ -114,6 +133,7 @@ public final class ModelStaleSentinelSelfCheckClientGameTest implements FabricCl
                 SlabModelStaleSentinel.testSessionOverride = false;
                 SlabModelStaleSentinel.resetCold();
             }
+            Slabbed.LOGGER.info(CLIENT_GAMETEST_PASS);
         }
     }
 }

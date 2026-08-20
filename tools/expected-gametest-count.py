@@ -22,6 +22,12 @@ CI. They run only under `runClientGameTest`, which nothing invokes
 automatically. This script prints their count as an explicit advisory line so
 the gap stays visible instead of reading as full coverage.
 
+That task has no count gate of its own, so a client entrypoint that never runs
+is indistinguishable from one that passed — the task just reports success.
+Until it has one, each client entrypoint logs 'CLIENT_GAMETEST | <class> | PASS'
+on its success path, and the run is proof only when the log carries one such
+line per entry below.
+
 Usage (from the repo root):
     python3 tools/expected-gametest-count.py
 
@@ -78,7 +84,10 @@ def main() -> int:
     client = json.loads(MOD_JSON.read_text())["entrypoints"].get("fabric-client-gametest", [])
     if client:
         print(f"NOT COVERED BY THIS GATE: {len(client)} fabric-client-gametest classes. They run "
-              f"only under `./gradlew25 runClientGameTest`, which no build or CI step invokes.")
+              f"only under `./gradlew25 runClientGameTest`, which no build or CI step invokes. "
+              f"That run is green only when its log shows {len(client)} "
+              f"'CLIENT_GAMETEST | <class> | PASS' lines — BUILD SUCCESSFUL alone does not prove "
+              f"an entrypoint ran.")
     return 0
 
 
