@@ -205,6 +205,7 @@ sourceSets {
             include("com/slabbed/client/BetaNoticeDismissedWorldsTest.java")
             include("com/slabbed/client/BetaNoticeDismissFeedbackTest.java")
             include("com/slabbed/client/BetaNoticeVersionChannelTest.java")
+            include("com/slabbed/test/RenderRegionBoundaryReadTest.java")
             include("com/slabbed/test/BottomSlabLoweredByCarrierBelowTest.java")
             include("com/slabbed/test/BlockEntityNeverPopTest.java")
             include("com/slabbed/test/BlockEntityCantileverTest.java")

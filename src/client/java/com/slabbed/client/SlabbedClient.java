@@ -9,6 +9,13 @@ import java.lang.reflect.InvocationTargetException;
 public final class SlabbedClient implements ClientModInitializer {
     @Override
     public void onInitializeClient() {
+        // FIRST, before anything can resolve a height: teach the common resolver to recognise the
+        // chunk-meshing view. SlabSupport must not link RenderSectionRegion itself (it is
+        // client-only), so the instanceof is supplied from here. Until this runs, the detector
+        // answers false and every out-of-bounds read rethrows — which is the safe default, but it
+        // means registration must never be moved later or made conditional.
+        com.slabbed.util.SlabSupport.registerChunkRendererRegionDetector(
+                view -> view instanceof net.minecraft.client.renderer.chunk.RenderSectionRegion);
         PlacementDyPredictionJournal.init();
         net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking.registerGlobalReceiver(
                 com.slabbed.network.PlacementDyCorrectionPayload.TYPE,

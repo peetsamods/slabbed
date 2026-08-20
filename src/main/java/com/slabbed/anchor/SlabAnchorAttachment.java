@@ -776,10 +776,10 @@ public final class SlabAnchorAttachment {
         // Beta4 sidecar: if the position currently satisfies the compound full-block
         // condition (anchored ordinary full block above a lowered bottom slab carrier),
         // also record the authored dy=-1.0 lane so it survives source slab removal.
-        BlockState state = world.getBlockState(pos);
+        BlockState state = SlabSupport.getBlockStateOrAir(world, pos);
         BlockPos belowPos = pos.below();
         if (qualifiesForCompoundFullBlockAnchor(world, pos, state)
-                || qualifiesForTopOfCompoundFullAnchor(world, pos, state, belowPos, world.getBlockState(belowPos))) {
+                || qualifiesForTopOfCompoundFullAnchor(world, pos, state, belowPos, SlabSupport.getBlockStateOrAir(world, belowPos))) {
             addToAttachment(world, pos, COMPOUND_FULL_BLOCK_ANCHOR_TYPE, "compound_full_block_anchor");
         }
     }
@@ -1151,7 +1151,7 @@ public final class SlabAnchorAttachment {
         if (!beta4CompoundVisibleRenderTraceEnabled() || !isCompoundVisibleAttachmentType(type)) {
             return;
         }
-        BlockState state = world.getBlockState(pos);
+        BlockState state = SlabSupport.getBlockStateOrAir(world, pos);
         double dy = SlabSupport.getYOffset(world, pos, state);
         Slabbed.LOGGER.info(
                 "[SLABBED_BETA4_COMPOUND_VISIBLE_RENDER_TRACE_MARKER_SET] action={} pos={} marker={} label={} serverMarker={} clientMarker=n/a modelViewType=Level slabSupportDy={} clientDy=n/a candidateRerenderScheduled=false neighborRerenderScheduled=false",
@@ -1417,7 +1417,7 @@ public final class SlabAnchorAttachment {
             return true;
         }
         BlockPos belowPos = pos.below();
-        BlockState below = world.getBlockState(belowPos);
+        BlockState below = SlabSupport.getBlockStateOrAir(world, belowPos);
         return qualifiesAsVerticalChainSupport(world, belowPos, below);
     }
 
@@ -1477,7 +1477,7 @@ public final class SlabAnchorAttachment {
             return false;
         }
         BlockPos belowPos = pos.below();
-        BlockState belowSlab = world.getBlockState(belowPos);
+        BlockState belowSlab = SlabSupport.getBlockStateOrAir(world, belowPos);
         return SlabSupport.isLoweredCompoundSourceSlab(world, belowPos, belowSlab);
     }
 
@@ -1626,7 +1626,7 @@ public final class SlabAnchorAttachment {
             return false;
         }
         BlockPos belowPos = pos.below();
-        BlockState below = world.getBlockState(belowPos);
+        BlockState below = SlabSupport.getBlockStateOrAir(world, belowPos);
         return SlabSupport.isLoweredTopLikeSlabCarrier(world, belowPos, below);
     }
 
@@ -1742,7 +1742,7 @@ public final class SlabAnchorAttachment {
             return false;
         }
         BlockPos belowPos = pos.below();
-        BlockState below = world.getBlockState(belowPos);
+        BlockState below = SlabSupport.getBlockStateOrAir(world, belowPos);
         if (!isOrdinaryFullBlockAnchorCandidate(world, belowPos, below)) {
             return false;
         }
@@ -1769,7 +1769,7 @@ public final class SlabAnchorAttachment {
             return false;
         }
         BlockPos belowPos = pos.below();
-        BlockState below = world.getBlockState(belowPos);
+        BlockState below = SlabSupport.getBlockStateOrAir(world, belowPos);
         if (!isOrdinaryFullBlockAnchorCandidate(world, belowPos, below)) {
             return false;
         }
@@ -1793,7 +1793,7 @@ public final class SlabAnchorAttachment {
         boolean hasLoweredAnchoredBridgeNeighbor = false;
         for (var dir : net.minecraft.core.Direction.Plane.HORIZONTAL) {
             BlockPos neighborPos = supportY.relative(dir);
-            BlockState neighbor = world.getBlockState(neighborPos);
+            BlockState neighbor = SlabSupport.getBlockStateOrAir(world, neighborPos);
             if (!isOrdinaryFullBlockAnchorCandidate(world, neighborPos, neighbor)) {
                 continue;
             }
@@ -1810,7 +1810,7 @@ public final class SlabAnchorAttachment {
             return false;
         }
 
-        BlockState below = world.getBlockState(supportY);
+        BlockState below = SlabSupport.getBlockStateOrAir(world, supportY);
         if (isOrdinaryFullBlockAnchorCandidate(world, supportY, below)
                 && (isAnchored(world, supportY) || SlabSupport.getYOffset(world, supportY, below) == -0.5d)) {
             return true;
@@ -1830,7 +1830,7 @@ public final class SlabAnchorAttachment {
         boolean hasLoweredAnchoredBridgeNeighbor = false;
         for (var dir : net.minecraft.core.Direction.Plane.HORIZONTAL) {
             BlockPos neighborPos = supportY.relative(dir);
-            BlockState neighbor = world.getBlockState(neighborPos);
+            BlockState neighbor = SlabSupport.getBlockStateOrAir(world, neighborPos);
             if (!isOrdinaryFullBlockAnchorCandidate(world, neighborPos, neighbor)) {
                 continue;
             }
@@ -1843,7 +1843,7 @@ public final class SlabAnchorAttachment {
         if (!hasLoweredAnchoredBridgeNeighbor) {
             return false;
         }
-        BlockState below = world.getBlockState(supportY);
+        BlockState below = SlabSupport.getBlockStateOrAir(world, supportY);
         if (isOrdinaryFullBlockAnchorCandidate(world, supportY, below)
                 && (isAnchored(world, supportY) || SlabSupport.hasBottomSlabBelow(world, supportY))) {
             return true;
