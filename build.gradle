@@ -22,8 +22,35 @@ fabricApi {
 // `./gradlew runGameTest -Dslabbed.sweep=true` reaches RegistrySweepTest. Loom run tasks do NOT
 // inherit the daemon's -D properties by default; RunConfigSettings.property() wires it through.
 // (RegistrySweepTest also honours the SLABBED_SWEEP env var directly as a fallback.)
+// The SAME forwarding must reach the client gametest JVM, so -Dslabbed.frozenDy=... on the gradle
+// invocation reaches it the way it already reaches gameTest.
+//
+// The in-JVM default here is the SHIPPED one (true), and must stay that way. The client suite exists to
+// prove the LAW 1 read contract on a real client — a placed cell's live read IS its stored fact — and
+// four of its five entrypoints assert live and stored are one value. Forcing this JVM frozen-OFF
+// disables the mechanism those tests exist to prove, so they cannot pass by construction; a client
+// suite that only goes green frozen-OFF is proving nothing about the shipped jar.
+// Fact-less setBlock scenery is the FIXTURE's job to author (FrozenDySceneFixture), never the runner's
+// to work around by turning the store off. Do not re-add a frozen-OFF default here.
 loom {
     runs {
+        configureEach {
+            if (name == "clientGameTest") {
+                property "slabbed.sweep", System.getProperty("slabbed.sweep", "false")
+                property "slabbed.frozenDy", System.getProperty("slabbed.frozenDy", "true")
+                // Per-case selectors. The entrypoints already branch on these, so without forwarding
+                // the selected paths are unreachable dead proof code. Forward only when set: each
+                // selector rejects an empty string, so a blank default would fail every run.
+                ["slabbed.c3.clientCase",
+                 "slabbed.test23.recorderCase",
+                 "slabbed.test28.deepHeldUseCase"].each { selector ->
+                    String requested = System.getProperty(selector)
+                    if (requested != null) {
+                        property selector, requested
+                    }
+                }
+            }
+        }
         gameTest {
             property "slabbed.sweep", System.getProperty("slabbed.sweep", "false")
             // Keep the gametest JVM at the frozen-OFF compatibility floor (design §4.1) even though the

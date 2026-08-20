@@ -2,6 +2,7 @@ package com.slabbed.test;
 
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
+import com.slabbed.Slabbed;
 import com.slabbed.anchor.SlabAnchorAttachment;
 import com.slabbed.util.LiveCursorIntentRecorder;
 import com.slabbed.util.SlabbedOffsetRaycast;
@@ -32,6 +33,14 @@ import java.util.LinkedHashMap;
 import java.util.List;
 
 public final class SlabbedLabLiveCursorIntentRecorderContractClientGameTest implements FabricClientGameTest {
+
+    /**
+     * Positive execution evidence. The client suite has no per-entrypoint count gate the way the server
+     * suite does, so an entrypoint that never runs is indistinguishable from one that passed: the task
+     * simply reports success. Every client entrypoint emits this on its success path, and a green run is
+     * proof only when the log carries one line per {@code fabric-client-gametest} entry.
+     */
+    private static final String CLIENT_GAMETEST_PASS = "CLIENT_GAMETEST | SlabbedLabLiveCursorIntentRecorderContractClientGameTest | PASS";
     private static final String TEST23_CASE_PROPERTY = "slabbed.test23.recorderCase";
     private static final String EMPTY_HAND_USE_PACKET_CAPTURE = "empty_hand_use_packet_capture";
     private static final String CURSOR_PRODUCTION_HOOK = "cursor_production_hook";
@@ -315,6 +324,7 @@ public final class SlabbedLabLiveCursorIntentRecorderContractClientGameTest impl
             assertContains(evidenceDir.resolve("summary.md"), "modelStaleAbsentRows=1");
             assertContains(evidenceDir.resolve("summary.md"), "ensembleOccludedOccupancyInfoRows=1");
             assertContains(evidenceDir.resolve("summary.md"), "ensembleClashRows=2");
+            Slabbed.LOGGER.info(CLIENT_GAMETEST_PASS);
         } catch (Exception e) {
             throw new RuntimeException("[LIVE_CURSOR_INTENT_RECORDER_CONTRACT_RED] " + e.getMessage(), e);
         } finally {

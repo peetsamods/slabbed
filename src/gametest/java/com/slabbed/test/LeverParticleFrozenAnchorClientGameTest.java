@@ -35,6 +35,14 @@ import java.util.List;
  * mixin observes that sink without changing the particle or its arguments.
  */
 public final class LeverParticleFrozenAnchorClientGameTest implements FabricClientGameTest {
+
+    /**
+     * Positive execution evidence. The client suite has no per-entrypoint count gate the way the server
+     * suite does, so an entrypoint that never runs is indistinguishable from one that passed: the task
+     * simply reports success. Every client entrypoint emits this on its success path, and a green run is
+     * proof only when the log carries one line per {@code fabric-client-gametest} entry.
+     */
+    private static final String CLIENT_GAMETEST_PASS = "CLIENT_GAMETEST | LeverParticleFrozenAnchorClientGameTest | PASS";
     private static final double BASELINE_DY = 0.0d;
     private static final double LOWERED_DY = -1.5d;
     private static final double EPSILON = 1.0e-9d;
@@ -135,6 +143,7 @@ public final class LeverParticleFrozenAnchorClientGameTest implements FabricClie
                         "after harmless neighbour edit");
                 runProductionSynchronizedRedstoneWireParticleRed(client.level, wireFixtures);
             });
+            Slabbed.LOGGER.info(CLIENT_GAMETEST_PASS);
         } catch (AssertionError error) {
             throw error;
         } catch (Exception error) {

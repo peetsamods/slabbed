@@ -44,6 +44,14 @@ import java.util.Map;
 
 /** One real entrypoint owning the frozen eighteen-case C3 client manifest. */
 public final class PlacementDyPredictionClientGameTest implements FabricClientGameTest {
+
+    /**
+     * Positive execution evidence. The client suite has no per-entrypoint count gate the way the server
+     * suite does, so an entrypoint that never runs is indistinguishable from one that passed: the task
+     * simply reports success. Every client entrypoint emits this on its success path, and a green run is
+     * proof only when the log carries one line per {@code fabric-client-gametest} entry.
+     */
+    private static final String CLIENT_GAMETEST_PASS = "CLIENT_GAMETEST | PlacementDyPredictionClientGameTest | PASS";
     private static final String CASE_SELECTOR_PROPERTY = "slabbed.c3.clientCase";
     private static final long NEGATIVE_ONE = Double.doubleToRawLongBits(-1.0d);
     private static final long POSITIVE_ZERO = Double.doubleToRawLongBits(+0.0d);
@@ -140,6 +148,7 @@ public final class PlacementDyPredictionClientGameTest implements FabricClientGa
                 }
             }
             Slabbed.LOGGER.info("C3_CLIENT_ENTRYPOINT | PASS | cases={}", caseCount);
+            Slabbed.LOGGER.info(CLIENT_GAMETEST_PASS);
         } catch (Throwable throwable) {
             throw new AssertionError("C3 client manifest failed", throwable);
         } finally {

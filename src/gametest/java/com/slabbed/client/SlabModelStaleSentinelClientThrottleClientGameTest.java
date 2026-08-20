@@ -1,5 +1,6 @@
 package com.slabbed.client;
 
+import com.slabbed.Slabbed;
 import com.slabbed.anchor.SlabAnchorAttachment;
 import com.slabbed.client.model.OffsetBlockStateModel;
 import com.slabbed.util.SlabModelStaleSentinel;
@@ -19,6 +20,14 @@ import java.util.Map;
 
 /** Pure pins for sentinel throttling and the C5 canonical client dy; no live world is needed. */
 public final class SlabModelStaleSentinelClientThrottleClientGameTest implements FabricClientGameTest {
+
+    /**
+     * Positive execution evidence. The client suite has no per-entrypoint count gate the way the server
+     * suite does, so an entrypoint that never runs is indistinguishable from one that passed: the task
+     * simply reports success. Every client entrypoint emits this on its success path, and a green run is
+     * proof only when the log carries one line per {@code fabric-client-gametest} entry.
+     */
+    private static final String CLIENT_GAMETEST_PASS = "CLIENT_GAMETEST | SlabModelStaleSentinelClientThrottleClientGameTest | PASS";
     @Override
     public void runTest(ClientGameTestContext ctx) {
         String red = SlabModelStaleSentinel.KIND_DIVERGENT;
@@ -40,6 +49,7 @@ public final class SlabModelStaleSentinelClientThrottleClientGameTest implements
                         "UNKNOWN_DIAGNOSTIC", 2_000L, Long.MIN_VALUE),
                 "unknown diagnostics must never chat");
         ctx.runOnClient(client -> c5CarpetAndPowderUseCanonicalClientDy());
+        Slabbed.LOGGER.info(CLIENT_GAMETEST_PASS);
     }
 
     private static void c5CarpetAndPowderUseCanonicalClientDy() {
