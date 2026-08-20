@@ -5,6 +5,7 @@ import net.fabricmc.fabric.api.client.command.v2.ClientCommands;
 import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallback;
 import net.fabricmc.fabric.api.client.command.v2.FabricClientCommandSource;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
+import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ServerData;
@@ -12,8 +13,12 @@ import net.minecraft.network.chat.ClickEvent;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.level.storage.LevelResource;
 
+import java.util.Locale;
+
 /**
- * A brief, one-time chat notice ("Slabbed is in beta...") with a click-to-dismiss link.
+ * A brief, one-time pre-release chat notice ("Slabbed is in {alpha,beta}...") with a
+ * click-to-dismiss link. The channel word is derived from the running mod version — see
+ * {@link #preReleaseChannel} — so it can never contradict the build it is shown on.
  *
  * <p>Shown at most once per client session PER WORLD (hopping back into the SAME world in one
  * sitting doesn't repeat it — see {@link BetaNoticeSessionGate}), AND permanently skipped for
@@ -33,6 +38,12 @@ public final class BetaNoticeClient {
                         .executes(BetaNoticeClient::runDismiss)));
 
         ClientPlayConnectionEvents.JOIN.register((handler, sender, client) -> {
+            // Channel first: a build with no pre-release marker shows nothing, and must not burn
+            // the per-world session gate deciding that.
+            String channel = preReleaseChannel(runningModVersion());
+            if (channel == null) {
+                return;
+            }
             String worldKey = currentWorldKey(client);
             if (!BetaNoticeSessionGate.shouldShow(worldKey)) {
                 return;
@@ -41,14 +52,48 @@ public final class BetaNoticeClient {
                 return;
             }
             BetaNoticeSessionGate.markShown(worldKey);
-            client.player.sendSystemMessage(
-                    Component.literal("Slabbed is in beta — expect some rough edges while it's being developed. ")
-                            .withStyle(ChatFormatting.GRAY, ChatFormatting.ITALIC)
-                            .append(Component.literal("[Don't show again]")
-                                    .withStyle(ChatFormatting.GRAY, ChatFormatting.UNDERLINE)
-                                    .withStyle(style -> style.withClickEvent(
-                                            new ClickEvent.RunCommand("/slabbed_dismiss_beta_notice")))));
+            client.player.sendSystemMessage(noticeMessage(channel));
         });
+    }
+
+    /**
+     * The pre-release channel this build is actually on, read from the mod version, or {@code null}
+     * when the version carries no pre-release marker (a stable build warns about nothing).
+     *
+     * <p><b>Do not re-add a hardcoded channel word to {@link #noticeMessage}.</b> The notice greeted
+     * players with "beta" on {@code 0.5.0-alpha.1} builds because the word was a literal while the
+     * version moved underneath it; the wording is derived precisely so it cannot drift again.
+     */
+    static String preReleaseChannel(String version) {
+        if (version == null) {
+            return null;
+        }
+        String lower = version.toLowerCase(Locale.ROOT);
+        if (lower.contains("alpha")) {
+            return "alpha";
+        }
+        if (lower.contains("beta")) {
+            return "beta";
+        }
+        return null;
+    }
+
+    /** The join notice for a given channel. The channel word is never written literally here. */
+    static Component noticeMessage(String channel) {
+        return Component.literal(
+                        "Slabbed is in " + channel + " — expect some rough edges while it's being developed. ")
+                .withStyle(ChatFormatting.GRAY, ChatFormatting.ITALIC)
+                .append(Component.literal("[Don't show again]")
+                        .withStyle(ChatFormatting.GRAY, ChatFormatting.UNDERLINE)
+                        .withStyle(style -> style.withClickEvent(
+                                new ClickEvent.RunCommand("/slabbed_dismiss_beta_notice"))));
+    }
+
+    /** The running mod version, or {@code null} if the container cannot be resolved. */
+    private static String runningModVersion() {
+        return FabricLoader.getInstance().getModContainer("slabbed")
+                .map(container -> container.getMetadata().getVersion().getFriendlyString())
+                .orElse(null);
     }
 
     private static int runDismiss(CommandContext<FabricClientCommandSource> ctx) {
