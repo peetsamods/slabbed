@@ -28,12 +28,17 @@ Keep the "do not re-add X" guard comments — they are anti-regression tripwires
 
 ## Verification is not optional
 
-- `./gradlew build runGameTest` on a CLEAN run dir (`rm -rf build/run/gameTest` first — a stale
-  dir silently drops tests and still prints green).
+- `./gradlew25 build runGameTest` on a CLEAN run dir (`rm -rf build/run/gameTest` first — a stale
+  dir silently drops tests and still prints green). This line needs JDK 25; plain `./gradlew` on a
+  JDK 21 default fails to read the MC named jar.
 - The reported count MUST match `python3 tools/expected-gametest-count.py`. A green with the
   wrong count is a false green.
-- Never write the literal `@GameTest` token in comments of registered test classes — the count
-  script counts occurrences.
+- Keep the literal `@GameTest` token out of comments in registered test classes as hygiene, but the
+  count script strips comments before counting and no longer depends on it. (It once did: five
+  `{@code @GameTest}` javadoc mentions inflated the expected total to 575 against a true 570, so the
+  gate reported a permanent false mismatch — fixed 2026-08-20.)
+- The count covers the `fabric-gametest` entrypoint only. Classes under `fabric-client-gametest`
+  are **not** counted by any gate.
 - The release jar is gated by a closed-world allowlist (`RELEASE_ALLOWLIST.md`) checked during
   `build`; debug/dev tooling ships in every jar default-off, but the file-writing audit/recorder
   packages never ship.

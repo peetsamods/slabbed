@@ -6,10 +6,18 @@ tests while still reporting BUILD SUCCESSFUL (observed 2026-08-06: 166 reported,
 ~65 lost, no warning). A green run is therefore NOT proof on its own: the
 reported "All N required tests passed" count must match this script's output.
 
-Counts every literal '@GameTest' occurrence in every class registered under the
-'fabric-gametest' entrypoint, plus 1 harness-contributed test. Because it counts
-LITERAL occurrences (annotation or not), never write the bare '@GameTest' token
-in a registered class's comments or javadoc.
+Counts every '@GameTest' occurrence OUTSIDE comments in every class registered
+under the 'fabric-gametest' entrypoint, plus 1 harness-contributed test.
+
+Comments are stripped before counting. An earlier revision counted literal
+occurrences anywhere in the file, which made the gate itself wrong: five
+'{@code @GameTest}' javadoc mentions across four registered classes inflated the
+expected total to 575 against a true 570, so the check reported a permanent false
+mismatch. Keeping the token out of comments is still good hygiene, but this
+script no longer depends on it.
+
+Known gap (deliberate, not an oversight): classes registered under the separate
+'fabric-client-gametest' entrypoint are NOT counted here.
 
 Usage (from the repo root):
     python3 tools/expected-gametest-count.py
@@ -25,12 +33,38 @@ MOD_JSON = ROOT / "src/gametest/resources/fabric.mod.json"
 HARNESS_TESTS = 1  # one test contributed by the harness itself
 
 
+def strip_comments(text: str) -> str:
+    """Drop // line comments and /* */ block comments, keeping line structure."""
+    out = []
+    in_block = False
+    for line in text.splitlines():
+        if in_block:
+            end = line.find("*/")
+            if end == -1:
+                continue
+            line, in_block = line[end + 2:], False
+        while True:
+            start = line.find("/*")
+            if start == -1:
+                break
+            end = line.find("*/", start + 2)
+            if end == -1:
+                line, in_block = line[:start], True
+                break
+            line = line[:start] + line[end + 2:]
+        slash = line.find("//")
+        if slash != -1:
+            line = line[:slash]
+        out.append(line)
+    return "\n".join(out)
+
+
 def main() -> int:
     entrypoints = json.loads(MOD_JSON.read_text())["entrypoints"]["fabric-gametest"]
     total = 0
     for cls in entrypoints:
         src = ROOT / "src/gametest/java" / (cls.replace(".", "/") + ".java")
-        count = src.read_text().count("@GameTest")
+        count = strip_comments(src.read_text()).count("@GameTest")
         total += count
     expected = total + HARNESS_TESTS
     print(f"{total} @GameTest occurrences in {len(entrypoints)} registered classes "
