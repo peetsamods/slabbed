@@ -16,8 +16,11 @@ expected total to 575 against a true 570, so the check reported a permanent fals
 mismatch. Keeping the token out of comments is still good hygiene, but this
 script no longer depends on it.
 
-Known gap (deliberate, not an oversight): classes registered under the separate
-'fabric-client-gametest' entrypoint are NOT counted here.
+Known gap: classes registered under the separate 'fabric-client-gametest'
+entrypoint are NOT counted here and are NOT run by `build`, `runGameTest`, or
+CI. They run only under `runClientGameTest`, which nothing invokes
+automatically. This script prints their count as an explicit advisory line so
+the gap stays visible instead of reading as full coverage.
 
 Usage (from the repo root):
     python3 tools/expected-gametest-count.py
@@ -69,6 +72,13 @@ def main() -> int:
     expected = total + HARNESS_TESTS
     print(f"{total} @GameTest occurrences in {len(entrypoints)} registered classes "
           f"+ {HARNESS_TESTS} harness test = expected suite count {expected}")
+
+    # Advisory only — never folded into the gated number above, because these do not run in the
+    # same task. Printed so the uncovered surface is stated out loud on every check.
+    client = json.loads(MOD_JSON.read_text())["entrypoints"].get("fabric-client-gametest", [])
+    if client:
+        print(f"NOT COVERED BY THIS GATE: {len(client)} fabric-client-gametest classes. They run "
+              f"only under `./gradlew25 runClientGameTest`, which no build or CI step invokes.")
     return 0
 
 
