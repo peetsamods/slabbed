@@ -25,9 +25,23 @@ public final class CompatHooks {
     public static volatile Predicate<BlockState> shouldSkipSlabSupportTestOverride = null;
 
     /**
+     * The same seam for {@link #shouldSkipOffset}, and it exists for a specific reason: the compat mod
+     * is absent in tests, so this hook always answered {@code false} and every compat-ownership branch
+     * of the resolver was unreachable headlessly. A change to them could pass the whole suite while
+     * being dead code — found the hard way on 2026-08-21, when a full green said nothing about a
+     * compat-branch change. Never set in production (only a gametest sets and clears it); {@code null}
+     * means "use the real hook".
+     */
+    public static volatile Predicate<BlockState> shouldSkipOffsetTestOverride = null;
+
+    /**
      * Returns true if compat requires skipping slab offset behavior for this state.
      */
     public static boolean shouldSkipOffset(BlockState state) {
+        Predicate<BlockState> override = shouldSkipOffsetTestOverride;
+        if (override != null && override.test(state)) {
+            return true;
+        }
         if (TerrainSlabsCompat.isLoaded()) {
             return TerrainSlabsCompat.shouldSkipOffset(state);
         }
