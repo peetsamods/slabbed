@@ -235,6 +235,7 @@ sourceSets {
             include("com/slabbed/test/RenderRegionBoundaryReadTest.java")
             include("com/slabbed/test/EnvironmentFillEligibilityTest.java")
             include("com/slabbed/test/CompatOffsetDeferralPinTest.java")
+            include("com/slabbed/test/LoweredSeatFreezeTest.java")
             include("com/slabbed/test/BottomSlabLoweredByCarrierBelowTest.java")
             include("com/slabbed/test/BlockEntityNeverPopTest.java")
             include("com/slabbed/test/BlockEntityCantileverTest.java")
