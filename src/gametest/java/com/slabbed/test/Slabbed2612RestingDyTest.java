@@ -592,23 +592,40 @@ public final class Slabbed2612RestingDyTest {
         helper.succeed();
     }
 
-    // ── thin top layers must NOT lower (stay 0.0) ─────────────────────────────────────────────────
+    // ── eligibility follows BEHAVIOUR, not block class (LAW 2) ────────────────────────────────────
 
+    /**
+     * Weather-deposited surface fill stays flush; everything else seats on its support.
+     *
+     * <p>This pair used to assert that BOTH snow and carpet stay flush, because eligibility was a
+     * block-class list. That was the LAW 2 violation: carpet is player-placed, never weather-deposited,
+     * so the hazard that justifies excluding snow never applied to it — and excluding it only made a
+     * carpet float half a block above the lowered block it lies on. Ruling of record: maintainer,
+     * 2026-08-20.
+     *
+     * <p>Read both rows together — they are the boundary. Snow flush alone would pass a predicate
+     * that excludes everything; carpet seated alone would pass one that excludes nothing.
+     */
     @GameTest(structure = "fabric-gametest-api-v1:empty")
-    public void thinLayersOnBottomSlabStayFlush(GameTestHelper helper) {
+    public void weatherFillStaysFlushWhilePlacedLayersSeat(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
         BlockPos slab = new BlockPos(2, 1, 2);
         BlockPos obj = new BlockPos(2, 2, 2);
-        BlockState[] states = {
-                Blocks.SNOW.defaultBlockState(),          // snow LAYER (layers=1 default)
-                Blocks.MOSS_CARPET.defaultBlockState()
-        };
-        for (BlockState s : states) {
-            helper.setBlock(slab, bottomSlab());
-            helper.setBlock(obj, s);
-            expect(helper, level, obj, 0.0, s.getBlock().getName().getString() + " (thin layer) must stay flush 0.0");
-            clear(helper, obj, slab);
-        }
+
+        // Weather lays this across whole biomes; lowering it would tear a step through terrain the
+        // player never placed.
+        helper.setBlock(slab, bottomSlab());
+        helper.setBlock(obj, Blocks.SNOW.defaultBlockState());
+        expect(helper, level, obj, 0.0, "a snow layer is weather-deposited fill and must stay flush 0.0");
+        clear(helper, obj, slab);
+
+        // Player-placed: it seats on the surface it lies on, like anything else.
+        helper.setBlock(slab, bottomSlab());
+        helper.setBlock(obj, Blocks.MOSS_CARPET.defaultBlockState());
+        expect(helper, level, obj, -0.5,
+                "carpet is player-placed, so it seats on the slab it lies on instead of floating above it");
+        clear(helper, obj, slab);
+
         helper.succeed();
     }
 
