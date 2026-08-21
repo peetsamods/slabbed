@@ -11,31 +11,27 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.material.FluidState;
 
 /**
- * THE CRASH: on the chunk-meshing thread the view is a bounds-limited {@code RenderSectionRegion}
- * that THROWS on a read outside its border (older render regions clamped to air instead). The
- * resolver does wide column walks and adjacent-column side-support reads that reach past that
- * border for a block near the region edge, so meshing ordinary terrain at a region boundary could
- * kill the client — routinely, on Terrain-slab-dense terrain, on world load.
+ * THE INVARIANT: the resolver must NEVER absorb a render-region bounds escape into a plausible
+ * answer. It lets the escape propagate, and the render entry point declines the whole resolution to
+ * flush — what vanilla draws.
  *
- * <p>The former remedy caught the throw at the model's outer entry and returned dy {@code 0.0} for
- * the WHOLE block, so a block near a region border rendered flush rather than at its real height.
- * The read is now bounded in one accessor instead, so only the out-of-bounds read ends and the rest
- * of the resolution finishes.
+ * <p><b>Why absorbing is worse than crashing.</b> Air is POSITIVE evidence here, not a neutral
+ * absence. {@code isCantileverFullBlockCandidate} sinks a full block precisely BECAUSE nothing is
+ * below it, so a read that answers air when it merely could not see makes a block resting on solid
+ * ground sink. The adjacent-side lanes treat an air neighbour as "keep looking", turning a true
+ * {@code -1.0} into {@code -0.5}. Both are wrong heights with no crash, no log and no marker — the
+ * player sees a build quietly deform, and nothing anywhere reports a fault.
  *
- * <p><b>What these rows do and do not prove.</b> They drive the real resolver through a view that
- * throws exactly like a render region does, which is the mechanism. They do NOT prove anything
- * about a rendered frame — no gametest can. They also exercise the live walk rather than the frozen
- * store, because the gametest JVM pins {@code slabbed.frozenDy=false}; under the shipped default the
- * public read returns the stored fact without walking, and it is the other resolver entry points the
- * render path calls that walk.
+ * <p>A per-read {@code getBlockStateOrAir} accessor was added on 2026-08-20 and reverted the same
+ * day for exactly this reason. These rows exist so it cannot come back unnoticed.
  *
- * <p><b>The teeth are in {@link #outsideARegionAnOutOfBoundsReadStillThrows}.</b> Answering air
- * everywhere would make the first row pass while silently swallowing genuine defects, so the pair
- * must be read together.
+ * <p><b>Two lanes, and they must be read together.</b> A row asserting only "the escape propagates"
+ * would pass even if the resolver had become unable to answer anything; a row asserting only
+ * "ordinary reads work" would pass with substitution restored. The pair pins the boundary.
  */
 public final class RenderRegionBoundaryReadTest {
 
-    /** Sentinel type the detector recognises, standing in for the client-only region class. */
+    /** A view bounded like a chunk-render region: inside its box it answers truthfully, outside it throws. */
     private static final class BoundedThrowingView implements BlockGetter {
         private final BlockGetter delegate;
         private final BlockPos center;
@@ -56,7 +52,7 @@ public final class RenderRegionBoundaryReadTest {
         @Override
         public BlockState getBlockState(BlockPos pos) {
             if (outside(pos)) {
-                // Exactly how the real region fails: an array index off the end of its copied section.
+                // Exactly how a real region fails: an index off the end of its copied sections.
                 throw new ArrayIndexOutOfBoundsException("outside the bounded test region: " + pos);
             }
             return delegate.getBlockState(pos);
@@ -83,106 +79,51 @@ public final class RenderRegionBoundaryReadTest {
         }
     }
 
-    private static BoundedThrowingView boundedViewAround(GameTestHelper helper, BlockPos absolute) {
-        // radius 0: every neighbour probe the resolver makes lands outside and throws, which is the
-        // worst case a real region border can present.
-        return new BoundedThrowingView(helper.getLevel(), absolute, 0);
-    }
-
     @GameTest(structure = "fabric-gametest-api-v1:empty")
-    public void insideARegionAnOutOfBoundsReadEndsAsAir(GameTestHelper helper) {
+    public void aBoundsEscapePropagatesInsteadOfBeingAbsorbed(GameTestHelper helper) {
         BlockPos relative = new BlockPos(1, 1, 1);
         helper.setBlock(relative, Blocks.STONE_SLAB);
         BlockPos absolute = helper.absolutePos(relative);
         BlockState state = helper.getLevel().getBlockState(absolute);
 
-        SlabSupport.registerChunkRendererRegionDetector(view -> view instanceof BoundedThrowingView);
+        // radius 0: every neighbour probe lands outside, the worst case a real border presents.
+        BlockGetter bounded = new BoundedThrowingView(helper.getLevel(), absolute, 0);
+
+        boolean propagated = false;
         try {
-            // Must not propagate. The value itself is not the assertion — surviving the walk is.
-            double dy = SlabSupport.getYOffset(boundedViewAround(helper, absolute), absolute, state);
-            if (!Double.isFinite(dy)) {
-                throw helper.assertionException(
-                        "a bounded region read must resolve to a finite height, got: " + dy);
-            }
-        } catch (IndexOutOfBoundsException crashed) {
-            StringBuilder where = new StringBuilder();
-            StackTraceElement[] frames = crashed.getStackTrace();
-            for (int i = 0; i < Math.min(frames.length, 8); i++) {
-                where.append(" | ").append(frames[i]);
-            }
-            throw helper.assertionException(
-                    "a read past a render-region border must end as air, not propagate: " + crashed
-                            + where);
-        } finally {
-            SlabSupport.registerChunkRendererRegionDetector(ignored -> false);
-        }
-        helper.succeed();
-    }
-
-    /**
-     * The stone-slab row above proves ONE lane. Resolution branches hard by block family — connector
-     * arms, standing objects, thin top layers and ceiling hangers each walk different code and reach
-     * different classes — and the first version of this fix guarded only {@code SlabSupport}, leaving
-     * {@code SlabAnchorAttachment} to walk straight through the hole. One lane passing is therefore
-     * not evidence the others are covered; each family below is its own subject.
-     */
-    @GameTest(structure = "fabric-gametest-api-v1:empty")
-    public void everyResolutionLaneSurvivesABoundedRegion(GameTestHelper helper) {
-        net.minecraft.world.level.block.Block[] lanes = {
-                Blocks.STONE_SLAB,        // slab lane
-                Blocks.OAK_FENCE,         // connector-arm lane
-                Blocks.TORCH,             // standing-object lane
-                // 26.x moved dyed blocks behind ColorCollection, so Blocks.CARPET is not a Block.
-                // MOSS_CARPET is a plain CarpetBlock and exercises the same thin-top-layer lane.
-                Blocks.MOSS_CARPET,       // thin-top-layer lane
-                Blocks.LANTERN,           // ceiling-hanger lane
-                Blocks.OAK_TRAPDOOR,      // sub-cell top-face lane
-                Blocks.STONE,             // plain full cube
-        };
-
-        SlabSupport.registerChunkRendererRegionDetector(view -> view instanceof BoundedThrowingView);
-        try {
-            for (net.minecraft.world.level.block.Block lane : lanes) {
-                BlockPos relative = new BlockPos(1, 1, 1);
-                helper.setBlock(relative, lane);
-                BlockPos absolute = helper.absolutePos(relative);
-                BlockState state = helper.getLevel().getBlockState(absolute);
-                try {
-                    SlabSupport.getYOffset(boundedViewAround(helper, absolute), absolute, state);
-                } catch (IndexOutOfBoundsException escaped) {
-                    StackTraceElement[] frames = escaped.getStackTrace();
-                    String site = frames.length > 1 ? frames[1].toString() : "unknown";
-                    throw helper.assertionException(
-                            "the " + lane.getName().getString() + " lane walked past the region border "
-                                    + "and propagated — an unguarded read remains at: " + site);
-                }
-            }
-        } finally {
-            SlabSupport.registerChunkRendererRegionDetector(ignored -> false);
-        }
-        helper.succeed();
-    }
-
-    @GameTest(structure = "fabric-gametest-api-v1:empty")
-    public void outsideARegionAnOutOfBoundsReadStillThrows(GameTestHelper helper) {
-        BlockPos relative = new BlockPos(1, 1, 1);
-        helper.setBlock(relative, Blocks.STONE_SLAB);
-        BlockPos absolute = helper.absolutePos(relative);
-        BlockState state = helper.getLevel().getBlockState(absolute);
-
-        // Detector says "not a region", so the guard must decline to absorb the throw. Swallowing it
-        // here would hide real defects behind a bounds check meant only for the meshing view.
-        SlabSupport.registerChunkRendererRegionDetector(ignored -> false);
-        boolean threw = false;
-        try {
-            SlabSupport.getYOffset(boundedViewAround(helper, absolute), absolute, state);
+            SlabSupport.getYOffset(bounded, absolute, state);
         } catch (IndexOutOfBoundsException expected) {
-            threw = true;
+            propagated = true;
         }
-        if (!threw) {
+        if (!propagated) {
             throw helper.assertionException(
-                    "outside a render region an out-of-bounds read must still throw — the guard is "
-                            + "absorbing failures it was never meant to see");
+                    "the resolver absorbed a bounds escape and returned a height anyway. Air is positive "
+                            + "evidence here — substituting it makes a grounded block sink. Let the escape "
+                            + "reach the render entry point, which declines to flush.");
+        }
+        helper.succeed();
+    }
+
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void aRegionThatCanSeeItsEvidenceAnswersTheSameAsTheLevel(GameTestHelper helper) {
+        // The other half. A bound that broke ordinary resolution would pass the row above and be
+        // useless; this pins that a view which CAN see everything answers exactly what the level does.
+        BlockPos slabRel = new BlockPos(1, 1, 1);
+        BlockPos objRel = new BlockPos(1, 2, 1);
+        helper.setBlock(slabRel, Blocks.STONE_SLAB);
+        helper.setBlock(objRel, Blocks.STONE);
+        BlockPos objAbs = helper.absolutePos(objRel);
+        BlockState objState = helper.getLevel().getBlockState(objAbs);
+
+        double fromLevel = SlabSupport.getYOffset(helper.getLevel(), objAbs, objState);
+        // radius 8 comfortably contains the whole column walk.
+        BlockGetter roomy = new BoundedThrowingView(helper.getLevel(), objAbs, 8);
+        double fromRegion = SlabSupport.getYOffset(roomy, objAbs, objState);
+
+        if (Math.abs(fromLevel - fromRegion) > 1.0e-9) {
+            throw helper.assertionException(
+                    "a region that can see its evidence must answer exactly what the level answers — level="
+                            + fromLevel + " region=" + fromRegion);
         }
         helper.succeed();
     }
