@@ -136,9 +136,39 @@ public final class SlabSupport {
     }
 
     /**
-     * Returns true if the block is a thin top-layer block (snow layers, carpet,
-     * pale moss carpet) that should never be visually offset by slab logic.
-     * These blocks sit flush on the surface and are not structural.
+     * Weather-deposited surface fill: terrain the world lays down by itself, rather than anything a
+     * player placed. Judged by BEHAVIOUR — carries a layer count, or is powder snow — never by a
+     * block-class list, per LAW 2 and the standing exclude-by-behaviour rule.
+     *
+     * <p><b>Why this one exclusion survives.</b> Weather lays snow across whole biomes. If it lowered
+     * wherever a slab happened to lie beneath, half a continuous snowy surface would render at
+     * {@code -0.5} and half at {@code 0.0} — a step through terrain the player never placed, cannot
+     * see the cause of, and cannot align. Terrain Slabs makes that reachable everywhere by turning
+     * natural surfaces half-height world-wide.
+     *
+     * <p><b>Why it is narrower than the class list it replaced.</b> Carpet is player-placed and never
+     * weather-deposited, so the hazard never applied to it; excluding it only made a carpet float
+     * half a block above the lowered block it lies on. Eligibility now follows behaviour, and carpet
+     * seats on its support like anything else.
+     *
+     * <p>Do not widen this back into a classname family. The name of a block is not a reason.
+     */
+    public static boolean isEnvironmentDepositedSurfaceFill(BlockState state) {
+        return state != null
+                && (state.hasProperty(BlockStateProperties.LAYERS)
+                        || state.getBlock() instanceof PowderSnowBlock);
+    }
+
+    /**
+     * A THICKNESS statement, and only that: a cell one-sixteenth of a block tall cannot transmit a
+     * support's top face upward, so the bounded column walks terminate on it — whatever rests on a
+     * carpet rests on the carpet, not on the slab underneath it.
+     *
+     * <p><b>It is NOT a lowering-eligibility test.</b> It used to be one, in {@link #shouldOffset};
+     * that was a LAW 2 violation — eligibility by block class — and it made carpet float above the
+     * lowered block it was lying on. Eligibility is now
+     * {@link #isEnvironmentDepositedSurfaceFill}, which asks what the block IS rather than what it
+     * is called. Do not re-add this predicate to an eligibility decision.
      */
     public static boolean isThinTopLayer(BlockState state) {
         Block block = state.getBlock();
@@ -1000,11 +1030,12 @@ public final class SlabSupport {
             return false;
         }
 
-        // never offset thin top-layer blocks (snow layers, carpet) or powder snow — natural surface
-        // terrain fill, not structural objects. Powder snow is a FULL CUBE so it is NOT an
-        // isThinTopLayer (which keys on SnowBlock), hence the explicit guard (else it steps -0.5 onto
-        // a slab while neighbouring powder snow on full ground stays flush — a snowy-terrain DODO).
-        if (isThinTopLayer(state) || state.getBlock() instanceof PowderSnowBlock) {
+        // Never offset weather-deposited surface fill: the world lays it across whole biomes, so
+        // lowering it wherever a slab happens to lie beneath tears a visible step through terrain the
+        // player never placed. Asked BY BEHAVIOUR (layer count, or powder snow) rather than by block
+        // class — see isEnvironmentDepositedSurfaceFill for why this is the only exclusion left and
+        // why carpet is deliberately no longer in it.
+        if (isEnvironmentDepositedSurfaceFill(state)) {
             return false;
         }
 

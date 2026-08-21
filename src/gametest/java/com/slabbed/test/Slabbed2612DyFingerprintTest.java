@@ -257,15 +257,22 @@ public final class Slabbed2612DyFingerprintTest {
         helper.succeed();
     }
 
-    // ── I. thin layers (must NOT lower) ───────────────────────────────────────
+    // ── I. surface fill: weather-deposited stays flush, player-placed seats ────
 
+    /**
+     * Carpet SEATS on the slab it lies on. It expected 0.0 until 2026-08-20, when eligibility stopped
+     * being a block-class list: carpet is player-placed, never weather-deposited, so the biome-wide
+     * step hazard that excludes snow never applied to it, and excluding it only made carpet float half
+     * a block above its support. Weather-deposited fill still expects 0.0 — see {@link #fpPowderSnow}
+     * and the snow-layer row.
+     */
     @GameTest(structure = "fabric-gametest-api-v1:empty")
     public void fpThinLayerCarpet(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
         BlockPos b = new BlockPos(2, 2, 2);
         helper.setBlock(b.below(), bottomSlab());
         helper.setBlock(b, Blocks.CARPET.white().defaultBlockState());
-        fingerprint(helper, level, b, "thin_layer_carpet", 0.0);
+        fingerprint(helper, level, b, "thin_layer_carpet", -0.5);
         helper.succeed();
     }
 

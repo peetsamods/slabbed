@@ -318,34 +318,39 @@ public final class ModelStaleSentinelContractTest {
 
     @GameTest(structure = "fabric-gametest-api-v1:empty")
     public void renderPolicyDivergenceFromLogicalDyDoesNotFalseRed(GameTestHelper helper) {
-        // Adversarial review finding #1: the render dy policy DELIBERATELY diverges from logical dy for
-        // carpets (ClientDy.dyFor lowers a carpet-on-slab to -0.5; SlabSupport.getYOffset holds thin top
-        // layers at 0.0). Arming/judging with one policy while the mesher bakes the other guarantees a
-        // false DIVERGENT on a healthy scene. This pins the cure: the sentinel arms AND judges with the
-        // INJECTED policy (the client driver injects the real render twin; here its exact carpet split
-        // is expressed without client types, since headless has no BlockAndTintGetter view).
+        // Adversarial review finding #1: when the render dy policy diverges from logical dy, arming or
+        // judging with one policy while the mesher bakes the other guarantees a false DIVERGENT on a
+        // healthy scene. This pins the cure: the sentinel arms AND judges with the INJECTED policy.
+        //
+        // The SUBJECT changed on 2026-08-20 and the reason matters. This scene used carpet, because
+        // render lowered a carpet-on-slab to -0.5 while logical dy held it at 0.0. That divergence is
+        // GONE — eligibility now follows behaviour, so logical dy seats carpet at -0.5 too and the two
+        // policies agree. Carpet can no longer manufacture a divergence, so the scene would prove
+        // nothing. A snow layer is the correct subject now: it is weather-deposited fill, so logical dy
+        // genuinely holds it at 0.0, and injecting -0.5 recreates the real divergent shape.
         List<LinkedHashMap<String, String>> rows = freshSentinel();
         try {
             ServerLevel w = helper.getLevel();
             BlockPos slab = helper.absolutePos(new BlockPos(2, 2, 2));
-            BlockPos carpet = helper.absolutePos(new BlockPos(2, 3, 2));
+            BlockPos fill = helper.absolutePos(new BlockPos(2, 3, 2));
             w.setBlock(slab, Blocks.OAK_SLAB.defaultBlockState().setValue(SlabBlock.TYPE, SlabType.BOTTOM), 2);
-            // 26.2 folds the 16 dyed carpets into Blocks.CARPET (a ColorCollection record).
-            w.setBlock(carpet, Blocks.CARPET.white().defaultBlockState(), 2);
+            w.setBlock(fill, Blocks.SNOW.defaultBlockState(), 2);
             SlabModelStaleSentinel.setLiveDyPolicy((level, pos, state) ->
-                    state.getBlock() instanceof CarpetBlock ? -0.5 : SlabSupport.getYOffset(level, pos, state));
-            if (Math.abs(liveDy(w, carpet)) > EPS) {
-                throw helper.assertionException("scene premise: LOGICAL dy of carpet-on-slab must be 0.0 (thin top layer)");
+                    state.getBlock() instanceof CarpetBlock || state.is(Blocks.SNOW)
+                            ? -0.5 : SlabSupport.getYOffset(level, pos, state));
+            if (Math.abs(liveDy(w, fill)) > EPS) {
+                throw helper.assertionException(
+                        "scene premise: LOGICAL dy of weather-deposited fill on a slab must be 0.0");
             }
-            SlabModelStaleSentinel.armForTest(w, carpet, SlabModelStaleSentinel.REASON_NEIGHBORHOOD, T0);
-            // What the real mesher bakes for this carpet: the render policy's -0.5.
-            SlabModelStaleSentinel.recordBake(carpet, -0.5f);
+            SlabModelStaleSentinel.armForTest(w, fill, SlabModelStaleSentinel.REASON_NEIGHBORHOOD, T0);
+            // What a mesher baking the divergent render policy would produce for this cell.
+            SlabModelStaleSentinel.recordBake(fill, -0.5f);
             for (long t = T0 + 20; t <= T0 + 300; t += 20) {
                 pass(helper, t, rows);
             }
             if (!rows.isEmpty()) {
                 throw helper.assertionException(
-                        "healthy carpet-on-slab scene must stay green when arm/judge/bake share the render policy; got " + rows);
+                        "healthy fill-on-slab scene must stay green when arm/judge/bake share the render policy; got " + rows);
             }
             helper.succeed();
         } finally {
