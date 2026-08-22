@@ -175,6 +175,18 @@ public final class PlacementCaptureBoundaryGameTest {
 
     @GameTest(structure = "fabric-gametest-api-v1:empty")
     public void replaceableCellUsesRootAim(GameTestHelper h) {
+        // EXPECTATION FLIPPED 2026-08-21, deliberately. This row used to expect dy=+1.0 — the value
+        // the root-aim UP formula produced with the GRASS as owner. That was the same-cell phantom
+        // plane: the replaced plant is the thing being DESTROYED, so its plane can seat nothing, and
+        // +1.0 left the stone floating three cells above the -2.0 support's real top. The resolver
+        // now seats a same-cell replacement on the support BELOW the target, so the correct frozen
+        // number here is the support's top: -2.0.
+        //
+        // The capture-boundary contract this row exists for is UNCHANGED and still pinned: the
+        // same-cell case is detected from the frozen ROOT AIM (aim.ownerPos == target), never by
+        // reconstructing an owner from the post-placement world. A reconstruction bug would not
+        // produce -2.0 from the aim's own formula; it is reachable only through the deliberate
+        // support-below seat.
         ServerLevel world = h.getLevel();
         BlockPos replaced = h.absolutePos(new BlockPos(3, 4, 3));
         world.setBlock(replaced.below(), Blocks.STONE.defaultBlockState(), Block.UPDATE_ALL);
@@ -184,9 +196,9 @@ public final class PlacementCaptureBoundaryGameTest {
                 new ItemStack(Items.STONE), replaced, Direction.UP));
         double dy = stored(world, replaced);
         if (!world.getBlockState(replaced).is(Blocks.STONE)
-                || Double.doubleToRawLongBits(dy) != Double.doubleToRawLongBits(1.0d)) {
-            throw h.assertionException(replaced, "replaceable-cell placement reconstructed the -2 neighbour "
-                    + "instead of preserving the root aim; dy=" + dy);
+                || Double.doubleToRawLongBits(dy) != Double.doubleToRawLongBits(-2.0d)) {
+            throw h.assertionException(replaced, "a same-cell replacement must seat on the real support "
+                    + "below the cell (-2.0), not the replaced plant's phantom plane; dy=" + dy);
         }
         pass(h, "replaceable_cell_uses_root_aim");
     }

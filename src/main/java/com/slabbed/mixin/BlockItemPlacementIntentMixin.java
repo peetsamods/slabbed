@@ -468,7 +468,7 @@ public abstract class BlockItemPlacementIntentMixin {
             LandingResolver.PlacementResolution resolution = frame.rootAim == null
                     || family == LandingResolver.Family.UNSUPPORTED
                     ? null
-                    : LandingResolver.resolve(frame.rootAim.resolverAim(), primary, finalState, family);
+                    : LandingResolver.resolve(world, frame.rootAim.resolverAim(), primary, finalState, family);
             if (family == LandingResolver.Family.PAIRED_FLOOR_SEAT && resolution == null) {
                 frame.pending = new PendingCapture(Map.of());
                 return;
@@ -1677,7 +1677,7 @@ public abstract class BlockItemPlacementIntentMixin {
         }
 
         LandingResolver.PlacementResolution resolution =
-                LandingResolver.resolve(aim, context.getClickedPos(), state, family);
+                LandingResolver.resolve(context.getLevel(), aim, context.getClickedPos(), state, family);
         if (resolution == null
                 || !Double.isFinite(resolution.landingDy())) {
             return true;

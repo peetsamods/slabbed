@@ -52,6 +52,7 @@
       "com.slabbed.test.CompatOffsetDeferralPinTest",
       "com.slabbed.test.LoweredSeatFreezeTest",
       "com.slabbed.test.FloorMountedIsNotHangingTest",
+      "com.slabbed.test.ReplaceableCellSeatTest",
       "com.slabbed.test.BottomSlabLoweredByCarrierBelowTest",
       "com.slabbed.test.BlockEntityNeverPopTest",
       "com.slabbed.test.BlockEntityCantileverTest",
