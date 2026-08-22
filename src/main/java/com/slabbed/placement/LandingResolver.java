@@ -212,6 +212,7 @@ public final class LandingResolver {
 
     /** C3 resolver using the frozen root aim rather than reconstructing an owner from the target. */
     public static PlacementResolution resolve(
+            BlockGetter world,
             PlacementAim aim,
             BlockPos actualTarget,
             BlockState finalState,
@@ -238,6 +239,25 @@ public final class LandingResolver {
                 && aim.replacementSameCell()
                 && aim.ownerPos().equals(actualTarget)) {
             return new PlacementResolution(actualTarget, aim.ownerVisibleDy(), true);
+        }
+        // SAME-CELL REPLACEMENT (the remaining families): the clicked owner IS the cell being filled —
+        // grass, a fern, one-layer snow being replaced. The owner is the thing being DESTROYED, so its
+        // plane can seat nothing; treating it like a clicked neighbour minted a height one whole cell
+        // wrong (measured: stone through grass over a bottom slab froze +0.5 in the test config, +1.0
+        // shipped, against a correct -0.5), which LAW 1 then preserved. Seat on the REAL support below
+        // the cell instead — exactly what the control placement without the plant computes.
+        // (The two same-cell merge families above keep the cell's own height on purpose: a second
+        // candle or snow layer merges INTO the existing block rather than replacing scenery.)
+        if (world != null && aim.ownerPos().equals(actualTarget)) {
+            BlockPos supportPos = actualTarget.below();
+            BlockState supportState = world.getBlockState(supportPos);
+            double supportDy = supportState.isAir() ? 0.0
+                    : visibleOwnerDy(world, supportPos, supportState);
+            double replacedSeat = supportPos.getY() + supportDy + topPlaneOffset(supportState)
+                    - actualTarget.getY();
+            return Double.isFinite(replacedSeat)
+                    ? new PlacementResolution(actualTarget, replacedSeat, false)
+                    : null;
         }
         double landingDy;
         if (aim.clickedFace() == Direction.UP) {

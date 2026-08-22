@@ -63,7 +63,13 @@ public final class CompatOffsetDeferralPinTest {
     }
 
     private static void compatOverride(boolean on) {
+        // Both seams together, because the real mod gates both: the offset skip AND the slab-support
+        // skip. Reproducing a live TS scene with only one of them active answers a question no real
+        // configuration ever asks.
         CompatHooks.shouldSkipOffsetTestOverride = on
+                ? st -> "terrain_slabs".equals(BuiltInRegistries.BLOCK.getKey(st.getBlock()).getNamespace())
+                : null;
+        CompatHooks.shouldSkipSlabSupportTestOverride = on
                 ? st -> "terrain_slabs".equals(BuiltInRegistries.BLOCK.getKey(st.getBlock()).getNamespace())
                 : null;
     }
@@ -124,6 +130,63 @@ public final class CompatOffsetDeferralPinTest {
             if (Math.abs(read) > 1.0e-9) {
                 throw helper.assertionException(
                         "compat terrain with no placement fact must read flush 0.0, got " + read);
+            }
+        } finally {
+            compatOverride(false);
+        }
+        helper.succeed();
+    }
+
+    /**
+     * NOT the live float — and that is the finding. A maintainer report (2026-08-22, real Terrain
+     * Slabs 3.3.2 in the dev client) has an oak slab clicked onto the centre of a compat slab's top
+     * face floating at dy {@code 0.0}. This row runs that EXACT placement through the seams, and the
+     * mint comes out {@code -0.5} — the correct continuation seat: the resolver's UP formula seats
+     * the slab on the compat owner's visible top even with the owner's dy compat-zeroed, because the
+     * arithmetic asks {@code topPlaneOffset} of the owner's SHAPE, which a compat bottom slab answers
+     * as {@code 0.5} like any slab.
+     *
+     * <p>So the Slabbed mint path is NOT where the live float comes from. Whatever produces it needs
+     * the real mod's runtime — its {@code generated} blockstate (a different {@code
+     * customSlabSurfaceKind}), its own mixins, or the client prediction round trip — none of which a
+     * headless seam carries. This row pins the mint's correctness so that when the live divergence is
+     * found, it cannot be "fixed" by breaking the part that already works.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void vanillaSlabOnCompatSlabTopMintsTheContinuationSeat(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        BlockPos supportRel = new BlockPos(2, 2, 2);
+        BlockPos support = helper.absolutePos(supportRel);
+        BlockPos placed = support.above();
+        helper.setBlock(supportRel.below(), Blocks.STONE.defaultBlockState());
+        helper.setBlock(supportRel, compatBottomSlab()); // worldgen-like: no placement fact
+
+        compatOverride(true);
+        try {
+            net.minecraft.world.entity.player.Player player =
+                    helper.makeMockPlayer(net.minecraft.world.level.GameType.SURVIVAL);
+            net.minecraft.world.item.ItemStack stack =
+                    new net.minecraft.world.item.ItemStack(Blocks.OAK_SLAB.asItem());
+            player.setItemInHand(net.minecraft.world.InteractionHand.MAIN_HAND, stack);
+            net.minecraft.world.phys.Vec3 hit =
+                    net.minecraft.world.phys.Vec3.atCenterOf(support).add(0.0, 0.5, 0.0);
+            stack.useOn(new net.minecraft.world.item.context.UseOnContext(player,
+                    net.minecraft.world.InteractionHand.MAIN_HAND,
+                    new net.minecraft.world.phys.BlockHitResult(hit,
+                            net.minecraft.core.Direction.UP, support, false)));
+
+            BlockState placedState = level.getBlockState(placed);
+            if (!placedState.is(Blocks.OAK_SLAB)) {
+                throw helper.assertionException(helper.relativePos(placed),
+                        "premise drift: expected the oak slab in the cell above the compat slab, got "
+                                + placedState + " (same cell holds " + level.getBlockState(support) + ")");
+            }
+            double stored = SlabAnchorAttachment.storedPlacementDy(level, placed);
+            if (!Double.isFinite(stored) || Math.abs(stored - (-0.5d)) > 1.0e-9) {
+                throw helper.assertionException(helper.relativePos(placed),
+                        "the oak slab must MINT the continuation seat -0.5 on a compat slab top, got "
+                                + stored + " — the mint path regressed; the live float (0.0, real-mod "
+                                + "runtime) is a SEPARATE divergence and must not be chased here");
             }
         } finally {
             compatOverride(false);

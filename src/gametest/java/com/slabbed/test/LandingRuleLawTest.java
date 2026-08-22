@@ -732,7 +732,8 @@ public final class LandingRuleLawTest {
                     LandingResolver.PlacementAim aim = new LandingResolver.PlacementAim(
                             owner, ownerState, depth, Direction.UP, hit, false);
                     LandingResolver.PlacementResolution resolution = LandingResolver.resolve(
-                            aim, owner.above(), held, LandingResolver.Family.PAIRED_FLOOR_SEAT);
+                            EmptyBlockGetter.INSTANCE, aim, owner.above(), held,
+                            LandingResolver.Family.PAIRED_FLOOR_SEAT);
                     double expected = depth + ((ownerState.getBlock() instanceof SlabBlock
                             && ownerState.getValue(SlabBlock.TYPE) == SlabType.BOTTOM) ? -0.5d : 0.0d);
                     double validation = LandingHitValidationPolicy.shiftedCenterDy(
@@ -895,7 +896,7 @@ public final class LandingRuleLawTest {
         for (BlockState object : c4Objects) {
             LandingResolver.Family family = LandingResolver.classify(object);
             LandingResolver.PlacementResolution resolution = LandingResolver.resolve(
-                    aim, owner.above(), object, family);
+                    EmptyBlockGetter.INSTANCE, aim, owner.above(), object, family);
             double validation = LandingHitValidationPolicy.shiftedCenterDy(
                     owner, ownerState, ownerDy, Direction.UP, hit, object);
             if (family == LandingResolver.Family.UNSUPPORTED
@@ -1125,9 +1126,9 @@ public final class LandingRuleLawTest {
         List<String> violations = new ArrayList<>();
         LandingResolver.Family carpetFamily = LandingResolver.classify(carpet);
         LandingResolver.PlacementResolution carpetUp =
-                LandingResolver.resolve(upAim, owner.above(), carpet, carpetFamily);
+                LandingResolver.resolve(EmptyBlockGetter.INSTANCE, upAim, owner.above(), carpet, carpetFamily);
         LandingResolver.PlacementResolution carpetSide =
-                LandingResolver.resolve(sideAim, owner.south(), carpet, carpetFamily);
+                LandingResolver.resolve(EmptyBlockGetter.INSTANCE, sideAim, owner.south(), carpet, carpetFamily);
         double carpetValidationUp = LandingHitValidationPolicy.shiftedCenterDy(
                 owner, ownerState, ownerDy, Direction.UP, hit, carpet);
         double carpetValidationSide = LandingHitValidationPolicy.shiftedCenterDy(
@@ -1146,11 +1147,11 @@ public final class LandingRuleLawTest {
 
         LandingResolver.Family powderFamily = LandingResolver.classify(powder);
         LandingResolver.PlacementResolution powderUp =
-                LandingResolver.resolve(upAim, owner.above(), powder, powderFamily);
+                LandingResolver.resolve(EmptyBlockGetter.INSTANCE, upAim, owner.above(), powder, powderFamily);
         LandingResolver.PlacementResolution powderSide =
-                LandingResolver.resolve(sideAim, owner.south(), powder, powderFamily);
+                LandingResolver.resolve(EmptyBlockGetter.INSTANCE, sideAim, owner.south(), powder, powderFamily);
         LandingResolver.PlacementResolution powderReplacement =
-                LandingResolver.resolve(replacementAim, owner, powder, powderFamily);
+                LandingResolver.resolve(EmptyBlockGetter.INSTANCE, replacementAim, owner, powder, powderFamily);
         LandingResolver.PlacementResolution powderLegacyWorldResolution =
                 LandingResolver.resolve(
                         EmptyBlockGetter.INSTANCE, owner.above(), powder, Direction.UP, powderFamily);
@@ -1187,7 +1188,7 @@ public final class LandingRuleLawTest {
             for (BlockState state : new BlockState[]{carpet, powder}) {
                 LandingResolver.Family family = LandingResolver.classify(state);
                 LandingResolver.PlacementResolution resolution =
-                        LandingResolver.resolve(upAim, owner.above(), state, family);
+                        LandingResolver.resolve(EmptyBlockGetter.INSTANCE, upAim, owner.above(), state, family);
                 double validation = LandingHitValidationPolicy.shiftedCenterDy(
                         owner, ownerState, ownerDy, Direction.UP, hit, state);
                 if (resolution != null || !Double.isNaN(validation)) {

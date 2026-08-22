@@ -237,6 +237,7 @@ sourceSets {
             include("com/slabbed/test/CompatOffsetDeferralPinTest.java")
             include("com/slabbed/test/LoweredSeatFreezeTest.java")
             include("com/slabbed/test/FloorMountedIsNotHangingTest.java")
+            include("com/slabbed/test/ReplaceableCellSeatTest.java")
             include("com/slabbed/test/BottomSlabLoweredByCarrierBelowTest.java")
             include("com/slabbed/test/BlockEntityNeverPopTest.java")
             include("com/slabbed/test/BlockEntityCantileverTest.java")
@@ -1247,5 +1248,15 @@ sourceSets {
     }
 }
 
-// 26.1.2 port: dev/audit tooling is deferred from core compileJava until core Slabbed compiles.
+// dev/audit tooling is excluded from compileJava because it is UN-PORTED, not merely deferred. The
+// whole tree is Yarn-mapped (net.minecraft.block/text/util.math/server.world); on this line's Mojang
+// mappings it does not compile at all. Measured 2026-08-22 by lifting the exclusion: errors in every
+// file of com/slabbed/dev/** and com/slabbed/dev/audit/**, all unresolved Yarn packages.
+//
+// CONSEQUENCE, and it is not obvious from the dev client: SlabbedDevCommands and SlabbedLab are
+// ClassNotFound at runtime, so /slabdy's target-dy overlay reports "not available in this build" and
+// the recorder cannot be used for live diagnosis on this line. /slabcheck, /slabrig and /slabkit are
+// unaffected — they live in com/slabbed/command/** and do register in dev.
+//
+// Lifting this means PORTING the tree to Mojang mappings, not deleting a line.
 sourceSets.main.java.exclude('com/slabbed/dev/**')

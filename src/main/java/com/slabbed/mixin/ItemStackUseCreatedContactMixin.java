@@ -80,6 +80,7 @@ public abstract class ItemStackUseCreatedContactMixin {
         }
 
         LandingResolver.PlacementResolution resolution = LandingResolver.resolve(
+                level,
                 frame.aim(),
                 frame.targetPos(),
                 createdState,
