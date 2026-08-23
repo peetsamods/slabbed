@@ -103,7 +103,8 @@
       "com.slabbed.test.SlabbedLabLiveCursorIntentRecorderContractClientGameTest",
       "com.slabbed.test.ModelStaleSentinelSelfCheckClientGameTest",
       "com.slabbed.client.SlabModelStaleSentinelClientThrottleClientGameTest",
-      "com.slabbed.test.LeverParticleFrozenAnchorClientGameTest"
+      "com.slabbed.test.LeverParticleFrozenAnchorClientGameTest",
+      "com.slabbed.test.DevDiagnosticsCompanionLoadsClientGameTest"
     ]
   },
   "mixins": [

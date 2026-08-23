@@ -289,6 +289,7 @@ sourceSets {
             include("com/slabbed/test/PlacementDyPredictionClientGameTest.java")
             include("com/slabbed/client/SlabModelStaleSentinelClientThrottleClientGameTest.java")
             include("com/slabbed/test/LeverParticleFrozenAnchorClientGameTest.java")
+            include("com/slabbed/test/DevDiagnosticsCompanionLoadsClientGameTest.java")
             include("com/slabbed/anchor/FrozenFlatAttachmentCapacityTest.java")
             include("com/slabbed/test/SlabRigGameTestSeams.java")
             include("com/slabbed/client/PlacementDyPredictionJournalGameTestAccess.java")
@@ -319,6 +320,35 @@ loom {
     mods {
         slabbed_diagnostics {
             sourceSet sourceSets.diagnostics
+        }
+    }
+    // The mods{} registration above alone LOOKS sufficient — it generates the fabric.classPathGroups
+    // entry that groups the diagnostics companion's (target-dy overlay, live-cursor recorder —
+    // src/diagnostics/) classes with its resources, exactly like main/client/gametest each get. It is
+    // not: classPathGroups only groups directories already ON a run's classpath, it does not ADD
+    // them. Without an explicit source() below, the companion's own fabric.mod.json was never
+    // reachable by Fabric Loader's mod scan on the INTERACTIVE dev launches, so it silently never
+    // loaded there — no error, no crash, just SlabbedDebugToolBridge staying uninstalled and /slabdy
+    // and /slabdev answering "not available in this build" forever. Caught 2026-08-23 on runClient by
+    // reading the "Loading N mods" log line by hand and noticing slabbed_diagnostics was absent.
+    //
+    // clientGameTest does NOT need the same line — it reuses the headless gametest source set's own
+    // compiled output and runtime classpath (there is no separate compileClientGametestJava task at
+    // all), and that source set already carries diagnostics explicitly (sourceSets{} above). Adding
+    // source(sourceSets.diagnostics) here anyway was tried and reverted the same day: it silently
+    // broke the client-gametest RUN itself — the test harness's own main class never launched, the
+    // JVM just booted a bare client to the title screen and exited, and every entrypoint (not only
+    // this one) went from PASS to simply never running, with "BUILD SUCCESSFUL" and zero
+    // CLIENT_GAMETEST lines. Confirmed by removing the line and rerunning: all 6 passed again. Do NOT
+    // re-add it. DevDiagnosticsCompanionLoadsClientGameTest pins that clientGameTest loads the
+    // companion through its EXISTING wiring; client/server have no headless proxy for the same claim,
+    // so re-check them by hand after touching this block.
+    runs {
+        client {
+            source sourceSets.diagnostics
+        }
+        server {
+            source sourceSets.diagnostics
         }
     }
 }
