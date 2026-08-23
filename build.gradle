@@ -65,6 +65,133 @@ loom {
     }
 }
 
+// The SAME forwarding gap existed on the INTERACTIVE runs, and there it was completely silent.
+// runClient/runServer only ever received the four hardcoded vmArgs above and inherited nothing else,
+// so `./gradlew25 runClient -Dslabbed.anything=true` was accepted by gradle, never reached the client
+// JVM, and produced no error and no log line — the run simply behaved as if the flag were absent.
+// That made every opt-in diagnostic below unreachable on the one venue where live and manual bugs are
+// actually investigated. Same structural class as the diagnostics-companion classpath gap above: dev
+// tooling that looks wired, is not, and fails silently.
+//
+// This is an explicit allowlist, not a blanket pass-through of the daemon's properties — a run must
+// never inherit unrelated JVM/gradle state. Every entry is a property the interactive JVMs actually
+// read. Regenerate the candidate set with:
+//   git grep -o -E '"slabbed\.[A-Za-z0-9_.]+"' -- src/main src/client src/diagnostics | sort -u
+// (that also reports the three *.mixins.json config names, which are not properties).
+//
+// Forwarded ONLY when actually set, exactly like the clientGameTest selector loop: a blank default
+// would hand the JVM an empty string where the code expects a real value or absence, converting
+// "unset" into "explicitly set to nothing". slabbed.frozenDy in particular has NO default here on
+// purpose — absent means the shipped in-code default (true) stands, which is the entire point of
+// exercising an interactive client. Do not give it a default in this block.
+def slabbedInteractiveRunProperties = [
+        // Read by src/main — reaches both the client and the integrated/dedicated server.
+        "slabbed.frozenDy",
+        "slabbed.anchor.trace",
+        "slabbed.inspect",
+        "slabbed.b2.live.trace",
+        "slabbed.bsfb.live.trace",
+        "slabbed.collisionFollow",
+        "slabbed.offsetRaycast",
+        "slabbed.offsetRaycast.trace",
+        "slabbed.beta4RepeatMergeTrace",
+        "slabbed.beta4CompoundVisibleRenderTrace",
+        // Read by src/client — meaningful on the client run, inert but harmless on the server run.
+        "slabbed.gapfill",
+        "slabbed.render.offset.cullTrace",
+        "slabbed.target.trace",
+        "slabbed.beta4.finalTargetTrace",
+        "slabbed.beta4LiveRetargetRecorder",
+        "slabbed.beta4LiveRetargetRecorderEveryTick",
+        "slabbed.beta4OutlineRecorder",
+        "slabbed.beta4OutlineRecorderWatch",
+        "slabbed.beta4OutlineRecorderTicks",
+        "slabbed.beta4ReloadJumpRecorder",
+        "slabbed.beta4ReloadJumpRecorderWatch",
+        "slabbed.beta4ReloadJumpRecorderTicks",
+        "slabbed.beta4ReloadJumpRecorderRadius",
+        "slabbed.beta4ModelDyRecorder",
+        "slabbed.beta4ModelDyRecorderWatch",
+        // Read by src/diagnostics — reachable on these runs only because the companion is on their
+        // classpath (the source() wiring above); without it these have no reader here either.
+        "slabbed.targetDyOverlay",
+        "slabbed.liveCursorIntentRecorder",
+        "slabbed.liveCursorIntentRecorderDir"
+]
+
+// Forwarded on the same terms, but their ONLY reader is compile-excluded from this port's source
+// sets (see the exclude() lines under sourceSets{} — the recorder diagnostics deferred until the
+// core compile was restored). The -D therefore arrives in a JVM that has no code to read it. They
+// stay listed so the wiring is already correct when a deferral is lifted, and the notice below
+// reports them as inert rather than letting them look effective — a flag that arrives and is read by
+// nothing fails exactly as silently as one that never arrives, which is the defect this block exists
+// to remove. Move an entry up into the live list in the same commit that restores its reader.
+def slabbedInteractiveRunPropertiesInert = [
+        "slabbed.beta4ManualLiveTrace",
+        "slabbed.beta4PlacementAuthorRecorder",
+        "slabbed.beta4PlacementAuthorRecorderWatch",
+        "slabbed.beta4PlacementAuthorRecorderTicks",
+        "slabbed.beta4CompoundLivePathRecorder",
+        "slabbed.beta35FenceWallLiveInspect",
+        "slabbed.beta35SlabHeightHitAcceptance",
+        "slabbed.beta35SlabJumpSourceTruth",
+        "slabbed.beta35LiveTorchCapture",
+        "slabbed.beta35LiveTorchDualTrace",
+        "slabbed.beta35FloorTorchSbsbsSourceTruthRed"
+]
+
+// Deliberately NOT forwarded: slabbed.debug.sbsb. The client run already pins it ON through the
+// hardcoded vmArgs at the top of this file, so forwarding it as well would put two -D entries for one
+// key on the same command line and make the effective value depend on the order Loom happens to
+// concatenate vmArgs and properties. That order is not a documented guarantee, so an override here
+// would be an unverified claim rather than a fix. The notice below reports it instead of ignoring it.
+def slabbedInteractiveForwarded = slabbedInteractiveRunProperties + slabbedInteractiveRunPropertiesInert
+
+loom {
+    runs {
+        client {
+            slabbedInteractiveForwarded.each { flag ->
+                String requested = System.getProperty(flag)
+                if (requested != null) {
+                    property flag, requested
+                }
+            }
+        }
+        server {
+            slabbedInteractiveForwarded.each { flag ->
+                String requested = System.getProperty(flag)
+                if (requested != null) {
+                    property flag, requested
+                }
+            }
+        }
+    }
+}
+
+// A slabbed.* property that an interactive run cannot act on must not fail silently — silence is the
+// defect this block exists to remove. Report it, but ONLY when an interactive run was actually
+// requested: the gametest lanes document dozens of their own -Dslabbed.* opt-ins which the
+// gameTest/clientGameTest blocks above forward, and warning about those on every invocation would be
+// noise. Report, never throw — a hard failure here would break those documented gametest
+// invocations, which configure this block without ever running the client.
+gradle.projectsEvaluated {
+    def requested = gradle.startParameter.taskNames.collect { it.tokenize(":").last() }
+    if (requested.any { it == "runClient" || it == "runServer" }) {
+        def set = System.getProperties().stringPropertyNames().findAll { it.startsWith("slabbed.") }
+        def inert = set.findAll { slabbedInteractiveRunPropertiesInert.contains(it) }.toSorted()
+        def unknown = set.findAll { !slabbedInteractiveForwarded.contains(it) }.toSorted()
+        if (!inert.isEmpty()) {
+            logger.lifecycle("Slabbed: forwarded to the interactive run but INERT here — the only "
+                    + "reader is compile-excluded from this port: " + inert.join(", "))
+        }
+        if (!unknown.isEmpty()) {
+            logger.lifecycle("Slabbed: NOT forwarded to the interactive run and will have no effect "
+                    + "there: " + unknown.join(", ") + " — add each to slabbedInteractiveRunProperties "
+                    + "in build.gradle if a client or server reader exists.")
+        }
+    }
+}
+
 version = project.mod_version
 group = project.maven_group
 
