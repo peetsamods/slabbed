@@ -41,7 +41,7 @@ public final class SlabRigHangingDirectStateStoreTest {
     private static final String LEGACY_WRITER_COMMIT =
             "653fac0c79dc393ea444fe933592b87dd65a618a";
     private static final String LEGACY_CHECKSUM_MANIFEST_SHA256 =
-            "90adcc386ad652b61d146edc0b3e841b3101333947a4714ef61ff26fccd10f12";
+            "4b469d0511c46c6bafdd81fe502c2cc087a021a357f2b8e1ea6537f162447c4e";
     private static final Pattern CHECKSUM_LINE =
             Pattern.compile("([0-9a-f]{64})  \\./([^\\r\\n]+)");
     private static final Pattern STATE_FILE =
@@ -146,8 +146,18 @@ public final class SlabRigHangingDirectStateStoreTest {
             Map<String, List<String>> sourceHashFields = new LinkedHashMap<>(
                     parseProvenance(sourceHashProvenancePath));
             expectFixtureFailure(() -> verifyHistoricalSource(verified.projectRoot(),
-                            sourceHashFields, "state_source_path", "state_source_sha256"),
-                    "historical git-show source-hash comparator");
+                            sourceHashFields, "state_retained_path", "state_source_sha256"),
+                    "retained historical source-hash comparator");
+
+            // Teeth for the containment guard: re-aiming a retained path at the LIVE src/main
+            // source must fail closed, never silently verify present-day bytes as "historical".
+            Map<String, List<String>> escapedFields = new LinkedHashMap<>(
+                    parseProvenance(verified.fixtureRoot().resolve("PROVENANCE.tsv")));
+            escapedFields.put("state_retained_path",
+                    List.of(single(escapedFields, "state_source_path")));
+            expectFixtureFailure(() -> verifyHistoricalSource(verified.projectRoot(),
+                            escapedFields, "state_retained_path", "state_source_sha256"),
+                    "retained source path escaping the fixture tree");
             expectFixtureFailure(() -> verifyFixtureTree(
                     verified.projectRoot(), sourceHashCopy, false),
                     "historical source-hash provenance drift");
@@ -205,8 +215,8 @@ public final class SlabRigHangingDirectStateStoreTest {
                                           boolean verifyHistoricalSources)
             throws IOException, InterruptedException {
         FixtureTree tree = scanTree(fixtureRoot);
-        requireFixture(tree.files().size() == 37 && tree.directories().size() == 10,
-                "legacy fixture tree must contain exactly 37 files and 11 directories including root");
+        requireFixture(tree.files().size() == 39 && tree.directories().size() == 10,
+                "legacy fixture tree must contain exactly 39 files and 11 directories including root");
         requireFixture(SlabRigHangingDirectState.sha256(Files.readAllBytes(
                         fixtureRoot.resolve("SHA256SUMS")))
                         .equals(LEGACY_CHECKSUM_MANIFEST_SHA256),
@@ -228,8 +238,8 @@ public final class SlabRigHangingDirectStateStoreTest {
             requireFixture(actual.equals(checksum.getValue()),
                     "fixture checksum drifted: " + checksum.getKey());
         }
-        requireFixture(checksums.size() == 36,
-                "legacy fixture checksum cardinality must be exactly 36");
+        requireFixture(checksums.size() == 38,
+                "legacy fixture checksum cardinality must be exactly 38");
         long rawFiles = checksums.keySet().stream()
                 .filter(path -> path.startsWith("active-owned/")
                         || path.startsWith("partial-clear/"))
@@ -261,15 +271,21 @@ public final class SlabRigHangingDirectStateStoreTest {
 
         if (verifyHistoricalSources) {
             verifyHistoricalSource(projectRoot, provenance,
-                    "state_source_path", "state_source_sha256");
+                    "state_retained_path", "state_source_sha256");
             verifyHistoricalSource(projectRoot, provenance,
-                    "store_source_path", "store_source_sha256");
+                    "store_retained_path", "store_source_sha256");
         }
         Path declaredExporter = projectRoot.resolve(
                 single(provenance, "exporter_path")).normalize();
         if (verifyHistoricalSources) {
             requireFixture(declaredExporter.equals(fixtureRoot.resolve("EXPORTER.java.txt")),
                     "retained exporter provenance path is not the exact tracked fixture file");
+            requireFixture(projectRoot.resolve(single(provenance, "state_retained_path"))
+                            .normalize().equals(fixtureRoot.resolve("STATE_SOURCE.java.txt")),
+                    "retained state-source provenance path is not the exact tracked fixture file");
+            requireFixture(projectRoot.resolve(single(provenance, "store_retained_path"))
+                            .normalize().equals(fixtureRoot.resolve("STORE_SOURCE.java.txt")),
+                    "retained store-source provenance path is not the exact tracked fixture file");
         }
         Path exporter = fixtureRoot.resolve("EXPORTER.java.txt");
         requireFixture(Files.isRegularFile(exporter, LinkOption.NOFOLLOW_LINKS),
@@ -334,6 +350,10 @@ public final class SlabRigHangingDirectStateStoreTest {
                 "src/main/java/com/slabbed/command/SlabRigHangingDirectStateStore.java");
         expected.put("store_source_sha256",
                 "4e5294e15f51b5087990079c002a849849298d92380908177546c0a29147b8dc");
+        expected.put("state_retained_path",
+                LEGACY_FIXTURE_RELATIVE + "/STATE_SOURCE.java.txt");
+        expected.put("store_retained_path",
+                LEGACY_FIXTURE_RELATIVE + "/STORE_SOURCE.java.txt");
         expected.put("exporter_path", LEGACY_FIXTURE_RELATIVE + "/EXPORTER.java.txt");
         expected.put("exporter_sha256",
                 "98df5ab0062333c45ca25dac3084511712b40b2d87c2de2e45fd83a049f3e085");
@@ -395,22 +415,32 @@ public final class SlabRigHangingDirectStateStoreTest {
                 "provenance allowed-coordinate set/order drifted");
     }
 
+    /**
+     * Verifies a writer-commit source against its pinned hash, reading a tracked retained copy.
+     *
+     * <p>The bytes MUST come from inside the verified fixture tree. Do not re-introduce a
+     * {@code git show} of {@code writer_commit}: that commit is reachable from no branch and no
+     * tag, so a git lookup failed on every fresh clone and would have started failing here the
+     * moment an unreachable-object prune ran — green that depended on one machine's object store.
+     * The retained copy is the historical blob itself, byte-identical at retention time, and it is
+     * pinned three ways (this hash key, PROVENANCE.tsv, SHA256SUMS), so it cannot be swapped.
+     *
+     * <p>The containment guard is load-bearing: without it a retained path could be pointed at the
+     * LIVE {@code src/main} source, which would silently re-derive the check against present-day
+     * bytes instead of the frozen ones.
+     */
     private static void verifyHistoricalSource(Path projectRoot,
                                                Map<String, List<String>> provenance,
-                                               String pathKey, String hashKey)
-            throws IOException, InterruptedException {
-        String sourcePath = single(provenance, pathKey);
-        Process process = new ProcessBuilder("git", "-C", projectRoot.toString(),
-                "show", "--no-ext-diff", LEGACY_WRITER_COMMIT + ":" + sourcePath).start();
-        byte[] source = process.getInputStream().readAllBytes();
-        byte[] errors = process.getErrorStream().readAllBytes();
-        int exit = process.waitFor();
-        requireFixture(exit == 0,
-                "git show failed for historical source " + sourcePath + ": "
-                        + new String(errors, StandardCharsets.UTF_8));
-        requireFixture(SlabRigHangingDirectState.sha256(source)
+                                               String retainedKey, String hashKey)
+            throws IOException {
+        Path fixtureRoot = projectRoot.resolve(LEGACY_FIXTURE_RELATIVE).normalize();
+        Path retained = projectRoot.resolve(single(provenance, retainedKey)).normalize();
+        requireFixture(retained.startsWith(fixtureRoot)
+                        && Files.isRegularFile(retained, LinkOption.NOFOLLOW_LINKS),
+                "retained historical source escaped the tracked fixture tree: " + retainedKey);
+        requireFixture(SlabRigHangingDirectState.sha256(Files.readAllBytes(retained))
                         .equals(single(provenance, hashKey)),
-                "historical git-show source hash drifted: " + sourcePath);
+                "retained historical source hash drifted: " + retainedKey);
     }
 
     private static void verifyPrivacyAndFixedUuids(FixtureTree tree) throws IOException {

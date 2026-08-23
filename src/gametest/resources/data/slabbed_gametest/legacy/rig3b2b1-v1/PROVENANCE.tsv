@@ -4,6 +4,8 @@ state_source_path	src/main/java/com/slabbed/command/SlabRigHangingDirectState.ja
 state_source_sha256	c5e2330f52a820fbf4a8a2bc3f432e8f357801df62fe6d0a9e711e882796930c
 store_source_path	src/main/java/com/slabbed/command/SlabRigHangingDirectStateStore.java
 store_source_sha256	4e5294e15f51b5087990079c002a849849298d92380908177546c0a29147b8dc
+state_retained_path	src/gametest/resources/data/slabbed_gametest/legacy/rig3b2b1-v1/STATE_SOURCE.java.txt
+store_retained_path	src/gametest/resources/data/slabbed_gametest/legacy/rig3b2b1-v1/STORE_SOURCE.java.txt
 exporter_path	src/gametest/resources/data/slabbed_gametest/legacy/rig3b2b1-v1/EXPORTER.java.txt
 exporter_sha256	98df5ab0062333c45ca25dac3084511712b40b2d87c2de2e45fd83a049f3e085
 evidence_root	tmp/rig3b3a-20260712T044815Z-f43bba02
