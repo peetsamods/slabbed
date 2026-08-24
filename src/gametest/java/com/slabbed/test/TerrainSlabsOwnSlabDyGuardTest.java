@@ -33,8 +33,11 @@ import net.minecraft.world.level.block.state.properties.SlabType;
  * namespace guard, so — in three distinct configs a genuine vanilla slab would legitimately be lowered in —
  * a TS-owned slab BOTH live-qualified as a Slabbed "persistent lowered slab carrier" AND read its OWN
  * {@code getYOffsetInner} dy as {@code -0.5}. That is Slabbed treating a self-positioning TS surface as if
- * IT were subtractively lowered — the same category as the world-hole bug: a TS block must be treated as
- * flush/vanilla-solid from Slabbed's perspective, full stop. Measured before the fix, all three subjects:
+ * IT were subtractively lowered — the same category as the world-hole bug. SCOPE (updated by the TS
+ * parity slice): the flush law here covers the UNAUTHORED subject — a TS state with no placement fact,
+ * which is every state these rows build (setBlock). A PLAYER-PLACED TS slab now carries a stored fact and
+ * reads it back through the store-first public entry; its height authority is the STORE, never
+ * carrier-hood, so the carrier ban below stays total for both. Measured before the fix, all three subjects:
  * {@code dy=-0.5, carrier=true, carrierNonRecursive=true} with the TS override active; after: {@code dy=0.0,
  * carrier=false}. The three reachable lanes:
  * <ol>
@@ -58,11 +61,11 @@ import net.minecraft.world.level.block.state.properties.SlabType;
  * {@code 5304e4b3}/{@code 68088bc6}/{@code c7a19048}/{@code 6a3f2859} precedent; NARROWING only, keyed on
  * the {@code terrain_slabs}/{@code terrainslabs} namespace → byte-identical without Terrain Slabs loaded.
  *
- * <p>(Note: the public {@code SlabSupport.getYOffset} entry ALSO short-circuits a TS subject to flush via
- * its own {@code CompatHooks.shouldSkipOffset(state)} check, so the render dy was already correct in
- * production; this fix closes the carrier-MARKER vector so no stale/inert TS marker can be written or read
- * by any un-{@code shouldSkipOffset}-guarded consumer — the internal {@code getYOffsetInner} recursions and
- * every direct {@code isPersistentLoweredSlabCarrier} reader.)
+ * <p>(Note: since the TS parity slice, the public {@code SlabSupport.getYOffset} entry consults the frozen
+ * STORE before its {@code CompatHooks.shouldSkipOffset(state)} check — a placed TS slab reads its fact, a
+ * factless one still short-circuits to flush. This fix closes the carrier-MARKER vector so no stale/inert
+ * TS marker can be written or read by any un-{@code shouldSkipOffset}-guarded consumer — the internal
+ * {@code getYOffsetInner} recursions and every direct {@code isPersistentLoweredSlabCarrier} reader.)
  *
  * <p>Test seam: Terrain Slabs is not on the gametest classpath, so the TS-owned verdict is forced for the
  * {@code terrain_slabs}-namespaced stand-in slab via {@code CompatHooks.shouldSkipSlabSupportTestOverride}.
@@ -134,7 +137,7 @@ public final class TerrainSlabsOwnSlabDyGuardTest {
     }
 
     @GameTest(structure = "fabric-gametest-api-v1:empty")
-    public void terrainSlabsBottomSlabOnLoweredFullBlockReadsFlush(GameTestHelper helper) {
+    public void anUnauthoredTerrainSlabsBottomSlabOnLoweredFullBlockReadsFlush(GameTestHelper helper) {
         ServerLevel w = helper.getLevel();
         BlockPos subj = buildBottomSlabOnLoweredFullBlock(helper, true);
 
@@ -214,7 +217,7 @@ public final class TerrainSlabsOwnSlabDyGuardTest {
     }
 
     @GameTest(structure = "fabric-gametest-api-v1:empty")
-    public void terrainSlabsSlabOnVerticalLoweredSupportReadsFlush(GameTestHelper helper) {
+    public void anUnauthoredTerrainSlabsSlabOnVerticalLoweredSupportReadsFlush(GameTestHelper helper) {
         ServerLevel w = helper.getLevel();
         BlockPos subj = buildSlabOnVerticalLoweredSupport(helper, true);
 

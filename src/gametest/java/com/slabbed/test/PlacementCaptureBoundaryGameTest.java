@@ -280,7 +280,14 @@ public final class PlacementCaptureBoundaryGameTest {
     }
 
     @GameTest(structure = "fabric-gametest-api-v1:empty")
-    public void terrainSlabsFinalStateWritesNothing(GameTestHelper h) {
+    public void aNonSlabCompatOwnedFinalStateWritesNothing(GameTestHelper h) {
+        // RESCOPED with the TS parity slice: the fixture the seam marks compat-owned is the PAIR
+        // block, which is not a tagged slab, so it stays owned and mints nothing — that is the
+        // surviving half of the old blanket law. A placed compat SLAB now DOES write a fact; that
+        // half is pinned by CompatEligibilityPredicateTest's parity row. The old name claimed the
+        // blanket ("terrain slabs final state writes nothing") while the body only ever measured
+        // this non-slab half — a green that survives a law change may be measuring a narrower thing
+        // than its name says.
         ServerLevel world = h.getLevel();
         BlockPos owner = flatOwner(h);
         Predicate<BlockState> previous = CompatHooks.shouldSkipSlabSupportTestOverride;
@@ -297,7 +304,7 @@ public final class PlacementCaptureBoundaryGameTest {
                 || !Double.isNaN(stored(world, lower.above()))) {
             throw h.assertionException(lower, "compat-owned final pair entered C3 store");
         }
-        pass(h, "terrain_slabs_final_state_writes_nothing");
+        pass(h, "non_slab_compat_owned_final_state_writes_nothing");
     }
 
     @GameTest(structure = "fabric-gametest-api-v1:empty")
