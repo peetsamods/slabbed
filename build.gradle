@@ -365,6 +365,7 @@ sourceSets {
             include("com/slabbed/test/LoweredSeatFreezeTest.java")
             include("com/slabbed/test/FloorMountedIsNotHangingTest.java")
             include("com/slabbed/test/ReplaceableCellSeatTest.java")
+            include("com/slabbed/test/RelocatedPlacementAimTest.java")
             include("com/slabbed/test/BottomSlabLoweredByCarrierBelowTest.java")
             include("com/slabbed/test/BlockEntityNeverPopTest.java")
             include("com/slabbed/test/BlockEntityCantileverTest.java")

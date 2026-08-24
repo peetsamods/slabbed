@@ -138,6 +138,7 @@ public abstract class BlockItemPlacementIntentMixin {
         BlockState placementState;
         PendingCapture pending;
         boolean actualTargetSeen;
+        boolean itemRelocated;
         boolean pendingComputed;
         boolean markerAuthorsCompleted;
         boolean setPlacedBySeen;
@@ -242,6 +243,10 @@ public abstract class BlockItemPlacementIntentMixin {
         if (frame != null && actual != null) {
             frame.actualContext = actual;
             frame.actualTargetSeen = true;
+            // The ONE place an item's own relocation is observable: what this method was handed
+            // versus what it returned. See slabbed$aimForResolve for why nothing downstream can
+            // re-derive this from geometry.
+            frame.itemRelocated = !actual.getClickedPos().equals(context.getClickedPos());
             PlacementDyCorrectionServer.observe(actual.getClickedPos());
         }
         return actual;
@@ -420,6 +425,30 @@ public abstract class BlockItemPlacementIntentMixin {
         }
     }
 
+    /**
+     * THE AIM THAT DESCRIBES THE FILLED CELL. The root aim is evidence about the CLICKED cell. An
+     * item's own {@code updatePlacementContext} may RELOCATE the placement away from it — vanilla
+     * scaffolding walks its column and builds at the far end — and pairing the stale aim with the
+     * far cell makes the resolver answer with the DISTANCE between two unrelated cells, which LAW 1
+     * then freezes (measured on this line: a 3-cell walk minted {@code -3.0}, a sideways extension
+     * {@code +1.0}, a lowered column {@code -3.5}).
+     *
+     * <p><b>DO NOT re-derive the relocation from geometry.</b> The upstream line keys this on "the
+     * filled cell is neither the aim's cell nor its clicked-face neighbour", and that predicate is
+     * WRONG here: this line's targeting seats legitimately into a cell several steps down a column
+     * with no item relocation at all, so the geometric form rewrites the aim of an ordinary deep
+     * placement. Attempted 2026-08-22 and reverted the same day — it silenced the occupancy-theft
+     * refusal ({@code LandingRuleLawTest} TEST 29 went red at exactly the fixture that gate exists
+     * for). Only the OBSERVED relocation is the discriminator, and only the wrap around
+     * {@code updatePlacementContext} can observe it.
+     */
+    private static LandingResolver.PlacementAim slabbed$aimForResolve(PlacementFrame frame) {
+        LandingResolver.PlacementAim aim = frame.rootAim == null ? null : frame.rootAim.resolverAim();
+        return frame.itemRelocated && aim != null && frame.actualContext != null
+                ? LandingResolver.captureRelocatedAim(frame.actualContext)
+                : aim;
+    }
+
     private static void slabbed$c3ComputePending(PlacementFrame frame) {
         frame.pendingComputed = true;
         if (!frame.actualTargetSeen || frame.actualContext == null) {
@@ -468,7 +497,8 @@ public abstract class BlockItemPlacementIntentMixin {
             LandingResolver.PlacementResolution resolution = frame.rootAim == null
                     || family == LandingResolver.Family.UNSUPPORTED
                     ? null
-                    : LandingResolver.resolve(world, frame.rootAim.resolverAim(), primary, finalState, family);
+                    : LandingResolver.resolve(
+                            world, slabbed$aimForResolve(frame), primary, finalState, family);
             if (family == LandingResolver.Family.PAIRED_FLOOR_SEAT && resolution == null) {
                 frame.pending = new PendingCapture(Map.of());
                 return;
@@ -1676,8 +1706,27 @@ public abstract class BlockItemPlacementIntentMixin {
             return true;
         }
 
-        LandingResolver.PlacementResolution resolution =
-                LandingResolver.resolve(context.getLevel(), aim, context.getClickedPos(), state, family);
+        // This gate runs AFTER updatePlacementContext, so a relocated placement reaches it with the
+        // same stale aim the mint had. It takes the same substitution, keyed on the same observed
+        // flag, so the gate and the mint never judge one placement at two different depths.
+        //
+        // SCOPE, stated honestly because a wrong reason here would outlive the code: no veto defect
+        // was OBSERVED from the stale pairing at this site (measured 2026-08-22, scaffolding scenes).
+        // Why it does not veto is NOT established — do not repeat any mechanism for it as fact. The
+        // substitution is here so the two sites cannot diverge, not to fix a proven defect, and no
+        // test can currently turn RED on reverting this site alone; the coverage that exists bounds
+        // the mint. Treat this site as unpinned and re-measure before relying on its behaviour.
+        // Substitute ONLY on relocation: this method's aim comes from C3_ROOT_AIM, which the remap
+        // and continuation lanes deliberately rebind after the frame was built, so it is not always
+        // frame.rootAim and must not be replaced by it.
+        PlacementFrame relocationFrame = slabbed$c3Frame();
+        LandingResolver.PlacementAim resolveAim = relocationFrame != null
+                && relocationFrame.itemRelocated
+                && relocationFrame.actualContext != null
+                ? LandingResolver.captureRelocatedAim(relocationFrame.actualContext)
+                : aim;
+        LandingResolver.PlacementResolution resolution = LandingResolver.resolve(
+                context.getLevel(), resolveAim, context.getClickedPos(), state, family);
         if (resolution == null
                 || !Double.isFinite(resolution.landingDy())) {
             return true;

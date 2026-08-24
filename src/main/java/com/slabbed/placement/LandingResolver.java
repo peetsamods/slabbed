@@ -107,6 +107,38 @@ public final class LandingResolver {
     }
 
     /**
+     * Aim reconstruction for a placement whose cell was RELOCATED by the item's own
+     * {@code updatePlacementContext} — a walk away from the clicked cell (vanilla scaffolding walks
+     * its column and builds at the far end). The relocated context's own hit sits at the destination
+     * with the WALK direction as its face, so the walk's SOURCE cell — the destination's neighbour
+     * against that face — is the real owner. Feeding that to {@link #resolve} applies the same
+     * arithmetic a direct aim on the source would: a flush source yields a flush destination, and a
+     * lowered source yields its own recorded seat.
+     *
+     * <p>The compat guards mirror {@link #captureAim} exactly. They must not be thinned here: the
+     * direct-aim path zeroes a compat-owned owner's dy, so a relocated capture that read one would
+     * seat a relocated placement on a height the direct path refuses to use.
+     */
+    public static PlacementAim captureRelocatedAim(BlockPlaceContext context) {
+        Level level = context.getLevel();
+        Direction walkFace = context.getClickedFace();
+        BlockPos ownerPos = context.getClickedPos().relative(walkFace.getOpposite()).immutable();
+        BlockState ownerState = level.getBlockState(ownerPos);
+        double ownerVisibleDy = ownerState.isAir()
+                || CompatHooks.shouldSkipOffset(ownerState)
+                || CompatHooks.shouldSkipSlabSupport(ownerState)
+                ? 0.0d
+                : visibleOwnerDy(level, ownerPos, ownerState);
+        return new PlacementAim(
+                ownerPos,
+                ownerState,
+                ownerVisibleDy,
+                walkFace,
+                context.getClickLocation(),
+                false);
+    }
+
+    /**
      * Classifies the held/placed block into its placement-time resolver family.
      */
     public static Family classify(BlockState placedState) {
