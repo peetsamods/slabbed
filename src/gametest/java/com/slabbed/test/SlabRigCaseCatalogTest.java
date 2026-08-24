@@ -251,14 +251,21 @@ public final class SlabRigCaseCatalogTest {
                         "every non-BlockItem exclusion needs a mapping-stable kind, reason, and route: " + entry);
             }
         }
-        long unknownEffects = first.items().stream()
+        // The catalog reviews the VANILLA runtime; every non-minecraft BlockItem is unknown by
+        // policy. The gametest runtime carries exactly two such items — the compat-eligibility twin
+        // fixtures, plain SlabBlock BlockItems registered so rows can drive the real placement
+        // transaction. They are enumerated here BY ID so this row keeps its vanilla-drift teeth:
+        // any other unknown (a new vanilla item class, a stray fixture) still fails.
+        java.util.Set<String> reviewedFixtureItems = java.util.Set.of(
+                "slabbed_gametest:eligibility_twin_slab", "terrain_slabs:eligibility_probe_slab");
+        List<String> unknownEffects = first.items().stream()
                 .filter(item -> item.effectPolicy() == SlabRigCaseCatalog.EffectPolicy.DEFERRED_UNKNOWN_EFFECT)
-                .count();
-        if (unknownEffects != 0) {
+                .map(SlabRigCaseCatalog.CatalogItem::id)
+                .filter(id -> !reviewedFixtureItems.contains(id))
+                .toList();
+        if (!unknownEffects.isEmpty()) {
             throw h.assertionException("current vanilla runtime introduced unreviewed BlockItem effects: "
-                    + first.items().stream()
-                    .filter(item -> item.effectPolicy() == SlabRigCaseCatalog.EffectPolicy.DEFERRED_UNKNOWN_EFFECT)
-                    .map(SlabRigCaseCatalog.CatalogItem::id).toList());
+                    + unknownEffects);
         }
 
         assertTags(h, included, "minecraft:stone", "family:ordinary_full_cube", "shape:full_cube");

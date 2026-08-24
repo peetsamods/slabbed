@@ -21,22 +21,22 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.SlabType;
 
 /**
- * PINS THE COMPAT-OFFSET DEFERRAL AS IT STANDS — deliberately, as a tripwire.
+ * PINS THE COMPAT-OFFSET STORE ORDERING — flipped consciously when the deferral was lifted.
  *
- * <p>The deferral (CHANGELOG, "TS-on-vanilla, TS+TS, deep chains"): compat-owned blocks are
- * categorically {@code shouldSkipOffset}, and that test runs BEFORE the frozen store in
- * {@code getYOffset}, so even a stored height is unreadable for them. Compound stacks collapse to
- * flush the moment a compat block enters them. That is a known, documented limitation.
+ * <p>THE DEFERRAL IS LIFTED (this line's Terrain Slabs parity slice): the frozen store is consulted
+ * BEFORE {@code shouldSkipOffset} in every read, and the placement gate carves TAGGED SLABS out of
+ * compat ownership, so a placed compat slab both MINTS a fact and READS it back. The first row now
+ * asserts the lifted contract: a stored fact on a compat slab is readable.
  *
- * <p><b>An attempt to lift it went live-RED on 2026-08-21</b> (ledger entry of that date): moving the
- * skip below the store let the CLIENT predict a lowered compat slab while the server still minted no
- * fact, so placements predicted-then-reverted, leaving the block above interpenetrating — strictly
- * worse than not lowering. Lifting the deferral needs the whole chain (server-side fact minting, a
- * depth authority, the placement refusal), not a read-path reorder.
+ * <p><b>The 2026-08-21 attempt went live-RED</b> (ledger entry of that date) because it reordered
+ * the READ without the WRITE: the client predicted a lowered compat slab, the server minted no fact,
+ * and the correction reverted it — predict-then-revert interpenetration. That post-mortem's own
+ * demand — "a read-path test cannot see a write-path gap" — is why the lift shipped together with
+ * {@code CompatEligibilityPredicateTest}, whose parity row drives the REAL {@code useOn} transaction
+ * and asserts the STORED fact, on both sides of the mint the 2026-08-21 rows could not see.
  *
- * <p><b>So the deferral-pin row here is EXPECTED to fail when someone lifts the deferral — that is
- * its job.</b> Whoever flips it must do so consciously, with that ledger entry in front of them,
- * shipping the write path along with the read path.
+ * <p>{@link #worldgenCompatTerrainReadsFlush} is the row that must survive every future change here:
+ * factless compat terrain (worldgen's shape) stays flush — the world-hole pin.
  *
  * <p><b>Why the seam exists.</b> The compat mod is absent in tests, so {@code shouldSkipOffset}
  * answered {@code false} for everything and every compat-ownership branch was unreachable headlessly —
@@ -91,10 +91,12 @@ public final class CompatOffsetDeferralPinTest {
     }
 
     @GameTest(structure = "fabric-gametest-api-v1:empty")
-    public void theDeferralStands_aStoredFactOnACompatSlabIsUnreadable(GameTestHelper helper) {
-        // THE TRIPWIRE ROW. Reads 0.0 today BECAUSE the compat skip runs before the store. If this
-        // row goes red with -0.5, someone has lifted the deferral: read the 2026-08-21 live-RED
-        // ledger entry before celebrating, and ship the server-side write path with it.
+    public void theDeferralIsLifted_aStoredFactOnACompatSlabIsReadable(GameTestHelper helper) {
+        // THE FLIPPED TRIPWIRE. Until the parity slice, this row asserted 0.0 — the skip ran before
+        // the store and even a recorded height was unreadable, which is what made every placed compat
+        // slab float. It now asserts the lifted contract. If this row goes red with 0.0, someone has
+        // restored the skip above the store read: that re-opens the float AND desyncs the client
+        // prediction from the server's stored fact — do not "fix" a compat symptom that way.
         ServerLevel level = helper.getLevel();
         BlockPos pos = helper.absolutePos(new BlockPos(2, 2, 2));
         level.setBlock(pos, compatBottomSlab(), 2);
@@ -103,12 +105,12 @@ public final class CompatOffsetDeferralPinTest {
         compatOverride(true);
         try {
             double read = shippedConfigYOffset(level, pos);
-            if (Math.abs(read) > 1.0e-9) {
+            if (Math.abs(read - (-0.5d)) > 1.0e-9) {
                 throw helper.assertionException(
-                        "the compat-offset deferral appears LIFTED (stored fact now readable, got " + read
-                                + "). That may be intended — but it went live-RED once: predict-then-revert "
-                                + "interpenetration, because the read path was reordered without the write "
-                                + "path. See the 2026-08-21 ledger entry, then update this pin consciously.");
+                        "a stored fact on a compat slab must be readable (expected -0.5, got " + read
+                                + "). The store is consulted before the compat skip; restoring the old "
+                                + "ordering re-opens the placed-compat-slab float and the "
+                                + "predict-then-revert desync (2026-08-21 ledger entry).");
             }
         } finally {
             compatOverride(false);

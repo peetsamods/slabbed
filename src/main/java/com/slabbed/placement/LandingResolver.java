@@ -92,11 +92,11 @@ public final class LandingResolver {
         Level level = context.getLevel();
         BlockPos ownerPos = context.getClickedPos().immutable();
         BlockState ownerState = level.getBlockState(ownerPos);
-        double ownerVisibleDy = ownerState.isAir()
-                || CompatHooks.shouldSkipOffset(ownerState)
-                || CompatHooks.shouldSkipSlabSupport(ownerState)
-                ? 0.0d
-                : visibleOwnerDy(level, ownerPos, ownerState);
+        // The owner-depth authority is visibleOwnerDy ALONE — it reads the store first, so a
+        // player-placed compat owner answers its recorded seat while factless compat terrain
+        // answers flush. Do not re-add a compat pre-guard here: zeroing the owner before the store
+        // read is what made every placement aimed at a placed compat slab measure a flush surface.
+        double ownerVisibleDy = visibleOwnerDy(level, ownerPos, ownerState);
         return new PlacementAim(
                 ownerPos,
                 ownerState,
@@ -115,20 +115,17 @@ public final class LandingResolver {
      * arithmetic a direct aim on the source would: a flush source yields a flush destination, and a
      * lowered source yields its own recorded seat.
      *
-     * <p>The compat guards mirror {@link #captureAim} exactly. They must not be thinned here: the
-     * direct-aim path zeroes a compat-owned owner's dy, so a relocated capture that read one would
-     * seat a relocated placement on a height the direct path refuses to use.
+     * <p>The owner-depth read mirrors {@link #captureAim} exactly — both delegate to
+     * {@link #visibleOwnerDy} alone. The two sites must keep the SAME authority: the direct-aim
+     * path and the relocated capture measuring different depths for the same owner would seat a
+     * relocated placement on a height the direct path refuses to use.
      */
     public static PlacementAim captureRelocatedAim(BlockPlaceContext context) {
         Level level = context.getLevel();
         Direction walkFace = context.getClickedFace();
         BlockPos ownerPos = context.getClickedPos().relative(walkFace.getOpposite()).immutable();
         BlockState ownerState = level.getBlockState(ownerPos);
-        double ownerVisibleDy = ownerState.isAir()
-                || CompatHooks.shouldSkipOffset(ownerState)
-                || CompatHooks.shouldSkipSlabSupport(ownerState)
-                ? 0.0d
-                : visibleOwnerDy(level, ownerPos, ownerState);
+        double ownerVisibleDy = visibleOwnerDy(level, ownerPos, ownerState);
         return new PlacementAim(
                 ownerPos,
                 ownerState,
@@ -169,6 +166,14 @@ public final class LandingResolver {
      * One final-state ownership gate shared by capture, landing, and hit validation. Terrain Slabs'
      * on-top registry already owns model, outline, and raycast for its members, so Slabbed must not
      * author a second stored dy for them.
+     *
+     * <p>A TAGGED SLAB is carved out of the two identity-based exclusions: a slab a player just
+     * placed is an ordinary slab whoever registered it (LAW.md clause 2), and the compat mod
+     * measurably applies no offset of its own to any slab — its offsets cover only on-top subjects,
+     * which the {@code handlesObjectOffset} arm below still owns unconditionally. This gate sits on
+     * the placement TRANSACTION, which worldgen cannot forge, so carving the slab shape out here
+     * mints facts only for player placements; worldgen compat terrain stays factless and every
+     * factless read still falls through to the exclusions it always hit.
      */
     public static boolean compatOwnsFinalState(BlockState state) {
         if (state == null) {
@@ -176,8 +181,8 @@ public final class LandingResolver {
         }
         Predicate<BlockState> override = compatFinalStateTestOverride;
         return (override != null && override.test(state))
-                || CompatHooks.shouldSkipOffset(state)
-                || CompatHooks.shouldSkipSlabSupport(state)
+                || ((CompatHooks.shouldSkipOffset(state) || CompatHooks.shouldSkipSlabSupport(state))
+                        && !SlabSupport.isTaggedSlab(state))
                 || CompatHooks.terrainSlabsHandlesObjectOffset(state);
     }
 
@@ -321,15 +326,20 @@ public final class LandingResolver {
 
     /**
      * The single "how deep is the surface I clicked" authority (design §1.2): the frozen store first,
-     * then the PUBLIC live read. TS-owned owners render flush ⇒ 0.0.
+     * then the PUBLIC live read. The compat exclusion applies only to the FACTLESS fall-through — an
+     * owner with a stored fact was player-placed and its recorded seat is the surface, whoever
+     * registered the block. Factless compat owners (worldgen terrain) render flush ⇒ 0.0.
      */
     public static double visibleOwnerDy(BlockGetter world, BlockPos ownerPos, BlockState ownerState) {
-        if (ownerState == null || ownerState.isAir() || CompatHooks.shouldSkipOffset(ownerState)) {
+        if (ownerState == null || ownerState.isAir()) {
             return 0.0;
         }
         double stored = SlabAnchorAttachment.storedPlacementDy(world, ownerPos);
         if (Double.isFinite(stored)) {
             return stored;
+        }
+        if (CompatHooks.shouldSkipOffset(ownerState)) {
+            return 0.0;
         }
         double live = SlabSupport.getYOffset(world, ownerPos, ownerState);
         return Double.isFinite(live) ? live : 0.0;

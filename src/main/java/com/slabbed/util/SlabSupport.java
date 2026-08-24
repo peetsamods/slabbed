@@ -8,6 +8,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.Identifier;
+import net.minecraft.tags.BlockTags;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.level.BlockGetter;
 import net.minecraft.world.level.LevelReader;
@@ -1103,6 +1104,24 @@ public final class SlabSupport {
     }
 
     /**
+     * A slab by BEHAVIOUR, whoever registered it: a {@link SlabBlock} carrying the vanilla TYPE
+     * property whose mod tags it into {@code minecraft:slabs}. A mod that adds its slabs to the tag
+     * is telling the game they are slabs; one that does not is opting out without needing a name
+     * here (LAW.md clause 2 — no namespace, no class list). This is the discriminator that lets a
+     * PLAYER-PLACED compat slab be an ordinary slab while worldgen-laid compat terrain — which never
+     * runs a placement transaction and therefore never carries a stored fact — keeps the compat
+     * exclusions. The state's own {@code generated}-style properties are deliberately NOT consulted:
+     * Terrain Slabs' worldgen emits its flag unset and its random ticks reset it, so the placement
+     * transaction is the only witness worldgen cannot forge.
+     */
+    public static boolean isTaggedSlab(BlockState state) {
+        return state != null
+                && state.getBlock() instanceof SlabBlock
+                && state.hasProperty(SlabBlock.TYPE)
+                && state.is(BlockTags.SLABS);
+    }
+
+    /**
      * Returns the Y offset for the block at {@code pos}.
      * <ul>
      *   <li>{@code -0.5} for blocks sitting above a bottom slab (or chain).</li>
@@ -1120,17 +1139,27 @@ public final class SlabSupport {
         if (state == null || state.isAir()) {
             return 0.0;
         }
-        if (CompatHooks.shouldSkipOffset(state)) {
-            return 0.0;
-        }
 
         // FROZEN-DY (LAW.md restoration, flag-gated -Dslabbed.frozenDy): return the finite height this
         // block was placed at, stored verbatim — the value the player aimed at, never re-derived from
         // the current neighbours. A missing/non-finite fact resolves flat and stays flat; the placement
         // offset is computed explicitly through getUnstoredYOffset instead of this public read path.
+        //
+        // The store is consulted BEFORE the compat exclusion, deliberately: a stored fact exists only
+        // for a block that ran a placement transaction, and a slab a player placed is an ordinary slab
+        // whoever registered it (LAW.md clause 2). Worldgen-laid compat terrain never runs a placement
+        // transaction, so it carries no fact, falls through, and keeps the exclusion — which is the
+        // world-hole pin. Do not move the skip back above the store read: that ordering is what made
+        // every placed Terrain Slabs block render flush regardless of its recorded seat.
         if (SlabAnchorAttachment.FROZEN_DY_ENABLED) {
             double frozen = SlabAnchorAttachment.storedPlacementDy(world, pos);
-            return Double.isFinite(frozen) ? frozen : 0.0d;
+            if (Double.isFinite(frozen)) {
+                return frozen;
+            }
+            return 0.0d;
+        }
+        if (CompatHooks.shouldSkipOffset(state)) {
+            return 0.0;
         }
 
         // Recursion guard: isSolidBlock → getCollisionShape → getOutlineShape (mixin) → getYOffset

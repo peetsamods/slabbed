@@ -146,7 +146,8 @@ public final class SlabRigCommandSmokeTest {
         }
         String status = String.join("\n", messages);
         for (String required : new String[]{
-                "[slabrig] hangs catalog", "runtimeItems=1537", "subjects=163", "routes=38740",
+                // runtimeItems: 1537 vanilla + the two compat-eligibility twin fixture BlockItems.
+                "[slabrig] hangs catalog", "runtimeItems=1539", "subjects=163", "routes=38740",
                 "paintingVariants=51", "randomPlaceable=47", "catalogHash=",
                 "minecraft=26.2", "runtimeContentSha256=", "paintingRegistry=minecraft:painting_variant",
                 "placeableTag=minecraft:placeable", "paintingComponent=minecraft:painting/variant",

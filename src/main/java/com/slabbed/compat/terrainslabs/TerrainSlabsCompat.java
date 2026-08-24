@@ -103,7 +103,18 @@ public final class TerrainSlabsCompat {
         }
     }
 
-    /** Returns true if slab offsets should be skipped for this state (a TS-owned block). */
+    /**
+     * Returns true if slab offsets should be skipped for this state (a TS-owned block).
+     *
+     * <p>SUBORDINATED, not authoritative: every read path consults the frozen store BEFORE this
+     * predicate, and the placement gate carves TAGGED SLABS out of it entirely — a slab a player
+     * places is an ordinary slab whoever registered it (LAW.md clause 2), and TS measurably applies
+     * no offset of its own to any slab (its offsets cover only on-top subjects, verified against the
+     * 3.3.2 jar: the model wrap and the raytrace both gate on the on-top predicate). What remains
+     * for this namespace rule is the FACTLESS fall-through: worldgen TS terrain never runs a
+     * placement transaction, carries no fact, and must stay flush — the world-hole pin. Do not
+     * delete it, and do not restore it above any store read.
+     */
     public static boolean shouldSkipOffset(BlockState state) {
         if (!LOADED) {
             return false;

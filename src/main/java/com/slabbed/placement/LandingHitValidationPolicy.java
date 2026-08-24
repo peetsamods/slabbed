@@ -1,6 +1,5 @@
 package com.slabbed.placement;
 
-import com.slabbed.compat.CompatHooks;
 import com.slabbed.util.SlabSupport;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -79,8 +78,13 @@ public final class LandingHitValidationPolicy {
                 || hitPos == null
                 || !Double.isFinite(ownerDy)
                 || !(ownerDy < -EPSILON)
-                || CompatHooks.shouldSkipOffset(ownerState)
-                || CompatHooks.shouldSkipSlabSupport(ownerState)
+                // The ONE shared ownership gate, on both ends of the gesture. Its tagged-slab
+                // carve-out is load-bearing here: a held compat SLAB must reach the tolerance shift
+                // like any vanilla slab, or the un-widened vanilla distance check silently rejects
+                // the use packet for every aim below -0.5 — the live "stubborn" refusal. A factless
+                // compat OWNER never arrives with ownerDy < 0, so worldgen terrain cannot reach the
+                // shift through this carve-out either way.
+                || LandingResolver.compatOwnsFinalState(ownerState)
                 || LandingResolver.compatOwnsFinalState(heldState)) {
             return Double.NaN;
         }
