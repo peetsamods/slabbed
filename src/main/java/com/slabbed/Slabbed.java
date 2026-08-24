@@ -63,6 +63,9 @@ public class Slabbed implements ModInitializer {
         registerDevHook("com.slabbed.command.SlabRigCommand", "register");
         registerDevHook("com.slabbed.command.SlabKitCommand", "register");
         registerDevHook("com.slabbed.command.SlabCheckCommand", "register");
+        // /slabbedver has none of the rig's unconditional hooks (executes(...) only), but it lives
+        // in the same package so the SAME exclusion glob keeps it out of both release artifacts.
+        registerDevHook("com.slabbed.command.SlabbedVerCommand", "register");
     }
 
     private static void registerDevHook(String className, String methodName) {
