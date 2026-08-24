@@ -330,6 +330,69 @@ public final class CompatEligibilityPredicateTest {
     }
 
     /**
+     * The THIRD consumer of the ownership gate, pinned at its own boundary: the server
+     * hit-validation policy. The packet path it lives in ({@code handleUseItemOn}) sits above every
+     * headless entry point, so the parity and inheritance rows — which drive {@code useOn} directly —
+     * can never reach it: without this row, reverting the policy's carve-out alone reddens NOTHING,
+     * and the live "stubborn" refusal (no tolerance shift → vanilla rejects every use packet aimed
+     * below −0.5) silently returns. {@code shiftedCenterDy} is a pure function, so the policy is
+     * pinned by calling it.
+     *
+     * <p>Deliberately its OWN row, not a cell folded into the rows above: a discriminator must be
+     * able to fail ALONE under its mutation, and a cell behind another row's assertions is shadowed
+     * by their failure order. MUTATION that must redden exactly this row: reintroduce an
+     * unconditional compat term for the held state in {@code LandingHitValidationPolicy}
+     * (e.g. {@code || CompatHooks.shouldSkipOffset(heldState)}) — the pre-carve-out form.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void aHeldCompatSlabReachesTheToleranceShiftLikeItsTwin(GameTestHelper helper) {
+        ELIGIBILITY_CLASSIFIER_TEST_GATE.set(Boolean.TRUE);
+        try {
+            // A deep-lowered vanilla bottom-slab owner; the hit sits on its translated top plane.
+            // The owner is deliberately NOT compat: this row isolates the HELD-state term.
+            BlockPos ownerPos = helper.absolutePos(new BlockPos(2, 2, 2));
+            BlockState ownerState =
+                    Blocks.STONE_SLAB.defaultBlockState().setValue(SlabBlock.TYPE, SlabType.BOTTOM);
+            double ownerDy = -1.0d;
+            Vec3 hit = new Vec3(ownerPos.getX() + 0.5, ownerPos.getY() - 0.5, ownerPos.getZ() + 0.5);
+
+            double vanillaHeld = com.slabbed.placement.LandingHitValidationPolicy.shiftedCenterDy(
+                    ownerPos, ownerState, ownerDy, Direction.UP, hit,
+                    Blocks.STONE_SLAB.defaultBlockState());
+            if (!Double.isFinite(vanillaHeld)) {
+                throw helper.assertionException(
+                        "premise drift: a vanilla slab held over a deep-lowered slab owner must reach "
+                                + "the tolerance shift (got NaN) — with a NaN reference the parity "
+                                + "assertions below would be vacuous");
+            }
+            double twinHeld = com.slabbed.placement.LandingHitValidationPolicy.shiftedCenterDy(
+                    ownerPos, ownerState, ownerDy, Direction.UP, hit, twinSlab());
+            double compatHeld = com.slabbed.placement.LandingHitValidationPolicy.shiftedCenterDy(
+                    ownerPos, ownerState, ownerDy, Direction.UP, hit, compatSlab());
+            if (Double.doubleToRawLongBits(twinHeld) != Double.doubleToRawLongBits(vanillaHeld)
+                    || Double.doubleToRawLongBits(compatHeld) != Double.doubleToRawLongBits(vanillaHeld)) {
+                throw helper.assertionException(
+                        "the tolerance shift must not depend on who registered the held slab: vanilla="
+                                + vanillaHeld + " twin=" + twinHeld + " compat=" + compatHeld
+                                + " — a NaN for the compat twin is the exact mechanism of the live "
+                                + "refusal (no shift, vanilla distance check rejects the packet)");
+            }
+            double compatCubeHeld = com.slabbed.placement.LandingHitValidationPolicy.shiftedCenterDy(
+                    ownerPos, ownerState, ownerDy, Direction.UP, hit,
+                    COMPAT_CUBE.defaultBlockState());
+            if (!Double.isNaN(compatCubeHeld)) {
+                throw helper.assertionException(
+                        "a held NON-slab compat block must still be refused the shift (got "
+                                + compatCubeHeld + ") — the carve-out is the tagged-slab shape; the "
+                                + "family-level control for this leg lives in the ownership-gate row");
+            }
+        } finally {
+            ELIGIBILITY_CLASSIFIER_TEST_GATE.set(Boolean.FALSE);
+        }
+        helper.succeed();
+    }
+
+    /**
      * The other half of the transaction discriminator, and the world-hole pin: a compat slab that
      * arrives WITHOUT a placement transaction — worldgen's shape, here {@code setBlock} — carries no
      * fact, reads flush through the public offset path, and is still excluded by the fall-through
