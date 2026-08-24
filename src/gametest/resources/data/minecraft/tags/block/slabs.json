@@ -1,0 +1,7 @@
+{
+  "replace": false,
+  "values": [
+    "terrain_slabs:eligibility_probe_slab",
+    "slabbed_gametest:eligibility_twin_slab"
+  ]
+}

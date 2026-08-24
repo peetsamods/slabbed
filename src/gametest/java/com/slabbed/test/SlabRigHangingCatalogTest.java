@@ -38,8 +38,12 @@ import java.io.IOException;
 /** Pure RIG-3A catalog plus RIG-3B1 registry/artifact contracts; no world execution. */
 public final class SlabRigHangingCatalogTest {
 
+    // Re-baselined when the compat-eligibility twin fixtures gained BlockItems (needed to drive the
+    // real placement transaction): the catalog delta was verified to be EXACTLY the two fixture
+    // items, both in the excluded partition with the explicit no-hanging-route reason. Any other
+    // change to this hash still demands the same delta-inspection before touching this constant.
     private static final String EXPECTED_26_2_CATALOG_HASH =
-            "db61c584f0f70c1120ec6cf631964cad96f71389dbc23e0b7e20e2c2f3685454";
+            "2a82519cce2936367791a96c0bdf3a750bdc269d0eb0d982357a962f31409a1d";
 
     @GameTest(structure = "fabric-gametest-api-v1:empty")
     public void hangingRuntimeSnapshotBindsFullPaintingRegistry(GameTestHelper helper) {
@@ -235,8 +239,11 @@ public final class SlabRigHangingCatalogTest {
                     + snapshot.items().size());
         }
         long blockItems = snapshot.items().stream().filter(SlabRigHangingCatalog.CatalogItem::blockItem).count();
+        // 1376 = 1374 vanilla-runtime exclusions + the two compat-eligibility twin fixture items
+        // (BlockItems registered so rows can drive the real placement transaction; both excluded
+        // here with the explicit no-hanging-route reason).
         if (blockItems != 159L || snapshot.items().size() - blockItems != 4L
-                || snapshot.excludedItems().size() != 1374) {
+                || snapshot.excludedItems().size() != 1376) {
             throw helper.assertionException("RIG-3 primary/remainder cardinality changed: block="
                     + blockItems + " entity=" + (snapshot.items().size() - blockItems)
                     + " excluded=" + snapshot.excludedItems().size());
