@@ -1181,6 +1181,16 @@ public final class SlabSupport {
      * {@link #IN_GET_Y_OFFSET} guard as {@link #getYOffset}. Diagnostics use it to compare a cell's
      * stored value against this unstored placement value. It does not alter {@link #getYOffset} or any
      * lane.
+     *
+     * <p>Consumed by {@link com.slabbed.anchor.SlabAnchorAttachment#freezeLoweredOnPlace} to decide
+     * the anchor/frozen-flat MARKER at {@code setPlacedBy} time, before the placement transaction has
+     * published the aim to the store — this is the ONLY reading available to that writer at that
+     * moment. The tagged-slab carve-out here must mirror {@link #getYOffset}'s: a placed compat slab
+     * without it read flush here regardless of its real (aimed) depth, so EVERY placed compat slab was
+     * marked FROZEN_FLAT unconditionally — not wrong for the slab's OWN rendered height (the store-first
+     * public read wins there), but wrong for every consumer that treats FROZEN_FLAT as "this support is
+     * genuinely flush" when deciding a DEPENDENT object's height (side-lane slab inheritance, a floor
+     * torch placed on top). Two writers of one placement transaction must agree on one predicate.
      */
     public static double getUnstoredYOffset(BlockGetter world, BlockPos pos, BlockState state) {
         if (world == null || pos == null) {
@@ -1189,7 +1199,7 @@ public final class SlabSupport {
         if (state == null || state.isAir()) {
             return 0.0;
         }
-        if (CompatHooks.shouldSkipOffset(state)) {
+        if (CompatHooks.shouldSkipOffset(state) && !isTaggedSlab(state)) {
             return 0.0;
         }
         // Deliberately skip getYOffset's frozen-store/stable-flat policy: this is the explicit

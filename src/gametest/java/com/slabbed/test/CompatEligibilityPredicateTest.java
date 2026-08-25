@@ -329,6 +329,127 @@ public final class CompatEligibilityPredicateTest {
         helper.succeed();
     }
 
+    /** {@code setBlock} + {@code setPlacedBy}, matching {@code Slabbed2612LoweringContractTest}'s
+     *  {@code authorBlock}: setPlacedBy's freeze classifier reads the placement-time (unstored)
+     *  offset, which only exists correctly with the frozen store OFF for the span of the call. */
+    private static void authorBlockDirect(GameTestHelper helper, ServerLevel level, BlockPos pos, BlockState state) {
+        boolean previous = SlabAnchorAttachment.FROZEN_DY_ENABLED;
+        SlabAnchorAttachment.FROZEN_DY_ENABLED = false;
+        try {
+            level.setBlock(pos, state, net.minecraft.world.level.block.Block.UPDATE_ALL);
+            state.getBlock().setPlacedBy(level, pos, level.getBlockState(pos), null, ItemStack.EMPTY);
+        } finally {
+            SlabAnchorAttachment.FROZEN_DY_ENABLED = previous;
+        }
+    }
+
+    /**
+     * A SEPARATE, SIBLING GUARD — not one of {@code compatOwnsFinalState}'s three consumers above, and
+     * found by checking whether the placement transaction has a SECOND WRITER that resolves
+     * independently of the minted value (a cross-line audit finding, applied here after confirming it
+     * transfers). {@code freezeLoweredOnPlace} (fired by {@code BlockOnPlacedAnchorMixin} at
+     * {@code setPlacedBy} HEAD, before the real aim is published to the store) decides the
+     * anchor/frozen-flat MARKER via {@code SlabSupport.getUnstoredYOffset}, which had its OWN
+     * unconditional compat exclusion — never updated when the parity slice carved tagged slabs out
+     * of {@code shouldSkipOffset}'s other callers. The slab's own rendered height was never wrong
+     * (the store-first public read wins there regardless of the marker) — what breaks is every OTHER
+     * consumer that trusts the marker as "this support is genuinely flush": a floor torch or a
+     * side-lane slab placed against a compat slab that is actually lowered would see it as flush,
+     * because the marker said so. Two writers of one transaction must read one predicate.
+     *
+     * <p>Geometry is {@code Slabbed2612LoweringContractTest}'s RC2-A scene reused exactly: a vanilla
+     * lowered carrier (stone on a bottom slab, dy -0.5), and a slab authored BESIDE it cantilevered
+     * over air — WYSIWYG says it must follow to -0.5, so it must anchor, never freeze-flat. The twin
+     * (non-compat) slab in the SAME run is the calibration: if the twin ever stopped anchoring, the
+     * geometry itself broke and the compat row would be measuring nothing.
+     *
+     * <p>MUTATION that must redden exactly this row, alone: restore the unconditional guard in
+     * {@code getUnstoredYOffset} (drop {@code && !isTaggedSlab(state)}). The flush-ground row below
+     * and the twin calibration here must both stay green under that mutation — neither one depends
+     * on the carve-out to reach its answer.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void aCantileveredCompatSlabAnchorsInsteadOfFreezingFlat(GameTestHelper helper) {
+        ELIGIBILITY_CLASSIFIER_TEST_GATE.set(Boolean.TRUE);
+        try {
+            ServerLevel level = helper.getLevel();
+
+            BlockPos vanillaCarrierBase = helper.absolutePos(new BlockPos(2, 2, 2));
+            level.setBlock(vanillaCarrierBase, Blocks.STONE_SLAB.defaultBlockState()
+                    .setValue(SlabBlock.TYPE, SlabType.BOTTOM), 2);
+            BlockPos vanillaLowered = vanillaCarrierBase.above();
+            level.setBlock(vanillaLowered, Blocks.STONE.defaultBlockState(), 2);
+            BlockPos vanillaBeside = vanillaLowered.east();
+            authorBlockDirect(helper, level, vanillaBeside, twinSlab());
+            if (!SlabAnchorAttachment.isAnchored(level, vanillaBeside)
+                    || SlabAnchorAttachment.isFrozenFlat(level, vanillaBeside)) {
+                throw helper.assertionException(
+                        "premise drift: the vanilla-twin calibration must anchor (not freeze-flat) "
+                                + "when cantilevered over air beside a lowered carrier, or the RC2-A "
+                                + "geometry itself is broken and the compat row below proves nothing");
+            }
+
+            BlockPos compatCarrierBase = helper.absolutePos(new BlockPos(5, 2, 2));
+            level.setBlock(compatCarrierBase, Blocks.STONE_SLAB.defaultBlockState()
+                    .setValue(SlabBlock.TYPE, SlabType.BOTTOM), 2);
+            BlockPos compatLowered = compatCarrierBase.above();
+            level.setBlock(compatLowered, Blocks.STONE.defaultBlockState(), 2);
+            BlockPos compatBeside = compatLowered.east();
+            authorBlockDirect(helper, level, compatBeside, compatSlab());
+
+            if (!SlabAnchorAttachment.isAnchored(level, compatBeside)) {
+                throw helper.assertionException(
+                        "a compat slab cantilevered over air beside a lowered carrier must ANCHOR, "
+                                + "matching the vanilla twin — a false answer means the second writer "
+                                + "is still blind to the carve-out and will mis-freeze every such "
+                                + "compat slab flat regardless of its real aimed depth");
+            }
+            if (SlabAnchorAttachment.isFrozenFlat(level, compatBeside)) {
+                throw helper.assertionException(
+                        "a compat slab cantilevered over air must not ALSO be marked frozen-flat — "
+                                + "a downstream consumer that trusts the flat marker over the anchor "
+                                + "would treat this genuinely lowered slab as a flush support");
+            }
+        } finally {
+            ELIGIBILITY_CLASSIFIER_TEST_GATE.set(Boolean.FALSE);
+        }
+        helper.succeed();
+    }
+
+    /**
+     * The regression guard beside the row above: a compat slab placed on ORDINARY FLUSH ground (no
+     * cantilever, solid support directly below) must still freeze FLAT, exactly like a vanilla slab
+     * in the same position. This is what stops the fix above from being over-corrected into "never
+     * freeze a compat slab" — the carve-out only changes what the marker reads, never whether a
+     * genuinely flush placement gets locked flat.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void aFlushCompatSlabStillFreezesFlat(GameTestHelper helper) {
+        ELIGIBILITY_CLASSIFIER_TEST_GATE.set(Boolean.TRUE);
+        try {
+            ServerLevel level = helper.getLevel();
+            BlockPos ground = helper.absolutePos(new BlockPos(8, 2, 2));
+            level.setBlock(ground.below(), Blocks.STONE.defaultBlockState(), 2);
+            authorBlockDirect(helper, level, ground, compatSlab());
+
+            if (SlabAnchorAttachment.isAnchored(level, ground)) {
+                throw helper.assertionException(
+                        "a flush compat slab on solid ground must not be ANCHORED (that is the "
+                                + "lowered marker) — anchoring a flush placement is its own regression");
+            }
+            if (!SlabAnchorAttachment.isFrozenFlat(level, ground)) {
+                throw helper.assertionException(
+                        "a flush compat slab on solid ground must still freeze FLAT, exactly like a "
+                                + "vanilla slab in the same spot — losing this means a slab or lowered "
+                                + "carrier placed under/beside it later could pull it down, which is "
+                                + "the pre-parity-slice behaviour this row guards against regressing");
+            }
+        } finally {
+            ELIGIBILITY_CLASSIFIER_TEST_GATE.set(Boolean.FALSE);
+        }
+        helper.succeed();
+    }
+
     /**
      * The THIRD consumer of the ownership gate, pinned at its own boundary: the server
      * hit-validation policy. The packet path it lives in ({@code handleUseItemOn}) sits above every
