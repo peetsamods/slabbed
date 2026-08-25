@@ -1,5 +1,6 @@
 package com.slabbed.util;
 
+import com.slabbed.anchor.SlabAnchorAttachment;
 import com.slabbed.compat.CompatHooks;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -51,35 +52,70 @@ public final class SlabEnsembleCoherence {
     private SlabEnsembleCoherence() {
     }
 
-    /** Failure-mode-4 guard: TS-owned blocks are outside Slabbed's offset authority. Uses BOTH hooks —
+    /** Failure-mode-4 IDENTITY test: is this state in the compat mod's namespace? Uses BOTH hooks —
      *  {@code shouldSkipOffset} (the authoritative live gate) and {@code shouldSkipSlabSupport} (which
-     *  carries the documented test seam; {@code shouldSkipOffset} has none — HANDOFF test-seam note). */
+     *  carries the documented test seam; {@code shouldSkipOffset} has none — HANDOFF test-seam note).
+     *  Identity alone no longer decides authority — see {@link #isOutsideOffsetAuthority}. */
     private static boolean isTsOwned(BlockState state) {
         return CompatHooks.shouldSkipOffset(state) || CompatHooks.shouldSkipSlabSupport(state);
     }
 
     /**
+     * Failure-mode-4 guard, FACT-AWARE (TS parity slice): a compat state is outside Slabbed's offset
+     * authority only while it carries no stored placement fact. A player-placed compat slab mints a
+     * fact and is inside the authority — its pairs must be classified, or the sentinel and recorder
+     * under-report on exactly the states the parity slice created (an instrument that under-reports
+     * is worse than no instrument if you do not know which way it is wrong). A factless compat state
+     * is worldgen's shape and stays excluded: the compat mod owns its terrain's visuals, and Slabbed's
+     * dy story does not describe them.
+     *
+     * <p>Order is load-bearing for the mesh path: the IDENTITY test runs first, so vanilla pairs —
+     * the overwhelming majority — never touch the store; only compat-namespaced states pay one
+     * attachment lookup, and the caller already performed the same read to produce the dy it passes.
+     */
+    private static boolean isOutsideOffsetAuthority(BlockGetter world, BlockPos pos, BlockState state) {
+        return isTsOwned(state)
+                && !Double.isFinite(SlabAnchorAttachment.storedPlacementDy(world, pos));
+    }
+
+    /**
      * Classify the vertical pair (block at {@code lowerPos}, block at {@code lowerPos.above()}).
-     * Air on either side, TS-owned blocks (failure-mode-4 guard), and vanilla non-contact pairs are
-     * COHERENT by definition. dys are passed in (the caller knows which dy authority applies — live
-     * logical dy at sample time).
+     * Air on either side, FACTLESS compat blocks (the fact-aware failure-mode-4 guard — a placed
+     * compat slab with a stored fact IS classified), and vanilla non-contact pairs are COHERENT by
+     * definition. dys are passed in (the caller knows which dy authority applies — live logical dy
+     * at sample time). This is the overload the sentinel, the recorder, and the mesh gap-fill band
+     * use; fact-awareness lives HERE because it needs {@code world}+{@code pos}.
      */
     public static Verdict classifyVerticalPair(BlockGetter world, BlockPos lowerPos,
                                                double dyLower, double dyUpper) {
         BlockPos upperPos = lowerPos.above();
         BlockState lower = world.getBlockState(lowerPos);
         BlockState upper = world.getBlockState(upperPos);
-        return classifyVerticalPair(lower, dyLower, upper, dyUpper);
+        if (lower.isAir() || upper.isAir()
+                || isOutsideOffsetAuthority(world, lowerPos, lower)
+                || isOutsideOffsetAuthority(world, upperPos, upper)) {
+            return Verdict.COHERENT;
+        }
+        return classifyContact(lower, dyLower, upper, dyUpper);
     }
 
     /**
-     * Classify two vertically adjacent states using their already-resolved offsets.
+     * Classify two vertically adjacent states using their already-resolved offsets. NO world/pos, so
+     * this overload cannot be fact-aware and keeps the BLANKET compat guard: every compat state is
+     * COHERENT here, placed or not. Callers that can supply world+pos must use the overload above —
+     * this one under-classifies placed compat slabs by construction.
      */
     public static Verdict classifyVerticalPair(BlockState lower, double dyLower,
                                                BlockState upper, double dyUpper) {
         if (lower.isAir() || upper.isAir() || isTsOwned(lower) || isTsOwned(upper)) {
             return Verdict.COHERENT;
         }
+        return classifyContact(lower, dyLower, upper, dyUpper);
+    }
+
+    /** The shared contact arithmetic; guards live in the public overloads. */
+    private static Verdict classifyContact(BlockState lower, double dyLower,
+                                           BlockState upper, double dyUpper) {
         VoxelShape lowerShape = vanillaShape(lower);
         VoxelShape upperShape = vanillaShape(upper);
         if (lowerShape.isEmpty() || upperShape.isEmpty()) {
@@ -185,7 +221,10 @@ public final class SlabEnsembleCoherence {
      */
     public static boolean isOccludedOccupancy(BlockGetter world, BlockPos pos, double dy) {
         BlockState state = world.getBlockState(pos);
-        if (state.isAir() || isTsOwned(state)) {
+        // Fact-aware guard, same reasoning as classifyVerticalPair: a placed compat slab can be a
+        // genuinely occluded occupant, and this predicate feeds the click-rescue remap — under the
+        // blanket guard a deep-placed compat slab's occupied-looking-empty cell was never rescued.
+        if (state.isAir() || isOutsideOffsetAuthority(world, pos, state)) {
             return false;
         }
         VoxelShape shape = vanillaShape(state);
@@ -248,6 +287,14 @@ public final class SlabEnsembleCoherence {
         return false;
     }
 
+    /**
+     * The ADMISSION classifiers' exclusion — deliberately still BLANKET, not fact-aware. These two
+     * predicates feed placement veto gates: widening them to see placed compat slabs would let a
+     * compat-involved pair start REFUSING placements that are admitted today, which is a gameplay
+     * change needing its own slice, its own pins, and its own live pass. The fact-aware guard above
+     * covers the measurement surfaces (sentinel, recorder, mesh band, click rescue), where widening
+     * only improves reporting and rescues. Do not fold the two guards together.
+     */
     private static boolean isTransitionEnvelopeExcluded(BlockState state) {
         return isTsOwned(state) || CompatHooks.terrainSlabsHandlesObjectOffset(state);
     }
