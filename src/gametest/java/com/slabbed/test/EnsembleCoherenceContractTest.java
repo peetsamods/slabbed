@@ -94,8 +94,13 @@ public final class EnsembleCoherenceContractTest {
     }
 
     @GameTest(structure = "fabric-gametest-api-v1:empty")
-    public void terrainSlabsBlocksAreGuarded(GameTestHelper helper) {
-        // Failure-mode-4: TS-owned blocks are outside Slabbed's offset authority — never classified.
+    public void aFactlessTerrainSlabsBlockIsGuarded(GameTestHelper helper) {
+        // Failure-mode-4, FACT-AWARE scope (renamed with the coherence-authority update — the old
+        // name "terrainSlabsBlocksAreGuarded" claimed the blanket law while this body only ever
+        // built a FACTLESS state via setBlock, so its green would have survived the fact-aware
+        // change while measuring the narrower surviving half): a compat state with NO stored
+        // placement fact — worldgen's shape — is outside Slabbed's offset authority and never
+        // classified. The authored half lives in its own row below.
         Block tsSlab = BuiltInRegistries.BLOCK.getValue(
                 Identifier.fromNamespaceAndPath("terrain_slabs", "geometric_remesh_scheduler_test_slab"));
         if (tsSlab == Blocks.AIR) {
@@ -111,7 +116,76 @@ public final class EnsembleCoherenceContractTest {
             w.setBlock(lower, Blocks.STONE.defaultBlockState(), 2);
             w.setBlock(lower.above(), tsSlab.defaultBlockState().setValue(SlabBlock.TYPE, SlabType.DOUBLE), 2);
             expect(helper, SlabEnsembleCoherence.classifyVerticalPair(w, lower, 0.0, -0.5),
-                    Kind.COHERENT, 0.0, "TS upper block must be skipped even with clashing dys");
+                    Kind.COHERENT, 0.0, "a FACTLESS TS upper block must be skipped even with clashing dys");
+            helper.succeed();
+        } finally {
+            com.slabbed.compat.CompatHooks.shouldSkipSlabSupportTestOverride = null;
+        }
+    }
+
+    /**
+     * The other half of the fact-aware guard, its OWN row so it can fail alone under its mutation:
+     * a compat state WITH a stored placement fact is INSIDE Slabbed's offset authority, so its pairs
+     * classify like any vanilla pair. Before this, the sentinel and recorder answered COHERENT for
+     * every TS-involved pair — the instrument under-reported on exactly the states the TS parity
+     * slice created. The occluded-occupancy predicate moves with it (it feeds the click-rescue
+     * remap, which never rescued a deep-placed compat slab).
+     *
+     * <p>MUTATION that must redden exactly this row: restore the blanket guard — replace
+     * {@code isOutsideOffsetAuthority(world, pos, state)} with {@code isTsOwned(state)} in the
+     * world+pos {@code classifyVerticalPair} and in {@code isOccludedOccupancy}. The factless row
+     * above stays green under that mutation (its state carries no fact either way), which is why
+     * the two rows cannot be one.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void aFactBearingTerrainSlabsBlockIsClassified(GameTestHelper helper) {
+        Block tsSlab = BuiltInRegistries.BLOCK.getValue(
+                Identifier.fromNamespaceAndPath("terrain_slabs", "geometric_remesh_scheduler_test_slab"));
+        if (tsSlab == Blocks.AIR) {
+            throw helper.assertionException("TS fixture slab missing from registry (entrypoint not run?)");
+        }
+        com.slabbed.compat.CompatHooks.shouldSkipSlabSupportTestOverride = s ->
+                BuiltInRegistries.BLOCK.getKey(s.getBlock()).getNamespace().equals("terrain_slabs");
+        try {
+            ServerLevel w = helper.getLevel();
+            BlockPos lower = helper.absolutePos(new BlockPos(2, 2, 3));
+            BlockPos upper = lower.above();
+            w.setBlock(lower, Blocks.STONE.defaultBlockState(), 2);
+            w.setBlock(upper, tsSlab.defaultBlockState().setValue(SlabBlock.TYPE, SlabType.DOUBLE), 2);
+            // The authorship discriminator: identical scene to the factless row, plus ONE fact.
+            com.slabbed.anchor.SlabAnchorAttachment.writePlacementDy(w, upper, -0.5d);
+
+            expect(helper, SlabEnsembleCoherence.classifyVerticalPair(w, lower, 0.0, -0.5),
+                    Kind.INTERPENETRATION, 0.5,
+                    "a fact-bearing TS upper block sinking -0.5 into a flush lower MUST be flagged — "
+                            + "COHERENT here means the instrument is blind to placed compat slabs again");
+
+            // The vanilla calibration in the same run: the same fact on a vanilla state produces the
+            // same verdict, so the row cannot pass via a compat-special code path.
+            BlockPos vLower = helper.absolutePos(new BlockPos(4, 2, 3));
+            w.setBlock(vLower, Blocks.STONE.defaultBlockState(), 2);
+            w.setBlock(vLower.above(), Blocks.STONE.defaultBlockState(), 2);
+            com.slabbed.anchor.SlabAnchorAttachment.writePlacementDy(w, vLower.above(), -0.5d);
+            expect(helper, SlabEnsembleCoherence.classifyVerticalPair(w, vLower, 0.0, -0.5),
+                    Kind.INTERPENETRATION, 0.5, "vanilla calibration pair must flag identically");
+
+            // The occluded-occupancy half: a fact-bearing TS slab rendering entirely below its cell
+            // floor is a real occluded occupant (feeds the click rescue); factless stays invisible.
+            BlockPos deep = helper.absolutePos(new BlockPos(6, 2, 3));
+            w.setBlock(deep, tsSlab.defaultBlockState().setValue(SlabBlock.TYPE, SlabType.BOTTOM), 2);
+            com.slabbed.anchor.SlabAnchorAttachment.writePlacementDy(w, deep, -1.0d);
+            if (!SlabEnsembleCoherence.isOccludedOccupancy(w, deep, -1.0d)) {
+                throw helper.assertionException(
+                        "a fact-bearing TS bottom slab at -1.0 renders wholly below its cell floor and "
+                                + "must read occluded — false means the click rescue skips compat slabs");
+            }
+            BlockPos deepFactless = helper.absolutePos(new BlockPos(8, 2, 3));
+            w.setBlock(deepFactless, tsSlab.defaultBlockState().setValue(SlabBlock.TYPE, SlabType.BOTTOM), 2);
+            if (SlabEnsembleCoherence.isOccludedOccupancy(w, deepFactless, -1.0d)) {
+                throw helper.assertionException(
+                        "a FACTLESS TS slab must stay outside the occluded predicate whatever dy the "
+                                + "caller injects — worldgen protection");
+            }
             helper.succeed();
         } finally {
             com.slabbed.compat.CompatHooks.shouldSkipSlabSupportTestOverride = null;
