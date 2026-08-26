@@ -5,6 +5,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.level.EmptyBlockGetter;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.BedBlock;
 import net.minecraft.world.level.block.EntityBlock;
@@ -17,6 +18,7 @@ import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 import net.minecraft.world.level.block.state.properties.SlabType;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.Vec3;
+import net.minecraft.world.phys.shapes.VoxelShape;
 
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
@@ -154,6 +156,32 @@ public final class LandingHitValidationPolicy {
                     ? ownerDy
                     : Double.NaN;
         }
+        // RESCUE LANE (maintainer ruling, 2026-08-26). Continues the 26e9b907 precedent, which
+        // broadened this policy for chain and dripstone owners on exactly this failure: vanilla's own
+        // hit-distance tolerance rejecting a use packet, before useOn runs, for a legitimate click on
+        // a body Slabbed renders lower than its cell.
+        //
+        // The gate BELOW keys on Family.FULL_BLOCK, which resolves through isSolidRender() — an
+        // OCCLUSION property ("do I hide my neighbours"), not a geometry one. LAW.md clause 2 forbids
+        // exactly that shape of proxy. Scaffolding is the counter-example that exposed it live: it does
+        // not occlude, yet getInteractionShape returns a FULL CUBE unconditionally, so the player
+        // genuinely aims at and clicks a full-cube face that the server then refuses.
+        //
+        // Scope is deliberately narrow on both axes, and each half is load-bearing:
+        //  - GEOMETRY, not class: the owner must PRESENT a full-cube interaction face. Vanilla's
+        //    default interaction shape is empty, so fences, walls, bars and chains do not qualify and
+        //    keep vanilla's centre exactly as UpwardContinuationValidationTest pins them.
+        //  - RESCUE ONLY: fire only where vanilla's own per-axis check would REJECT. A widening that
+        //    also fired where vanilla already accepts would change an admitted decision, which is not
+        //    what a tolerance rescue is for, and would redden those same pins — they assert
+        //    componentDistance <= tolerance together with a NaN shift.
+        // Reach is NOT widened by this: isWithinBlockInteractionRange is checked separately and
+        // earlier in handleUseItemOn, so a shifted centre cannot extend how far a player can build.
+        if (presentsFullCubeInteractionFace(ownerState)
+                && vanillaWouldRejectOnYAlone(ownerPos, hitPos)
+                && insideTranslatedCell(ownerPos, ownerDy, hitPos)) {
+            return ownerDy;
+        }
         if (ownerFamily != LandingResolver.Family.FULL_BLOCK) {
             return Double.NaN;
         }
@@ -283,6 +311,48 @@ public final class LandingHitValidationPolicy {
                 && hitPos.y <= ownerPos.getY() + ownerDy + maxY + EPSILON
                 && hitPos.z >= ownerPos.getZ() - EPSILON
                 && hitPos.z <= ownerPos.getZ() + 1.0d + EPSILON;
+    }
+
+    /**
+     * Vanilla's own per-axis packet tolerance, read from {@code ServerGamePacketListenerImpl
+     * .handleUseItemOn}: it accepts iff every component of {@code hit - Vec3.atCenterOf(pos)} is
+     * strictly under this. Mirrored here so the rescue lane can ask "would vanilla reject this?"
+     * rather than guessing a threshold.
+     */
+    private static final double VANILLA_COMPONENT_TOLERANCE = 1.0000001d;
+
+    /**
+     * True when vanilla's unshifted check would reject this hit on the Y axis ALONE. X and Z are
+     * deliberately not consulted: the shift only moves Y, so a hit out of range on X or Z is
+     * unrescuable and must keep falling through to vanilla.
+     */
+    private static boolean vanillaWouldRejectOnYAlone(BlockPos ownerPos, Vec3 hitPos) {
+        return Math.abs(hitPos.y - (ownerPos.getY() + 0.5d)) >= VANILLA_COMPONENT_TOLERANCE;
+    }
+
+    /**
+     * Does this owner PRESENT a full-cube face to the player? Asked of the state's own interaction
+     * geometry, never of its class or its occlusion flag (LAW.md clause 2). Queried context-free
+     * against {@link EmptyBlockGetter} so the dy lanes see no support context and return the
+     * UNSHIFTED shape in both live and headless environments — the same discipline
+     * {@code SlabEnsembleCoherence.vanillaShape} uses, and the reason the bounds test below is a
+     * plain 0..1 comparison. Fails CLOSED: anything that is empty, partial, or unexpectedly
+     * translated answers false and the caller keeps vanilla's centre.
+     */
+    private static boolean presentsFullCubeInteractionFace(BlockState state) {
+        if (state == null) {
+            return false;
+        }
+        VoxelShape interaction = state.getInteractionShape(EmptyBlockGetter.INSTANCE, BlockPos.ZERO);
+        if (interaction == null || interaction.isEmpty()) {
+            return false;
+        }
+        for (Direction.Axis axis : Direction.Axis.values()) {
+            if (interaction.min(axis) > EPSILON || interaction.max(axis) < 1.0d - EPSILON) {
+                return false;
+            }
+        }
+        return true;
     }
 
     private static boolean insideTranslatedCell(BlockPos ownerPos, double ownerDy, Vec3 hitPos) {
