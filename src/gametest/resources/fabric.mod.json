@@ -85,6 +85,7 @@
       "com.slabbed.test.LandingRuleLawTest",
       "com.slabbed.test.UpwardContinuationValidationTest",
       "com.slabbed.test.DeepObjectOwnerHitRescueTest",
+      "com.slabbed.test.HangingUndersideHitRescueTest",
       "com.slabbed.test.PlacementCaptureBoundaryGameTest",
       "com.slabbed.test.RegistrySweepTest",
       "com.slabbed.test.SlabRigCommandSmokeTest",

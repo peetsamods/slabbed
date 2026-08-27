@@ -397,6 +397,7 @@ sourceSets {
             include("com/slabbed/test/LandingRuleLawTest.java")
             include("com/slabbed/test/UpwardContinuationValidationTest.java")
             include("com/slabbed/test/DeepObjectOwnerHitRescueTest.java")
+            include("com/slabbed/test/HangingUndersideHitRescueTest.java")
             include("com/slabbed/test/PlacementCaptureBoundaryGameTest.java")
             include("com/slabbed/test/RegistrySweepTest.java")
             include("com/slabbed/test/RegistrySweepArtifacts.java")
