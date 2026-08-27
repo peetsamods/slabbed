@@ -1,4 +1,4 @@
-# Ensemble Coherence — Design (2026-07-07, the maintainer-approved lane)
+# Ensemble Coherence — Design (2026-07-07, maintainer-approved lane)
 
 See `LAW.md` — this design does not redefine WYSIWYG or NEVER-POP.
 
@@ -13,7 +13,7 @@ lanes). Neighbors never negotiate. Three visible sub-classes when neighbors disa
 2. **Gaps** (the CHANGELOG-deferred "mixed-offset stacks" known issue): `dyLower − dyUpper > 0` leaves
    an open seam mid-stack (−1.0 under −0.5 → half-block air band).
 3. **Occupancy invisibility** (frame t=98s): a slab at cell C renders level with the LOWERED top of the
-   block below — cell C *looks* like free space above a surface. the maintainer clicked a trapdoor into it 5×;
+   block below — cell C *looks* like free space above a surface. The maintainer clicked a trapdoor into it 5×;
    vanilla refused 5× (cell occupied). WYSIWYG corollary: the logical occupancy of a cell is not
    visually apparent around mixed-dy geometry.
 

@@ -1,5 +1,7 @@
 # Frozen-dy restoration plan — making the code obey the WYSIWYG law
 
+See LAW.md — this doc does not redefine the law.
+
 **Status: INVESTIGATION / PLAN ONLY. No code changed. Awaiting the maintainer's review of the vision.**
 
 ## The law (already documented, already the spec)

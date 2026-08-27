@@ -216,7 +216,7 @@ public final class Slabbed2612UseOnPlacementTest {
     }
 
     /**
-     * the maintainer WYSIWYG (2026-06-19, FIXED): clicking the SIDE face of a -0.5 lowered block to place a slab,
+     * MAINTAINER WYSIWYG (2026-06-19, FIXED): clicking the SIDE face of a -0.5 lowered block to place a slab,
      * even when the placement cell has SOLID GROUND below it, must FOLLOW to the lowered surface (-0.5) —
      * it lands where the crosshair clicked, NOT frozen flat 0.5 above (the maintainer's "lands 0.5 high" bug). The
      * fix: the placement-intent mixin marks the clicked-lowered-face placement, and freezeLoweredOnPlace
@@ -420,7 +420,7 @@ public final class Slabbed2612UseOnPlacementTest {
     /**
      * P26-12 RED: cantilever-against-cantilever. Slab A is placed beside a lowered block (anchored -0.5).
      * Placing slab B by clicking A's lowered side face must ALSO land -0.5 (WYSIWYG follow) and must NOT pop
-     * A back up to 0.0. the maintainer's live report: placing B sent BOTH to vanilla 0.0 (0.5 high). Drives the real
+     * A back up to 0.0. The maintainer's live report: placing B sent BOTH to vanilla 0.0 (0.5 high). Drives the real
      * useOn path on the SERVER (the authoritative dy the client now mirrors). Honest (visible-band) hit.
      */
     @GameTest(structure = "fabric-gametest-api-v1:empty")
@@ -763,7 +763,7 @@ public final class Slabbed2612UseOnPlacementTest {
     }
 
     /**
-     * the maintainer live RED (2026-06-21): clicking the visible UP face of an anchored lowered TOP slab must stack
+     * The maintainer live RED (2026-06-21): clicking the visible UP face of an anchored lowered TOP slab must stack
      * a new bottom slab on that lowered surface. It must not reinterpret the UP hit as a DOWN merge and
      * fill the lower half underneath the clicked slab.
      */
