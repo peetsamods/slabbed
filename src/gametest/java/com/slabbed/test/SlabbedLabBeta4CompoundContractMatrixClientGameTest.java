@@ -131,7 +131,7 @@ public final class SlabbedLabBeta4CompoundContractMatrixClientGameTest
             rows.add(rowPlacement(ctx, sp, "06_PLACE_SLAB_SIDE_LOWER_HALF",
                     new ItemStack(Items.STONE_SLAB, 8), Direction.EAST, SIDE_EAST,
                     false, "minecraft:stone_slab",
-                    "UNDECIDED_intent_the maintainer_live_fail_wrong_column_or_lane"));
+                    "UNDECIDED_intent_live_fail_wrong_column_or_lane"));
             rows.add(rowPlacement(ctx, sp, "07_PLACE_SLAB_SIDE_UPPER_HALF",
                     new ItemStack(Items.STONE_SLAB, 8), Direction.EAST, SIDE_EAST,
                     true, "minecraft:stone_slab",
@@ -385,7 +385,7 @@ public final class SlabbedLabBeta4CompoundContractMatrixClientGameTest
 
     private static Row rowSourceSlabBreak(ClientGameTestContext ctx, TestSingleplayerContext sp) {
         String rowName = "09_SOURCE_SLAB_BREAK";
-        String expected = "UNDECIDED_intent_decide_A_richer_anchor_or_B_renormalize_or_C_pop_the maintainer_live_jump_observed";
+        String expected = "UNDECIDED_intent_decide_A_richer_anchor_or_B_renormalize_or_C_pop_live_jump_observed";
         try {
             reseed(ctx, sp);
             final String[] pre = new String[1];

@@ -740,7 +740,15 @@ def pruneClientOnlyEntriesManifest = { File artifact ->
     }
 }
 
-def releaseHygieneForbiddenTokens = [
+// Discretion law (maintainer ruling, 2026-08-07; jar gate added 2026-08-27): the maintainer's
+// personal name and machine username must never ship in a release artifact. These caught a real
+// leak once — 43 name-prefixed log-marker literals compiled into allowlisted classes — so they
+// are jar-content tokens, not paranoia. Assembled from pieces, same as the S-6 hook, so this
+// file's own text can never match its own gate (and never re-introduces the strings it bans).
+def discretionForbiddenTokens = [
+        "JUL" + "IA", "Jul" + "ia", "jul" + "ia", "jool" + "mac", "sch" + "ohl",
+]
+def releaseHygieneForbiddenTokens = discretionForbiddenTokens + [
         "LiveCursorIntentRecorder",
         "SlabModelStaleSentinel",
         "TargetDyOverlay",

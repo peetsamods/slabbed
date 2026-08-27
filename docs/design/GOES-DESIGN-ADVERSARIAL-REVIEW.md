@@ -40,7 +40,7 @@ Placement-time resolver cost: fine. The trap is C5: moving thin layers/powder sn
 
 ## 7. Decision list
 
-**Hiding as engineering:** D3 omits that existing worlds' carpets on plain bottom slabs — rendered −0.5 today by the `ClientDy.java:24-27` fork with **no store entry** — will **pop flush on upgrade** once C5 collapses to one authority (NaN → live lanes → thin-layer veto → 0.0). the maintainer will see blocks move; that must be an explicit D3 bullet and release-note line. The occlusion-refusal also converts some today-succeeding clicks into refusals — worth a bullet. **Padding:** D5 was effectively ruled in the TEST 13 ledger verdict ("keep frozen mode"); D12 has exactly one law-compatible answer; D10 is tested reality plus law. Trimming them sharpens the eight real rulings.
+**Hiding as engineering:** D3 omits that existing worlds' carpets on plain bottom slabs — rendered −0.5 today by the `ClientDy.java:24-27` fork with **no store entry** — will **pop flush on upgrade** once C5 collapses to one authority (NaN → live lanes → thin-layer veto → 0.0). The maintainer will see blocks move; that must be an explicit D3 bullet and release-note line. The occlusion-refusal also converts some today-succeeding clicks into refusals — worth a bullet. **Padding:** D5 was effectively ruled in the TEST 13 ledger verdict ("keep frozen mode"); D12 has exactly one law-compatible answer; D10 is tested reality plus law. Trimming them sharpens the eight real rulings.
 
 ## 8. Strongest counter-design, steelmanned
 

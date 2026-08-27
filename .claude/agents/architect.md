@@ -79,4 +79,4 @@ assigned tier, and (4) any open questions. Keep it compact.
 - **Commit after each successful pass** (reviewer `commit-ready: yes` + the `tools/hooks` guardrails
   green). One reviewed unit → one commit; never batch. Behavior changes then stop for the maintainer's live A/B
   (S-5 / `docs/process/LIVE_LEDGER.md`).
-- the maintainer is the human owner. Surface real decisions to her; never guess them.
+- The maintainer is the human owner. Surface real decisions to her; never guess them.
