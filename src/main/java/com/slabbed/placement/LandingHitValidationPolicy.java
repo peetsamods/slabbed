@@ -151,6 +151,33 @@ public final class LandingHitValidationPolicy {
                 && insideTranslatedCell(ownerPos, ownerDy, hitPos)) {
             return ownerDy;
         }
+        // HANGING-UNDERSIDE LANE (maintainer ruling, 2026-08-26). Live defect: hanging a chain — or
+        // anything — under a LOWERED LANTERN was refused. A hanging lantern's body starts 0.0625
+        // above its own cell floor, so at dy -1.0 its visible underside sits at posY-0.9375 and the
+        // honest click lands 1.4375 below the cell centre; vanilla's unshifted check kills the packet
+        // before useOn runs. Measured live: 8/8 rejections at exactly that hit.
+        //
+        // SCOPE, and every term is load-bearing. This deliberately does NOT generalise the lane above
+        // to "any owner on a DOWN face": that widening was measured (probe: geometric lane, zero test
+        // edits, full suite) to contradict FIVE pinned assertions, and
+        // handoffs/packages/PKG-20260727-chain-follower-shift-policy.md forbids it in writing —
+        // "recognize the owner only through isBeta35VerticalChainVisibleOwnerObject", "Do not ...
+        // admit general OBJECT owners", and it names horizontal chain and non-chain object as
+        // required refusals. Those stay refused.
+        //
+        // What separates a hanging lantern from a fence or a tip-up dripstone here is GEOMETRY, not
+        // class (LAW.md clause 2): its body HANGS CLEAR of its own cell floor, leaving the gap the
+        // player is aiming into, and the hit lies on that underside plane. A fence, a vertical chain
+        // and a tip-up dripstone all start their bodies AT the cell floor, so they cannot satisfy the
+        // first term; a horizontal chain does hang clear, but the pinned hit for it sits below its
+        // body rather than on its underside, so it cannot satisfy the second. Verified against all
+        // five: none is admitted by this lane.
+        if (hitFace == Direction.DOWN
+                && vanillaWouldRejectOnYAlone(ownerPos, hitPos)
+                && clickedHangingBodyUnderside(ownerPos, ownerState, ownerDy, hitPos)
+                && insideTranslatedCell(ownerPos, ownerDy, hitPos)) {
+            return ownerDy;
+        }
         if (ownerState.getBlock() instanceof SlabBlock) {
             return insideTranslatedSlabShape(ownerPos, ownerState, ownerDy, hitPos)
                     ? ownerDy
@@ -328,6 +355,39 @@ public final class LandingHitValidationPolicy {
      */
     private static boolean vanillaWouldRejectOnYAlone(BlockPos ownerPos, Vec3 hitPos) {
         return Math.abs(hitPos.y - (ownerPos.getY() + 0.5d)) >= VANILLA_COMPONENT_TOLERANCE;
+    }
+
+    /** Plane-coincidence tolerance: a raycast face hit returns the exact intersection point. */
+    private static final double UNDERSIDE_PLANE_EPSILON = 1.0e-4d;
+
+    /**
+     * Did the player click the underside of a body that HANGS CLEAR of its own cell floor?
+     *
+     * <p>Both terms are geometry, asked of the owner's own shape rather than its class (LAW.md
+     * clause 2). A body whose minimum Y is above its cell floor leaves a visible gap beneath it —
+     * that gap is what the player is aiming into, and it is what a hanging lantern has (0.0625) while
+     * a fence, a vertical chain and a tip-up pointed dripstone do not (all 0.0). The second term
+     * requires the hit to lie ON that underside plane, which is what separates this from a hit that
+     * merely falls somewhere inside the translated cell — a horizontal chain hangs clear too, but the
+     * pinned hit for it sits 0.40625 BELOW its body rather than on it.
+     *
+     * <p>Queried context-free against {@link EmptyBlockGetter} so the dy lanes see no support context
+     * and return the UNSHIFTED shape in both live and headless environments; the translation is then
+     * applied here, exactly once, from the caller's frozen dy. Fails CLOSED on an empty or
+     * floor-touching shape.
+     */
+    private static boolean clickedHangingBodyUnderside(
+            BlockPos ownerPos, BlockState ownerState, double ownerDy, Vec3 hitPos) {
+        VoxelShape shape = ownerState.getShape(EmptyBlockGetter.INSTANCE, BlockPos.ZERO);
+        if (shape.isEmpty()) {
+            return false;
+        }
+        double bodyMinY = shape.min(Direction.Axis.Y);
+        if (bodyMinY <= EPSILON) {
+            return false;
+        }
+        double underside = ownerPos.getY() + ownerDy + bodyMinY;
+        return Math.abs(hitPos.y - underside) <= UNDERSIDE_PLANE_EPSILON;
     }
 
     /**
