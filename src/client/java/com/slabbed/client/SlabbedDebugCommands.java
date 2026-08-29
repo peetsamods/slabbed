@@ -124,5 +124,22 @@ public final class SlabbedDebugCommands {
         public String buildStamp() {
             return BuildStamp.describeShort();
         }
+
+        @Override
+        public List<String> chunkGauge() {
+            Minecraft client = source.getClient();
+            if (client == null || client.level == null || client.player == null) {
+                return List.of();
+            }
+            // The integrated-server chunk when present (the store's authoritative copy), else the
+            // client chunk — both carry the synced attachments, and MEASURING is all this does.
+            var level = client.getSingleplayerServer() != null
+                    ? client.getSingleplayerServer().getLevel(client.level.dimension())
+                    : null;
+            var world = level != null ? level : client.level;
+            return com.slabbed.anchor.ChunkPlacementGauge.report(
+                    world.getChunkAt(client.player.blockPosition()),
+                    world.registryAccess());
+        }
     }
 }

@@ -104,6 +104,12 @@ public final class ShippedDebugCommandsTest {
         public String buildStamp() {
             return "sha=deadbeef built=1970-01-01T00:00:00Z";
         }
+
+        @Override
+        public List<String> chunkGauge() {
+            return List.of(
+                    "[slabdy] chunk (0, 0): placement heights: 2 entries, 60 B of 31.7 KB sync budget (0%) — GREEN");
+        }
     }
 
     /** A Session with the debug tools PRESENT — i.e. the dev / diagnostics-companion shape. */
@@ -195,6 +201,7 @@ public final class ShippedDebugCommandsTest {
                 "slabdy on",
                 "slabdy off",
                 "slabdy build",
+                "slabdy chunk",
                 "slabdev",
                 "slabdev debug",
                 "slabdev debug on",

@@ -101,7 +101,8 @@
       "com.slabbed.test.SlabRigHangingDirectExecutorTest",
       "com.slabbed.test.SlabTestKitPaletteTest",
       "com.slabbed.test.SlabTestKitCommandsTest",
-      "com.slabbed.anchor.FrozenFlatAttachmentCapacityTest"
+      "com.slabbed.anchor.FrozenFlatAttachmentCapacityTest",
+      "com.slabbed.anchor.PlacementDyAttachmentCapacityTest"
     ],
     "fabric-client-gametest": [
       "com.slabbed.test.PlacementDyPredictionClientGameTest",
