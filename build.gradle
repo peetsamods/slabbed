@@ -168,6 +168,12 @@ jar {
     }
 }
 
+tasks.named("sourcesJar", Jar).configure {
+    from("LICENSE") {
+        rename { "${it}_${project.base.archivesName.get()}" }
+    }
+}
+
 publishing {
     publications {
         register("mavenJava", MavenPublication) {
