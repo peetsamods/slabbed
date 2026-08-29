@@ -223,12 +223,29 @@ public abstract class SlabSupportStateMixin {
 
     // ── placement / survival support ──────────────────────────────────
 
+    /**
+     * Flower-pot floor support, OPT-IN ONLY ({@link SlabSupport#POT_FLOOR_SUPPORT}).
+     *
+     * <p>Vanilla imposes no survival requirement on {@code minecraft:flower_pot} — it floats — so with
+     * the flag off this inject must not answer at all and vanilla decides. It may NEVER narrow
+     * vanilla's answer while off: a pot deleted by a neighbour edit is exactly what LAW 1's "it should
+     * stay there no matter what" forbids, and the height LAW 1 froze keeps the pot where it was placed
+     * rather than moving it, so floating preserves WYSIWYG instead of breaking it.
+     *
+     * <p>Do NOT re-add an unconditional {@code setReturnValue} here. From 2026-05-11 this branch
+     * replaced vanilla's answer for every pot, so both arms failing returned {@code false} and the pot
+     * dropped (GH #67, GH #64). The requirement now lives behind the flag, off by default
+     * (maintainer ruling, 2026-08-28).
+     */
     @Inject(method = "canSurvive", at = @At("HEAD"), cancellable = true)
     private void slabbed$flowerPotFloorTopSurvival(
             LevelReader world,
             BlockPos pos,
             CallbackInfoReturnable<Boolean> cir
     ) {
+        if (!SlabSupport.POT_FLOOR_SUPPORT) {
+            return;
+        }
         BlockState self = (BlockState) (Object) this;
         if (!self.is(Blocks.FLOWER_POT)) {
             return;
