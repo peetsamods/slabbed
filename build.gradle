@@ -59,7 +59,12 @@ loom {
             // FROZEN_DY_ENABLED in-process and restore to the *default* — stays valid because the
             // in-JVM default here is false. -Dslabbed.frozenDy=... on the gradle invocation still wins.
             // The shipped (property-absent) default of true is asserted by
-            // LandingRuleLawTest#shippedFrozenDyDefaultIsOn.
+            // LandingRuleLawTest#shippedFrozenDyDefaultIsOn, which reads the production literal
+            // SlabAnchorAttachment.FROZEN_DY_SHIPPED_DEFAULT. That indirection is REQUIRED, not a
+            // style choice: forcing the property here (and =true for clientGameTest) means no row can
+            // observe the property-absent default by reading the field, so a row written the obvious
+            // way is masked in every venue. Until 2026-08-28 that row re-derived the initializer
+            // instead and could not fail at all, making this comment's claim false.
             property "slabbed.frozenDy", System.getProperty("slabbed.frozenDy", "false")
         }
     }

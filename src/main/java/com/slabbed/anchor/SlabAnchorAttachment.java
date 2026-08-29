@@ -286,8 +286,20 @@ public final class SlabAnchorAttachment {
      * blocks placed before the flip; those cells resolve to stable flat {@code 0.0} with no recovery
      * from live neighbour geometry — there is no retro-migration (design D5).
      */
+    /**
+     * The SHIPPED default of {@link #FROZEN_DY_ENABLED}, as a value a test can read.
+     *
+     * <p>Both automated venues force {@code slabbed.frozenDy} explicitly (build.gradle: {@code =false}
+     * for gameTest, {@code =true} for clientGameTest), so no row can observe the property-absent
+     * default by reading the field — {@code LandingRuleLawTest#shippedFrozenDyDefaultIsOn} previously
+     * re-implemented the initializer expression instead, which made it unconditionally true and unable
+     * to fail for any edit here. Naming the literal gives that row something real to assert against
+     * while the venues keep forcing the property.
+     */
+    public static final String FROZEN_DY_SHIPPED_DEFAULT = "true";
+
     public static boolean FROZEN_DY_ENABLED =
-            Boolean.parseBoolean(System.getProperty("slabbed.frozenDy", "true"));
+            Boolean.parseBoolean(System.getProperty("slabbed.frozenDy", FROZEN_DY_SHIPPED_DEFAULT));
 
     /**
      * Records the height this placement landed at, so every later read returns it verbatim. Server-side
