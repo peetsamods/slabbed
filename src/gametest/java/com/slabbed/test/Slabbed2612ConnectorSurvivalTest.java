@@ -1,6 +1,5 @@
 package com.slabbed.test;
 
-import com.slabbed.Slabbed;
 import com.slabbed.util.SlabSupport;
 import net.fabricmc.fabric.api.gametest.v1.GameTest;
 import net.minecraft.core.BlockPos;
@@ -188,11 +187,18 @@ public final class Slabbed2612ConnectorSurvivalTest {
     }
 
     /**
-     * A flower_pot survives on a bottom-slab top (the supported, intended case). NOTE (measured): a
-     * flower_pot ALSO reports canSurvive==true with air below — i.e. it does not require support to
-     * survive in this build (vanilla flower pots have no support rule, and/or the slab survival mixin
-     * does not remove that). We assert the supported case and LOG the air case rather than asserting a
-     * "pop" that does not happen; checklist E7 ("pot pops when slab removed") is therefore a LIVE check.
+     * A flower_pot survives on a bottom-slab top (the supported case) AND with air below (vanilla —
+     * a pot has no survival requirement).
+     *
+     * <p>The air arm is the one that matters and it used to be a LOG, not an assertion — its note
+     * claimed a measured {@code canSurvive==true} over air, which was the OPPOSITE of what shipped:
+     * from 2026-05-11 the survival inject replaced vanilla's answer for every pot, so both its arms
+     * failing returned {@code false} and breaking the block under a placed pot DELETED it (GH #67,
+     * GH #64). A row that logs cannot notice that, which is why the regression shipped under a green
+     * suite. It asserts now.
+     *
+     * <p>MUTATION that must redden this row alone: {@code -Dslabbed.potFloorSupport=true}, or
+     * flipping {@link SlabSupport#POT_FLOOR_SUPPORT}'s default literal to {@code "true"}.
      */
     @GameTest(structure = "fabric-gametest-api-v1:empty")
     public void flowerPotSurvivesOnSlabTop(GameTestHelper helper) {
@@ -205,8 +211,44 @@ public final class Slabbed2612ConnectorSurvivalTest {
             throw helper.assertionException(pot, "flower_pot must survive on a bottom-slab top");
         }
         helper.setBlock(new BlockPos(2, 1, 2), Blocks.AIR.defaultBlockState());
-        Slabbed.LOGGER.info("CONN-SURV | flower_pot canSurvive with air below = {} (no support rule — E7 is a live check)",
-                level.getBlockState(abs).canSurvive(level, abs));
+        if (!level.getBlockState(abs).canSurvive(level, abs)) {
+            throw helper.assertionException(pot,
+                    "a placed flower_pot must SURVIVE when the block beneath it is broken — vanilla "
+                    + "imposes no support rule on a pot, and LAW 1 says a placed block stays where it "
+                    + "is no matter what a neighbour does. Deleting it is the GH #67 / GH #64 defect. "
+                    + "If -Dslabbed.potFloorSupport=true this row is expected to fail: that opt-in "
+                    + "restores the pre-2026-08-28 requirement deliberately.");
+        }
+        helper.succeed();
+    }
+
+    /**
+     * The SHIPPED default of the pot floor-support opt-in is OFF.
+     *
+     * <p>Written to the shape a shipped-default row needs (sweep finding, 2026-08-28): it reads the
+     * PRODUCTION field rather than re-deriving the initializer expression — a row that re-evaluates
+     * {@code getProperty("slabbed.potFloorSupport", "false")} proves only that it can read its own
+     * literal — and it first asserts the property is UNSET, so if a future venue starts forcing the
+     * flag this row fails loudly instead of silently beginning to measure the venue.
+     *
+     * <p>MUTATION that must redden this row alone: flip the default literal in
+     * {@link SlabSupport#POT_FLOOR_SUPPORT} to {@code "true"}.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void shippedPotFloorSupportDefaultIsOff(GameTestHelper helper) {
+        String forced = System.getProperty("slabbed.potFloorSupport");
+        if (forced != null) {
+            throw helper.assertionException(BlockPos.ZERO,
+                    "premise drift: slabbed.potFloorSupport is FORCED to \"" + forced + "\" in this "
+                    + "venue, so this row can no longer observe the shipped default. Either stop "
+                    + "forcing it, or this row is measuring the venue instead of the jar.");
+        }
+        if (SlabSupport.POT_FLOOR_SUPPORT) {
+            throw helper.assertionException(BlockPos.ZERO,
+                    "the shipped default of SlabSupport.POT_FLOOR_SUPPORT must be OFF — a pot must "
+                    + "keep vanilla's no-support-requirement unless a player opts in. Shipping it ON "
+                    + "deletes placed pots on a neighbour break (GH #67, GH #64).");
+        }
         helper.succeed();
     }
 

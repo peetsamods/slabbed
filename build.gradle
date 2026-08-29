@@ -98,6 +98,7 @@ def slabbedInteractiveRunProperties = [
         "slabbed.bsfb.live.trace",
         "slabbed.collisionFollow",
         "slabbed.offsetRaycast",
+        "slabbed.potFloorSupport",
         "slabbed.offsetRaycast.trace",
         "slabbed.beta4RepeatMergeTrace",
         "slabbed.beta4CompoundVisibleRenderTrace",

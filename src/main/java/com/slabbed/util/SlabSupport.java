@@ -1229,6 +1229,26 @@ public final class SlabSupport {
     public static final boolean COLLISION_FOLLOW =
             !"false".equalsIgnoreCase(System.getProperty("slabbed.collisionFollow", "true"));
 
+    /**
+     * POT FLOOR SUPPORT (opt-in): require a floor under a flower pot, with
+     * {@code -Dslabbed.potFloorSupport=true}. Default OFF — vanilla has no survival requirement for
+     * {@code minecraft:flower_pot}, so by default this mod imposes none either.
+     *
+     * <p>WHY THE DEFAULT IS OFF (maintainer ruling, 2026-08-28). The requirement shipped ON from
+     * 2026-05-11, grouped with the floor-torch and candle family. Torches and candles genuinely do
+     * carry a vanilla survival requirement; a flower pot does not, so the pot was admitted to that
+     * family by resemblance rather than by behaviour. The consequence was destructive: breaking the
+     * block under a placed pot deleted it, which is what LAW 1's "it should stay there no matter
+     * what" forbids, and it removed a vanilla building technique.
+     *
+     * <p>SURVIVAL IS NOT THE WYSIWYG AXIS. WYSIWYG governs where a placement LANDS; this governs
+     * whether it PERSISTS. A pot seated flush on a lowered slab keeps the height LAW 1 froze for it,
+     * so when its support is broken it stays at that exact height rather than moving — floating is
+     * the outcome that honours both laws, not a departure from them.
+     */
+    public static final boolean POT_FLOOR_SUPPORT =
+            "true".equalsIgnoreCase(System.getProperty("slabbed.potFloorSupport", "false"));
+
     private static final ThreadLocal<Boolean> VANILLA_COLLISION_SHAPE_QUERY =
             ThreadLocal.withInitial(() -> Boolean.FALSE);
 
