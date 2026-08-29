@@ -32,6 +32,138 @@ public final class Slabbed2612CollisionDepthTest {
 
     private static final double EPS = 1.0e-6;
 
+    /**
+     * THE PLAYER'S GESTURE: the climb you FACE onto a lowered block equals the climb you SEE.
+     *
+     * <p>This is the reported symptom in its own terms (maintainer, live, 2026-08-28): "build a
+     * lowered block, then a slab next to it so it looks like you should just be able to jump from the
+     * slab onto the lowered block — you can't. It treats that lowered block like it's too high."
+     *
+     * <p>Stated as an equality rather than against a jump-height constant, deliberately. The invariant
+     * is WYSIWYG applied to movement — the physical step must equal the visual step — and that survives
+     * any change to vanilla's step/jump numbers, which a hardcoded threshold would not. For the record
+     * of what those numbers were when this was written: vanilla step height is 0.6 and jump height is
+     * about 1.25, the visual climb here is 1.0 (jumpable, not steppable), and the physical climb before
+     * the fix was 1.5 — past BOTH, so the block was not reachable at all.
+     *
+     * <p>MUTATION that must redden this row: restore the {@code instanceof StairBlock} restriction on
+     * {@code SlabSupportStateMixin#slabbed$collisionQueryExit}.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void theClimbOntoALoweredBlockMatchesTheClimbYouCanSee(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        // Slab the player stands on, and beside it a bottom slab carrying the lowered block.
+        BlockPos standRel = new BlockPos(2, 1, 2);
+        BlockPos carrierRel = new BlockPos(3, 1, 2);
+        BlockPos loweredRel = carrierRel.above();
+        helper.setBlock(standRel, bottomSlabState());
+        helper.setBlock(carrierRel, bottomSlabState());
+        helper.setBlock(loweredRel, Blocks.STONE.defaultBlockState());
+
+        BlockPos standAbs = helper.absolutePos(standRel);
+        BlockPos loweredAbs = helper.absolutePos(loweredRel);
+        BlockState standState = level.getBlockState(standAbs);
+        BlockState loweredState = level.getBlockState(loweredAbs);
+
+        double dy = SlabSupport.getYOffset(level, loweredAbs, loweredState);
+        if (Math.abs(dy + 0.5d) > EPS) {
+            throw helper.assertionException(loweredRel,
+                    "premise drift: the block must be LOWERED for this row to mean anything, dy=" + dy);
+        }
+
+        double standDrawnTop = standAbs.getY()
+                + standState.getShape(level, standAbs, CollisionContext.empty()).bounds().maxY;
+        double loweredDrawnTop = loweredAbs.getY()
+                + loweredState.getShape(level, loweredAbs, CollisionContext.empty()).bounds().maxY;
+        double visualClimb = loweredDrawnTop - standDrawnTop;
+
+        // The physical top is whatever the entity world actually reports, so this measures the union
+        // of the block's own cell AND the hanging contribution — not one contributor's opinion.
+        double physicalTop = Double.NaN;
+        for (int i = -8; i <= 40; i++) {
+            double y = loweredAbs.getY() + i * 0.0625d;
+            AABB probe = new AABB(loweredAbs.getX() + 0.3d, y + 0.001d, loweredAbs.getZ() + 0.3d,
+                    loweredAbs.getX() + 0.7d, y + 0.0615d, loweredAbs.getZ() + 0.7d);
+            if (!level.noCollision(probe)) {
+                physicalTop = y + 0.0625d;
+            }
+        }
+        double physicalClimb = physicalTop - standDrawnTop;
+
+        Slabbed.LOGGER.info("CLIMB | standTop={} loweredDrawnTop={} loweredSolidTop={} visual={} physical={}",
+                standDrawnTop, loweredDrawnTop, physicalTop, visualClimb, physicalClimb);
+
+        if (Math.abs(physicalClimb - visualClimb) > 0.0625d) {
+            throw helper.assertionException(loweredRel,
+                    "UNREACHABLE-LOOKING BLOCK: from the neighbouring slab you SEE a climb of "
+                    + visualClimb + " but you must actually climb " + physicalClimb + ". The lowered "
+                    + "block is physically taller than it looks, so a jump that plainly should land "
+                    + "on it does not. Reported live: 'it treats that lowered block like it's too "
+                    + "high.' GH #31.");
+        }
+        helper.succeed();
+    }
+
+    /**
+     * A lowered block is solid EXACTLY where it is drawn — no phantom above its visible top.
+     *
+     * <p>The class's other rows check PRESENCE (is there collision where it's drawn). Presence alone
+     * cannot see an EXTRA solid volume, which is how GH #31 survived them: the compensation is
+     * additive, so the block was solid where drawn AND for half a block above it. Measured before the
+     * fix, stone on a bottom slab: {@code drawnTop=-54.5 solidTop=-54.0 delta=0.5}. The player stood
+     * half a block above the surface and could not climb up from an adjacent slab (1.5 > jump height).
+     *
+     * <p>Asserted through {@code level.noCollision} rather than off the shape, so it measures what the
+     * entity world actually reports — the union of the block's own cell and the hanging contribution
+     * from {@code BlockCollisionsLoweredAboveMixin} — not just one contributor's opinion.
+     *
+     * <p>MUTATION that must redden this row alone: restore the {@code instanceof StairBlock} restriction
+     * on {@code SlabSupportStateMixin#slabbed$collisionQueryExit}.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void aLoweredFullBlockIsSolidExactlyWhereDrawn(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        BlockPos slabRel = new BlockPos(2, 1, 2);
+        BlockPos blockRel = slabRel.above();
+        helper.setBlock(slabRel, bottomSlabState());
+        helper.setBlock(blockRel, Blocks.STONE.defaultBlockState());
+
+        BlockPos abs = helper.absolutePos(blockRel);
+        BlockState st = level.getBlockState(abs);
+        double dy = SlabSupport.getYOffset(level, abs, st);
+        if (Math.abs(dy + 0.5d) > EPS) {
+            throw helper.assertionException(blockRel,
+                    "premise drift: stone on a bottom slab must lower -0.5, got " + dy
+                    + " — this row is no longer measuring a lowered block");
+        }
+
+        double drawnTop = abs.getY() + st.getShape(level, abs, CollisionContext.empty()).bounds().maxY;
+
+        // The band immediately ABOVE the drawn top must be free. Probe just inside it so a shape that
+        // ends exactly at drawnTop does not register.
+        AABB abovePhantom = new AABB(
+                abs.getX() + 0.3d, drawnTop + 0.01d, abs.getZ() + 0.3d,
+                abs.getX() + 0.7d, drawnTop + 0.45d, abs.getZ() + 0.7d);
+        if (!level.noCollision(abovePhantom)) {
+            throw helper.assertionException(blockRel,
+                    "PHANTOM COLLISION: the band just above a lowered block's DRAWN top ("
+                    + drawnTop + ") is solid. The player stands there instead of on the visible "
+                    + "surface, and cannot climb up from an adjacent slab. GH #31.");
+        }
+
+        // And the block must still be solid where it IS drawn — the no-ghost direction, restated here
+        // so a fix that merely deletes collision cannot pass this row.
+        AABB inVisual = new AABB(
+                abs.getX() + 0.3d, drawnTop - 0.45d, abs.getZ() + 0.3d,
+                abs.getX() + 0.7d, drawnTop - 0.05d, abs.getZ() + 0.7d);
+        if (level.noCollision(inVisual)) {
+            throw helper.assertionException(blockRel,
+                    "CLIP-THROUGH: a lowered block must stay solid where it is drawn — removing the "
+                    + "phantom must not remove the block's real body");
+        }
+        helper.succeed();
+    }
+
     private static net.minecraft.world.level.block.state.BlockState bottomSlabState() {
         return Blocks.STONE_SLAB.defaultBlockState().setValue(SlabBlock.TYPE, SlabType.BOTTOM);
     }

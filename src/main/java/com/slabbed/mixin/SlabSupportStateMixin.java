@@ -9,7 +9,6 @@ import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.CarpetBlock;
 import net.minecraft.world.level.block.DoorBlock;
 import net.minecraft.world.level.block.MossyCarpetBlock;
-import net.minecraft.world.level.block.StairBlock;
 import net.minecraft.world.phys.shapes.CollisionContext;
 import net.minecraft.world.level.block.SupportType;
 import net.minecraft.world.level.block.SlabBlock;
@@ -43,10 +42,17 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
  *       position.</li>
  * </ol>
  *
- * <p><b>Note:</b> collision shapes are intentionally NOT offset. Offsetting
- * them causes the player to clip into full blocks when walking onto them
- * from the slab surface (the step-up from slab top to collision bottom
- * exceeds MC's 0.6 step height for full blocks).
+ * <p><b>Collision follows the visual (since 2026-08-28).</b> This note previously said the opposite —
+ * that collision shapes are intentionally NOT offset, because offsetting them made the player clip
+ * into full blocks walking on from a slab. That was true of the original fix, before
+ * {@code BlockCollisionsLoweredAboveMixin} unioned a lowered block's hanging part into the cell below.
+ * Leaving the block's own cell vanilla while only ADDING the underside left the un-lowered top in
+ * place, so a block drawn {@code Y-0.5 .. Y+0.5} was solid {@code Y-0.5 .. Y+1}: the player stood half
+ * a block above the surface and could not climb up from an adjacent slab at all (1.5 > jump height).
+ * Measured, GH #31. A lowered block is now solid exactly where it is drawn.
+ *
+ * <p>Consumers that apply {@code dy} THEMSELVES must read {@link SlabSupport#unloweredCollisionShape}
+ * instead, or they offset twice — the placement occupancy gate is the one that does.
  */
 @Mixin(BlockBehaviour.BlockStateBase.class)
 public abstract class SlabSupportStateMixin {
@@ -376,21 +382,53 @@ public abstract class SlabSupportStateMixin {
         SLABBED$IN_COLLISION_QUERY.set(Boolean.TRUE);
     }
 
+    /**
+     * A lowered block's collision follows its visual — SOLID EXACTLY WHERE DRAWN, no phantom above.
+     *
+     * <p>This lane was {@code StairBlock}-only until 2026-08-28. With the block's own cell left
+     * vanilla and only {@link SlabSupport#withHangingLoweredCollisionFromAbove} compensating, the
+     * compensation is ADDITIVE — it unions the hanging underside into the cell below but never removes
+     * the un-lowered top — so a block at cell Y drawn {@code Y-0.5 .. Y+0.5} was solid
+     * {@code Y-0.5 .. Y+1}. Measured, not inferred: {@code drawnTop=-54.5 solidTop=-54.0 delta=0.5}
+     * for stone on a bottom slab. The player stands half a block above the surface, and the climb from
+     * an adjacent slab top is 1.5 — past step height and past jump height (GH #31).
+     *
+     * <p>WHY THE GHOST DOES NOT COME BACK, which is the reason this was stair-only. The comment above
+     * records that offsetting collision made the block a ghost because the cell-bounded broadphase
+     * never samples a shape hanging into the cell below. That was true BEFORE the hanging union
+     * existed; it is not true now — {@code BlockCollisionsLoweredAboveMixin} adds the hanging part when
+     * the broadphase queries the cell below, so the underside is covered whether or not the player's
+     * box reaches the block's own cell. Stairs have run with the full offset and no ghost since the
+     * carve-out landed, which is the standing proof. {@code GhostLoweredCollisionProofTest} and
+     * {@code Slabbed2612CollisionDepthTest} both still pin the no-ghost direction.
+     *
+     * <p>The {@code isVanillaCollisionShapeQuery} guard is load-bearing and must stay: the hanging
+     * union computes the above block's contribution through {@code vanillaCollisionShape}, which sets
+     * that flag precisely so this lane does NOT move the shape a second time. Removing it double-offsets
+     * every hanging contribution.
+     *
+     * <p>Empty stays empty — this only MOVES an existing shape, it never invents one, so powder snow's
+     * contextual (absent) collision is untouched.
+     */
     @Inject(method = "getCollisionShape(Lnet/minecraft/world/level/BlockGetter;Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/phys/shapes/CollisionContext;)Lnet/minecraft/world/phys/shapes/VoxelShape;",
             at = @At("RETURN"), cancellable = true)
     private void slabbed$collisionQueryExit(BlockGetter world, BlockPos pos, CollisionContext ctx,
                                             CallbackInfoReturnable<VoxelShape> cir) {
         SLABBED$IN_COLLISION_QUERY.set(Boolean.FALSE);
-        BlockState self = (BlockState) (Object) this;
-        if (SlabSupport.isVanillaCollisionShapeQuery() || !(self.getBlock() instanceof StairBlock)) {
+        if (SlabSupport.isVanillaCollisionShapeQuery()) {
             return;
         }
+        // Cheap tests FIRST. This runs on the entity-movement hot path — every colliding cell in every
+        // entity's sweep, every tick — and getYOffset is a store lookup, not a field read. An empty
+        // shape (air, and every non-colliding block) can never be moved, so it must never pay for one.
+        VoxelShape shape = cir.getReturnValue();
+        if (shape == null || shape.isEmpty()) {
+            return;
+        }
+        BlockState self = (BlockState) (Object) this;
         double yOff = SlabSupport.getYOffset(world, pos, self);
         if (yOff < -1.0e-6d) {
-            VoxelShape shape = cir.getReturnValue();
-            if (shape != null && !shape.isEmpty()) {
-                cir.setReturnValue(shape.move(0.0d, yOff, 0.0d));
-            }
+            cir.setReturnValue(shape.move(0.0d, yOff, 0.0d));
         }
     }
 
