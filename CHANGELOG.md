@@ -25,6 +25,11 @@ See LAW.md — this changelog does not redefine the law.
 
 ### Fixes
 
+- **Mobs, arrows, and explosions respect what you see.** A block resting lower than its grid cell
+  was invisible to sight lines and projectiles in its lower half — mobs could see (and shoot) you
+  through visibly solid cover, arrows flew through the drawn body, and an explosion behind it
+  sheltered nobody. All three now treat a lowered block as solid exactly where it is drawn. The
+  empty-looking space above it is correctly clear to all three as well.
 - **Lowered blocks are solid exactly where you see them.** A block resting lower than its grid cell
   was solid for half a block *above* its visible top: you stood in the air above the surface instead
   of on it, and you could not step up onto it from an adjacent slab at all — the invisible ledge was

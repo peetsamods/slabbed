@@ -195,16 +195,26 @@ public final class PlacementDyAttachmentCapacityTest {
     public void chunkGaugeReportsMeasuredEntriesAndBands(GameTestHelper helper) {
         var level = helper.getLevel();
         BlockPos base = helper.absolutePos(new BlockPos(2, 2, 2));
-        var chunk = level.getChunkAt(base);
+        // All five writes must land in ONE chunk: clamp the local X so base+4 cannot cross a chunk
+        // border. The first version used base.offset(i,0,0) raw and went red the moment the batch
+        // layout placed the structure near a border — 1 of 5 writes landed in the measured chunk.
+        BlockPos start = new BlockPos(
+                (base.getX() & ~15) + Math.min(base.getX() & 15, 11), base.getY(), base.getZ());
+        var chunk = level.getChunkAt(start);
         for (int i = 0; i < 5; i++) {
-            SlabAnchorAttachment.writePlacementDy(level, base.offset(i, 0, 0), -0.5d);
+            SlabAnchorAttachment.writePlacementDy(level, start.offset(i, 0, 0), -0.5d);
         }
 
         java.util.List<String> lines = ChunkPlacementGauge.report(chunk, level.registryAccess());
         String headline = lines.isEmpty() ? "" : lines.get(0);
-        if (!headline.contains("placement heights: 5 entries") || !headline.contains("GREEN")) {
+        // AT LEAST five: gametests run batched, and another test's structure can share this chunk
+        // and write its own facts. Asserting an exact count would measure the batch layout.
+        java.util.regex.Matcher m = java.util.regex.Pattern
+                .compile("placement heights: (\\d+) entr").matcher(headline);
+        if (!m.find() || Integer.parseInt(m.group(1)) < 5 || !headline.contains("GREEN")) {
             throw helper.assertionException(
-                    "gauge headline must report the 5 written entries and the GREEN band, got: " + headline);
+                    "gauge headline must report at least the 5 written entries and the GREEN band, got: "
+                    + headline);
         }
         boolean namedBlock = lines.stream().anyMatch(l -> l.contains("heights by block"));
         if (!namedBlock) {
@@ -222,7 +232,7 @@ public final class PlacementDyAttachmentCapacityTest {
         // Leave the chunk as found — the store is per-chunk state shared with later tests.
         // removeAnchor is the production removal path and clears the dy entry with it.
         for (int i = 0; i < 5; i++) {
-            SlabAnchorAttachment.removeAnchor(level, base.offset(i, 0, 0));
+            SlabAnchorAttachment.removeAnchor(level, start.offset(i, 0, 0));
         }
         helper.succeed();
     }
