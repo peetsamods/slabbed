@@ -1437,8 +1437,10 @@ public abstract class BlockItemPlacementIntentMixin {
                 || !SlabEnsembleCoherence.isOccludedOccupancy(level, occupied, occupantDy)) {
             return;
         }
-        VoxelShape translatedOccupantShape = occupant.getCollisionShape(
-                        level, occupied, CollisionContext.empty())
+        // UNLOWERED on purpose: this site applies occupantDy itself on the next line. Reading the
+        // ordinary (already-lowered) shape here would offset twice and the gate would compare volumes
+        // that are nowhere near each other.
+        VoxelShape translatedOccupantShape = SlabSupport.unloweredCollisionShape(occupant, level, occupied)
                 .move(occupied.getX(), occupied.getY() + occupantDy, occupied.getZ());
         BlockItem self = (BlockItem) (Object) this;
         Vec3 click = context.getClickLocation();
@@ -1752,8 +1754,8 @@ public abstract class BlockItemPlacementIntentMixin {
         if (occupancyFrame == null) {
             return true;
         }
-        VoxelShape candidateShape = state.getCollisionShape(
-                        world, placePos, CollisionContext.empty())
+        // UNLOWERED on purpose: landingDy is applied on the next line. See the sibling site above.
+        VoxelShape candidateShape = SlabSupport.unloweredCollisionShape(state, world, placePos)
                 .move(placePos.getX(), placePos.getY() + resolution.landingDy(), placePos.getZ());
         if (candidateShape.isEmpty()) {
             return true;

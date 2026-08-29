@@ -2142,9 +2142,13 @@ public final class LandingRuleLawTest {
                             + liveTarget + "] P=" + w.getBlockState(placement) + " PFact=" + beforePlacementFact.present());
                 }
 
-                VoxelShape translatedTargetShape = targetState.getCollisionShape(w, target, CollisionContext.empty())
+                // UNLOWERED reads: this premise applies targetDy/placementDy itself, exactly as the
+                // production gate does. Since 2026-08-28 the ordinary getCollisionShape already returns
+                // the shape at its visual position, so reading it here would offset twice and the two
+                // volumes would no longer meet. Mirrors SlabSupport#unloweredCollisionShape at the gate.
+                VoxelShape translatedTargetShape = SlabSupport.unloweredCollisionShape(targetState, w, target)
                         .move(target.getX(), target.getY() + targetDy, target.getZ());
-                VoxelShape translatedPlacementShape = heldSlabState.getCollisionShape(w, placement, CollisionContext.empty())
+                VoxelShape translatedPlacementShape = SlabSupport.unloweredCollisionShape(heldSlabState, w, placement)
                         .move(placement.getX(), placement.getY() + placementDy, placement.getZ());
                 if (!Shapes.joinIsNotEmpty(translatedTargetShape, translatedPlacementShape, BooleanOp.AND)) {
                     throw h.assertionException(target, "wrong-red premise: " + fixtureNames[i]

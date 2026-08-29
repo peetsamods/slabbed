@@ -1236,6 +1236,19 @@ public final class SlabSupport {
         return Boolean.TRUE.equals(VANILLA_COLLISION_SHAPE_QUERY.get());
     }
 
+    /**
+     * The UN-LOWERED collision shape, for callers that apply the offset themselves.
+     *
+     * <p>Since 2026-08-28 a lowered block's {@code getCollisionShape} returns its shape already moved
+     * to the visual position, so any caller that then adds {@code dy} of its own would offset twice.
+     * The placement occupancy gate does exactly that — it reads a shape and moves it by the
+     * occupant's or candidate's dy — so it must read through here. Anything asking "where is this
+     * block solid?" should use the ordinary call instead.
+     */
+    public static VoxelShape unloweredCollisionShape(BlockState state, CollisionGetter getter, BlockPos pos) {
+        return vanillaCollisionShape(state, getter, pos);
+    }
+
     private static VoxelShape vanillaCollisionShape(BlockState state, CollisionGetter getter, BlockPos pos) {
         boolean previous = isVanillaCollisionShapeQuery();
         VANILLA_COLLISION_SHAPE_QUERY.set(Boolean.TRUE);

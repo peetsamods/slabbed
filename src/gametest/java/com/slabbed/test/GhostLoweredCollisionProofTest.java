@@ -32,15 +32,20 @@ import net.minecraft.world.phys.shapes.VoxelShape;
  * never samples it → the player walks through (the ghost).
  *
  * <p>This is independent of the removed {@code getCollisionShape} injection
- * (that only ever touched fence/wall/grindstone). The fix is to keep movement
- * collision vanilla (within-cell) by suppressing the outline offset during a
- * collision query.
+ * (that only ever touched fence/wall/grindstone).
  *
- * <p><b>Assertion.</b> A full block sitting above a bottom slab (dy=-0.5) must
- * report a collision shape whose {@code min Y >= 0} — i.e. within its own cell.
- * RED (bleed present) reports {@code min Y = -0.5}; GREEN (vanilla collision)
- * reports {@code min Y = 0}. A second check confirms the broadphase actually
- * yields a collision for a player-sized box standing on the block's cell.
+ * <p><b>How the ghost is prevented NOW (updated 2026-08-28).</b> The original fix kept movement
+ * collision vanilla — within its own cell — by suppressing the outline offset during a collision
+ * query. That is no longer how the guarantee is delivered: {@code BlockCollisionsLoweredAboveMixin}
+ * unions a lowered block's hanging part into the cell below when the broadphase queries it, so the
+ * drawn volume is occupied regardless of which cell owns the shape. Collision therefore follows the
+ * visual (GH #31 — otherwise a phantom half-block sat above every lowered surface).
+ *
+ * <p><b>Assertions.</b> Outcome, not mechanism, so either implementation may satisfy them: the block
+ * is solid in the part of its DRAWN volume that hangs below its own cell (the band where the original
+ * ghost was felt), and a player-sized box standing on its cell collides. The old
+ * {@code min Y >= 0} shape assertion was removed because it pinned the first implementation and
+ * would reject any fix that made collision follow the visual.
  *
  * <p>Does NOT mutate production logic; pure measurement/regression.
  */
@@ -75,15 +80,33 @@ public final class GhostLoweredCollisionProofTest {
                     + "); cannot test the collision bleed");
         }
 
-        // CORE: the collision shape the broadphase uses must be within the cell.
-        VoxelShape collision = blockState.getCollisionShape(level, blockAbs, CollisionContext.empty());
-        double minY = collision.isEmpty() ? 0.0 : collision.min(Direction.Axis.Y);
-        if (minY < -EPS) {
+        // CORE: the block must be SOLID THROUGHOUT ITS DRAWN VOLUME, including the part that hangs
+        // into the cell below. This is the anti-ghost invariant itself.
+        //
+        // It replaced a mechanism pin (2026-08-28). That pin asserted the collision shape's
+        // minY >= 0 — "stays within its own cell" — which was the ORIGINAL fix's implementation, from
+        // before BlockCollisionsLoweredAboveMixin existed: with no hanging union, a shape reaching
+        // below its cell was simply dropped by the cell-bounded broadphase and the player fell through.
+        // The union now supplies that lower part when the broadphase queries the cell below, so
+        // "within its own cell" is no longer what keeps a player out — being solid where drawn is.
+        // Pinning the implementation also actively blocked the GH #31 fix, because collision could not
+        // follow the visual without tripping it, which left a phantom half-block above every lowered
+        // surface. Asserting the outcome instead admits either implementation and rejects both defects.
+        //
+        // This is STRICTLY STRONGER than the pin it replaced: minY >= 0 says nothing about whether the
+        // drawn volume is actually occupied, and the sub-cell band below is exactly where the original
+        // ghost was felt.
+        double drawnMinY = blockAbs.getY()
+                + blockState.getShape(level, blockAbs, CollisionContext.empty()).bounds().minY;
+        AABB inHangingPart = new AABB(
+                blockAbs.getX() + 0.3, drawnMinY + 0.05, blockAbs.getZ() + 0.3,
+                blockAbs.getX() + 0.7, drawnMinY + 0.45, blockAbs.getZ() + 0.7);
+        if (level.noCollision(inHangingPart)) {
             throw helper.assertionException(blockRel,
-                    "GHOST: lowered full block (dy=" + dy + ") has SUB-CELL collision"
-                    + " minY=" + minY + " — the outline offset bled into movement collision"
-                    + " (vanilla getCollisionShape -> getShape). The cell-bounded broadphase"
-                    + " drops a shape that hangs below its own cell, so the player passes through.");
+                    "GHOST: lowered full block (dy=" + dy + ") is NOT solid in the part of its drawn"
+                    + " volume that hangs below its own cell (drawn minY=" + drawnMinY + "). The"
+                    + " broadphase is dropping the hanging shape, so the player passes through the"
+                    + " lower half of what they can see.");
         }
 
         // CORROBORATION: a player-sized box standing on the block's cell must collide.
@@ -94,7 +117,7 @@ public final class GhostLoweredCollisionProofTest {
         if (noCollision) {
             throw helper.assertionException(blockRel,
                     "GHOST: broadphase yielded NO collision for a player box on the lowered"
-                    + " block's cell (minY=" + minY + ", dy=" + dy + ") — pass-through.");
+                    + " block's cell (drawn minY=" + drawnMinY + ", dy=" + dy + ") — pass-through.");
         }
 
         helper.succeed();
