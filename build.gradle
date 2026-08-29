@@ -229,6 +229,13 @@ jar {
     exclude "com/slabbed/util/SlabbedRecorder\$*.class"
 }
 
+tasks.named("sourcesJar", Jar).configure {
+    from("LICENSE") {
+        rename { "${it}_${project.base.archivesName.get()}" }
+    }
+    exclude "com/slabbed/util/SlabbedRecorder.java"
+}
+
 publishing {
     publications {
         register("mavenJava", MavenPublication) {
