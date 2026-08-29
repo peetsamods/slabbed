@@ -6,7 +6,7 @@ chosen when it was placed; a later neighbor edit must not move it. See `LAW.md` 
 
 ## Current development state
 
-- Source version: `0.5.0-beta.9+26.2`.
+- Source version: `0.5.2-alpha.1+26.2`.
 - Minecraft: 26.2; Fabric Loader and Fabric API are required.
 - Java: 25 for this checkout's build and test tasks.
 - This is an active development candidate, not a release recommendation. The current live RED is an

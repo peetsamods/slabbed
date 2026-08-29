@@ -25,6 +25,18 @@ See LAW.md — this changelog does not redefine the law.
 
 ### Fixes
 
+- **Lowered blocks are solid exactly where you see them.** A block resting lower than its grid cell
+  was solid for half a block *above* its visible top: you stood in the air above the surface instead
+  of on it, and you could not step up onto it from an adjacent slab at all — the invisible ledge was
+  taller than you can jump. The block's collision now follows its visual, so the surface you see is
+  the surface you stand on. The underside is unchanged, so nothing has become walk-through-able.
+  ([#31](https://github.com/peetsamods/slabbed/issues/31))
+- **Scaffolding stacks where you aim again.** Side-clicking a scaffolding column to extend it did
+  nothing; clicking its top face put a floating scaffolding diagonally away from where you aimed, and
+  those strays stayed behind when the original was broken. Vanilla moves a scaffolding placement away
+  from the cell you clicked, and the mod was measuring the height against the clicked cell instead of
+  the one the block actually landed in, then freezing that wrong height permanently.
+  ([#65](https://github.com/peetsamods/slabbed/issues/65))
 - **Deep scaffolding accepts side-clicks.** Side-clicking a scaffolding column that renders a block
   or more below its cell no longer makes the block flicker in and vanish — the server now validates
   the click against the position you can actually see. Confirmed in live play.
