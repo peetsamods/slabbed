@@ -1,0 +1,9 @@
+{
+  "replace": false,
+  "values": [
+    "terrain_slabs:shim_terrain_slab",
+    "terrain_slabs:shim_terrain_step",
+    "terrainslabs:shim_terrain_slab",
+    "slabbed_ts_shim:shim_terrain_slab"
+  ]
+}

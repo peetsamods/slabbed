@@ -1,3 +1,18 @@
 {
-  "mod.slabbed.name": "Slabbed"
+  "mod.slabbed.name": "Slabbed",
+  "commands.slabbed.deep_mode.status.legacy": "Deep mode is OFF for this legacy save; no consent has been recorded.",
+  "commands.slabbed.deep_mode.status.disabled": "Deep mode is OFF for this save.",
+  "commands.slabbed.deep_mode.status.enabled": "Deep mode is permanently ON for this save.",
+  "commands.slabbed.deep_mode.status.locked": "Deep mode is locked OFF because this save uses unknown consent data.",
+  "commands.slabbed.deep_mode.warning": "WARNING: Deep mode affects this save and its copies, may move unstored or factless blocks, and cannot be disabled safely. Older Slabbed versions may not honor it. Make a backup before enabling permanently.",
+  "commands.slabbed.deep_mode.confirm_button": "[Enable permanently]",
+  "commands.slabbed.deep_mode.confirm_hover": "Permanently enable deep mode for this save",
+  "commands.slabbed.deep_mode.cancel_button": "[Cancel]",
+  "commands.slabbed.deep_mode.cancel_hover": "Leave deep mode off",
+  "commands.slabbed.deep_mode.enabled": "Deep mode is now permanently enabled for this save.",
+  "commands.slabbed.deep_mode.already_enabled": "Deep mode is already permanently enabled for this save.",
+  "commands.slabbed.deep_mode.canceled": "Deep mode remains off; no save setting was changed.",
+  "commands.slabbed.deep_mode.no_confirmation": "No active deep-mode confirmation exists. Run /slabbed deep-mode enable first.",
+  "commands.slabbed.deep_mode.locked": "This save's consent data is newer or unreadable; deep mode remains locked off.",
+  "commands.slabbed.deep_mode.no_server": "Deep mode could not find an active server save."
 }

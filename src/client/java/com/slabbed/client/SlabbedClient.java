@@ -1,49 +1,16 @@
 package com.slabbed.client;
 
-import com.slabbed.Slabbed;
-import com.slabbed.debug.SlabbedInspect;
-import net.fabricmc.api.ClientModInitializer;
-import net.fabricmc.loader.api.FabricLoader;
+import net.neoforged.bus.api.IEventBus;
+import net.neoforged.neoforge.common.NeoForge;
 
-import java.lang.reflect.InvocationTargetException;
-
-public final class SlabbedClient implements ClientModInitializer {
-    @Override
-    public void onInitializeClient() {
-        SlabbedInspect.logSessionStart();
-        SlabbedModelLoadingPlugin.init();
-        SlabAnchorClientSync.init();
-        com.slabbed.client.debug.BsFbLiveTraceClient.init();
-        initGapFillerOverlay();
-        initScreenshotCaptureService();
+public final class SlabbedClient {
+    private SlabbedClient() {
     }
 
-    private static void initGapFillerOverlay() {
-        if (!SlabbedClientFlags.GAP_FILL) {
-            return;
-        }
-        invokeStaticInit(
-                "com.slabbed.client.GapFillerOverlay",
-                "gap filler overlay");
-    }
-
-    private static void initScreenshotCaptureService() {
-        if (!FabricLoader.getInstance().isDevelopmentEnvironment()) {
-            return;
-        }
-        invokeStaticInit(
-                "com.slabbed.client.ScreenshotCaptureService",
-                "screenshot capture service");
-    }
-
-    private static void invokeStaticInit(String className, String label) {
-        try {
-            Class<?> hookClass = Class.forName(className);
-            hookClass.getMethod("init").invoke(null);
-        } catch (ClassNotFoundException e) {
-            Slabbed.LOGGER.warn("{} is unavailable in this environment", label);
-        } catch (NoSuchMethodException | IllegalAccessException | InvocationTargetException | LinkageError e) {
-            Slabbed.LOGGER.warn("Failed to initialize {}", label, e);
-        }
+    public static void init(IEventBus modEventBus) {
+        SlabbedModelLoadingPlugin.init(modEventBus);
+        SlabAnchorClientSync.init(NeoForge.EVENT_BUS);
+        SlabPlacementHeightClientSync.init(NeoForge.EVENT_BUS);
+        DeepDyConsentClientSync.init(NeoForge.EVENT_BUS);
     }
 }

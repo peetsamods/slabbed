@@ -1,5 +1,138 @@
 ## [Unreleased]
 
+The NeoForge 1.21.1 parity line now carries `0.5.2-alpha.1+1.21.1` (maintainer
+ruling, 2026-08-28). The label follows the shared alpha series rather than the
+line's own history: `0.5.1-alpha.1` was published from another line, so this one
+adopts the next number instead of reusing a spent one. Nothing is tagged or
+published under this label yet — the version is bumped, the release is not cut.
+
+### Placement and persistence
+
+- Store the exact signed half-step chosen by a real placement, persist it with
+  its chunk, synchronize it to clients, and keep it permanent through neighbor
+  updates and support removal.
+- Keep the legal interaction envelope at `−3.0` and reject aims or prospective
+  landings deeper than it before block, fact, item, event, or chunk-dirty
+  mutation. A `−2.5` landing is inside the envelope and is accepted.
+- Guard server-world shape resolution off the server thread to prevent chunk
+  loading from lighting and other background workers.
+
+### Rendering and physics
+
+- Resolve model, outline, raycast, collision, culling, and client refresh from
+  one numeric placement height, including the legal `−3.0` boundary.
+- Preserve inventory, custom-renderer, dynamic, and foreign composite model
+  identity instead of wrapping models Slabbed does not own.
+- Restore reciprocal fence, wall, and pane settlement immediately after a
+  lowered placement without cascading unrelated neighbor updates.
+
+### Compatibility and vanilla ownership
+
+- Add isolated integration coverage for Terrain Slabs, Sable moving-world
+  targeting, Snow! Real Magic composite rendering, and Smooth Steps movement
+  and camera convergence.
+- Preserve Create inventory-model identity while keeping world block-state
+  models eligible for Slabbed rendering.
+- Return redstone connection topology and free-floating chain survival to
+  vanilla behavior, and prevent spawning on bottom-like slab surfaces.
+
+### Save-scoped deep mode
+
+- Add explicit absent, disabled, enabled, and unknown-future consent states.
+  New and legacy saves remain shallow by default; unknown data fails closed.
+- Add the server-owned `/slabbed deep-mode status|enable|confirm|cancel` flow
+  with owner-level permission, a replay-safe confirmation window, and one-way
+  save-wide activation.
+- Synchronize consent to clients, refresh the active renderer, reset to shallow
+  behavior on logout, and retain the state through restart and save copies.
+
+### Verification
+
+- Expand the clean NeoForge server suite to 252 required GameTests with a fixed
+  independent count, permanent-placement controls, allocation guards, and exact
+  runtime/source JAR allowlists.
+- Add isolated physical-client routes for placement-height lifecycle, numeric
+  visual ownership, Terrain Slabs, Snow! Real Magic, Smooth Steps, and deep-mode
+  restart/reconnect behavior.
+
+Placement permanence is governed by [LAW.md](LAW.md).
+
+## [0.4.2-beta.2] - Minecraft 1.21.1 (NeoForge)
+
+Carries the 0.4.2 parity-candidate work for this port plus a render-path
+performance cleanup. Build metadata corrected from `+26.2` (inherited from the
+26.2 parity port it was derived from) to `+1.21.1`, the actual target Minecraft
+version; this is a relabel only and does not affect version precedence.
+
+### Performance
+- Removed always-on per-block work from the chunk-mesh render path: the
+  full-mesh-bounds diagnostic sampler no longer does a block-registry lookup,
+  ~6 string allocations, and an atomic increment per block before checking its
+  (production-off) trace flag — that work and its per-vertex bounds loop are now
+  skipped entirely unless the trace is armed. Render trace flags are read once at
+  class-load instead of per block; `render.offset.trace` (which client gametests
+  toggle at runtime) stays live but is gated cheap-first. Zero behavior change;
+  matters most under Sodium, which routes all block geometry through this path.
+  (This is the generalized form of the Fabric 1.21.1 per-block-trace lag; the
+  exact Fabric cause — per-block reflection on a release-excluded class — is
+  structurally absent on NeoForge.)
+
+## [0.4.0-beta.3] - Slabbed 0.4.0 Beta 3 / Minecraft 1.21.1
+
+The Minecraft 1.21.1 port, with a rebuilt targeting path. Consolidates the
+slab-lowering, placement, and visual-contact work since 0.2.0-beta.4.
+
+> Version note: this port moves from `0.2.0-beta.4` directly to `0.4.0-beta.3`;
+> the intervening `0.3.x` and `0.4.0-beta.1`–`beta.2` tags belong to separate
+> Slabbed branches and are not part of this 1.21.1 line.
+
+### Targeting
+- Replaced the old DDA "rescue" retargeter with an offset-aware nearest-hit raycast, so the crosshair selects and breaks exactly the block you are pointing at on lowered/offset shapes — no more sideways mistargeting. Fence/wall/pane and lowered-block outlines are kept consistent with their rendered shape so the raycast can't target a phantom.
+
+### Fixed
+- Adjacent side slabs beside a lowered full block stay visually lowered and merge flush (no seam/float across the height step).
+- Decorative hangers — lanterns, soul lanterns, spore blossoms, hanging roots, pale hanging moss — follow a lowered support block down instead of clipping into it. Chains excluded; top-slab `+0.5` adherence preserved.
+- Powder snow is never lowered onto slabs (it is a full terrain cube, not a thin top layer), fixing the snowy-terrain see-through step.
+- Lowered top-slab lower-edge side placement lands flush in the aimed visual half; a slab placed onto a compound/lowered stack targets the visible owner's top.
+- Fence, wall, and pane connections no longer draw across a Slabbed height step.
+- Lowered trapdoor seam resolves from the correct block-state authority.
+
+### Developer
+- `/slabdy` overlay: a toggleable HUD readout of the targeted block's source and visual offset, now off by default in release/profile launches.
+
+### Known limitations
+- A face-culling / shadow artifact beside a lowered full-block ↔ vanilla-slab boundary is deferred to a later render/culling slice.
+- Full Terrain Slabs named-surface support (lowering objects onto Terrain Slabs surfaces) is not in this build; Terrain Slabs blocks are kept un-offset (no ghost terrain) and otherwise behave as vanilla support.
+- No all-item or all-partial-block support claim is made for this beta.
+
+## [0.2.0-beta.4] — Slabbed 0.2.0 Beta 4 / Beta 4
+
+### Highlights
+- Major slab-supported object targeting/contact stability pass covering:
+  - floor torch
+  - candle
+  - flower pot
+  - button
+  - trapdoor
+  - door
+  - fence
+  - wall
+  - fence gate
+  - chain
+  - lantern
+- This final public beta.4 slice locks the beta.4 runtime/metadata on `0.2.0-beta.4` after non-blocking final proof checks.
+
+### Known limitation
+- `SLAB_PLACEMENT_LANE_JUMP_DEFERRED_NO_NAMED_LEGAL_LANE`
+- panes/carpet/thin top layers are not covered by SBSBS matrix
+- No all-item support claim is made for beta.4
+
+### Credit
+An external PR investigation into hitbox selection, ghost rendering, slab
+placement edge cases, and bounded depth helped shape the Beta 4 compound-lane
+decisions and release guardrails. The PR was not merged directly:
+https://github.com/peetsamods/slabbed/pull/8
+
 ## [0.2.0-beta.2] — Side-Slab Torch Stability
 
 ### Fixed
@@ -38,3 +171,7 @@
 ### Known issues
 - Redstone on slabs: visual/connection edge cases remain (down-step and power propagation still under investigation).
 - Hanging support under top slabs: needs explicit in-game verification/triage for any remaining blocks beyond lanterns.
+
+---
+
+*👾 Changelog written by Claude, proofread and edited by me.*

@@ -5,7 +5,11 @@
   "name": "Slabbed GameTest",
   "environment": "*",
   "entrypoints": {
+    "client": [
+      "com.slabbed.test.Mc1211GoblinRouteClientEntrypoint"
+    ],
     "fabric-gametest": [
+      "com.slabbed.test.Mc1211GoblinRouteCanaryGameTest",
       "com.slabbed.test.SlabbedLabFixtureTest",
       "com.slabbed.test.ChainSurvivalReproTest"
     ],
@@ -14,11 +18,14 @@
       "com.slabbed.test.SlabbedLabUltraGoblin2StressClientGameTest",
       "com.slabbed.test.SlabbedLabLoweredSidePlacementLiveReproClientGameTest",
       "com.slabbed.test.SlabbedLabRenderRegionLoweredCarrierBridgeClientGameTest",
-      "com.slabbed.test.SlabbedLabModelDySingleOwnerAuditClientGameTest"
+      "com.slabbed.test.SlabbedLabModelDySingleOwnerAuditClientGameTest",
+      "com.slabbed.test.SlabbedLabBeta4CompoundLoweredFullBlockCollapseClientGameTest",
+      "com.slabbed.test.SlabbedLabBeta4CompoundContractMatrixClientGameTest",
+      "com.slabbed.test.SlabbedLabBeta4AuthoredCompoundAnchorDepthClientGameTest"
     ]
   },
   "depends": {
-    "fabricloader": ">=0.18.1",
+    "fabricloader": ">=0.17.3",
     "fabric-gametest-api-v1": "*",
     "slabbed": "*"
   }

@@ -1,0 +1,9 @@
+modLoader = "javafml"
+loaderVersion = "[2,)"
+license = "GPL-3.0-only"
+
+[[mods]]
+modId = "terrain_slabs"
+version = "0.0.0+headless-shim"
+displayName = "Terrain Slabs Headless Classifier Shim"
+description = '''Test-only stand-in that claims the Terrain Slabs mod id so the compatibility gate is provable in the headless GameTest server. Loaded only by the GameTest run configuration; never part of any shipped or installed artifact.'''

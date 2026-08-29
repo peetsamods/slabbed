@@ -1,0 +1,16 @@
+modLoader = "javafml"
+loaderVersion = "[2,)"
+license = "GPL-3.0-only"
+
+[[mods]]
+modId = "slabbed_devtools"
+version = "0.0.0+devtools"
+displayName = "Slabbed Dev Diagnostics"
+description = '''Dev-only recorder, rig builder, and target-dy display. Loaded only by dev run configurations; never part of any shipped or installed artifact.'''
+
+[[dependencies.slabbed_devtools]]
+modId = "slabbed"
+type = "required"
+versionRange = "[0,)"
+ordering = "AFTER"
+side = "BOTH"

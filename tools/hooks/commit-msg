@@ -1,0 +1,126 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+message_file="$1"
+repo_root="$(git rev-parse --show-toplevel)"
+repo_root_real="$(cd -P -- "$repo_root" && pwd)"
+staged_paths=()
+
+while IFS= read -r -d '' path; do
+    staged_paths+=("$path")
+done < <(git diff --cached --name-only -z)
+
+fail() {
+    echo "commit-msg: $1" >&2
+    exit 1
+}
+
+added_lines="$(git diff --cached --no-ext-diff --unified=0 | grep '^+' | grep -v '^+++' || true)"
+metadata_to_scan="$added_lines"
+metadata_to_scan+=$'\n'
+metadata_to_scan+="$(< "$message_file")"
+# A path is public surface even when no added line mentions it, and the "^+++" filter
+# above discards the only diff line a new or renamed path appears on.
+metadata_to_scan+=$'\n'
+metadata_to_scan+="$(printf '%s\n' "${staged_paths[@]:-}")"
+
+windows_path_separator='\\+'
+users_directory_name='Users'
+home_directory_name='home'
+local_path_pattern="/${users_directory_name}/[^/[:space:]]+|/${home_directory_name}/[^/[:space:]]+|[A-Za-z]:${windows_path_separator}${users_directory_name}${windows_path_separator}"
+client_new_thread_key='client-new'
+session_metadata_pattern="(thread|session|run)[[:space:]_-]*id[[:space:]]*[\"']?[[:space:]]*[:=]|rollout[[:space:]_-]*(id|path)[[:space:]]*[\"']?[[:space:]]*[:=]|${client_new_thread_key}-thread:"
+if grep -qiE "${local_path_pattern}|${session_metadata_pattern}" <<< "$metadata_to_scan"; then
+    fail "staged content contains local-path or session metadata"
+fi
+
+for local_value in "$(git config user.name || true)" "$(id -un || true)"; do
+    if [[ -n "$local_value" ]] && grep -Fq -- "$local_value" <<< "$metadata_to_scan"; then
+        fail "staged content contains local identity metadata"
+    fi
+done
+
+# The configured git identity is not the only name that must stay out of public content,
+# and this public repository is the wrong place to record the others. The designated
+# out-of-repo notes directory supplies them, one literal per line; blank lines and lines
+# beginning with "#" are ignored. Matches are reported by count, never echoed.
+discretion_notes_root="$(cd -P -- "$repo_root/../Slabbed-notes" 2>/dev/null && pwd || true)"
+if [[ -n "$discretion_notes_root" && -f "$discretion_notes_root/discretion-denylist.txt" ]]; then
+    while IFS= read -r discretion_pattern || [[ -n "$discretion_pattern" ]]; do
+        [[ -z "$discretion_pattern" || "$discretion_pattern" == \#* ]] && continue
+        if grep -qiF -- "$discretion_pattern" <<< "$metadata_to_scan"; then
+            fail "staged content or message matches a discretion denylist entry"
+        fi
+    done < "$discretion_notes_root/discretion-denylist.txt"
+fi
+
+
+shopt -s nocasematch
+for path in "${staged_paths[@]:-}"; do
+    case "$path" in
+        LAW.md) ;;
+        *.md|*.markdown|*.adoc|*.asciidoc|*.rst|*.txt)
+            # Read the blob once, then grep the variable. Piping into grep -q here is a trap
+            # under this script's pipefail: grep exits on its first match and closes the pipe,
+            # git show takes SIGPIPE writing the rest of a large file, the pipeline goes
+            # nonzero, and the negated check inverts that into "no reference found" - failing
+            # a compliant document, timing-dependently, with this very message.
+            staged_doc="$(git show ":$path" 2>/dev/null || true)"
+            if grep -qiE '(^|[^[:alnum:]])law([[:space:]-]|$)' <<< "$staged_doc" \
+                    && ! grep -q 'LAW.md' <<< "$staged_doc"; then
+                fail "law-related tracked documentation must reference LAW.md ($path)"
+            fi
+            ;;
+    esac
+done
+shopt -u nocasematch
+
+source_commit=false
+behavior_commit=false
+for path in "${staged_paths[@]:-}"; do
+    case "$path" in
+        src/main/*) source_commit=true; behavior_commit=true ;;
+        src/client/*|src/gametest/*|build.gradle|gradle.properties) behavior_commit=true ;;
+        _mcsrc/*|net/minecraft/*|docs/binder/*)
+            fail "forbidden source or binder material is staged"
+            ;;
+    esac
+done
+
+if [[ "$source_commit" == true ]]; then
+    law_preflight_trailers=()
+    shopt -s nocasematch
+    while IFS= read -r trailer; do
+        case "$trailer" in
+            LAW-PREFLIGHT:*) law_preflight_trailers+=("$trailer") ;;
+        esac
+    done < <(git interpret-trailers --parse "$message_file")
+    shopt -u nocasematch
+    if [[ ${#law_preflight_trailers[@]} -ne 1 || ! "${law_preflight_trailers[0]:-}" =~ ^LAW-PREFLIGHT:\ [ny]$ ]]; then
+        fail "source commits require a LAW-PREFLIGHT: n or LAW-PREFLIGHT: y trailer"
+    fi
+fi
+
+if [[ "$behavior_commit" == true ]]; then
+    ledger_path="${SLABBED_BEHAVIOR_LEDGER:-}"
+    [[ -n "$ledger_path" ]] || fail "behavior commits require a designated external behavior ledger"
+    [[ "$ledger_path" = /* ]] || fail "behavior ledger must be an absolute external file path"
+    [[ -f "$ledger_path" && ! -L "$ledger_path" ]] \
+        || fail "behavior ledger must name a non-symlinked regular external file"
+    notes_root="$(cd -P -- "$repo_root/../Slabbed-notes" 2>/dev/null && pwd)" \
+        || fail "the designated external notes directory is unavailable"
+    ledger_real="$(cd -P -- "$(dirname "$ledger_path")" 2>/dev/null && printf '%s/%s' "$PWD" "$(basename "$ledger_path")")" \
+        || fail "behavior ledger path cannot be resolved"
+    case "$ledger_real" in
+        "$notes_root"/*) ;;
+        *) fail "behavior ledger must live in the designated external notes directory" ;;
+    esac
+    case "$ledger_real" in
+        "$repo_root_real"/*) fail "behavior ledger must remain outside the repository" ;;
+    esac
+    candidate_digest="$(git diff --cached --binary --no-ext-diff | shasum -a 256 | awk '{print $1}')"
+    ledger_token="candidate-diff-sha256: $candidate_digest"
+    last_nonempty_ledger_line="$(awk 'NF { line = $0 } END { print line }' "$ledger_real")"
+    [[ "$last_nonempty_ledger_line" == "$ledger_token" ]] \
+        || fail "behavior ledger must end with the staged-diff token"
+fi

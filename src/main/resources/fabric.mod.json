@@ -3,7 +3,7 @@
   "id": "slabbed",
   "version": "${version}",
   "name": "Slabbed",
-  "license": "MIT",
+  "license": "GPL-3.0-only",
   "environment": "*",
   "entrypoints": {
     "main": [
@@ -25,9 +25,6 @@
   "depends": {
     "fabricloader": "*",
     "fabric-api": "*",
-    "minecraft": "1.21.11"
-  },
-  "recommends": {
-    "indium": "*"
+    "minecraft": "1.21.1"
   }
 }

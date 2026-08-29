@@ -1,147 +1,213 @@
 package com.slabbed.mixin.client;
 
+import com.mojang.blaze3d.vertex.PoseStack;
+import com.mojang.blaze3d.vertex.VertexConsumer;
 import com.slabbed.client.ClientDy;
-import com.slabbed.client.debug.ModelDyTranslateTraceBridge;
-import net.minecraft.block.BlockState;
-import net.minecraft.client.render.VertexConsumer;
-import net.minecraft.client.render.block.BlockModelRenderer;
-import net.minecraft.client.util.math.MatrixStack;
-import net.minecraft.client.render.model.BlockModelPart;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.world.BlockRenderView;
+import com.slabbed.client.model.ChainCeilingGeometry;
+import com.slabbed.client.model.OffsetBlockStateModel;
+import com.slabbed.util.RuntimeDiagnostics;
+import com.slabbed.util.SlabSupport;
+import net.minecraft.client.renderer.block.ModelBlockRenderer;
+import net.minecraft.client.resources.model.BakedModel;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
+import net.minecraft.util.RandomSource;
+import net.minecraft.world.level.BlockAndTintGetter;
+import net.minecraft.world.level.block.state.BlockState;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
+import org.spongepowered.asm.mixin.injection.ModifyVariable;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
-
-import java.util.List;
 
 /**
  * Applies ClientDy translate on the main block render path so models align with outline/raycast.
  */
-@Mixin(BlockModelRenderer.class)
+@Mixin(ModelBlockRenderer.class)
 public class BlockModelDyTranslateMixin {
+    @ModifyVariable(
+            method = "tesselateBlock(Lnet/minecraft/world/level/BlockAndTintGetter;Lnet/minecraft/client/resources/model/BakedModel;Lnet/minecraft/world/level/block/state/BlockState;Lnet/minecraft/core/BlockPos;Lcom/mojang/blaze3d/vertex/PoseStack;Lcom/mojang/blaze3d/vertex/VertexConsumer;ZLnet/minecraft/util/RandomSource;JI)V",
+            at = @At("HEAD"),
+            argsOnly = true,
+            ordinal = 0)
+    private boolean slabbed$relaxCullAtHeightStep(
+            boolean cull,
+            BlockAndTintGetter world,
+            BakedModel model,
+            BlockState state,
+            BlockPos pos
+    ) {
+        boolean heightStep = false;
+        if (cull && world != null && state != null && pos != null) {
+            for (Direction direction : Direction.Plane.HORIZONTAL) {
+                if (SlabSupport.isSlabHeightStepFace(world, pos, state, direction)) {
+                    heightStep = true;
+                    break;
+                }
+            }
+        }
+        RuntimeDiagnostics.recordRenderStepCullTrace(pos, cull && heightStep);
+        return heightStep ? false : cull;
+    }
+
     private static void slabbed$recordTrace(
             String method,
-            BlockRenderView world,
+            BlockAndTintGetter world,
             BlockPos pos,
             BlockState state,
             double dy
     ) {
-        ModelDyTranslateTraceBridge.record(method, world, pos, state, dy);
+        RuntimeDiagnostics.recordModelDyTrace(method, world, pos, state, dy);
     }
 
-    @Inject(method = "render(Lnet/minecraft/world/BlockRenderView;Ljava/util/List;Lnet/minecraft/block/BlockState;Lnet/minecraft/util/math/BlockPos;Lnet/minecraft/client/util/math/MatrixStack;Lnet/minecraft/client/render/VertexConsumer;ZI)V",
+    private static double slabbed$modelDy(BakedModel model, BlockAndTintGetter world, BlockPos pos, BlockState state) {
+        if (model instanceof OffsetBlockStateModel) {
+            return 0.0d;
+        }
+        if (ChainCeilingGeometry.usesAlternateGeometry(world, pos, state)) {
+            return 0.0d;
+        }
+        return ClientDy.dyFor(world, pos, state);
+    }
+
+    private static void slabbed$pushWrapperContext(BakedModel model, BlockAndTintGetter world, BlockPos pos, BlockState state) {
+        if (model instanceof OffsetBlockStateModel) {
+            OffsetBlockStateModel.pushRenderContextFallback(world, pos, state);
+        }
+    }
+
+    private static void slabbed$popWrapperContext(BakedModel model) {
+        if (model instanceof OffsetBlockStateModel) {
+            OffsetBlockStateModel.popRenderContextFallback();
+        }
+    }
+
+    @Inject(method = "tesselateBlock(Lnet/minecraft/world/level/BlockAndTintGetter;Lnet/minecraft/client/resources/model/BakedModel;Lnet/minecraft/world/level/block/state/BlockState;Lnet/minecraft/core/BlockPos;Lcom/mojang/blaze3d/vertex/PoseStack;Lcom/mojang/blaze3d/vertex/VertexConsumer;ZLnet/minecraft/util/RandomSource;JI)V",
             at = @At("HEAD"))
-    private void slabbed$pushDy(BlockRenderView world,
-                                List<BlockModelPart> parts,
+    private void slabbed$pushDy(BlockAndTintGetter world,
+                                BakedModel model,
                                 BlockState state,
                                 BlockPos pos,
-                                MatrixStack matrices,
+                                PoseStack matrices,
                                 VertexConsumer vertexConsumer,
                                 boolean cull,
+                                RandomSource random,
+                                long seed,
                                 int overlay,
                                 CallbackInfo ci) {
-        double dy = ClientDy.dyFor(world, pos, state);
-        slabbed$recordTrace("render", world, pos, state, dy);
+        slabbed$pushWrapperContext(model, world, pos, state);
+        double dy = slabbed$modelDy(model, world, pos, state);
+        slabbed$recordTrace("tesselateBlock", world, pos, state, dy);
         if (dy == 0.0) {
             return;
         }
-        matrices.push();
+        matrices.pushPose();
         matrices.translate(0.0, dy, 0.0);
     }
 
-    @Inject(method = "render(Lnet/minecraft/world/BlockRenderView;Ljava/util/List;Lnet/minecraft/block/BlockState;Lnet/minecraft/util/math/BlockPos;Lnet/minecraft/client/util/math/MatrixStack;Lnet/minecraft/client/render/VertexConsumer;ZI)V",
+    @Inject(method = "tesselateBlock(Lnet/minecraft/world/level/BlockAndTintGetter;Lnet/minecraft/client/resources/model/BakedModel;Lnet/minecraft/world/level/block/state/BlockState;Lnet/minecraft/core/BlockPos;Lcom/mojang/blaze3d/vertex/PoseStack;Lcom/mojang/blaze3d/vertex/VertexConsumer;ZLnet/minecraft/util/RandomSource;JI)V",
             at = @At("TAIL"))
-    private void slabbed$popDy(BlockRenderView world,
-                               List<BlockModelPart> parts,
+    private void slabbed$popDy(BlockAndTintGetter world,
+                               BakedModel model,
                                BlockState state,
                                BlockPos pos,
-                               MatrixStack matrices,
+                               PoseStack matrices,
                                VertexConsumer vertexConsumer,
                                boolean cull,
+                               RandomSource random,
+                               long seed,
                                int overlay,
                                CallbackInfo ci) {
-        double dy = ClientDy.dyFor(world, pos, state);
-        if (dy == 0.0) {
-            return;
+        double dy = slabbed$modelDy(model, world, pos, state);
+        if (dy != 0.0) {
+            matrices.popPose();
         }
-        matrices.pop();
+        slabbed$popWrapperContext(model);
     }
 
-    @Inject(method = "renderSmooth(Lnet/minecraft/world/BlockRenderView;Ljava/util/List;Lnet/minecraft/block/BlockState;Lnet/minecraft/util/math/BlockPos;Lnet/minecraft/client/util/math/MatrixStack;Lnet/minecraft/client/render/VertexConsumer;ZI)V",
+    @Inject(method = "tesselateWithAO(Lnet/minecraft/world/level/BlockAndTintGetter;Lnet/minecraft/client/resources/model/BakedModel;Lnet/minecraft/world/level/block/state/BlockState;Lnet/minecraft/core/BlockPos;Lcom/mojang/blaze3d/vertex/PoseStack;Lcom/mojang/blaze3d/vertex/VertexConsumer;ZLnet/minecraft/util/RandomSource;JI)V",
             at = @At("HEAD"))
-    private void slabbed$pushDySmooth(BlockRenderView world,
-                                      List<BlockModelPart> parts,
+    private void slabbed$pushDySmooth(BlockAndTintGetter world,
+                                      BakedModel model,
                                       BlockState state,
                                       BlockPos pos,
-                                      MatrixStack matrices,
+                                      PoseStack matrices,
                                       VertexConsumer vertexConsumer,
                                       boolean cull,
+                                      RandomSource random,
+                                      long seed,
                                       int overlay,
                                       CallbackInfo ci) {
-        double dy = ClientDy.dyFor(world, pos, state);
-        slabbed$recordTrace("renderSmooth", world, pos, state, dy);
+        slabbed$pushWrapperContext(model, world, pos, state);
+        double dy = slabbed$modelDy(model, world, pos, state);
+        slabbed$recordTrace("tesselateWithAO", world, pos, state, dy);
         if (dy == 0.0) {
             return;
         }
-        matrices.push();
+        matrices.pushPose();
         matrices.translate(0.0, dy, 0.0);
     }
 
-    @Inject(method = "renderSmooth(Lnet/minecraft/world/BlockRenderView;Ljava/util/List;Lnet/minecraft/block/BlockState;Lnet/minecraft/util/math/BlockPos;Lnet/minecraft/client/util/math/MatrixStack;Lnet/minecraft/client/render/VertexConsumer;ZI)V",
+    @Inject(method = "tesselateWithAO(Lnet/minecraft/world/level/BlockAndTintGetter;Lnet/minecraft/client/resources/model/BakedModel;Lnet/minecraft/world/level/block/state/BlockState;Lnet/minecraft/core/BlockPos;Lcom/mojang/blaze3d/vertex/PoseStack;Lcom/mojang/blaze3d/vertex/VertexConsumer;ZLnet/minecraft/util/RandomSource;JI)V",
             at = @At("TAIL"))
-    private void slabbed$popDySmooth(BlockRenderView world,
-                                     List<BlockModelPart> parts,
+    private void slabbed$popDySmooth(BlockAndTintGetter world,
+                                     BakedModel model,
                                      BlockState state,
                                      BlockPos pos,
-                                     MatrixStack matrices,
+                                     PoseStack matrices,
                                      VertexConsumer vertexConsumer,
                                      boolean cull,
+                                     RandomSource random,
+                                     long seed,
                                      int overlay,
                                      CallbackInfo ci) {
-        double dy = ClientDy.dyFor(world, pos, state);
-        if (dy == 0.0) {
-            return;
+        double dy = slabbed$modelDy(model, world, pos, state);
+        if (dy != 0.0) {
+            matrices.popPose();
         }
-        matrices.pop();
+        slabbed$popWrapperContext(model);
     }
 
-    @Inject(method = "renderFlat(Lnet/minecraft/world/BlockRenderView;Ljava/util/List;Lnet/minecraft/block/BlockState;Lnet/minecraft/util/math/BlockPos;Lnet/minecraft/client/util/math/MatrixStack;Lnet/minecraft/client/render/VertexConsumer;ZI)V",
+    @Inject(method = "tesselateWithoutAO(Lnet/minecraft/world/level/BlockAndTintGetter;Lnet/minecraft/client/resources/model/BakedModel;Lnet/minecraft/world/level/block/state/BlockState;Lnet/minecraft/core/BlockPos;Lcom/mojang/blaze3d/vertex/PoseStack;Lcom/mojang/blaze3d/vertex/VertexConsumer;ZLnet/minecraft/util/RandomSource;JI)V",
             at = @At("HEAD"))
-    private void slabbed$pushDyFlat(BlockRenderView world,
-                                    List<BlockModelPart> parts,
+    private void slabbed$pushDyFlat(BlockAndTintGetter world,
+                                    BakedModel model,
                                     BlockState state,
                                     BlockPos pos,
-                                    MatrixStack matrices,
+                                    PoseStack matrices,
                                     VertexConsumer vertexConsumer,
                                     boolean cull,
+                                    RandomSource random,
+                                    long seed,
                                     int overlay,
                                     CallbackInfo ci) {
-        double dy = ClientDy.dyFor(world, pos, state);
-        slabbed$recordTrace("renderFlat", world, pos, state, dy);
+        slabbed$pushWrapperContext(model, world, pos, state);
+        double dy = slabbed$modelDy(model, world, pos, state);
+        slabbed$recordTrace("tesselateWithoutAO", world, pos, state, dy);
         if (dy == 0.0) {
             return;
         }
-        matrices.push();
+        matrices.pushPose();
         matrices.translate(0.0, dy, 0.0);
     }
 
-    @Inject(method = "renderFlat(Lnet/minecraft/world/BlockRenderView;Ljava/util/List;Lnet/minecraft/block/BlockState;Lnet/minecraft/util/math/BlockPos;Lnet/minecraft/client/util/math/MatrixStack;Lnet/minecraft/client/render/VertexConsumer;ZI)V",
+    @Inject(method = "tesselateWithoutAO(Lnet/minecraft/world/level/BlockAndTintGetter;Lnet/minecraft/client/resources/model/BakedModel;Lnet/minecraft/world/level/block/state/BlockState;Lnet/minecraft/core/BlockPos;Lcom/mojang/blaze3d/vertex/PoseStack;Lcom/mojang/blaze3d/vertex/VertexConsumer;ZLnet/minecraft/util/RandomSource;JI)V",
             at = @At("TAIL"))
-    private void slabbed$popDyFlat(BlockRenderView world,
-                                   List<BlockModelPart> parts,
+    private void slabbed$popDyFlat(BlockAndTintGetter world,
+                                   BakedModel model,
                                    BlockState state,
                                    BlockPos pos,
-                                   MatrixStack matrices,
+                                   PoseStack matrices,
                                    VertexConsumer vertexConsumer,
                                    boolean cull,
+                                   RandomSource random,
+                                   long seed,
                                    int overlay,
                                    CallbackInfo ci) {
-        double dy = ClientDy.dyFor(world, pos, state);
-        if (dy == 0.0) {
-            return;
+        double dy = slabbed$modelDy(model, world, pos, state);
+        if (dy != 0.0) {
+            matrices.popPose();
         }
-        matrices.pop();
+        slabbed$popWrapperContext(model);
     }
 }

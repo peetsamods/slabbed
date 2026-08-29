@@ -4,19 +4,32 @@
   "compatibilityLevel": "JAVA_21",
   "mixins": [
     "HangingSignAttachedMixin",
+    "CandleParticleMixin",
+    "LeverParticleMixin",
     "CarpetBlockMixin",
+    "SnowLayerBlockMixin",
     "torch.TorchBlockMixin",
+    "BlockCollisionsLoweredAboveMixin",
     "SlabSupportBlockMixin",
     "SlabSupportStateMixin",
     "TorchParticleAccessor",
     "TorchParticleMixin",
+    "RedstoneTorchParticleMixin",
     "WallTorchParticleMixin",
+    "LivingEntityLoweredScaffoldingMixin",
     "RedstoneWireBlockMixin",
-    "BlockItemPlaceTraceMixin",
     "BlockItemPlacementIntentMixin",
+    "ServerInteractBlockHitToleranceMixin",
     "BlockOnPlacedAnchorMixin",
-    "BlockOnStateReplacedAnchorMixin"
+    "BlockOnStateReplacedAnchorMixin",
+    "FencePaneSlabConnectionMixin",
+    "WallSlabConnectionMixin",
+    "AbstractArrowOffsetClipMixin",
+    "LivingEntitySightOffsetClipMixin",
+    "ExplosionOcclusionOffsetClipMixin"
   ],
   "client": [],
-  "injectors": { "defaultRequire": 1 }
+  "injectors": {
+    "defaultRequire": 1
+  }
 }
