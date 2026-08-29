@@ -261,34 +261,45 @@ public final class LandingRuleLawTest {
      * C1 (design D5, §4.4 row C1): the SHIPPED default of
      * {@link SlabAnchorAttachment#FROZEN_DY_ENABLED} is ON.
      *
-     * <p>This row cannot read the live field: the gametest JVM forwards {@code -Dslabbed.frozenDy=false}
-     * (build.gradle — the frozen-OFF compatibility floor of design §4.1), so the field is {@code false}
-     * inside the suite by design. Instead it asserts the field initializer's <em>semantics</em>: with
-     * the property absent, the exact expression the field uses at {@code SlabAnchorAttachment.java}
-     * ({@code Boolean.parseBoolean(System.getProperty("slabbed.frozenDy", "true"))}) evaluates
-     * {@code true}. This mirror MUST be kept in sync with that initializer; flipping the default literal
-     * there to {@code "false"} without updating this row is exactly what this test guards against.
+     * <p>This row cannot read {@code FROZEN_DY_ENABLED} itself: BOTH automated venues force the
+     * property (build.gradle — {@code =false} for gameTest, the frozen-OFF compatibility floor of
+     * design §4.1; {@code =true} for clientGameTest), so the field never carries the shipped default
+     * inside a suite. It reads {@link SlabAnchorAttachment#FROZEN_DY_SHIPPED_DEFAULT} — the production
+     * literal the initializer actually uses — so flipping that literal reddens this row.
      *
-     * <p>GREEN as of C1 (this is not an expected-red landing row — it pins the C1 flag flip itself).
+     * <p>REWRITTEN 2026-08-28 because it could not fail. It used to clear the property and then
+     * evaluate its OWN hardcoded copy of the initializer expression, which is unconditionally
+     * {@code true}: the assertion was dead code and its javadoc claimed to guard exactly the mutation
+     * it provably could not see, while build.gradle cited it as the sole proof that LAW 1's frozen
+     * store ships ON. A row that re-derives an initializer proves only that it can read its own
+     * literal. Related shape and the same two required clauses:
+     * {@code Slabbed2612ConnectorSurvivalTest#shippedPotFloorSupportDefaultIsOff}.
+     *
+     * <p>MUTATION that must redden this row alone: flip {@code FROZEN_DY_SHIPPED_DEFAULT} to
+     * {@code "false"}.
      */
     @GameTest(structure = "fabric-gametest-api-v1:empty")
     public void shippedFrozenDyDefaultIsOn(GameTestHelper h) {
-        String saved = System.getProperty("slabbed.frozenDy");
-        boolean shippedDefault;
-        try {
-            System.clearProperty("slabbed.frozenDy");
-            shippedDefault = Boolean.parseBoolean(System.getProperty("slabbed.frozenDy", "true"));
-        } finally {
-            if (saved != null) {
-                System.setProperty("slabbed.frozenDy", saved);
-            }
-        }
-        Slabbed.LOGGER.info("LANDING-RULE | shipped frozenDy default (property absent) = {}", shippedDefault);
+        // Read the PRODUCTION literal, never a local re-derivation of the initializer.
+        boolean shippedDefault = Boolean.parseBoolean(SlabAnchorAttachment.FROZEN_DY_SHIPPED_DEFAULT);
+        Slabbed.LOGGER.info("LANDING-RULE | shipped frozenDy default (production literal) = {}", shippedDefault);
         if (!shippedDefault) {
             throw h.assertionException(BlockPos.ZERO,
-                    "C1/D5: the shipped default of FROZEN_DY_ENABLED must be ON. The field initializer at "
-                    + "SlabAnchorAttachment.java must read Boolean.parseBoolean(System.getProperty("
-                    + "\"slabbed.frozenDy\", \"true\")); got default=false with the property absent.");
+                    "C1/D5: the shipped default of FROZEN_DY_ENABLED must be ON, but the production "
+                    + "literal SlabAnchorAttachment.FROZEN_DY_SHIPPED_DEFAULT is \""
+                    + SlabAnchorAttachment.FROZEN_DY_SHIPPED_DEFAULT + "\". Shipping frozen dy OFF means "
+                    + "every placed block's height re-derives from its neighbours on every read — LAW 1 "
+                    + "is not in force in the jar players run.");
+        }
+
+        // ANTI-MASKING: the field must agree with the literal whenever the venue is NOT forcing the
+        // property. Without this, a venue that stops forcing it could drift from the literal unnoticed.
+        if (System.getProperty("slabbed.frozenDy") == null
+                && SlabAnchorAttachment.FROZEN_DY_ENABLED != shippedDefault) {
+            throw h.assertionException(BlockPos.ZERO,
+                    "the property is unset, so FROZEN_DY_ENABLED (" + SlabAnchorAttachment.FROZEN_DY_ENABLED
+                    + ") must equal the shipped literal (" + shippedDefault + ") — the field and the "
+                    + "literal this row asserts have diverged.");
         }
         h.succeed();
     }
