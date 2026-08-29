@@ -70,6 +70,12 @@ public final class SlabbedDebugCommandTree {
 
         /** The jar identity stamp, so a bug report can name the exact build. */
         String buildStamp();
+
+        /**
+         * The formatted chunk-capacity gauge for the chunk the player is standing in, or an EMPTY
+         * list when there is no player/world. Never null. See {@code ChunkPlacementGauge}.
+         */
+        List<String> chunkGauge();
     }
 
     private SlabbedDebugCommandTree() {
@@ -82,6 +88,8 @@ public final class SlabbedDebugCommandTree {
      *   <li>bare {@code /slabdy} — toggle the target-dy overlay.</li>
      *   <li>{@code /slabdy row} — print the current crosshair target's full diagnostic dump.
      *       Needs nothing but shipped code, so it works in a release jar.</li>
+     *   <li>{@code /slabdy chunk} — print the standing chunk's attachment-capacity gauge (the GH #36
+     *       railing). Needs nothing but shipped code, so it works in a release jar.</li>
      *   <li>{@code /slabdy build} — print the jar identity stamp.</li>
      * </ul>
      */
@@ -90,6 +98,8 @@ public final class SlabbedDebugCommandTree {
                 .executes(ctx -> overlay(sessions.apply(ctx), null))
                 .then(LiteralArgumentBuilder.<S>literal("row")
                         .executes(ctx -> row(sessions.apply(ctx))))
+                .then(LiteralArgumentBuilder.<S>literal("chunk")
+                        .executes(ctx -> chunk(sessions.apply(ctx))))
                 .then(LiteralArgumentBuilder.<S>literal("on")
                         .executes(ctx -> overlay(sessions.apply(ctx), Boolean.TRUE)))
                 .then(LiteralArgumentBuilder.<S>literal("off")
@@ -153,6 +163,18 @@ public final class SlabbedDebugCommandTree {
         session.feedback("[slabdev] live cursor recorder: " + (next ? "on" : "off")
                 + " (" + session.recorderStatus() + ")");
         session.feedback("[slabdev] " + session.buildStamp());
+        return 1;
+    }
+
+    private static int chunk(Session session) {
+        List<String> lines = session.chunkGauge();
+        if (lines.isEmpty()) {
+            session.feedback("[slabdy] chunk: no world");
+            return 0;
+        }
+        for (String line : lines) {
+            session.feedback(line);
+        }
         return 1;
     }
 

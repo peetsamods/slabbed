@@ -428,6 +428,7 @@ sourceSets {
             include("com/slabbed/test/LeverParticleFrozenAnchorClientGameTest.java")
             include("com/slabbed/test/DevDiagnosticsCompanionLoadsClientGameTest.java")
             include("com/slabbed/anchor/FrozenFlatAttachmentCapacityTest.java")
+            include("com/slabbed/anchor/PlacementDyAttachmentCapacityTest.java")
             include("com/slabbed/test/SlabRigGameTestSeams.java")
             include("com/slabbed/client/PlacementDyPredictionJournalGameTestAccess.java")
             include("com/slabbed/test/mixin/SlabRigCommandGameTestMixin.java")

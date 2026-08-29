@@ -249,26 +249,16 @@ public final class SlabAnchorAttachment {
             }
     );
 
+    /**
+     * Compact section-grouped sync codec (GH #36's unfixed half — the naive sixteen-bytes-per-entry
+     * form died at ~2,030 stored placements against Fabric's 32,502-byte attachment ceiling; a 16x16
+     * footprint with eight placement layers is 2,048). Same treatment {@code frozen_flat} already
+     * received, extended to a map via a bit-exact value palette. Decodes the old count-plus-pairs
+     * wire format for mixed-version transition. Capacity is pinned by
+     * {@code PlacementDyAttachmentCapacityTest}.
+     */
     private static final StreamCodec<RegistryFriendlyByteBuf, Long2DoubleOpenHashMap> DY_MAP_PACKET_CODEC =
-            StreamCodec.of(
-                    (buf, map) -> {
-                        buf.writeVarInt(map.size());
-                        for (var e : map.long2DoubleEntrySet()) {
-                            buf.writeLong(e.getLongKey());
-                            buf.writeDouble(e.getDoubleValue());
-                        }
-                    },
-                    buf -> {
-                        int n = buf.readVarInt();
-                        Long2DoubleOpenHashMap m = newDyMap();
-                        for (int i = 0; i < n; i++) {
-                            long k = buf.readLong();
-                            double v = buf.readDouble();
-                            m.put(k, v);
-                        }
-                        return m;
-                    }
-            );
+            ChunkPositionDyMapPacketCodec.INSTANCE;
 
     public static final AttachmentType<Long2DoubleOpenHashMap> PLACEMENT_DY_TYPE =
             AttachmentRegistry.<Long2DoubleOpenHashMap>create(PLACEMENT_DY_ID, builder -> builder
