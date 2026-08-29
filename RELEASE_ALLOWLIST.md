@@ -111,6 +111,11 @@ anything. The split above puts the fine granularity only where a leak has actual
 | `com/slabbed/mixin/ServerInteractBlockHitToleranceMixin` | Server-side hit tolerance for offset targeting. |
 | `com/slabbed/mixin/SlabSupportBlockMixin` | Slab support surface. |
 | `com/slabbed/mixin/SlabSupportStateMixin` | Slab support state. |
+| `com/slabbed/mixin/AbstractArrowOffsetClipMixin` | Arrows/tridents hit a lowered block where it is drawn. |
+| `com/slabbed/mixin/ClipContextBlockAccessor` | Reads a clip's block mode so the collider-clip supplement only answers COLLIDER queries. |
+| `com/slabbed/mixin/LivingEntitySightOffsetClipMixin` | Mob sight is blocked by a lowered block's drawn body. |
+| `com/slabbed/mixin/ProjectileBlockClipOffsetMixin` | Projectiles hit a lowered block where it is drawn. |
+| `com/slabbed/mixin/ServerExplosionOcclusionOffsetClipMixin` | Explosions are sheltered by a lowered block's drawn body. |
 | `com/slabbed/mixin/TorchParticleAccessor` | Accessor supporting the torch particle mixins. |
 | `com/slabbed/mixin/TorchParticleMixin` | Particle origin follows the lowered block. |
 | `com/slabbed/mixin/WallRedstoneTorchParticleMixin` | Particle origin follows the lowered block. |
@@ -154,6 +159,7 @@ anything. The split above puts the fine granularity only where a leak has actual
 | `com/slabbed/util/PlacementVerificationVerdict` | Placement verification result type. |
 | `com/slabbed/util/SlabEnsembleCoherence` | Combined-slab ensemble coherence law. |
 | `com/slabbed/util/SlabSupport` | Support-surface resolution. |
+| `com/slabbed/util/SlabbedOffsetColliderClip` | Neighbour-aware COLLIDER clip supplement (sight, shelter, projectiles follow the drawn body). |
 | `com/slabbed/util/SlabbedOffsetRaycast` | Offset-aware nearest-hit raycast — the targeting overhaul. |
 | `com/slabbed/util/SlabbedDebugCommandTree` | The Brigadier node structure and feedback strings for the shipped `/slabdy` and `/slabdev`. Pure Brigadier, generic over the command source, no Minecraft or client type in any signature — deliberately so: a client command tree is unreachable from a headless dedicated-server GameTest, and "the command is invocable" is only worth what its test is worth. `ShippedDebugCommandsTest` registers these exact builders into a real dispatcher and executes real command strings. Inert until invoked: everything runs inside an `executes(...)` body. |
 | `com/slabbed/util/SlabdyRowFormatter` | Headless field computation for the `[slabdy]` diagnostic row. **Previously excluded** with the reason "no shipped consumer on this line" — that is no longer true: `/slabdy row` is a shipped consumer, and it is the one debug subcommand that does real work on a release jar (it needs nothing but `SlabAnchorAttachment` and `SlabSupport`, both approved above). Read-only: it computes strings and touches no state. |

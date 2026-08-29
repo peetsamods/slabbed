@@ -33,6 +33,280 @@ public final class Slabbed2612CollisionDepthTest {
     private static final double EPS = 1.0e-6;
 
     /**
+     * END TO END: a REAL arrow flown into a lowered block's drawn lower half sticks there.
+     *
+     * <p>This row exists because the five helper rows above cannot see the WIRING — they call
+     * {@code SlabbedOffsetColliderClip} directly, so an unwired (or wrongly-targeted) mixin leaves
+     * them green while live arrows fly through. That is exactly what shipped for a few hours on
+     * 2026-08-29: the projectile redirect targeted {@code ProjectileUtil.getHitResult}, which on
+     * this line serves the THROWABLE family only — 26.2 moved {@code AbstractArrow} to the
+     * {@code projectile.arrow} subpackage and its {@code tick()} still clips directly, and a javap
+     * against the OLD package name failed silently, its empty output read as "no clip here". A
+     * consumer above every headless entry, in a fix authored the same day that class was recorded.
+     *
+     * <p>MUTATION that must redden this row alone: remove {@code AbstractArrowOffsetClipMixin}
+     * from {@code slabbed.mixins.json} (the helper rows stay green — that is the point).
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = 60)
+    public void aRealArrowSticksInTheDrawnLowerHalf(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        BlockPos abs = loweredStone(helper);
+        // helper.spawn takes STRUCTURE-RELATIVE coordinates (the first version passed absolutes and
+        // the arrow spawned twelve million blocks away). loweredStone's block sits at rel (2,2,2).
+        net.minecraft.world.entity.projectile.arrow.AbstractArrow arrow =
+                helper.spawn(net.minecraft.world.entity.EntityTypes.ARROW,
+                        new net.minecraft.world.phys.Vec3(0.5d, 1.75d, 2.5d));
+        arrow.setNoGravity(true);
+        arrow.setDeltaMovement(new net.minecraft.world.phys.Vec3(0.8d, 0.0d, 0.0d));
+
+        helper.runAfterDelay(20, () -> {
+            double speed = arrow.getDeltaMovement().length();
+            double dist = arrow.position().distanceTo(
+                    new net.minecraft.world.phys.Vec3(abs.getX() + 0.5d, abs.getY() - 0.25d, abs.getZ() + 0.5d));
+            if (speed > 0.05d || dist > 1.5d) {
+                throw helper.assertionException(helper.relativePos(abs),
+                        "a real arrow shot into the drawn lower half must STICK in the lowered block; "
+                        + "after 20 ticks speed=" + speed + " dist=" + dist + " pos=" + arrow.position()
+                        + " — the mixin wiring (not the helper) is what this row measures");
+            }
+            helper.succeed();
+        });
+    }
+
+    /**
+     * END TO END, throwable family: a REAL snowball flown into the drawn lower half impacts there
+     * (thrown projectiles discard on block impact). Exists for the same reason as the arrow row —
+     * the throwable seam is {@code ProjectileUtil.getHitResult}, a class NOTHING else in this suite
+     * ever loads, and a mixin on a never-loaded class gets no injection check at all: {@code require}
+     * (config or annotation) only fires at class load, so without this row a dead-targeted
+     * ProjectileUtil mixin ships green with every protection nominally on.
+     *
+     * <p>MUTATION that must redden this row alone: remove {@code ProjectileBlockClipOffsetMixin}
+     * from {@code slabbed.mixins.json}.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = 60)
+    public void aRealSnowballImpactsTheDrawnLowerHalf(GameTestHelper helper) {
+        loweredStone(helper);
+        net.minecraft.world.entity.projectile.throwableitemprojectile.Snowball ball =
+                helper.spawn(net.minecraft.world.entity.EntityTypes.SNOWBALL,
+                        new net.minecraft.world.phys.Vec3(0.5d, 1.75d, 2.5d));
+        ball.setNoGravity(true);
+        ball.setDeltaMovement(new net.minecraft.world.phys.Vec3(0.8d, 0.0d, 0.0d));
+
+        // Delay tuned so the discriminator is the BAND, not "hit anything eventually": at 0.8/tick
+        // from rel x=0.5 the band (rel x=2.0-3.0) is reached by tick ~2-4, and the nearest terrain
+        // beyond it not before tick ~6. At tick 4, wired = already discarded on the band; unwired =
+        // still flying in the gap. The first version waited 20 ticks and passed UNWIRED because the
+        // ball discarded on far terrain — "impacted somewhere" is not "impacted the drawn body".
+        helper.runAfterDelay(4, () -> {
+            if (ball.isAlive()) {
+                throw helper.assertionException(new BlockPos(2, 2, 2),
+                        "a real snowball thrown into the drawn lower half must IMPACT the lowered "
+                        + "block by tick 4 (thrown projectiles discard on hit); it is still flying at "
+                        + ball.position() + " — the ProjectileUtil wiring is what this row measures, "
+                        + "and nothing else in the suite ever loads that class");
+            }
+            helper.succeed();
+        });
+    }
+
+    /**
+     * MIXIN-APPLICATION SMOKE: force-load every class the collider-clip mixins target, so each
+     * injection check runs INSIDE the suite. The lesson this encodes (2026-08-29, both lines): a
+     * {@code @Redirect} whose target string matches nothing is loud ONLY if its target class loads —
+     * {@code defaultRequire = 1} was in this config the whole time a dead-targeted mixin shipped
+     * through two fully green suites, because no row ever loaded {@code ProjectileUtil}. Loading the
+     * class is the check; this row makes the load unconditional.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void colliderClipMixinTargetsApplyOnLoad(GameTestHelper helper) {
+        String[] targets = {
+                net.minecraft.world.entity.projectile.arrow.AbstractArrow.class.getName(),
+                net.minecraft.world.entity.projectile.ProjectileUtil.class.getName(),
+                net.minecraft.world.entity.LivingEntity.class.getName(),
+                net.minecraft.world.level.ServerExplosion.class.getName(),
+        };
+        for (String name : targets) {
+            if (name == null || name.isEmpty()) {
+                throw helper.assertionException(BlockPos.ZERO, "mixin target class failed to load");
+            }
+        }
+        helper.succeed();
+    }
+
+    private static net.minecraft.world.level.ClipContext colliderRay(
+            net.minecraft.world.phys.Vec3 from, net.minecraft.world.phys.Vec3 to) {
+        return new net.minecraft.world.level.ClipContext(from, to,
+                net.minecraft.world.level.ClipContext.Block.COLLIDER,
+                net.minecraft.world.level.ClipContext.Fluid.NONE, CollisionContext.empty());
+    }
+
+    /** Stone lowered -0.5 on a bottom slab; returns its absolute pos. Shared fixture for the clip rows. */
+    private static BlockPos loweredStone(GameTestHelper helper) {
+        helper.setBlock(new BlockPos(2, 1, 2), bottomSlabState());
+        BlockPos rel = new BlockPos(2, 2, 2);
+        helper.setBlock(rel, Blocks.STONE.defaultBlockState());
+        BlockPos abs = helper.absolutePos(rel);
+        double dy = SlabSupport.getYOffset(helper.getLevel(), abs, helper.getLevel().getBlockState(abs));
+        if (Math.abs(dy + 0.5d) > EPS) {
+            throw helper.assertionException(rel, "premise drift: fixture stone must lower -0.5, dy=" + dy);
+        }
+        return abs;
+    }
+
+    /**
+     * THE GAP: a COLLIDER ray through a lowered block's drawn LOWER HALF (the band hanging into the
+     * cell below) must hit it — this is what mobs, explosions, and projectiles ask. Vanilla's DDA
+     * misses it (measured on this line: MISS on both the unfixed and per-state-fixed trees), because
+     * while the ray crosses the cell below, it asks that cell and never sees the neighbour's hang.
+     *
+     * <p>MUTATION that must redden this row alone: skip the owner search in
+     * {@code SlabbedOffsetColliderClip.OwnerSearch#consumeCell}.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void colliderClipHitsTheDrawnLowerHalf(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        BlockPos abs = loweredStone(helper);
+        net.minecraft.world.phys.Vec3 from = new net.minecraft.world.phys.Vec3(abs.getX() - 2.0, abs.getY() - 0.25, abs.getZ() + 0.5);
+        net.minecraft.world.phys.Vec3 to = new net.minecraft.world.phys.Vec3(abs.getX() + 3.0, abs.getY() - 0.25, abs.getZ() + 0.5);
+        net.minecraft.world.level.ClipContext ctx = colliderRay(from, to);
+        net.minecraft.world.phys.BlockHitResult vanilla = level.clip(ctx);
+        net.minecraft.world.phys.BlockHitResult result =
+                com.slabbed.util.SlabbedOffsetColliderClip.clipForProjectile(level, ctx, vanilla);
+        if (result.getType() != net.minecraft.world.phys.HitResult.Type.BLOCK
+                || !result.getBlockPos().equals(abs)) {
+            throw helper.assertionException(helper.relativePos(abs),
+                    "a COLLIDER ray through the drawn lower half must hit the lowered block AT ITS OWN "
+                    + "POS (attribution matters — projectiles read it); got " + result.getType()
+                    + " — mobs see and shoot through visibly solid cover. GH #31 family.");
+        }
+        helper.succeed();
+    }
+
+    /**
+     * ADDITIVE ONLY, upper bound: the empty-looking band above the drawn top must stay clear — the
+     * supplement may add obstructions the drawn world has, never resurrect the phantom the per-state
+     * fix removed.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void colliderClipKeepsTheBandAboveTheDrawnTopClear(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        BlockPos abs = loweredStone(helper);
+        net.minecraft.world.phys.Vec3 from = new net.minecraft.world.phys.Vec3(abs.getX() - 2.0, abs.getY() + 0.75, abs.getZ() + 0.5);
+        net.minecraft.world.phys.Vec3 to = new net.minecraft.world.phys.Vec3(abs.getX() + 3.0, abs.getY() + 0.75, abs.getZ() + 0.5);
+        net.minecraft.world.level.ClipContext ctx = colliderRay(from, to);
+        net.minecraft.world.phys.BlockHitResult result = com.slabbed.util.SlabbedOffsetColliderClip
+                .clipForProjectile(level, ctx, level.clip(ctx));
+        if (result.getType() == net.minecraft.world.phys.HitResult.Type.BLOCK
+                && result.getBlockPos().equals(abs)) {
+            throw helper.assertionException(helper.relativePos(abs),
+                    "the band above a lowered block's drawn top is empty on screen and must be empty "
+                    + "to sight and projectiles — the phantom must not return through the supplement");
+        }
+        helper.succeed();
+    }
+
+    /**
+     * THE OCCLUSION FAST PATH: when vanilla already found an obstruction, the search is skipped and
+     * vanilla's exact result object is returned — a boolean consumer cannot tell which obstruction
+     * stopped it, so any extra work there is pure waste.
+     *
+     * <p>MUTATION that must redden this row alone: make {@code clipForOcclusion} run the search on
+     * non-MISS hits too (returning a nearer owner hit would fail the identity check).
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void occlusionFastPathReturnsVanillasOwnHit(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        BlockPos abs = loweredStone(helper);
+        // A full wall column strictly between ray start and the lowered block, spanning the ray's Y.
+        helper.setBlock(new BlockPos(1, 1, 2), Blocks.OBSIDIAN.defaultBlockState());
+        helper.setBlock(new BlockPos(1, 2, 2), Blocks.OBSIDIAN.defaultBlockState());
+        net.minecraft.world.phys.Vec3 from = new net.minecraft.world.phys.Vec3(abs.getX() - 2.0, abs.getY() - 0.25, abs.getZ() + 0.5);
+        net.minecraft.world.phys.Vec3 to = new net.minecraft.world.phys.Vec3(abs.getX() + 3.0, abs.getY() - 0.25, abs.getZ() + 0.5);
+        net.minecraft.world.level.ClipContext ctx = colliderRay(from, to);
+        net.minecraft.world.phys.BlockHitResult vanilla = level.clip(ctx);
+        if (vanilla.getType() != net.minecraft.world.phys.HitResult.Type.BLOCK) {
+            throw helper.assertionException(new BlockPos(1, 2, 2),
+                    "premise drift: the obsidian wall must already block this ray for vanilla");
+        }
+        net.minecraft.world.phys.BlockHitResult result =
+                com.slabbed.util.SlabbedOffsetColliderClip.clipForOcclusion(level, ctx, vanilla);
+        if (result != vanilla) {
+            throw helper.assertionException(new BlockPos(1, 2, 2),
+                    "an already-blocked occlusion ray must return vanilla's own hit untouched — the "
+                    + "fast path is the whole cost story for sight and explosions");
+        }
+        helper.succeed();
+    }
+
+    /**
+     * THE MODE GATE: a non-COLLIDER ray through the same hang band passes through untouched. On this
+     * line the clip mode is a call-site PARAMETER (ProjectileUtil and hasLineOfSight both take it),
+     * so OUTLINE/VISUAL contexts genuinely reach the redirected seams; collision geometry must not
+     * answer an outline question.
+     *
+     * <p>MUTATION that must redden this row alone: drop the blockMode check in
+     * {@code SlabbedOffsetColliderClip#supplement}.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void nonColliderModesPassThroughUntouched(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        BlockPos abs = loweredStone(helper);
+        net.minecraft.world.phys.Vec3 from = new net.minecraft.world.phys.Vec3(abs.getX() - 2.0, abs.getY() - 0.25, abs.getZ() + 0.5);
+        net.minecraft.world.phys.Vec3 to = new net.minecraft.world.phys.Vec3(abs.getX() + 3.0, abs.getY() - 0.25, abs.getZ() + 0.5);
+        // OUTLINE mode: the outline path has its OWN offset authority (SlabbedOffsetRaycast); the
+        // collider supplement answering here would put two authorities on one question.
+        net.minecraft.world.level.ClipContext outlineCtx = new net.minecraft.world.level.ClipContext(
+                from, to, net.minecraft.world.level.ClipContext.Block.OUTLINE,
+                net.minecraft.world.level.ClipContext.Fluid.NONE, CollisionContext.empty());
+        net.minecraft.world.phys.BlockHitResult vanilla = level.clip(outlineCtx);
+        net.minecraft.world.phys.BlockHitResult result =
+                com.slabbed.util.SlabbedOffsetColliderClip.clipForProjectile(level, outlineCtx, vanilla);
+        if (result != vanilla) {
+            throw helper.assertionException(helper.relativePos(abs),
+                    "a non-COLLIDER clip must return vanilla's result object untouched — the "
+                    + "supplement answers collision questions only");
+        }
+        helper.succeed();
+    }
+
+    /**
+     * NEAREST WINS for projectiles: with a real vanilla hit FARTHER along the ray than the hanging
+     * body, the supplement's nearer owner hit is chosen — an arrow must stick in the first thing it
+     * visibly reaches, not the first thing vanilla's cell-bounded walk noticed.
+     *
+     * <p>MUTATION that must redden this row alone: invert or drop the distance comparison in
+     * {@code supplement}.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void projectileTakesTheNearerOwnerHit(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        BlockPos abs = loweredStone(helper);
+        // A wall BEHIND the lowered block along the ray, at ray height: vanilla hits it (the hang
+        // band's own cells are air to vanilla), the supplement's hit on the lowered block is nearer.
+        helper.setBlock(new BlockPos(4, 1, 2), Blocks.OBSIDIAN.defaultBlockState());
+        net.minecraft.world.phys.Vec3 from = new net.minecraft.world.phys.Vec3(abs.getX() - 2.0, abs.getY() - 0.25, abs.getZ() + 0.5);
+        net.minecraft.world.phys.Vec3 to = new net.minecraft.world.phys.Vec3(abs.getX() + 3.0, abs.getY() - 0.25, abs.getZ() + 0.5);
+        net.minecraft.world.level.ClipContext ctx = colliderRay(from, to);
+        net.minecraft.world.phys.BlockHitResult vanilla = level.clip(ctx);
+        if (vanilla.getType() != net.minecraft.world.phys.HitResult.Type.BLOCK
+                || vanilla.getBlockPos().equals(abs)) {
+            throw helper.assertionException(helper.relativePos(abs),
+                    "premise drift: vanilla must hit the FARTHER wall, not the lowered block; got "
+                    + vanilla.getType() + " at " + vanilla.getBlockPos().toShortString());
+        }
+        net.minecraft.world.phys.BlockHitResult result =
+                com.slabbed.util.SlabbedOffsetColliderClip.clipForProjectile(level, ctx, vanilla);
+        if (!result.getBlockPos().equals(abs)) {
+            throw helper.assertionException(helper.relativePos(abs),
+                    "the lowered block's drawn body is NEARER than vanilla's wall hit and must win; "
+                    + "got " + result.getBlockPos().toShortString());
+        }
+        helper.succeed();
+    }
+
+
+    /**
      * THE PLAYER'S GESTURE: the climb you FACE onto a lowered block equals the climb you SEE.
      *
      * <p>This is the reported symptom in its own terms (maintainer, live, 2026-08-28): "build a
