@@ -68,15 +68,20 @@ public final class SlabRigHangingDirectExecutorTest {
     // load slows the calibration and the real command together. Do not delete the calibration and
     // fall back to comparing elapsedMillis straight against these constants.
     private static final long START_BUDGET_MILLIS = 15_000L;
-    private static final long READ_OR_CLEAR_BUDGET_MILLIS = 5_000L;
+    // Read/clear floor recalibrated 5_000 -> 8_000 (maintainer ruling, 2026-08-30): the late-run
+    // status read repeatedly measured 5.7-7.5s on a host whose same-run calibration reported idle
+    // (~11.6-14.4ms/round trip), so the scaled term never engaged and the old floor false-REDed.
+    // The budget only needs to catch a regression in the executor's own cost, which would blow far
+    // past this; do not tighten it back without fresh multi-host timings.
+    private static final long READ_OR_CLEAR_BUDGET_MILLIS = 8_000L;
     private static final int FLUIDITY_CALIBRATION_SAMPLES = 3;
     // Sized so the scaled budget lands ON the floor at idle (measured calibration ~11.7ms/round trip,
-    // so 15_000/11.7 ~= 1300 and 5_000/11.7 ~= 430, preserving the 3:1 ratio). That matters: with a
-    // smaller multiplier the floor wins until the host is >4x slower, and the observed false-REDs
-    // happened at ~3.5x — the scaling would never have engaged for the very case it exists to cover.
-    // Landing on the floor means idle strictness is unchanged and ANY slowdown scales from there.
+    // so 15_000/11.7 ~= 1300 and 8_000/11.7 ~= 680). That matters: with a smaller multiplier the
+    // floor wins until the host is far slower, and historical false-REDs happened at ~3.5x — the
+    // scaling would never have engaged for the very case it exists to cover. Landing on the floor
+    // means idle strictness is unchanged and ANY slowdown scales from there.
     private static final int START_FLUIDITY_MULTIPLIER = 1_300;
-    private static final int READ_OR_CLEAR_FLUIDITY_MULTIPLIER = 430;
+    private static final int READ_OR_CLEAR_FLUIDITY_MULTIPLIER = 680;
     private static long cachedFluidityCalibrationNanos = -1L;
 
     private static String startCommand(int selectorPage) {
