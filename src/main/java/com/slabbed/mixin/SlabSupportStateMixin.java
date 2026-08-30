@@ -220,8 +220,14 @@ public abstract class SlabSupportStateMixin {
         }
         BlockPos below = pos.below();
         BlockState belowState = world.getBlockState(below);
-        cir.setReturnValue(SlabSupport.canTreatAsSolidTopFace(world, below)
-                || belowState.isFaceSturdy(world, below, Direction.UP));
+        // Strictly widening: vanilla flower pots survive anywhere, so this inject may only
+        // ever force TRUE for a supported seat and must otherwise fall through to vanilla.
+        // Replacing the answer destroys a placed pot when its support changes. Do not
+        // re-add an unconditional setReturnValue (maintainer ruling, 2026-08-30).
+        if (SlabSupport.canTreatAsSolidTopFace(world, below)
+                || belowState.isFaceSturdy(world, below, Direction.UP)) {
+            cir.setReturnValue(true);
+        }
     }
 
     @Inject(method = "canSurvive", at = @At("HEAD"), cancellable = true)

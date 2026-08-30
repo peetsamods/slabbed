@@ -1238,6 +1238,10 @@ public final class SlabbedLabFixtureTest {
 
         world.setBlock(support, Blocks.AIR.defaultBlockState(), Block.UPDATE_ALL);
         BlockState after = world.getBlockState(pot);
+        ctx.assertTrue(after.is(Blocks.FLOWER_POT),
+                "P26 flower pot survival: removing the support must not destroy the pot — vanilla pots float");
+        ctx.assertTrue(after.canSurvive(world, pot),
+                "P26 flower pot survival: a pot with air below must report canSurvive, exactly as vanilla");
         System.out.println("[NEOFORGE_P26_FLOWER_POT_SURVIVAL_ROW]"
                 + " bottomSlab=true"
                 + " afterSupportRemoved=" + after.getBlock()
