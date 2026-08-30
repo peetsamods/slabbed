@@ -1,10 +1,11 @@
 ## [Unreleased]
 
-The NeoForge 1.21.1 parity line now carries `0.5.2-alpha.1+1.21.1` (maintainer
-ruling, 2026-08-28). The label follows the shared alpha series rather than the
-line's own history: `0.5.1-alpha.1` was published from another line, so this one
-adopts the next number instead of reusing a spent one. Nothing is tagged or
-published under this label yet — the version is bumped, the release is not cut.
+The NeoForge 1.21.1 parity line now carries `0.5.2-alpha.2+1.21.1` (maintainer
+ruling, 2026-08-30). The label follows the shared alpha series rather than the
+line's own history: `0.5.2-alpha.1` is spent by another line's tagged release,
+so this one adopts the next number instead of reusing it — the same rule that
+previously skipped `0.5.1-alpha.1`. Nothing is tagged or published under this
+label yet — the version is bumped, the release is not cut.
 
 ### Placement and persistence
 
