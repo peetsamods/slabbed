@@ -75,6 +75,9 @@ label yet — the version is bumped, the release is not cut.
 - Mob path planning, Breeze aim, long-jump clearance checks, and firework
   blasts still measure the unlowered box; they query block shape outside the
   compensated entry points.
+- Placing against a deeply lowered surface can show a brief visual snap: the
+  client first draws the block at vanilla height, then drops it to the correct
+  flush landing when the server confirms. The final landing is correct.
 
 ### Verification
 
