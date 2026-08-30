@@ -7,6 +7,14 @@ so this one adopts the next number instead of reusing it — the same rule that
 previously skipped `0.5.1-alpha.1`. Nothing is tagged or published under this
 label yet — the version is bumped, the release is not cut.
 
+### Upgrade note
+
+- Blocks that follow a lowered support but were placed before the flush-landing
+  rule carry no stored height fact. Over deep supports these were previously
+  clamped to a −1.0 offset; on first load in this version they seat flush on
+  the real surface. This is a one-time visual shift to the intended permanent
+  seating, not data loss.
+
 ### Placement and persistence
 
 - Store the exact signed half-step chosen by a real placement, persist it with
@@ -37,6 +45,18 @@ label yet — the version is bumped, the release is not cut.
 - Return redstone connection topology and free-floating chain survival to
   vanilla behavior, and prevent spawning on bottom-like slab surfaces.
 
+### Sight, projectiles, and blast
+
+- Arrows, spectral arrows, and tridents strike the drawn shape of a lowered
+  block instead of its original full-height box.
+- Mob line of sight respects the drawn solid half of a lowered block: a mob no
+  longer sees a target through geometry that is visibly solid.
+- Explosion exposure is measured against drawn shapes, so cover from a lowered
+  block matches what is rendered.
+- Independent kill switches: `-Dslabbed.arrowOffsetClip=false` and
+  `-Dslabbed.sightOffsetClip=false` (the latter reverts sight and blast
+  together without touching arrows).
+
 ### Save-scoped deep mode
 
 - Add explicit absent, disabled, enabled, and unknown-future consent states.
@@ -47,9 +67,18 @@ label yet — the version is bumped, the release is not cut.
 - Synchronize consent to clients, refresh the active renderer, reset to shallow
   behavior on logout, and retain the state through restart and save copies.
 
+### Known limitations
+
+- Sight and blast compensation is additive: the drawn solid half now blocks
+  correctly, but the vacated upper band of a lowered block still blocks sight
+  and blast as if it were solid.
+- Mob path planning, Breeze aim, long-jump clearance checks, and firework
+  blasts still measure the unlowered box; they query block shape outside the
+  compensated entry points.
+
 ### Verification
 
-- Expand the clean NeoForge server suite to 252 required GameTests with a fixed
+- Expand the clean NeoForge server suite to 255 required GameTests with a fixed
   independent count, permanent-placement controls, allocation guards, and exact
   runtime/source JAR allowlists.
 - Add isolated physical-client routes for placement-height lifecycle, numeric
