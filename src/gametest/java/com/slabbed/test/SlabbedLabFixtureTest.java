@@ -727,6 +727,175 @@ public final class SlabbedLabFixtureTest {
     }
 
     /**
+     * An arrow shot through the VACATED upper band of a lowered block must fly through
+     * (maintainer ruling, 2026-08-31: clear the band to match the visual).
+     *
+     * <p>Mirror of the hang-band arrow row above. Stone lowered by {@code dy=-0.5} draws from
+     * {@code block.y-0.5} to {@code block.y+0.5}; its un-lowered collision box still answers
+     * {@code [block.y, block.y+1]} to {@code Level.clip}, so the strip
+     * {@code [block.y+0.5, block.y+1]} is empty on screen yet solid to every COLLIDER clip. The
+     * arrow is fired horizontally at {@code block.y+0.75}, strictly inside that strip.
+     *
+     * <p>Control arm first: the SAME ray against an UNSHIFTED stone (no slab beneath, dy=0) must
+     * stop — the clearing is keyed on the stored offset, so a plain block's top half must never
+     * become permeable. Then the lowered arm: the ray must clear the whole column.
+     */
+    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = "empty")
+    public void anArrowFliesThroughALoweredBlocksVacatedBand(GameTestHelper ctx) {
+        ServerLevel world = ctx.getLevel();
+        BlockPos slab = ctx.absolutePos(new BlockPos(2, 2, 7));
+        BlockPos block = slab.above();
+
+        double startX = slab.getX() - 2.0d;
+        double bandY = block.getY() + 0.75d;
+        double centreZ = slab.getZ() + 0.5d;
+        double velocityX = 4.0d;
+
+        // Control: unshifted stone still stops the same ray.
+        world.setBlock(slab, Blocks.AIR.defaultBlockState(), Block.UPDATE_ALL);
+        world.setBlock(block, Blocks.STONE.defaultBlockState(), Block.UPDATE_ALL);
+        double controlDy = SlabSupport.getYOffset(world, block, world.getBlockState(block));
+        ctx.assertTrue(Math.abs(controlDy) <= MC1211_SERVER_STATE_EPSILON,
+                "premise: stone with no slab beneath must be unshifted, or the control arm is"
+                        + " not a control; dy=" + controlDy);
+        Arrow controlArrow = new Arrow(world, startX, bandY, centreZ, new ItemStack(Items.ARROW), null);
+        controlArrow.setDeltaMovement(velocityX, 0.0d, 0.0d);
+        controlArrow.tick();
+        double controlFinalX = controlArrow.getX();
+        controlArrow.discard();
+        ctx.assertTrue(controlFinalX < block.getX() + 0.5d,
+                "control: an arrow into an UNSHIFTED block's top half must stop; band clearing"
+                        + " must never apply to dy=0 cells; observedFinalX=" + controlFinalX);
+
+        // Lowered arm: the vacated band must be clear.
+        world.setBlock(slab, slab(SlabType.BOTTOM), Block.UPDATE_ALL);
+        world.setBlock(block, Blocks.STONE.defaultBlockState(), Block.UPDATE_ALL);
+        double dy = SlabSupport.getYOffset(world, block, world.getBlockState(block));
+        ctx.assertTrue(dy < -MC1211_SERVER_STATE_EPSILON,
+                "premise: stone above a bottom slab must lower, or the vacated band this row"
+                        + " aims through does not exist; dy=" + dy);
+        ctx.assertTrue(bandY > block.getY() + 0.5d + Math.abs(dy) - 0.5d,
+                "premise: the aim height must sit above the lowered stone's drawn top; bandY="
+                        + bandY + " dy=" + dy);
+
+        Arrow arrow = new Arrow(world, startX, bandY, centreZ, new ItemStack(Items.ARROW), null);
+        arrow.setDeltaMovement(velocityX, 0.0d, 0.0d);
+        arrow.tick();
+        double finalX = arrow.getX();
+        arrow.discard();
+        ctx.assertTrue(finalX > block.getX() + 1.0d,
+                "an arrow through a lowered block's vacated upper band must fly through — the"
+                        + " space is empty on screen; startX=" + startX + " bandY=" + bandY
+                        + " blockDy=" + dy + " observedFinalX=" + finalX);
+        ctx.succeed();
+    }
+
+    /**
+     * A mob CAN see a target through the VACATED upper band of a lowered block
+     * (maintainer ruling, 2026-08-31: clear the band to match the visual).
+     *
+     * <p>Mirror of the drawn-half sight row above, aimed at {@code block.y+0.75} — inside the
+     * strip the lowered stone has visibly vacated but its un-lowered collision box still covers.
+     * Control arm first: with an UNSHIFTED stone the same sightline must stay blocked.
+     */
+    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = "empty")
+    public void aMobSeesThroughALoweredBlocksVacatedBand(GameTestHelper ctx) {
+        ServerLevel world = ctx.getLevel();
+        BlockPos slab = ctx.absolutePos(new BlockPos(4, 2, 14));
+        BlockPos block = slab.above();
+
+        double bandY = block.getY() + 0.75d;
+        double centreZ = slab.getZ() + 0.5d;
+
+        Zombie watcher = EntityType.ZOMBIE.create(world);
+        ItemEntity target = EntityType.ITEM.create(world);
+        ctx.assertTrue(watcher != null && target != null,
+                "premise: both entities must instantiate");
+        try {
+            watcher.setPos(slab.getX() - 2.5d, bandY - watcher.getEyeHeight(), centreZ);
+            target.setPos(slab.getX() + 3.5d, bandY - target.getEyeHeight(), centreZ);
+            world.addFreshEntity(watcher);
+            world.addFreshEntity(target);
+
+            // Control: unshifted stone still blocks the same sightline.
+            world.setBlock(slab, Blocks.AIR.defaultBlockState(), Block.UPDATE_ALL);
+            world.setBlock(block, Blocks.STONE.defaultBlockState(), Block.UPDATE_ALL);
+            double controlDy = SlabSupport.getYOffset(world, block, world.getBlockState(block));
+            ctx.assertTrue(Math.abs(controlDy) <= MC1211_SERVER_STATE_EPSILON,
+                    "premise: stone with no slab beneath must be unshifted; dy=" + controlDy);
+            ctx.assertTrue(!watcher.hasLineOfSight(target),
+                    "control: an UNSHIFTED block's top half must still block sight; band"
+                            + " clearing must never apply to dy=0 cells");
+
+            // Lowered arm: the vacated band must be see-through.
+            world.setBlock(slab, slab(SlabType.BOTTOM), Block.UPDATE_ALL);
+            world.setBlock(block, Blocks.STONE.defaultBlockState(), Block.UPDATE_ALL);
+            double dy = SlabSupport.getYOffset(world, block, world.getBlockState(block));
+            ctx.assertTrue(dy < -MC1211_SERVER_STATE_EPSILON,
+                    "premise: the stone must lower, or the vacated band does not exist; dy=" + dy);
+            ctx.assertTrue(watcher.hasLineOfSight(target),
+                    "a mob must see through a lowered block's vacated upper band — the space is"
+                            + " empty on screen; bandY=" + bandY + " blockDy=" + dy);
+        } finally {
+            watcher.discard();
+            target.discard();
+        }
+        ctx.succeed();
+    }
+
+    /**
+     * An explosion reaches a victim through the VACATED upper band of a lowered block
+     * (maintainer ruling, 2026-08-31: clear the band to match the visual).
+     *
+     * <p>Mirror of the drawn-half explosion row above: victim and blast centre sit at
+     * {@code block.y+0.75}, wholly inside the vacated strip. Control arm first: with an
+     * UNSHIFTED stone the same geometry must stay fully occluded.
+     */
+    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = "empty")
+    public void anExplosionReachesThroughALoweredBlocksVacatedBand(GameTestHelper ctx) {
+        ServerLevel world = ctx.getLevel();
+        BlockPos slab = ctx.absolutePos(new BlockPos(4, 2, 19));
+        BlockPos block = slab.above();
+
+        double bandY = block.getY() + 0.75d;
+        double centreZ = slab.getZ() + 0.5d;
+        Vec3 blastCentre = new Vec3(slab.getX() - 2.5d, bandY, centreZ);
+
+        ItemEntity victim = EntityType.ITEM.create(world);
+        ctx.assertTrue(victim != null, "premise: the victim entity must instantiate");
+        try {
+            victim.setPos(slab.getX() + 3.5d, bandY, centreZ);
+            world.addFreshEntity(victim);
+
+            // Control: unshifted stone still occludes the same geometry.
+            world.setBlock(slab, Blocks.AIR.defaultBlockState(), Block.UPDATE_ALL);
+            world.setBlock(block, Blocks.STONE.defaultBlockState(), Block.UPDATE_ALL);
+            double controlDy = SlabSupport.getYOffset(world, block, world.getBlockState(block));
+            ctx.assertTrue(Math.abs(controlDy) <= MC1211_SERVER_STATE_EPSILON,
+                    "premise: stone with no slab beneath must be unshifted; dy=" + controlDy);
+            float controlSeen = Explosion.getSeenPercent(blastCentre, victim);
+            ctx.assertTrue(controlSeen < 0.01f,
+                    "control: an UNSHIFTED block's top half must still occlude; band clearing"
+                            + " must never apply to dy=0 cells; seen=" + controlSeen);
+
+            // Lowered arm: the vacated band must not shelter.
+            world.setBlock(slab, slab(SlabType.BOTTOM), Block.UPDATE_ALL);
+            world.setBlock(block, Blocks.STONE.defaultBlockState(), Block.UPDATE_ALL);
+            double dy = SlabSupport.getYOffset(world, block, world.getBlockState(block));
+            ctx.assertTrue(dy < -MC1211_SERVER_STATE_EPSILON,
+                    "premise: the stone must lower, or the vacated band does not exist; dy=" + dy);
+            float bandSeen = Explosion.getSeenPercent(blastCentre, victim);
+            ctx.assertTrue(bandSeen > 0.99f,
+                    "an explosion must reach a victim through a lowered block's vacated upper"
+                            + " band — the space is empty on screen; controlSeen=" + controlSeen
+                            + " bandSeen=" + bandSeen + " blockDy=" + dy);
+        } finally {
+            victim.discard();
+        }
+        ctx.succeed();
+    }
+
+    /**
      * A slab aimed at a wall's SIDE face cantilevers off that face; it does not drop onto whatever
      * happens to lie below the cell it lands in.
      *
