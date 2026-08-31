@@ -2,6 +2,7 @@
   "required": true,
   "package": "com.slabbed.mixin",
   "compatibilityLevel": "JAVA_17",
+  "refmap": "slabbed.refmap.json",
   "mixins": [
     "HangingSignAttachedMixin",
     "CandleParticleMixin",

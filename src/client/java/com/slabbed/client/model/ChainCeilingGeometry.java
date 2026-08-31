@@ -5,7 +5,6 @@ import com.slabbed.util.SlabSupport;
 import net.minecraft.client.renderer.RenderType;
 import net.minecraft.client.renderer.block.model.BakedQuad;
 import net.minecraft.client.resources.model.BakedModel;
-import net.minecraft.client.resources.model.ModelResourceLocation;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.resources.ResourceLocation;
@@ -19,13 +18,17 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * NeoForge-native alternate baked geometry for a vertical chain under a slab ceiling.
+ * Alternate baked geometry for a vertical chain under a slab ceiling.
  */
 public final class ChainCeilingGeometry {
     public static final ResourceLocation MODEL_ID = ResourceLocation.fromNamespaceAndPath(
             Slabbed.MOD_ID,
             "block/chain_ceiling_support");
-    public static final ModelResourceLocation MODEL_LOCATION = ModelResourceLocation.standalone(MODEL_ID);
+    /**
+     * 1.20.1 registers an extra model by plain {@link ResourceLocation} and keys the baked map the
+     * same way, so there is no standalone {@code ModelResourceLocation} wrapper here.
+     */
+    public static final ResourceLocation MODEL_LOCATION = MODEL_ID;
 
     private static volatile BakedModel model;
 
@@ -36,11 +39,11 @@ public final class ChainCeilingGeometry {
         event.register(MODEL_LOCATION);
     }
 
-    public static void captureBakedModel(Map<ModelResourceLocation, BakedModel> models) {
+    public static void captureBakedModel(Map<ResourceLocation, BakedModel> models) {
         model = models.get(MODEL_LOCATION);
     }
 
-    public static boolean isModelLocation(ModelResourceLocation location) {
+    public static boolean isModelLocation(ResourceLocation location) {
         return MODEL_LOCATION.equals(location);
     }
 

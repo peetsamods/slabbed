@@ -5,6 +5,7 @@ import com.slabbed.client.model.ChainCeilingGeometry;
 import com.slabbed.client.model.OffsetBlockStateModel;
 import net.minecraft.client.resources.model.BakedModel;
 import net.minecraft.client.resources.model.ModelResourceLocation;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.client.resources.model.MultiPartBakedModel;
 import net.minecraft.client.resources.model.WeightedBakedModel;
 import net.minecraftforge.eventbus.api.IEventBus;
@@ -20,7 +21,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 
 public final class SlabbedModelLoadingPlugin {
-    private static final String MODEL_WRAPPER_PROOF_PROPERTY = "slabbed.neoforge.modelWrapperProof";
+    private static final String MODEL_WRAPPER_PROOF_PROPERTY = "slabbed.modelWrapperProof";
     private static final String FABRIC_BAKED_MODEL_INTERFACE =
             "net.fabricmc.fabric.api.renderer.v1.model.FabricBakedModel";
     private static final Map<Class<?>, Optional<Method>> VANILLA_ADAPTER_METHODS =
@@ -63,10 +64,13 @@ public final class SlabbedModelLoadingPlugin {
                 skipped.get());
     }
 
-    static BakedModel wrapModel(ModelResourceLocation id, BakedModel model) {
+    static BakedModel wrapModel(ResourceLocation id, BakedModel model) {
         if (model == null
                 || ChainCeilingGeometry.isModelLocation(id)
-                || ModelResourceLocation.INVENTORY_VARIANT.equals(id.getVariant())
+                // 1.20.1 has no INVENTORY_VARIANT constant and the baked map is keyed by plain
+                // ResourceLocation, so the variant is only readable when the key really is one.
+                || (id instanceof ModelResourceLocation modelId
+                        && "inventory".equals(modelId.getVariant()))
                 || model.isCustomRenderer()
                 || (model instanceof IDynamicBakedModel && !isNamedVanillaComposite(model))
                 || model instanceof BakedModelWrapper<?>

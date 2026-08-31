@@ -7,23 +7,15 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.Tag;
-import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.Level;
 import net.minecraftforge.eventbus.api.IEventBus;
-import net.neoforged.neoforge.attachment.AttachmentSyncHandler;
-import net.neoforged.neoforge.attachment.AttachmentType;
-import net.neoforged.neoforge.attachment.IAttachmentHolder;
-import net.neoforged.neoforge.attachment.IAttachmentSerializer;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.event.level.LevelEvent;
 import net.minecraftforge.event.server.ServerStartedEvent;
 import net.minecraftforge.event.server.ServerStoppedEvent;
-import net.neoforged.neoforge.registries.DeferredHolder;
-import net.neoforged.neoforge.registries.DeferredRegister;
-import net.neoforged.neoforge.registries.NeoForgeRegistries;
 import org.jetbrains.annotations.Nullable;
 
 /**
@@ -38,28 +30,19 @@ public final class DeepDyConsentAttachment {
     private static final String VERSION_KEY = "version";
     private static final String ENABLED_KEY = "enabled";
 
-    private static final DeferredRegister<AttachmentType<?>> ATTACHMENT_TYPES =
-            DeferredRegister.create(NeoForgeRegistries.Keys.ATTACHMENT_TYPES, Slabbed.MOD_ID);
     private static final AtomicLong AUTHORITATIVE_READS = new AtomicLong();
     private static volatile Consumer<Boolean> CLIENT_STATE_OBSERVER = enabled -> { };
-
-    private static final IAttachmentSerializer<Tag, Stamp> SERIALIZER = new TagSerializer();
-    private static final AttachmentSyncHandler<Stamp> SYNC_HANDLER = new ConsentSyncHandler();
-
-    public static final DeferredHolder<AttachmentType<?>, AttachmentType<Stamp>> CONSENT_TYPE =
-            ATTACHMENT_TYPES.register(
-                    "deep_dy_consent",
-                    () -> AttachmentType.builder(Stamp::disabled)
-                            .serialize(SERIALIZER)
-                            .sync(SYNC_HANDLER)
-                            .build());
 
     private DeepDyConsentAttachment() {
     }
 
-    /** Registers storage and authoritative server lifecycle hooks. */
+    /**
+     * Registers authoritative server lifecycle hooks.
+     *
+     * <p>Storage itself is the level capability registered by {@link SlabbedCapabilities}; the
+     * stamp reaches clients through {@link SlabbedAnchorNetwork} rather than an attachment sync.
+     */
     public static void register(IEventBus modEventBus) {
-        ATTACHMENT_TYPES.register(modEventBus);
         MinecraftForge.EVENT_BUS.addListener(DeepDyConsentAttachment::onLevelLoad);
         MinecraftForge.EVENT_BUS.addListener(DeepDyConsentAttachment::onCreateSpawnPosition);
         MinecraftForge.EVENT_BUS.addListener(DeepDyConsentAttachment::onServerStarted);
@@ -73,7 +56,11 @@ public final class DeepDyConsentAttachment {
             return null;
         }
         AUTHORITATIVE_READS.incrementAndGet();
-        return level.getExistingDataOrNull(CONSENT_TYPE.get());
+        if (level.isClientSide()) {
+            return SlabbedClientMirror.consentStamp();
+        }
+        SlabbedConsentStore store = SlabbedCapabilities.consentStore(level);
+        return store == null ? null : store.stampOrNull();
     }
 
     /** Reads the four-state save classification without creating storage. */
@@ -172,13 +159,20 @@ public final class DeepDyConsentAttachment {
     }
 
     private static void mirror(ServerLevel level, @Nullable Stamp authority) {
-        Stamp existing = level.getExistingDataOrNull(CONSENT_TYPE.get());
+        SlabbedConsentStore store = SlabbedCapabilities.consentStore(level);
+        if (store == null) {
+            return;
+        }
+        Stamp existing = store.stampOrNull();
         if (authority == null) {
             if (existing != null) {
-                level.removeData(CONSENT_TYPE.get());
+                store.putStamp(null);
+                SlabbedAnchorNetwork.syncConsent(level, null);
             }
         } else if (!authority.equals(existing)) {
-            level.setData(CONSENT_TYPE.get(), authority.copy());
+            Stamp copy = authority.copy();
+            store.putStamp(copy);
+            SlabbedAnchorNetwork.syncConsent(level, copy);
         }
     }
 
@@ -206,48 +200,17 @@ public final class DeepDyConsentAttachment {
         NO_SERVER
     }
 
-    private static final class TagSerializer implements IAttachmentSerializer<Tag, Stamp> {
-        @Override
-        public Stamp read(
-                IAttachmentHolder holder,
-                Tag tag,
-                net.minecraft.core.HolderLookup.Provider provider
-        ) {
-            return Stamp.fromTag(tag);
-        }
-
-        @Override
-        public Tag write(Stamp stamp, net.minecraft.core.HolderLookup.Provider provider) {
-            return stamp.serializedTag();
-        }
-    }
-
-    private static final class ConsentSyncHandler implements AttachmentSyncHandler<Stamp> {
-        @Override
-        public boolean sendToPlayer(IAttachmentHolder holder, ServerPlayer player) {
-            return true;
-        }
-
-        @Override
-        public void write(RegistryFriendlyByteBuf buffer, Stamp stamp, boolean initialSync) {
-            buffer.writeVarInt(stamp.wireVersion());
-            buffer.writeByte(stamp.state().wireCode());
-        }
-
-        @Override
-        public Stamp read(
-                IAttachmentHolder holder,
-                RegistryFriendlyByteBuf buffer,
-                @Nullable Stamp previousValue
-        ) {
-            Stamp stamp = Stamp.fromWire(buffer.readVarInt(), buffer.readByte());
-            if (holder instanceof Level level && level.isClientSide()) {
-                boolean enabled = stamp.state() == State.ENABLED;
-                SlabSupport.armDeepAlphabet(enabled);
-                CLIENT_STATE_OBSERVER.accept(enabled);
-            }
-            return stamp;
-        }
+    /**
+     * Applies a stamp that arrived from the server on the logical client.
+     *
+     * <p>This is the half of the old sync handler that was not pure serialization: arming the
+     * deep alphabet and notifying the client observer. {@link SlabbedAnchorNetwork} calls it
+     * through {@link SlabbedClientMirror} once the payload is decoded.
+     */
+    public static void acceptClientStamp(@Nullable Stamp stamp) {
+        boolean enabled = stamp != null && stamp.state() == State.ENABLED;
+        SlabSupport.armDeepAlphabet(enabled);
+        CLIENT_STATE_OBSERVER.accept(enabled);
     }
 
     /** Immutable persisted stamp. Unknown schema data is preserved byte-for-byte on re-save. */

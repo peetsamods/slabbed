@@ -1,5 +1,7 @@
 package com.slabbed.client;
 
+import com.slabbed.anchor.SlabAnchorMarker;
+import com.slabbed.anchor.SlabbedClientMirror;
 import com.slabbed.Slabbed;
 import com.slabbed.anchor.SlabAnchorAttachment;
 import com.slabbed.util.SlabSupport;
@@ -11,8 +13,7 @@ import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraftforge.eventbus.api.IEventBus;
-import net.neoforged.neoforge.attachment.AttachmentType;
-import net.neoforged.neoforge.client.event.ClientTickEvent;
+import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.event.level.ChunkEvent;
 
 import java.util.ArrayList;
@@ -39,7 +40,7 @@ public final class SlabAnchorClientSync {
     private static final Map<AttachmentSnapshotKey, LongOpenHashSet> ATTACHMENT_SNAPSHOTS = new HashMap<>();
     private static boolean initialized;
 
-    private record AttachmentSnapshotKey(long chunkPos, AttachmentType<LongOpenHashSet> attachmentType) {
+    private record AttachmentSnapshotKey(long chunkPos, SlabAnchorMarker attachmentType) {
     }
 
     private SlabAnchorClientSync() {
@@ -69,7 +70,7 @@ public final class SlabAnchorClientSync {
             if (chunk == null) {
                 return false;
             }
-            LongOpenHashSet set = chunk.getExistingDataOrNull(SlabAnchorAttachment.ANCHOR_TYPE.get());
+            LongOpenHashSet set = SlabbedClientMirror.markerOrNull(chunk, SlabAnchorAttachment.ANCHOR_TYPE);
             return set != null && set.contains(pos.asLong());
         };
         SlabAnchorAttachment.clientFrozenFlatLookup = pos -> {
@@ -85,7 +86,7 @@ public final class SlabAnchorClientSync {
             if (chunk == null) {
                 return false;
             }
-            LongOpenHashSet set = chunk.getExistingDataOrNull(SlabAnchorAttachment.LOWERED_SLAB_CARRIER_TYPE.get());
+            LongOpenHashSet set = SlabbedClientMirror.markerOrNull(chunk, SlabAnchorAttachment.LOWERED_SLAB_CARRIER_TYPE);
             return set != null && set.contains(pos.asLong());
         };
         SlabAnchorAttachment.clientCompoundFullBlockAnchorLookup = pos -> {
@@ -121,19 +122,19 @@ public final class SlabAnchorClientSync {
         TRACKED_CHUNKS.put(chunk.getPos().toLong(), chunk);
 
         logReloadJumpSync("chunkLoad", chunk, SlabAnchorAttachment.ANCHOR_TYPE, null,
-                chunk.getExistingDataOrNull(SlabAnchorAttachment.ANCHOR_TYPE.get()));
+                SlabbedClientMirror.markerOrNull(chunk, SlabAnchorAttachment.ANCHOR_TYPE));
         logReloadJumpSync("chunkLoad", chunk, SlabAnchorAttachment.LOWERED_SLAB_CARRIER_TYPE, null,
-                chunk.getExistingDataOrNull(SlabAnchorAttachment.LOWERED_SLAB_CARRIER_TYPE.get()));
+                SlabbedClientMirror.markerOrNull(chunk, SlabAnchorAttachment.LOWERED_SLAB_CARRIER_TYPE));
         logReloadJumpSync("chunkLoad", chunk, SlabAnchorAttachment.COMPOUND_FULL_BLOCK_ANCHOR_TYPE, null,
-                chunk.getExistingDataOrNull(SlabAnchorAttachment.COMPOUND_FULL_BLOCK_ANCHOR_TYPE.get()));
+                SlabbedClientMirror.markerOrNull(chunk, SlabAnchorAttachment.COMPOUND_FULL_BLOCK_ANCHOR_TYPE));
         logReloadJumpSync("chunkLoad", chunk, SlabAnchorAttachment.COMPOUND_VISIBLE_SIDE_LOWER_SLAB_TYPE, null,
-                chunk.getExistingDataOrNull(SlabAnchorAttachment.COMPOUND_VISIBLE_SIDE_LOWER_SLAB_TYPE.get()));
+                SlabbedClientMirror.markerOrNull(chunk, SlabAnchorAttachment.COMPOUND_VISIBLE_SIDE_LOWER_SLAB_TYPE));
         logReloadJumpSync("chunkLoad", chunk, SlabAnchorAttachment.COMPOUND_VISIBLE_SIDE_UPPER_SLAB_TYPE, null,
-                chunk.getExistingDataOrNull(SlabAnchorAttachment.COMPOUND_VISIBLE_SIDE_UPPER_SLAB_TYPE.get()));
+                SlabbedClientMirror.markerOrNull(chunk, SlabAnchorAttachment.COMPOUND_VISIBLE_SIDE_UPPER_SLAB_TYPE));
         logReloadJumpSync("chunkLoad", chunk, SlabAnchorAttachment.COMPOUND_VISIBLE_SIDE_DOUBLE_SLAB_TYPE, null,
-                chunk.getExistingDataOrNull(SlabAnchorAttachment.COMPOUND_VISIBLE_SIDE_DOUBLE_SLAB_TYPE.get()));
+                SlabbedClientMirror.markerOrNull(chunk, SlabAnchorAttachment.COMPOUND_VISIBLE_SIDE_DOUBLE_SLAB_TYPE));
         logReloadJumpSync("chunkLoad", chunk, SlabAnchorAttachment.COMPOUND_VISIBLE_OWNER_TOP_SLAB_TYPE, null,
-                chunk.getExistingDataOrNull(SlabAnchorAttachment.COMPOUND_VISIBLE_OWNER_TOP_SLAB_TYPE.get()));
+                SlabbedClientMirror.markerOrNull(chunk, SlabAnchorAttachment.COMPOUND_VISIBLE_OWNER_TOP_SLAB_TYPE));
 
         // Also handle any attachment value already present at chunk-load time.
         // This covers the case where the chunk attachment sync packet arrived before
@@ -169,17 +170,20 @@ public final class SlabAnchorClientSync {
 
     private static LongOpenHashSet clientAttachmentSet(
             BlockPos pos,
-            Supplier<AttachmentType<LongOpenHashSet>> attachmentType
+            SlabAnchorMarker attachmentType
     ) {
         Minecraft mc = Minecraft.getInstance();
         if (mc == null || mc.level == null || pos == null) {
             return null;
         }
         LevelChunk chunk = mc.level.getChunk(pos.getX() >> 4, pos.getZ() >> 4);
-        return chunk == null ? null : chunk.getExistingDataOrNull(attachmentType.get());
+        return chunk == null ? null : SlabbedClientMirror.markerOrNull(chunk, attachmentType);
     }
 
-    private static void pollAttachmentChanges(ClientTickEvent.Post event) {
+    private static void pollAttachmentChanges(TickEvent.ClientTickEvent event) {
+        if (event.phase != TickEvent.Phase.END) {
+            return;
+        }
         Minecraft mc = Minecraft.getInstance();
         if (mc.level == null) {
             TRACKED_CHUNKS.clear();
@@ -205,11 +209,11 @@ public final class SlabAnchorClientSync {
     private static void pollAttachmentChange(
             Minecraft mc,
             LevelChunk chunk,
-            Supplier<AttachmentType<LongOpenHashSet>> attachmentType
+            SlabAnchorMarker attachmentType
     ) {
-        AttachmentSnapshotKey key = new AttachmentSnapshotKey(chunk.getPos().toLong(), attachmentType.get());
+        AttachmentSnapshotKey key = new AttachmentSnapshotKey(chunk.getPos().toLong(), attachmentType);
         LongOpenHashSet oldSet = ATTACHMENT_SNAPSHOTS.get(key);
-        LongOpenHashSet newSet = copyAttachmentSet(chunk.getExistingDataOrNull(attachmentType.get()));
+        LongOpenHashSet newSet = copyAttachmentSet(SlabbedClientMirror.markerOrNull(chunk, attachmentType));
         if (attachmentSetsEqual(oldSet, newSet)) {
             return;
         }
@@ -222,10 +226,10 @@ public final class SlabAnchorClientSync {
 
     private static void snapshotAttachment(
             LevelChunk chunk,
-            Supplier<AttachmentType<LongOpenHashSet>> attachmentType
+            SlabAnchorMarker attachmentType
     ) {
-        AttachmentSnapshotKey key = new AttachmentSnapshotKey(chunk.getPos().toLong(), attachmentType.get());
-        ATTACHMENT_SNAPSHOTS.put(key, copyAttachmentSet(chunk.getExistingDataOrNull(attachmentType.get())));
+        AttachmentSnapshotKey key = new AttachmentSnapshotKey(chunk.getPos().toLong(), attachmentType);
+        ATTACHMENT_SNAPSHOTS.put(key, copyAttachmentSet(SlabbedClientMirror.markerOrNull(chunk, attachmentType)));
     }
 
     private static LongOpenHashSet copyAttachmentSet(LongOpenHashSet set) {
@@ -243,9 +247,9 @@ public final class SlabAnchorClientSync {
 
     private static void scheduleInitialRerenders(
             LevelChunk chunk,
-            Supplier<AttachmentType<LongOpenHashSet>> attachmentType
+            SlabAnchorMarker attachmentType
     ) {
-        LongOpenHashSet initial = chunk.getExistingDataOrNull(attachmentType.get());
+        LongOpenHashSet initial = SlabbedClientMirror.markerOrNull(chunk, attachmentType);
         logReloadJumpSync("initialRerenderCheck", chunk, attachmentType, null, initial);
         if (initial != null && !initial.isEmpty()) {
             Minecraft mc = Minecraft.getInstance();
@@ -258,7 +262,7 @@ public final class SlabAnchorClientSync {
     private static void scheduleRerendersForSet(
             Minecraft mc,
             LongOpenHashSet set,
-            Supplier<AttachmentType<LongOpenHashSet>> attachmentType
+            SlabAnchorMarker attachmentType
     ) {
         if (set == null || set.isEmpty()) {
             return;
@@ -276,7 +280,7 @@ public final class SlabAnchorClientSync {
                             rerenderPos.toShortString());
                 }
                 logReloadJumpSyncRerender(rerenderPos, current);
-                if (SlabAnchorAttachment.isCompoundVisibleAttachmentType(attachmentType.get())) {
+                if (SlabAnchorAttachment.isCompoundVisibleAttachmentType(attachmentType)) {
                     scheduleCompoundVisibleRenderRefresh(mc, rerenderPos, current, attachmentType);
                 } else {
                     mc.levelRenderer.setBlockDirty(rerenderPos, current, current);
@@ -289,7 +293,7 @@ public final class SlabAnchorClientSync {
             Minecraft mc,
             BlockPos pos,
             BlockState state,
-            Supplier<AttachmentType<LongOpenHashSet>> attachmentType
+            SlabAnchorMarker attachmentType
     ) {
         mc.levelRenderer.setBlocksDirty(
                 pos.getX() - 1, pos.getY() - 1, pos.getZ() - 1,
@@ -301,7 +305,7 @@ public final class SlabAnchorClientSync {
         return Boolean.getBoolean("slabbed.beta4ReloadJumpRecorder");
     }
 
-    private static String labelForAttachment(Supplier<AttachmentType<LongOpenHashSet>> attachmentType) {
+    private static String labelForAttachment(SlabAnchorMarker attachmentType) {
         if (attachmentType == SlabAnchorAttachment.ANCHOR_TYPE) {
             return "persistentFullBlockAnchor";
         }
@@ -333,7 +337,7 @@ public final class SlabAnchorClientSync {
     private static void logReloadJumpSync(
             String event,
             LevelChunk chunk,
-            Supplier<AttachmentType<LongOpenHashSet>> attachmentType,
+            SlabAnchorMarker attachmentType,
             LongOpenHashSet oldSet,
             LongOpenHashSet newSet
     ) {
@@ -406,12 +410,12 @@ public final class SlabAnchorClientSync {
             String event,
             String type,
             LevelChunk chunk,
-            Supplier<AttachmentType<LongOpenHashSet>> attachmentType,
+            SlabAnchorMarker attachmentType,
             LongOpenHashSet oldSet,
             LongOpenHashSet newSet
     ) {
         if (!SlabAnchorAttachment.beta4CompoundVisibleRenderTraceEnabled()
-                || !SlabAnchorAttachment.isCompoundVisibleAttachmentType(attachmentType.get())) {
+                || !SlabAnchorAttachment.isCompoundVisibleAttachmentType(attachmentType)) {
             return;
         }
         boolean oldPresent = oldSet != null && !oldSet.isEmpty();
@@ -432,12 +436,12 @@ public final class SlabAnchorClientSync {
             Minecraft mc,
             BlockPos pos,
             BlockState state,
-            Supplier<AttachmentType<LongOpenHashSet>> attachmentType
+            SlabAnchorMarker attachmentType
     ) {
         if (!SlabAnchorAttachment.beta4CompoundVisibleRenderTraceEnabled()) {
             return;
         }
-        String marker = SlabAnchorAttachment.compoundVisibleAttachmentLabel(attachmentType.get());
+        String marker = SlabAnchorAttachment.compoundVisibleAttachmentLabel(attachmentType);
         boolean clientMarker = compoundVisibleClientMarker(mc, pos, state, attachmentType);
         double slabSupportDy = mc.level == null ? 0.0d : SlabSupport.getYOffset(mc.level, pos, state);
         double clientDy = mc.level == null ? 0.0d : ClientDy.dyFor(mc.level, pos, state);
@@ -463,7 +467,7 @@ public final class SlabAnchorClientSync {
             Minecraft mc,
             BlockPos pos,
             BlockState state,
-            Supplier<AttachmentType<LongOpenHashSet>> attachmentType
+            SlabAnchorMarker attachmentType
     ) {
         if (mc.level == null) {
             return false;

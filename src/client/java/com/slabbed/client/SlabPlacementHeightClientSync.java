@@ -2,6 +2,7 @@ package com.slabbed.client;
 
 import com.slabbed.anchor.ClientRenderDyPrediction;
 import com.slabbed.anchor.SlabPlacementHeightAttachment;
+import com.slabbed.anchor.SlabbedClientMirror;
 import it.unimi.dsi.fastutil.longs.Long2ByteOpenHashMap;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 import java.util.ArrayList;
@@ -19,7 +20,7 @@ import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraftforge.eventbus.api.IEventBus;
 import net.minecraftforge.client.event.ClientPlayerNetworkEvent;
-import net.neoforged.neoforge.client.event.ClientTickEvent;
+import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.event.level.ChunkEvent;
 
 /** Refreshes affected client blocks when the synchronized placement-height map changes. */
@@ -87,7 +88,10 @@ public final class SlabPlacementHeightClientSync {
         }
     }
 
-    private static void pollAttachmentChanges(ClientTickEvent.Post event) {
+    private static void pollAttachmentChanges(TickEvent.ClientTickEvent event) {
+        if (event.phase != TickEvent.Phase.END) {
+            return;
+        }
         Minecraft minecraft = Minecraft.getInstance();
         if (minecraft.level == null || minecraft.levelRenderer == null) {
             return;
@@ -104,8 +108,7 @@ public final class SlabPlacementHeightClientSync {
     }
 
     private static void observeReferenceChange(Minecraft minecraft, LevelChunk chunk) {
-        Long2ByteOpenHashMap current = chunk.getExistingDataOrNull(
-                SlabPlacementHeightAttachment.PLACEMENT_DY_TYPE.get());
+        Long2ByteOpenHashMap current = SlabbedClientMirror.placementDyOrNull(chunk);
         boolean wasInitialized = INITIALIZED_CHUNKS.contains(chunk);
         if (wasInitialized && current == LAST_REFERENCES.get(chunk)) {
             return;

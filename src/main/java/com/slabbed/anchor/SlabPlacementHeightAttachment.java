@@ -11,19 +11,15 @@ import java.util.OptionalInt;
 import java.util.function.LongToIntFunction;
 import java.util.stream.IntStream;
 import java.util.stream.LongStream;
+import javax.annotation.Nullable;
 import net.minecraft.core.BlockPos;
-import net.minecraft.network.RegistryFriendlyByteBuf;
-import net.minecraft.network.codec.StreamCodec;
+import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.BlockGetter;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.level.dimension.DimensionType;
 import net.minecraftforge.eventbus.api.IEventBus;
-import net.neoforged.neoforge.attachment.AttachmentType;
-import net.neoforged.neoforge.registries.DeferredHolder;
-import net.neoforged.neoforge.registries.DeferredRegister;
-import net.neoforged.neoforge.registries.NeoForgeRegistries;
 
 /**
  * Persistent, synchronized storage for a placed block's canonical half-step height fact.
@@ -45,9 +41,6 @@ public final class SlabPlacementHeightAttachment {
     public static final int MAX_FACTS_PER_CHUNK = 16 * 16 * DimensionType.Y_SIZE;
 
     private static final int STREAM_BYTES_PER_FACT = Long.BYTES + Byte.BYTES;
-
-    private static final DeferredRegister<AttachmentType<?>> ATTACHMENT_TYPES =
-            DeferredRegister.create(NeoForgeRegistries.Keys.ATTACHMENT_TYPES, Slabbed.MOD_ID);
 
     private static final Codec<long[]> POSITIONS_CODEC = Codec.LONG_STREAM.flatXmap(
             SlabPlacementHeightAttachment::decodePositions,
@@ -72,27 +65,18 @@ public final class SlabPlacementHeightAttachment {
             SlabPlacementHeightAttachment::encodeFacts
     );
 
-    private static final StreamCodec<RegistryFriendlyByteBuf, Long2ByteOpenHashMap> STREAM_CODEC =
-            StreamCodec.of(
-                    SlabPlacementHeightAttachment::encodeStream,
-                    SlabPlacementHeightAttachment::decodeStream
-            );
-
-    /** Registers the persistent attachment and its full-map chunk-watch synchronization. */
-    public static final DeferredHolder<AttachmentType<?>, AttachmentType<Long2ByteOpenHashMap>>
-            PLACEMENT_DY_TYPE = ATTACHMENT_TYPES.register("placement_dy",
-                    () -> AttachmentType.<Long2ByteOpenHashMap>builder(
-                            () -> new Long2ByteOpenHashMap())
-                            .serialize(MAP_CODEC, facts -> !facts.isEmpty())
-                            .sync(STREAM_CODEC)
-                            .build());
 
     private SlabPlacementHeightAttachment() {
     }
 
-    /** Registers the placement-height attachment before chunks load. */
+    /**
+     * No registration of its own on Forge.
+     *
+     * <p>The placement map lives inside the chunk capability that {@link SlabbedCapabilities}
+     * registers, and its client copy is filled by {@link SlabbedAnchorNetwork}. The method is kept
+     * so the call order in {@link SlabAnchorAttachment#register} reads the same on both loaders.
+     */
     public static void register(IEventBus modEventBus) {
-        ATTACHMENT_TYPES.register(modEventBus);
     }
 
     /**
@@ -142,7 +126,7 @@ public final class SlabPlacementHeightAttachment {
         if (chunk == null || pos == null) {
             return OptionalInt.empty();
         }
-        Long2ByteOpenHashMap facts = chunk.getExistingDataOrNull(PLACEMENT_DY_TYPE.get());
+        Long2ByteOpenHashMap facts = factsOrNull(chunk);
         if (facts == null) {
             return OptionalInt.empty();
         }
@@ -216,24 +200,20 @@ public final class SlabPlacementHeightAttachment {
         if (!isValidWrite(chunk, pos, halfSteps)) {
             return false;
         }
-        long packed = pos.asLong();
-        Long2ByteOpenHashMap existing = chunk.getExistingDataOrNull(PLACEMENT_DY_TYPE.get());
-        if (existing != null && existing.containsKey(packed)
-                && existing.get(packed) == (byte) halfSteps) {
+        SlabbedChunkStore store = SlabbedCapabilities.chunkStore(chunk);
+        if (store == null) {
             return false;
         }
+        long packed = pos.asLong();
+        Long2ByteOpenHashMap existing = store.placementDyOrNull();
         if (existing != null && !existing.containsKey(packed)
                 && existing.size() >= MAX_FACTS_PER_CHUNK) {
             return false;
         }
-
-        Long2ByteOpenHashMap replacement = existing == null
-                ? new Long2ByteOpenHashMap()
-                : new Long2ByteOpenHashMap(existing);
-        replacement.put(packed, (byte) halfSteps);
-        chunk.setData(PLACEMENT_DY_TYPE.get(), replacement);
-        chunk.setUnsaved(true);
-        return true;
+        // The store writes in place and emits a constant-size delta. NeoForge needed a whole-map
+        // replacement to notice the change; a capability does not, and a per-placement whole-map
+        // resend is the wire cliff the delta exists to avoid.
+        return store.putPlacementDy(packed, (byte) halfSteps);
     }
 
     /**
@@ -248,21 +228,24 @@ public final class SlabPlacementHeightAttachment {
         if (!isValidPosition(chunk, pos)) {
             return false;
         }
-        Long2ByteOpenHashMap existing = chunk.getExistingDataOrNull(PLACEMENT_DY_TYPE.get());
-        long packed = pos.asLong();
-        if (existing == null || !existing.containsKey(packed)) {
-            return false;
-        }
+        SlabbedChunkStore store = SlabbedCapabilities.chunkStore(chunk);
+        return store != null && store.removePlacementDy(pos.asLong());
+    }
 
-        Long2ByteOpenHashMap replacement = new Long2ByteOpenHashMap(existing);
-        replacement.remove(packed);
-        if (replacement.isEmpty()) {
-            chunk.removeData(PLACEMENT_DY_TYPE.get());
-        } else {
-            chunk.setData(PLACEMENT_DY_TYPE.get(), replacement);
+    /**
+     * The authoritative fact map for a chunk, or null when there is none.
+     *
+     * <p>A logical-client chunk carries an empty capability, because a Forge capability does not
+     * synchronize. Client reads land in {@link SlabbedClientMirror} instead, which is what the
+     * chunk-render lookup installed by the client sync consults.
+     */
+    @Nullable
+    private static Long2ByteOpenHashMap factsOrNull(LevelChunk chunk) {
+        if (chunk.getLevel() != null && chunk.getLevel().isClientSide()) {
+            return SlabbedClientMirror.placementDyOrNull(chunk);
         }
-        chunk.setUnsaved(true);
-        return true;
+        SlabbedChunkStore store = SlabbedCapabilities.chunkStore(chunk);
+        return store == null ? null : store.placementDyOrNull();
     }
 
     /** Deterministic bounded codec used by native chunk persistence. */
@@ -270,9 +253,14 @@ public final class SlabPlacementHeightAttachment {
         return MAP_CODEC;
     }
 
-    /** Deterministic bounded wire codec used by the native attachment sync registration. */
-    public static StreamCodec<RegistryFriendlyByteBuf, Long2ByteOpenHashMap> streamCodec() {
-        return STREAM_CODEC;
+    /** Deterministic bounded wire encoder. Kept public: the schema suite asserts its bounds. */
+    public static void encodeStream(FriendlyByteBuf buffer, Long2ByteOpenHashMap facts) {
+        writeStream(buffer, facts);
+    }
+
+    /** Deterministic bounded wire decoder, rejecting oversized, truncated and duplicated input. */
+    public static Long2ByteOpenHashMap decodeStream(FriendlyByteBuf buffer) {
+        return readStream(buffer);
     }
 
     private static boolean isValidWrite(LevelChunk chunk, BlockPos pos, int halfSteps) {
@@ -365,8 +353,8 @@ public final class SlabPlacementHeightAttachment {
         return DataResult.success(new EncodedFacts(positions, heights));
     }
 
-    private static void encodeStream(
-            RegistryFriendlyByteBuf buffer,
+    private static void writeStream(
+            FriendlyByteBuf buffer,
             Long2ByteOpenHashMap facts
     ) {
         if (facts.size() > MAX_FACTS_PER_CHUNK) {
@@ -381,7 +369,7 @@ public final class SlabPlacementHeightAttachment {
         }
     }
 
-    private static Long2ByteOpenHashMap decodeStream(RegistryFriendlyByteBuf buffer) {
+    private static Long2ByteOpenHashMap readStream(FriendlyByteBuf buffer) {
         int count = buffer.readVarInt();
         if (count < 0 || count > MAX_FACTS_PER_CHUNK) {
             throw new IllegalArgumentException("Invalid placement_dy fact count " + count);

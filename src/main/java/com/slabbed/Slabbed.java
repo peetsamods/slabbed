@@ -3,6 +3,7 @@ package com.slabbed;
 import net.minecraftforge.eventbus.api.IEventBus;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.fml.common.Mod;
+import net.minecraftforge.fml.javafmlmod.FMLJavaModLoadingContext;
 import net.minecraftforge.fml.loading.FMLEnvironment;
 import net.minecraftforge.fml.loading.FMLLoader;
 import org.slf4j.Logger;
@@ -21,7 +22,13 @@ public class Slabbed {
     private static final String P9_SNOW_PROOF_PROPERTY = "slabbed.p9.snow.proof";
     private static final String P9_SMOOTH_STEPS_PROOF_PROPERTY = "slabbed.p9.smooth_steps.proof";
 
-    public Slabbed(IEventBus modEventBus) {
+    /**
+     * Forge 47 constructs the mod class with no arguments and hands the mod event bus out through
+     * the loading context. Constructor injection of the bus is a NeoForge affordance and does not
+     * exist here, so the bus is fetched rather than received.
+     */
+    public Slabbed() {
+        IEventBus modEventBus = FMLJavaModLoadingContext.get().getModEventBus();
         LOGGER.info("Slabbed initialized");
         com.slabbed.anchor.SlabAnchorAttachment.register(modEventBus);
         com.slabbed.command.DeepDyCommand.register();

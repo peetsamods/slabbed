@@ -1,5 +1,6 @@
 package com.slabbed.util;
 
+import com.slabbed.anchor.SlabAnchorMarker;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 import java.util.function.Supplier;
 import net.minecraft.core.BlockPos;
@@ -18,7 +19,6 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
-import net.neoforged.neoforge.attachment.AttachmentType;
 
 public final class RuntimeDiagnostics {
     private static volatile long renderStepCullTracePos = Long.MIN_VALUE;
@@ -219,7 +219,7 @@ public final class RuntimeDiagnostics {
     public static void recordBeta35SlabJumpAnchorEvent(
             Level world,
             String action,
-            Supplier<AttachmentType<LongOpenHashSet>> type,
+            SlabAnchorMarker type,
             BlockPos pos,
             BlockState oldState,
             BlockState newState
