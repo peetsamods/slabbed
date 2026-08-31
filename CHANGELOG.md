@@ -53,9 +53,15 @@ label yet — the version is bumped, the release is not cut.
   longer sees a target through geometry that is visibly solid.
 - Explosion exposure is measured against drawn shapes, so cover from a lowered
   block matches what is rendered.
+- The empty space a lowered block has visibly vacated is clear in return:
+  arrows fly through it, mobs see through it, and explosions reach through it,
+  instead of the block's original full-height box still acting solid there
+  (maintainer ruling, 2026-08-31). A normal, unshifted block is unaffected.
 - Independent kill switches: `-Dslabbed.arrowOffsetClip=false` and
   `-Dslabbed.sightOffsetClip=false` (the latter reverts sight and blast
-  together without touching arrows).
+  together without touching arrows). Each switch restores full vanilla
+  behavior for its consumers — both the drawn-solid blocking and the
+  vacated-band clearing.
 
 ### Save-scoped deep mode
 
@@ -69,9 +75,6 @@ label yet — the version is bumped, the release is not cut.
 
 ### Known limitations
 
-- Sight and blast compensation is additive: the drawn solid half now blocks
-  correctly, but the vacated upper band of a lowered block still blocks sight
-  and blast as if it were solid.
 - Mob path planning, Breeze aim, long-jump clearance checks, and firework
   blasts still measure the unlowered box; they query block shape outside the
   compensated entry points.
@@ -81,7 +84,7 @@ label yet — the version is bumped, the release is not cut.
 
 ### Verification
 
-- Expand the clean NeoForge server suite to 255 required GameTests with a fixed
+- Expand the clean NeoForge server suite to 258 required GameTests with a fixed
   independent count, permanent-placement controls, allocation guards, and exact
   runtime/source JAR allowlists.
 - Add isolated physical-client routes for placement-height lifecycle, numeric
