@@ -96,6 +96,16 @@ public final class SlabbedOffsetColliderClip {
             return vanillaHit;
         }
         if (vanillaHit.getType() != HitResult.Type.MISS) {
+            // INVARIANT: the band-clearing re-march must run under exactly the gates of the
+            // additive owner-window search it composes with — the master switch included — or a
+            // switched-off configuration yields a third behavior that is neither vanilla nor the
+            // drawn world (band cleared, hanging bodies not blocking). clip() below enforces
+            // ENABLED for the additive half; this mirrors it for the clearing half. No headless
+            // venue can toggle a class-load system property per row, so this guard is pinned by
+            // this comment and review rather than a test — do not separate the two gates.
+            if (!ENABLED) {
+                return vanillaHit;
+            }
             // Off-thread queries keep vanilla's answer untouched, exactly as clip() below does.
             if (slabbed$isUnsafeAsyncShapeContext(world)) {
                 return vanillaHit;
