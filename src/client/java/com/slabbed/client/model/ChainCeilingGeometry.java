@@ -12,8 +12,8 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.level.BlockGetter;
 import net.minecraft.world.level.block.state.BlockState;
-import net.neoforged.neoforge.client.event.ModelEvent;
-import net.neoforged.neoforge.client.model.data.ModelData;
+import net.minecraftforge.client.event.ModelEvent;
+import net.minecraftforge.client.model.data.ModelData;
 
 import java.util.List;
 import java.util.Map;

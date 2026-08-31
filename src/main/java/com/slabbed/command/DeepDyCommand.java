@@ -18,9 +18,9 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.HoverEvent;
 import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.world.entity.Entity;
-import net.neoforged.neoforge.common.NeoForge;
-import net.neoforged.neoforge.event.RegisterCommandsEvent;
-import net.neoforged.neoforge.event.server.ServerStoppedEvent;
+import net.minecraftforge.common.MinecraftForge;
+import net.minecraftforge.event.RegisterCommandsEvent;
+import net.minecraftforge.event.server.ServerStoppedEvent;
 
 /** Server-owned, one-way activation command for save-scoped deep placement. */
 public final class DeepDyCommand {
@@ -36,8 +36,8 @@ public final class DeepDyCommand {
             return;
         }
         initialized = true;
-        NeoForge.EVENT_BUS.addListener(DeepDyCommand::onRegisterCommands);
-        NeoForge.EVENT_BUS.addListener(DeepDyCommand::onServerStopped);
+        MinecraftForge.EVENT_BUS.addListener(DeepDyCommand::onRegisterCommands);
+        MinecraftForge.EVENT_BUS.addListener(DeepDyCommand::onServerStopped);
     }
 
     private static void onRegisterCommands(RegisterCommandsEvent event) {

@@ -2,7 +2,7 @@ package com.slabbed.client;
 
 import com.slabbed.Slabbed;
 import net.minecraft.client.Minecraft;
-import net.neoforged.bus.api.IEventBus;
+import net.minecraftforge.eventbus.api.IEventBus;
 import net.neoforged.neoforge.client.event.ClientTickEvent;
 
 /**

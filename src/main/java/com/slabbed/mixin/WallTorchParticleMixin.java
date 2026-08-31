@@ -4,6 +4,7 @@ import com.slabbed.util.SlabSupport;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.particles.ParticleTypes;
+import net.minecraft.core.particles.ParticleOptions;
 import net.minecraft.core.particles.SimpleParticleType;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.level.Level;
@@ -50,7 +51,7 @@ public abstract class WallTorchParticleMixin {
         double z = pos.getZ() + 0.5 + 0.27 * facingOpp.getStepZ();
         // Particle field is on TorchBlock (parent); read via accessor since Mixin
         // @Shadow does not traverse class hierarchy.
-        SimpleParticleType particle = ((TorchParticleAccessor) (Object) this).slabbed$getParticle();
+        ParticleOptions particle = ((TorchParticleAccessor) (Object) this).slabbed$getParticle();
         world.addParticle(ParticleTypes.SMOKE, x, y, z, 0.0, 0.0, 0.0);
         world.addParticle(particle, x, y, z, 0.0, 0.0, 0.0);
         ci.cancel();

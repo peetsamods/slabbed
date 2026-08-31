@@ -7,10 +7,10 @@ import net.minecraft.client.resources.model.BakedModel;
 import net.minecraft.client.resources.model.ModelResourceLocation;
 import net.minecraft.client.resources.model.MultiPartBakedModel;
 import net.minecraft.client.resources.model.WeightedBakedModel;
-import net.neoforged.bus.api.IEventBus;
-import net.neoforged.neoforge.client.model.BakedModelWrapper;
-import net.neoforged.neoforge.client.model.IDynamicBakedModel;
-import net.neoforged.neoforge.client.event.ModelEvent;
+import net.minecraftforge.eventbus.api.IEventBus;
+import net.minecraftforge.client.model.BakedModelWrapper;
+import net.minecraftforge.client.model.IDynamicBakedModel;
+import net.minecraftforge.client.event.ModelEvent;
 
 import java.lang.reflect.Method;
 import java.util.Map;

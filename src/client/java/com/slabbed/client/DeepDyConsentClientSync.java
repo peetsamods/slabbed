@@ -5,8 +5,8 @@ import com.slabbed.util.SlabSupport;
 import java.util.function.Consumer;
 import java.util.function.IntConsumer;
 import net.minecraft.client.Minecraft;
-import net.neoforged.bus.api.IEventBus;
-import net.neoforged.neoforge.client.event.ClientPlayerNetworkEvent;
+import net.minecraftforge.eventbus.api.IEventBus;
+import net.minecraftforge.client.event.ClientPlayerNetworkEvent;
 
 /** Keeps the client deep-resolution cache scoped to one server connection. */
 public final class DeepDyConsentClientSync {

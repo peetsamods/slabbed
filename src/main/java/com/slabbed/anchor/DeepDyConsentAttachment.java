@@ -12,15 +12,15 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.Level;
-import net.neoforged.bus.api.IEventBus;
+import net.minecraftforge.eventbus.api.IEventBus;
 import net.neoforged.neoforge.attachment.AttachmentSyncHandler;
 import net.neoforged.neoforge.attachment.AttachmentType;
 import net.neoforged.neoforge.attachment.IAttachmentHolder;
 import net.neoforged.neoforge.attachment.IAttachmentSerializer;
-import net.neoforged.neoforge.common.NeoForge;
-import net.neoforged.neoforge.event.level.LevelEvent;
-import net.neoforged.neoforge.event.server.ServerStartedEvent;
-import net.neoforged.neoforge.event.server.ServerStoppedEvent;
+import net.minecraftforge.common.MinecraftForge;
+import net.minecraftforge.event.level.LevelEvent;
+import net.minecraftforge.event.server.ServerStartedEvent;
+import net.minecraftforge.event.server.ServerStoppedEvent;
 import net.neoforged.neoforge.registries.DeferredHolder;
 import net.neoforged.neoforge.registries.DeferredRegister;
 import net.neoforged.neoforge.registries.NeoForgeRegistries;
@@ -60,10 +60,10 @@ public final class DeepDyConsentAttachment {
     /** Registers storage and authoritative server lifecycle hooks. */
     public static void register(IEventBus modEventBus) {
         ATTACHMENT_TYPES.register(modEventBus);
-        NeoForge.EVENT_BUS.addListener(DeepDyConsentAttachment::onLevelLoad);
-        NeoForge.EVENT_BUS.addListener(DeepDyConsentAttachment::onCreateSpawnPosition);
-        NeoForge.EVENT_BUS.addListener(DeepDyConsentAttachment::onServerStarted);
-        NeoForge.EVENT_BUS.addListener(DeepDyConsentAttachment::onServerStopped);
+        MinecraftForge.EVENT_BUS.addListener(DeepDyConsentAttachment::onLevelLoad);
+        MinecraftForge.EVENT_BUS.addListener(DeepDyConsentAttachment::onCreateSpawnPosition);
+        MinecraftForge.EVENT_BUS.addListener(DeepDyConsentAttachment::onServerStarted);
+        MinecraftForge.EVENT_BUS.addListener(DeepDyConsentAttachment::onServerStopped);
     }
 
     /** Reads the stored stamp without creating one. */

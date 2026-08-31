@@ -1,7 +1,7 @@
 package com.slabbed.client;
 
-import net.neoforged.bus.api.IEventBus;
-import net.neoforged.neoforge.common.NeoForge;
+import net.minecraftforge.eventbus.api.IEventBus;
+import net.minecraftforge.common.MinecraftForge;
 
 public final class SlabbedClient {
     private SlabbedClient() {
@@ -9,8 +9,8 @@ public final class SlabbedClient {
 
     public static void init(IEventBus modEventBus) {
         SlabbedModelLoadingPlugin.init(modEventBus);
-        SlabAnchorClientSync.init(NeoForge.EVENT_BUS);
-        SlabPlacementHeightClientSync.init(NeoForge.EVENT_BUS);
-        DeepDyConsentClientSync.init(NeoForge.EVENT_BUS);
+        SlabAnchorClientSync.init(MinecraftForge.EVENT_BUS);
+        SlabPlacementHeightClientSync.init(MinecraftForge.EVENT_BUS);
+        DeepDyConsentClientSync.init(MinecraftForge.EVENT_BUS);
     }
 }

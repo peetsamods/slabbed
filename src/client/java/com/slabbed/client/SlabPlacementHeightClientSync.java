@@ -17,10 +17,10 @@ import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.chunk.LevelChunk;
-import net.neoforged.bus.api.IEventBus;
-import net.neoforged.neoforge.client.event.ClientPlayerNetworkEvent;
+import net.minecraftforge.eventbus.api.IEventBus;
+import net.minecraftforge.client.event.ClientPlayerNetworkEvent;
 import net.neoforged.neoforge.client.event.ClientTickEvent;
-import net.neoforged.neoforge.event.level.ChunkEvent;
+import net.minecraftforge.event.level.ChunkEvent;
 
 /** Refreshes affected client blocks when the synchronized placement-height map changes. */
 public final class SlabPlacementHeightClientSync {

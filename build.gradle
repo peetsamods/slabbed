@@ -1,8 +1,20 @@
+buildscript {
+    repositories {
+        maven { url = 'https://repo.spongepowered.org/repository/maven-public/' }
+        mavenCentral()
+    }
+    dependencies {
+        classpath 'org.spongepowered:mixingradle:0.7.38'
+    }
+}
+
 plugins {
     id 'java-library'
     id 'maven-publish'
-    id 'net.neoforged.moddev' version '2.0.141'
+    id 'net.minecraftforge.gradle' version '6.0.+'
 }
+
+apply plugin: 'org.spongepowered.mixin'
 
 version = project.mod_version
 group = project.mod_group_id
@@ -12,11 +24,23 @@ base {
 }
 
 java {
-    toolchain.languageVersion = JavaLanguageVersion.of(21)
+    toolchain.languageVersion = JavaLanguageVersion.of(17)
     withSourcesJar()
 }
 
-def slabbedReleaseExcludes = [
+// ForgeGradle jar-in-jar: required so the shipped jar carries MixinExtras.
+jarJar.enable()
+
+def gameTestNamespace = findProperty("slabbedGameTestNamespace") ?: project.mod_id
+
+// Forge 1.20.1 bootstrap gate.
+//
+// The tree was seeded from the NeoForge 1.21.1 0.5.2-alpha.2 line, so every source
+// here is still written against NeoForge 21.1 / MC 1.21.1. This exclude list is the
+// same one the donor line used to keep optional dev/debug/recorder tooling out of the
+// main compile; it is NOT a statement that the remainder is ported. Files graduate
+// into a green compile one at a time as the loader translation proceeds.
+def slabbedBootstrapExcludes = [
         "com/slabbed/debug/**",
         "com/slabbed/dev/**",
         "com/slabbed/client/debug/**",
@@ -46,1125 +70,146 @@ def slabbedReleaseExcludes = [
         "com/slabbed/util/SlabbedAuditBridge.java",
         "com/slabbed/util/SlabbedDebug.java"
 ]
-def gameTestDirectory = layout.buildDirectory.dir("run/gameTest")
-def p2bProofDirectory = layout.buildDirectory.dir("run/p2bLifecycle")
-def p10cProofDirectory = layout.buildDirectory.dir("run/p10cConsentLifecycle")
-def p7ProofDirectory = layout.buildDirectory.dir("run/p7Visual")
-def p8ProofDirectory = layout.buildDirectory.dir("run/p8TerrainSlabs")
-def p9SnowProofDirectory = layout.buildDirectory.dir("run/p9Snow")
-def p9SmoothStepsProofDirectory = layout.buildDirectory.dir("run/p9SmoothSteps")
-def p9SmoothStepsRedDirectory = layout.buildDirectory.dir("run/p9SmoothStepsRed")
-def parityServerDirectory = layout.buildDirectory.dir("run/parityServer")
-
-// Descriptive build identity. Exact runtime bytes remain authoritative through BuildStamp's
-// content digest; this label makes a dev launch traceable to the checkout that produced it.
-def slabbedGitSha = { ->
-    try {
-        def head = 'git rev-parse --short=10 HEAD'.execute(null, rootDir).text.trim()
-        if (head.isEmpty()) {
-            return 'unknown'
-        }
-        def dirty = 'git status --porcelain'.execute(null, rootDir).text.trim()
-        return dirty.isEmpty() ? head : head + '-dirty'
-    } catch (Exception ignored) {
-        return 'unknown'
-    }
-}()
-def slabbedBuildTime = java.time.Instant.now().toString()
 
 sourceSets {
     main {
         java {
-            srcDir "src/client/java"
-            // NeoForge bootstrap: keep dev/debug/manual recorder implementations out
-            // of main compile until that optional tooling lane is ported deliberately.
-            exclude "com/slabbed/debug/**"
-            exclude "com/slabbed/dev/**"
-            exclude "com/slabbed/client/debug/**"
-            exclude "com/slabbed/client/CaptureProfile.java"
-            exclude "com/slabbed/client/GapFillerOverlay.java"
-            exclude "com/slabbed/client/NeoForgeChainCeilingClientProof.java"
-            exclude "com/slabbed/client/NeoForgeClientProofCanary.java"
-            exclude "com/slabbed/client/NeoForgeClientWorldProof.java"
-            exclude "com/slabbed/client/NeoForgeFenceGateClientProof.java"
-            exclude "com/slabbed/client/ScreenshotCaptureContext.java"
-            exclude "com/slabbed/client/ScreenshotCaptureService.java"
-            exclude "com/slabbed/client/ScreenshotFlightLock.java"
-            exclude "com/slabbed/client/TargetDyOverlay.java"
-            exclude "com/slabbed/client/runtime/ModelDyTranslateTraceBridge.java"
-            exclude "com/slabbed/mixin/BlockItemPlaceTraceMixin.java"
-            exclude "com/slabbed/mixin/SlabBlockPlacementFixMixin.java"
-            exclude "com/slabbed/mixin/client/Beta*.java"
-            exclude "com/slabbed/mixin/debug/**"
-            exclude "com/slabbed/util/Beta4ManualLiveTrace.java"
-            exclude "com/slabbed/util/Beta4PlacementAuthorRecorder.java"
-            exclude "com/slabbed/util/Beta35FenceWallLiveInspectRecorder.java"
-            exclude "com/slabbed/util/Beta35LiveTorchCaptureRecorder.java"
-            exclude "com/slabbed/util/Beta35SlabHeightHitAcceptanceRecorder.java"
-            exclude "com/slabbed/util/Beta35SlabJumpSourceTruthRecorder.java"
-            exclude "com/slabbed/util/DebugTraceContext.java"
-            exclude "com/slabbed/util/Mc1211TrapdoorUnderBottomRecorder.java"
-            exclude "com/slabbed/util/SlabbedAuditBridge.java"
-            exclude "com/slabbed/util/SlabbedDebug.java"
+            setSrcDirs(["src/main/java", "src/client/java"])
+            slabbedBootstrapExcludes.each { exclude it }
         }
         resources {
-            srcDir "src/client/resources"
+            setSrcDirs(["src/main/resources", "src/client/resources"])
             exclude "fabric.mod.json"
             exclude "slabbed.debug.mixins.json"
         }
     }
     gametest {
         java {
-            setSrcDirs(["src/gametest/java", "src/main/java"])
-            setIncludes([
-                    "com/slabbed/test/CeilingFlushRulingTest.java",
-                    "com/slabbed/test/ChainColumnLoweredCapCoherenceTest.java",
-                    "com/slabbed/test/ChainSurvivalReproTest.java",
-                    "com/slabbed/test/CombinedSlabChainingMatrixTest.java",
-                    "com/slabbed/test/DeepDyConsentTest.java",
-                    "com/slabbed/test/DySpecificationTest.java",
-                    "com/slabbed/test/LegacySupportSeatResolutionTest.java",
-                    "com/slabbed/test/Mc1211GoblinRouteCanaryGameTest.java",
-                    "com/slabbed/test/NeighborUpdateInvarianceTest.java",
-                    "com/slabbed/test/NeverPopBreadthTest.java",
-                    "com/slabbed/test/P6InteractionParityTest.java",
-                    "com/slabbed/test/P7VisualParityTest.java",
-                    "com/slabbed/test/SlabPlacementHeightPersistenceSyncTest.java",
-                    "com/slabbed/test/SlabPlacementHeightLifecycleTest.java",
-                    "com/slabbed/test/SlabPlacementHeightResolverTest.java",
-                    "com/slabbed/test/SlabPlacementHeightSchemaTest.java",
-                    "com/slabbed/test/SlabbedHotPathAllocationRegressionTest.java",
-                    "com/slabbed/test/SlabHeightStepCullTest.java",
-                    "com/slabbed/test/SlabbedLabFixtureTest.java",
-                    "com/slabbed/test/TerrainSlabsHeadlessClassifierTest.java",
-                    "com/slabbed/test/UpFaceEdgeCombineGuardTest.java",
-                    "com/slabbed/test/VanillaDownstreamOwnershipTest.java",
-                    "com/slabbed/dev/SlabbedLabFixtures.java"
-            ])
+            setSrcDirs(["src/gametest/java"])
+            // Forge GameTest registration differs from the NeoForge donor's.
+            // Nothing graduates here until the server suite is translated.
+            setIncludes([])
         }
         resources {
-            setSrcDirs([])
+            setSrcDirs(["src/gametest/resources"])
+            exclude "fabric.mod.json"
         }
-        compileClasspath += sourceSets.main.output + sourceSets.main.compileClasspath
-        runtimeClasspath += output + compileClasspath
-    }
-    p2btest {
-        java {
-            setSrcDirs(["src/p2btest/java"])
-        }
-        resources {
-            setSrcDirs([])
-        }
-        compileClasspath += sourceSets.main.output + sourceSets.main.compileClasspath
-        runtimeClasspath += output + compileClasspath
-    }
-    p7test {
-        java {
-            setSrcDirs(["src/p7test/java"])
-        }
-        resources {
-            setSrcDirs([])
-        }
-        compileClasspath += sourceSets.main.output + sourceSets.main.compileClasspath
-        runtimeClasspath += output + compileClasspath
-    }
-    p8test {
-        java {
-            setSrcDirs(["src/p8test/java"])
-        }
-        resources {
-            setSrcDirs([])
-        }
-        compileClasspath += sourceSets.main.output + sourceSets.main.compileClasspath
-        runtimeClasspath += output + compileClasspath
-    }
-    p9snowtest {
-        java {
-            setSrcDirs(["src/p9snowtest/java"])
-        }
-        resources {
-            setSrcDirs([])
-        }
-        compileClasspath += sourceSets.main.output + sourceSets.main.compileClasspath
-        runtimeClasspath += output + compileClasspath
-    }
-    p9smoothstepstest {
-        java {
-            setSrcDirs(["src/p9smoothstepstest/java"])
-        }
-        resources {
-            setSrcDirs([])
-        }
-        compileClasspath += sourceSets.main.output + sourceSets.main.compileClasspath
-        runtimeClasspath += output + compileClasspath
-    }
-    // Standalone classifier shim that claims the Terrain Slabs mod id inside the
-    // GameTest server only. It must never depend on main and must never ship.
-    tsshim {
-        java {
-            setSrcDirs(["src/tsshim/java"])
-        }
-        resources {
-            setSrcDirs(["src/tsshim/resources"])
-        }
-        runtimeClasspath += output
-    }
-    // Dev-only diagnostics lane: recorder, rig builder, and target-dy display. Compiles
-    // against main but is its own mod, loaded only by dev run configurations; the jar task
-    // never sees it and the release hygiene gate proves the shipping jar cannot name it.
-    devtools {
-        java {
-            setSrcDirs(["src/devtools/java"])
-        }
-        resources {
-            setSrcDirs(["src/devtools/resources"])
-        }
-        compileClasspath += sourceSets.main.output + sourceSets.main.compileClasspath
-        runtimeClasspath += output + compileClasspath
-    }
-    // Code-free environment source sets: they exist only so a run configuration can
-    // carry real optional mods on its classpath. The real Terrain Slabs and the
-    // GameTest shim must never share a run.
-    serverenv {
-        java {
-            setSrcDirs([])
-        }
-        resources {
-            setSrcDirs([])
-        }
-        compileClasspath += sourceSets.main.output + sourceSets.main.compileClasspath
-        runtimeClasspath += output + compileClasspath
+        compileClasspath += sourceSets.main.output + configurations.compileClasspath
+        runtimeClasspath += sourceSets.main.output + configurations.runtimeClasspath
     }
 }
 
 repositories {
-    maven {
-        name = "Sinytra"
-        url = "https://maven.su5ed.dev/releases"
-    }
-    exclusiveContent {
-        forRepository {
-            maven {
-                name = "Modrinth"
-                url = "https://api.modrinth.com/maven"
-            }
-        }
-        filter {
-            includeGroup "maven.modrinth"
-        }
-    }
+    mavenCentral()
+    maven { url = 'https://repo.spongepowered.org/repository/maven-public/' }
 }
 
-neoForge {
-    version = project.neo_version
-    addModdingDependenciesTo sourceSets.p2btest
-    addModdingDependenciesTo sourceSets.p7test
-    addModdingDependenciesTo sourceSets.p8test
-    addModdingDependenciesTo sourceSets.p9snowtest
-    addModdingDependenciesTo sourceSets.p9smoothstepstest
-    addModdingDependenciesTo sourceSets.tsshim
-    addModdingDependenciesTo sourceSets.devtools
-    addModdingDependenciesTo sourceSets.serverenv
+minecraft {
+    mappings channel: project.mapping_channel, version: project.mapping_version
+    copyIdeResources = true
 
     runs {
         client {
-            client()
-            // Dev-session policy: recorder and target-dy display are ON from launch.
-            // Source defaults stay off; only this run configuration arms them.
-            // Overridable so a session can separate PRODUCT cost from RECORDER cost without
-            // editing the build: -Pslabbed.recorder=false. The recorder samples every tick and
-            // every frame, and each sample re-runs shape and raycast work, so a heavy session
-            // writes tens of megabytes and its cost is not small. Default stays ON - a live pass
-            // without it produces no evidence, and that has been the more expensive mistake.
-            systemProperty "slabbed.liveCursorIntentRecorder",
-                    (findProperty("slabbed.recorder") ?: "true").toString()
-            systemProperty "slabbed.targetDyOverlay", "true"
-            systemProperty "slabbed.devGitSha", slabbedGitSha
-            systemProperty "slabbed.devBuildTime", slabbedBuildTime
-            systemProperty "slabbed.devClassesRoot", sourceSets.main.output.classesDirs.singleFile.absolutePath
-            systemProperty "slabbed.devResourcesRoot", sourceSets.main.output.resourcesDir.absolutePath
+            workingDirectory project.file("run")
+            property "forge.logging.markers", "REGISTRIES"
+            property "forge.logging.console.level", "debug"
+            mods {
+                "${mod_id}" {
+                    source sourceSets.main
+                }
+            }
         }
         server {
-            server()
-            programArgument "--nogui"
+            workingDirectory project.file("run")
+            property "forge.logging.markers", "REGISTRIES"
+            property "forge.logging.console.level", "debug"
+            args "--nogui"
+            mods {
+                "${mod_id}" {
+                    source sourceSets.main
+                }
+            }
         }
-        parityServer {
-            server()
-            programArgument "--nogui"
-            gameDirectory = parityServerDirectory
-            sourceSet = sourceSets.serverenv
-        }
-        serverGameTest {
-            server()
-            programArgument "--nogui"
-            gameDirectory = gameTestDirectory
-            systemProperty "neoforge.gameTestServer", "true"
-            systemProperty "neoforge.enabledGameTestNamespaces", "fabric-gametest-api-v1"
-            jvmArguments.addAll(providers.systemProperty("slabbed.lawGate")
-                    .map { value -> ["-Dslabbed.lawGate=" + value] }
-                    .orElse([]))
-            taskBefore tasks.named("gametestClasses")
-            taskBefore tasks.named("tsshimClasses")
-        }
-        p2bPersistenceWriter {
-            server()
-            programArgument "--nogui"
-            gameDirectory = p2bProofDirectory
-            systemProperty "slabbed.p2b.phase", "writer"
-            taskBefore tasks.named("p2btestClasses")
-        }
-        p2bClientSync {
-            client()
-            gameDirectory = p2bProofDirectory
-            systemProperty "slabbed.p2b.phase", "client"
-            taskBefore tasks.named("p2btestClasses")
-        }
-        p10cOffWriter {
-            server()
-            programArgument "--nogui"
-            gameDirectory = p10cProofDirectory
-            systemProperty "slabbed.p10c.phase", "off-writer"
-            taskBefore tasks.named("p2btestClasses")
-        }
-        p10cEnabledWriter {
-            server()
-            programArgument "--nogui"
-            gameDirectory = p10cProofDirectory
-            systemProperty "slabbed.p10c.phase", "enabled-writer"
-            taskBefore tasks.named("p2btestClasses")
-        }
-        p10cClientLifecycle {
-            client()
-            gameDirectory = p10cProofDirectory
-            systemProperty "slabbed.p10c.phase", "client"
-            taskBefore tasks.named("p2btestClasses")
-        }
-        p7VisualClient {
-            client()
-            gameDirectory = p7ProofDirectory
-            systemProperty "slabbed.p7.proof", "true"
-            taskBefore tasks.named("p7testClasses")
-        }
-        p8TerrainSlabsClient {
-            client()
-            sourceSet = sourceSets.p8test
-            gameDirectory = p8ProofDirectory
-            systemProperty "slabbed.p8.proof", "true"
-            taskBefore tasks.named("p8testClasses")
-        }
-        p9SnowClient {
-            client()
-            sourceSet = sourceSets.p9snowtest
-            gameDirectory = p9SnowProofDirectory
-            systemProperty "slabbed.p9.snow.proof", "true"
-            taskBefore tasks.named("p9snowtestClasses")
-        }
-        p9SmoothStepsClient {
-            client()
-            sourceSet = sourceSets.p9smoothstepstest
-            gameDirectory = p9SmoothStepsProofDirectory
-            systemProperty "slabbed.p9.smooth_steps.proof", "true"
-            taskBefore tasks.named("p9smoothstepstestClasses")
-        }
-        p9SmoothStepsRedClient {
-            client()
-            sourceSet = sourceSets.p9smoothstepstest
-            gameDirectory = p9SmoothStepsRedDirectory
-            systemProperty "slabbed.p9.smooth_steps.proof", "true"
-            systemProperty "slabbed.p9.smooth_steps.expect_collision_red", "true"
-            systemProperty "slabbed.collisionFollow", "false"
-            taskBefore tasks.named("p9smoothstepstestClasses")
-        }
-        configureEach {
-            logLevel = org.slf4j.event.Level.DEBUG
-        }
-    }
-
-    mods {
-        "${mod_id}" {
-            sourceSet sourceSets.main
-            sourceSet sourceSets.gametest
-            sourceSet sourceSets.p2btest
-            sourceSet sourceSets.p7test
-            sourceSet sourceSets.p8test
-            sourceSet sourceSets.p9snowtest
-            sourceSet sourceSets.p9smoothstepstest
-        }
-        tsshim {
-            sourceSet sourceSets.tsshim
-        }
-        devtools {
-            sourceSet sourceSets.devtools
-        }
-    }
-
-    // The shim claims the real Terrain Slabs mod id, so it may exist ONLY inside the
-    // headless GameTest server. Every other run keeps the real-mod lane (or no
-    // Terrain Slabs at all); loading both the shim and the real mod would collide.
-    runs.configureEach { run ->
-        if (run.name == "serverGameTest") {
-            run.loadedMods = [mods."${mod_id}", mods.tsshim]
-        } else if (run.name == "client" || run.name == "parityServer" || run.name == "server") {
-            run.loadedMods = [mods."${mod_id}", mods.devtools]
-        } else {
-            run.loadedMods = [mods."${mod_id}"]
+        gameTestServer {
+            workingDirectory project.file("run/gameTest")
+            property "forge.logging.markers", "REGISTRIES"
+            property "forge.logging.console.level", "debug"
+            property "forge.gameTestServer", "true"
+            property "forge.enabledGameTestNamespaces", gameTestNamespace
+            args "--nogui"
+            mods {
+                "${mod_id}" {
+                    source sourceSets.main
+                    source sourceSets.gametest
+                }
+            }
         }
     }
 }
 
-configurations {
-    gametestImplementation.extendsFrom implementation
-    p2btestImplementation.extendsFrom implementation
-    p7testImplementation.extendsFrom implementation
-    p8testImplementation.extendsFrom implementation
-    p9snowtestImplementation.extendsFrom implementation
-    p9smoothstepstestImplementation.extendsFrom implementation
+mixin {
+    add sourceSets.main, "slabbed.refmap.json"
+    config "slabbed.mixins.json"
+    config "slabbed.client.mixins.json"
 }
 
 dependencies {
-    gametestImplementation "org.sinytra.forgified-fabric-api:forgified-fabric-api:${project.ffapi_version}"
-    p8testImplementation "maven.modrinth:countereds-terrain-slabs:3.1.2"
-    p8testImplementation "maven.modrinth:architectury-api:13.0.8+neoforge"
-    serverenvImplementation "maven.modrinth:countereds-terrain-slabs:3.1.2"
-    serverenvImplementation "maven.modrinth:architectury-api:13.0.8+neoforge"
-    p9snowtestImplementation "maven.modrinth:iJNje1E8:CplQCHcl"
-    p9snowtestImplementation "maven.modrinth:ufdDoWPd:tfwJWC8g"
-    p9snowtestImplementation "maven.modrinth:AANobbMI:Pb3OXVqC"
-    p9snowtestCompileOnly "org.sinytra.forgified-fabric-api:fabric-renderer-api-v1:3.4.1+9125b6dc19"
-    p9smoothstepstestImplementation "maven.modrinth:5VSZqDK0:fO1PtlIv"
-    p9smoothstepstestImplementation "maven.modrinth:countereds-terrain-slabs:3.1.2"
-    p9smoothstepstestImplementation "maven.modrinth:architectury-api:13.0.8+neoforge"
-    testImplementation "org.sinytra.forgified-fabric-api:fabric-renderer-api-v1:3.4.1+9125b6dc19"
-    testImplementation "org.junit.jupiter:junit-jupiter:5.11.4"
-    testRuntimeOnly "org.junit.platform:junit-platform-launcher:1.11.4"
-}
-
-sourceSets.test.compileClasspath += sourceSets.main.compileClasspath
-sourceSets.test.runtimeClasspath += sourceSets.main.runtimeClasspath
-sourceSets.test.compileClasspath += sourceSets.devtools.output + sourceSets.devtools.compileClasspath
-sourceSets.test.runtimeClasspath += sourceSets.devtools.output + sourceSets.devtools.runtimeClasspath
-
-tasks.named("test").configure {
-    dependsOn(tasks.named("devtoolsClasses"))
-    systemProperty "slabbed.devGitSha", slabbedGitSha
-    systemProperty "slabbed.devBuildTime", slabbedBuildTime
-    useJUnitPlatform()
-}
-
-tasks.named("sourcesJar").configure {
-    exclude slabbedReleaseExcludes
-    exclude "fabric.mod.json", "slabbed.debug.mixins.json"
-}
-
-tasks.register("cleanGameTestRunDirectory", Delete) {
-    delete gameTestDirectory
+    minecraft "net.minecraftforge:forge:${project.minecraft_version}-${project.forge_version}"
+    annotationProcessor 'org.spongepowered:mixin:0.8.5:processor'
+    // Forge 1.20.1 does NOT bundle MixinExtras (NeoForge does). The donor tree
+    // uses @WrapOperation/@WrapMethod/@Local on the placement path, so the mod
+    // has to ship it jar-in-jar. 0.4.x is the line that has @WrapMethod and
+    // still targets Mixin 0.8.5, which is what Forge 47 ships.
+    annotationProcessor "io.github.llamalad7:mixinextras-common:0.4.1"
+    compileOnly "io.github.llamalad7:mixinextras-common:0.4.1"
+    implementation(jarJar("io.github.llamalad7:mixinextras-forge:[0.4.1,)")) {
+        jarJar.ranged(it, "[0.4.1,)")
+    }
 }
 
 tasks.register("syncGameTestStructures", Sync) {
-    dependsOn(tasks.named("cleanGameTestRunDirectory"))
     from("gameteststructures")
-    into(gameTestDirectory.map { directory -> directory.dir("gameteststructures") })
+    into(layout.projectDirectory.dir("run/gameTest/gameteststructures"))
 }
 
-tasks.named("runServerGameTest").configure {
+tasks.matching { it.name == "runGameTestServer" }.configureEach {
+    dependsOn(tasks.named("gametestClasses"))
     dependsOn(tasks.named("syncGameTestStructures"))
-}
-
-tasks.register("cleanParityServerRunDirectory", Delete) {
-    delete parityServerDirectory
-}
-
-// The parity server keeps its own game directory so a dedicated-server run can never
-// read or write the shared developer run directory. Preparation is idempotent so a
-// second run reuses the same world and proves persistence across a real restart;
-// use cleanParityServerRunDirectory for a fresh world.
-tasks.register("prepareParityServerRunDirectory") {
-    outputs.dir(parityServerDirectory)
-    doLast {
-        File directory = parityServerDirectory.get().asFile
-        if (!directory.mkdirs() && !directory.isDirectory()) {
-            throw new GradleException("Could not create the parity server directory")
-        }
-        new File(directory, "eula.txt").setText("eula=true\n", "UTF-8")
-        new File(directory, "server.properties").setText(
-                "level-name=saves/parity-world\n"
-                        + "online-mode=false\n"
-                        + "spawn-protection=0\n"
-                        + "view-distance=4\n"
-                        + "simulation-distance=4\n"
-                        + "sync-chunk-writes=true\n",
-                "UTF-8")
-    }
-}
-
-tasks.named("runParityServer").configure {
-    dependsOn(tasks.named("prepareParityServerRunDirectory"))
-    standardInput = System.in
-}
-
-tasks.register("cleanP2bProofRunDirectory", Delete) {
-    delete p2bProofDirectory
-}
-
-tasks.register("prepareP2bProofRunDirectory") {
-    dependsOn(tasks.named("cleanP2bProofRunDirectory"))
-    outputs.dir(p2bProofDirectory)
-    doLast {
-        File directory = p2bProofDirectory.get().asFile
-        if (!directory.mkdirs() && !directory.isDirectory()) {
-            throw new GradleException("Could not create the P2b proof directory")
-        }
-        new File(directory, "eula.txt").setText("eula=true\n", "UTF-8")
-        new File(directory, "server.properties").setText(
-                "level-name=saves/p2b-proof\n"
-                        + "online-mode=false\n"
-                        + "spawn-protection=0\n"
-                        + "view-distance=4\n"
-                        + "simulation-distance=4\n",
-                "UTF-8")
-    }
-}
-
-tasks.named("runP2bPersistenceWriter").configure {
-    dependsOn(tasks.named("prepareP2bProofRunDirectory"))
-}
-
-tasks.named("runP2bClientSync").configure {
-    mustRunAfter(tasks.named("runP2bPersistenceWriter"))
-}
-
-tasks.register("verifyP2bLifecycleProof") {
-    dependsOn(tasks.named("runP2bPersistenceWriter"), tasks.named("runP2bClientSync"))
-    doLast {
-        File proofDirectory = p2bProofDirectory.get().dir("proof").asFile
-        File writerReceipt = new File(proofDirectory, "writer.ok")
-        File clientReceipt = new File(proofDirectory, "client.ok")
-        File clientFailure = new File(proofDirectory, "client.failed")
-        if (!writerReceipt.isFile()
-                || writerReceipt.getText("UTF-8") != "writer=green\n") {
-            throw new GradleException("The P2b disk writer did not produce its exact receipt")
-        }
-        if (!clientReceipt.isFile()
-                || clientReceipt.getText("UTF-8")
-                != "initial=true update=true removal=true reset=true reconnect=true\n") {
-            throw new GradleException("The P2b client did not produce its exact lifecycle receipt")
-        }
-        if (clientFailure.exists()) {
-            throw new GradleException("The P2b client recorded a failed lifecycle phase")
-        }
-        logger.lifecycle("P2b lifecycle proof verified: disk, sync, removal, reset, reconnect")
-    }
-}
-
-tasks.register("runP2bLifecycleProof") {
-    group = "verification"
-    description = "Runs the isolated two-process P2b persistence and connected-client proof."
-    dependsOn(tasks.named("verifyP2bLifecycleProof"))
-}
-
-tasks.register("cleanP10cProofRunDirectory", Delete) {
-    delete p10cProofDirectory
-}
-
-def writeP10cServerProperties = { String levelName ->
-    File directory = p10cProofDirectory.get().asFile
-    new File(directory, "server.properties").setText(
-            "level-name=saves/" + levelName + "\n"
-                    + "online-mode=false\n"
-                    + "spawn-protection=0\n"
-                    + "view-distance=4\n"
-                    + "simulation-distance=4\n",
-            "UTF-8")
-}
-
-tasks.register("prepareP10cProofRunDirectory") {
-    dependsOn(tasks.named("cleanP10cProofRunDirectory"))
-    outputs.dir(p10cProofDirectory)
-    doLast {
-        File directory = p10cProofDirectory.get().asFile
-        if (!directory.mkdirs() && !directory.isDirectory()) {
-            throw new GradleException("Could not create the P10C proof directory")
-        }
-        new File(directory, "eula.txt").setText("eula=true\n", "UTF-8")
-    }
-}
-
-tasks.named("runP10cOffWriter").configure {
-    dependsOn(tasks.named("prepareP10cProofRunDirectory"))
-    doFirst {
-        writeP10cServerProperties("p10c-off")
-    }
-}
-
-tasks.named("runP10cEnabledWriter").configure {
-    dependsOn(tasks.named("runP10cOffWriter"))
-    doFirst {
-        writeP10cServerProperties("p10c-enabled")
-    }
-}
-
-tasks.register("cloneP10cEnabledSave") {
-    dependsOn(tasks.named("runP10cEnabledWriter"))
-    outputs.dir(p10cProofDirectory.map { directory -> directory.dir("saves/p10c-enabled-copy") })
-    doLast {
-        File source = p10cProofDirectory.get().dir("saves/p10c-enabled").asFile
-        File destination = p10cProofDirectory.get().dir("saves/p10c-enabled-copy").asFile
-        if (!new File(source, "level.dat").isFile()) {
-            throw new GradleException("The enabled P10C save was not closed before copying")
-        }
-        project.copy {
-            from(source)
-            into(destination)
-        }
-        if (!new File(destination, "level.dat").isFile()) {
-            throw new GradleException("The copied P10C save is incomplete")
-        }
-    }
-}
-
-tasks.named("runP10cClientLifecycle").configure {
-    dependsOn(tasks.named("cloneP10cEnabledSave"))
-}
-
-tasks.register("verifyP10cConsentLifecycleProof") {
-    dependsOn(tasks.named("runP10cClientLifecycle"))
-    doLast {
-        File proofDirectory = p10cProofDirectory.get().dir("proof").asFile
-        File offWriter = new File(proofDirectory, "off-writer.ok")
-        File enabledWriter = new File(proofDirectory, "enabled-writer.ok")
-        File client = new File(proofDirectory, "client.ok")
-        File failure = new File(proofDirectory, "client.failed")
-        if (!offWriter.isFile() || offWriter.getText("UTF-8") != "off_writer=true\n") {
-            throw new GradleException("The P10C off writer did not produce its exact receipt")
-        }
-        if (!enabledWriter.isFile()
-                || enabledWriter.getText("UTF-8") != "enabled_writer=true\n") {
-            throw new GradleException("The P10C enabled writer did not produce its exact receipt")
-        }
-        String expected = "restart=true copy=true sync=true refresh=true logout_reset=true off_reconnect=true\n"
-        if (!client.isFile() || client.getText("UTF-8") != expected) {
-            String detail = failure.isFile() ? failure.getText("UTF-8").trim() : "missing receipt"
-            throw new GradleException("The P10C client lifecycle proof did not pass: " + detail)
-        }
-        if (failure.exists()) {
-            throw new GradleException("The P10C client retained a failure receipt")
-        }
-        logger.lifecycle("P10C consent lifecycle proof verified: restart, copy, sync, refresh, reset, off reconnect")
-    }
-}
-
-tasks.register("runP10cConsentLifecycleProof") {
-    group = "verification"
-    description = "Runs the isolated P10C disk, connected-client, and renderer-refresh proof."
-    dependsOn(tasks.named("verifyP10cConsentLifecycleProof"))
-}
-
-tasks.register("cleanP7ProofRunDirectory", Delete) {
-    delete p7ProofDirectory
-}
-
-tasks.register("prepareP7ProofRunDirectory") {
-    dependsOn(tasks.named("cleanP7ProofRunDirectory"))
-    outputs.dir(p7ProofDirectory)
-    doLast {
-        File directory = p7ProofDirectory.get().asFile
-        if (!directory.mkdirs() && !directory.isDirectory()) {
-            throw new GradleException("Could not create the P7 proof directory")
-        }
-    }
-}
-
-tasks.named("runP7VisualClient").configure {
-    dependsOn(tasks.named("prepareP7ProofRunDirectory"))
-}
-
-tasks.register("verifyP7VisualProof") {
-    dependsOn(tasks.named("runP7VisualClient"))
-    doLast {
-        File proofDirectory = p7ProofDirectory.get().dir("proof").asFile
-        File receipt = new File(proofDirectory, "p7-client.ok")
-        File failure = new File(proofDirectory, "p7-client.failed")
-        String expected = "numeric=true model=true single_owner=true cull=true bounded=true allocation=true geometric=true\n"
-        if (!receipt.isFile() || receipt.getText("UTF-8") != expected) {
-            String detail = failure.isFile() ? failure.getText("UTF-8").trim() : "missing receipt"
-            throw new GradleException("The P7 client visual proof did not pass: " + detail)
-        }
-        if (failure.exists()) {
-            throw new GradleException("The P7 client visual proof retained a failure receipt")
-        }
-        logger.lifecycle("P7 client visual proof verified: numeric fact, model, cull, bounded view, allocation, geometric cell")
-    }
-}
-
-tasks.register("runP7VisualProof") {
-    group = "verification"
-    description = "Runs the isolated NeoForge client visual parity proof."
-    dependsOn(tasks.named("verifyP7VisualProof"))
-}
-
-tasks.register("cleanP8ProofRunDirectory", Delete) {
-    delete p8ProofDirectory
-}
-
-tasks.register("prepareP8ProofRunDirectory") {
-    dependsOn(tasks.named("cleanP8ProofRunDirectory"))
-    outputs.dir(p8ProofDirectory)
-    doLast {
-        File directory = p8ProofDirectory.get().asFile
-        if (!directory.mkdirs() && !directory.isDirectory()) {
-            throw new GradleException("Could not create the P8 proof directory")
-        }
-    }
-}
-
-tasks.register("verifyP8TerrainSlabsDependencies") {
-    doLast {
-        def expected = [
-                "countereds-terrain-slabs": "56d52bd9864423d8d8e2b6cf88d3533824b2ab64e3947e039d3d90bcc4d69e43b2dc56046f4f9e7c7cb9baa384bb3757d7ff18d70690888f54c3755bfbb7b593",
-                "architectury-api": "65e3664953385d880320dd6bb818bcb96d361c07c53e2a7f65e64c6a47720ee26b233224ae9cad465ef0b2bbaefdaf30fb0175a983cecd91de058817d6fcf57e"
-        ]
-        def artifacts = configurations.p8testRuntimeClasspath.resolvedConfiguration.resolvedArtifacts
-                .findAll { it.moduleVersion.id.group == "maven.modrinth" }
-        expected.each { name, expectedHash ->
-            def matches = artifacts.findAll { it.name == name }
-            if (matches.size() != 1) {
-                throw new GradleException("Expected exactly one P8 dependency artifact for " + name)
-            }
-            def digest = java.security.MessageDigest.getInstance("SHA-512")
-            matches.first().file.withInputStream { input ->
-                byte[] buffer = new byte[8192]
-                int read
-                while ((read = input.read(buffer)) != -1) {
-                    digest.update(buffer, 0, read)
-                }
-            }
-            String actualHash = digest.digest().encodeHex().toString()
-            if (actualHash != expectedHash) {
-                throw new GradleException("P8 dependency hash mismatch for " + name)
-            }
-        }
-        logger.lifecycle("P8 dependency identity verified: Terrain Slabs 3.1.2 and Architectury 13.0.8")
-    }
-}
-
-tasks.named("runP8TerrainSlabsClient").configure {
-    dependsOn(tasks.named("prepareP8ProofRunDirectory"))
-    dependsOn(tasks.named("verifyP8TerrainSlabsDependencies"))
-}
-
-tasks.register("verifyP8TerrainSlabsProof") {
-    dependsOn(tasks.named("runP8TerrainSlabsClient"))
-    doLast {
-        File proofDirectory = p8ProofDirectory.get().dir("proof").asFile
-        File receipt = new File(proofDirectory, "p8-terrain-slabs.ok")
-        File failure = new File(proofDirectory, "p8-terrain-slabs.failed")
-        String expected = "versions=true classification=true vanilla_slab=true flat=true visual=true collision_gap=true raycast=true no_compounding=true\n"
-        if (!receipt.isFile() || receipt.getText("UTF-8") != expected) {
-            // Distinguish the three cases. A receipt that exists but does not match reads as
-            // "missing receipt" otherwise, which sends the reader looking for the wrong problem -
-            // usually a lane change that did not update this literal in lockstep.
-            String detail
-            if (failure.isFile()) {
-                detail = failure.getText("UTF-8").trim()
-            } else if (!receipt.isFile()) {
-                detail = "no receipt was written"
-            } else {
-                detail = "receipt does not match the expected flags; got: " + receipt.getText("UTF-8").trim()
-            }
-            throw new GradleException("The P8 Terrain Slabs proof did not pass: " + detail)
-        }
-        if (failure.exists()) {
-            throw new GradleException("The P8 Terrain Slabs proof retained a failure receipt")
-        }
-        logger.lifecycle("P8 Terrain Slabs proof verified: real-mod classification, the ruled support gap, and non-compounding")
-    }
-}
-
-tasks.register("runP8TerrainSlabsProof") {
-    group = "verification"
-    description = "Runs the isolated Terrain Slabs 3.1.2 geometry-coherence proof."
-    dependsOn(tasks.named("verifyP8TerrainSlabsProof"))
-}
-
-tasks.register("cleanP9SnowProofRunDirectory", Delete) {
-    delete p9SnowProofDirectory
-}
-
-tasks.register("prepareP9SnowProofRunDirectory") {
-    dependsOn(tasks.named("cleanP9SnowProofRunDirectory"))
-    outputs.dir(p9SnowProofDirectory)
-    doLast {
-        File directory = p9SnowProofDirectory.get().asFile
-        if (!directory.mkdirs() && !directory.isDirectory()) {
-            throw new GradleException("Could not create the P9 Snow proof directory")
-        }
-    }
-}
-
-tasks.register("verifyP9SnowDependencies") {
-    doLast {
-        def expected = [
-                "iJNje1E8": "d68a1761b96878d902ec1496ed97cab75f1fd5dad9375d73ad6bf336f2c39f7a64bbce40e66113f680f1a3e7762fe52b3b6fce309dc49ee5217e339c2b367c63",
-                "ufdDoWPd": "d01c347febcb3d77bbfd2f44f38a80afbf4cf0b72a2aaa5d1875a38cbcd78be5a263fae4f63685256ea29c5f5f5d0f1c46892e2c78c4c1204863415dec9f4151",
-                "AANobbMI": "ce58f34d05d96c0a109a5cea23c741f6bdb2e6be31fc087c5989274cefca5f10ba0c08c62083cf554a51f2c7667bf46e4164383f675c844e77633aef2659996b"
-        ]
-        def artifacts = configurations.p9snowtestRuntimeClasspath.resolvedConfiguration.resolvedArtifacts
-                .findAll { it.moduleVersion.id.group == "maven.modrinth" }
-        expected.each { module, expectedHash ->
-            def matches = artifacts.findAll { it.moduleVersion.id.name == module }
-            if (matches.size() != 1) {
-                throw new GradleException("Expected exactly one P9 Snow dependency artifact for " + module)
-            }
-            def digest = java.security.MessageDigest.getInstance("SHA-512")
-            matches.first().file.withInputStream { input ->
-                byte[] buffer = new byte[8192]
-                int read
-                while ((read = input.read(buffer)) != -1) {
-                    digest.update(buffer, 0, read)
-                }
-            }
-            String actualHash = digest.digest().encodeHex().toString()
-            if (actualHash != expectedHash) {
-                throw new GradleException("P9 Snow dependency hash mismatch for " + module)
-            }
-        }
-        logger.lifecycle("P9 Snow dependency identity verified: Snow! Real Magic 12.2.2, Kiwi 15.8.7, Sodium 0.6.13")
-    }
-}
-
-tasks.named("runP9SnowClient").configure {
-    dependsOn(tasks.named("prepareP9SnowProofRunDirectory"))
-    dependsOn(tasks.named("verifyP9SnowDependencies"))
-}
-
-tasks.register("verifyP9SnowProof") {
-    dependsOn(tasks.named("runP9SnowClient"))
-    doLast {
-        File proofDirectory = p9SnowProofDirectory.get().dir("proof").asFile
-        File receipt = new File(proofDirectory, "p9-snow.ok")
-        File failure = new File(proofDirectory, "p9-snow.failed")
-        String expected = "versions=true registry=true top=true side=true identity=true visibility=true removal=true ordinary=true\n"
-        if (!receipt.isFile() || receipt.getText("UTF-8") != expected) {
-            String detail = failure.isFile() ? failure.getText("UTF-8").trim() : "missing receipt"
-            throw new GradleException("The P9 Snow composite proof did not pass: " + detail)
-        }
-        if (failure.exists()) {
-            throw new GradleException("The P9 Snow composite proof retained a failure receipt")
-        }
-        logger.lifecycle("P9 Snow proof verified: real placement, composite model identity, visibility, removal, and ordinary control")
-    }
-}
-
-tasks.register("runP9SnowProof") {
-    group = "verification"
-    description = "Runs the isolated Snow! Real Magic 12.2.2 composite-model proof."
-    dependsOn(tasks.named("verifyP9SnowProof"))
-}
-
-tasks.register("cleanP9SmoothStepsProofRunDirectory", Delete) {
-    delete p9SmoothStepsProofDirectory
-}
-
-tasks.register("prepareP9SmoothStepsProofRunDirectory") {
-    dependsOn(tasks.named("cleanP9SmoothStepsProofRunDirectory"))
-    outputs.dir(p9SmoothStepsProofDirectory)
-    doLast {
-        File directory = p9SmoothStepsProofDirectory.get().asFile
-        if (!directory.mkdirs() && !directory.isDirectory()) {
-            throw new GradleException("Could not create the P9 Smooth Steps proof directory")
-        }
-    }
-}
-
-tasks.register("cleanP9SmoothStepsRedRunDirectory", Delete) {
-    delete p9SmoothStepsRedDirectory
-}
-
-tasks.register("prepareP9SmoothStepsRedRunDirectory") {
-    dependsOn(tasks.named("cleanP9SmoothStepsRedRunDirectory"))
-    outputs.dir(p9SmoothStepsRedDirectory)
-    doLast {
-        File directory = p9SmoothStepsRedDirectory.get().asFile
-        if (!directory.mkdirs() && !directory.isDirectory()) {
-            throw new GradleException("Could not create the P9 Smooth Steps RED directory")
-        }
-    }
-}
-
-tasks.register("verifyP9SmoothStepsDependencies") {
-    doLast {
-        def expected = [
-                "5VSZqDK0": "c3159a803255ecd2dbe3ae3d15b2d5e42d5678fa12d2145056324b9bc9963013f266748857b1e20d387b573835bcd41a189a7bd143747ce77aa36125486feaaa",
-                "countereds-terrain-slabs": "56d52bd9864423d8d8e2b6cf88d3533824b2ab64e3947e039d3d90bcc4d69e43b2dc56046f4f9e7c7cb9baa384bb3757d7ff18d70690888f54c3755bfbb7b593",
-                "architectury-api": "65e3664953385d880320dd6bb818bcb96d361c07c53e2a7f65e64c6a47720ee26b233224ae9cad465ef0b2bbaefdaf30fb0175a983cecd91de058817d6fcf57e"
-        ]
-        def artifacts = configurations.p9smoothstepstestRuntimeClasspath.resolvedConfiguration.resolvedArtifacts
-                .findAll { it.moduleVersion.id.group == "maven.modrinth" }
-        expected.each { module, expectedHash ->
-            def matches = artifacts.findAll { it.moduleVersion.id.name == module }
-            if (matches.size() != 1) {
-                throw new GradleException("Expected exactly one P9 Smooth Steps dependency artifact for " + module)
-            }
-            def digest = java.security.MessageDigest.getInstance("SHA-512")
-            matches.first().file.withInputStream { input ->
-                byte[] buffer = new byte[8192]
-                int read
-                while ((read = input.read(buffer)) != -1) {
-                    digest.update(buffer, 0, read)
-                }
-            }
-            String actualHash = digest.digest().encodeHex().toString()
-            if (actualHash != expectedHash) {
-                throw new GradleException("P9 Smooth Steps dependency hash mismatch for " + module)
-            }
-        }
-        logger.lifecycle("P9 Smooth Steps dependency identity verified: Smooth Steps 1.1.0, Terrain Slabs 3.1.2, Architectury 13.0.8")
-    }
-}
-
-tasks.named("runP9SmoothStepsClient").configure {
-    dependsOn(tasks.named("prepareP9SmoothStepsProofRunDirectory"))
-    dependsOn(tasks.named("verifyP9SmoothStepsDependencies"))
-}
-
-tasks.named("runP9SmoothStepsRedClient").configure {
-    dependsOn(tasks.named("prepareP9SmoothStepsRedRunDirectory"))
-    dependsOn(tasks.named("verifyP9SmoothStepsDependencies"))
-}
-
-tasks.register("verifyP9SmoothStepsProof") {
-    dependsOn(tasks.named("runP9SmoothStepsClient"))
-    doLast {
-        File proofDirectory = p9SmoothStepsProofDirectory.get().dir("proof").asFile
-        File receipt = new File(proofDirectory, "p9-smooth-steps.ok")
-        File failure = new File(proofDirectory, "p9-smooth-steps.failed")
-        String expected = "versions=true tracker=true placement=true permanent=true visual=true collision=true raycast=true step=true camera=true flat=true startup=true\n"
-        if (!receipt.isFile() || receipt.getText("UTF-8") != expected) {
-            String detail = failure.isFile() ? failure.getText("UTF-8").trim() : "missing receipt"
-            throw new GradleException("The P9 Smooth Steps proof did not pass: " + detail)
-        }
-        if (failure.exists()) {
-            throw new GradleException("The P9 Smooth Steps proof retained a failure receipt")
-        }
-        logger.lifecycle("P9 Smooth Steps proof verified: exact geometry, real half-step movement, tracker, and camera convergence")
-    }
-}
-
-tasks.register("verifyP9SmoothStepsCollisionRed") {
-    dependsOn(tasks.named("runP9SmoothStepsRedClient"))
-    doLast {
-        File proofDirectory = p9SmoothStepsRedDirectory.get().dir("proof").asFile
-        File receipt = new File(proofDirectory, "p9-smooth-steps-collision-red.ok")
-        File failure = new File(proofDirectory, "p9-smooth-steps.failed")
-        String expected = "versions=true tracker=true placement=true permanent=true visual=true collision_red=true raycast=true startup=true\n"
-        if (!receipt.isFile() || receipt.getText("UTF-8") != expected) {
-            String detail = failure.isFile() ? failure.getText("UTF-8").trim() : "missing receipt"
-            throw new GradleException("The P9 Smooth Steps collision RED did not prove the intended mismatch: " + detail)
-        }
-        if (failure.exists()) {
-            throw new GradleException("The P9 Smooth Steps collision RED retained an unrelated failure receipt")
-        }
-        logger.lifecycle("P9 Smooth Steps collision RED verified: disabled collision-follow recreates only the geometry mismatch")
-    }
-}
-
-tasks.register("runP9SmoothStepsProof") {
-    group = "verification"
-    description = "Runs the isolated Smooth Steps 1.1.0 movement and camera proof."
-    dependsOn(tasks.named("verifyP9SmoothStepsProof"))
-}
-
-tasks.register("runP9SmoothStepsCollisionRed") {
-    group = "verification"
-    description = "Proves the Smooth Steps fixture detects disabled Slabbed collision following."
-    dependsOn(tasks.named("verifyP9SmoothStepsCollisionRed"))
-}
-
-tasks.register("verifyGameTestCount") {
-    doLast {
-        if ("false".equalsIgnoreCase(System.getProperty("slabbed.lawGate"))) {
-            throw new GradleException(
-                    "slabbed.lawGate=false is characterization-only and cannot satisfy runGameTest/check")
-        }
-        File log = gameTestDirectory.get().file("logs/latest.log").asFile
-        if (!log.isFile()) {
-            throw new GradleException("GameTest log was not created: " + log)
-        }
-        def successSummaries = []
-        log.eachLine("UTF-8") { line ->
-            def summary = (line =~ /^\[[^\]]+\] \[Server thread\/INFO\] \[net\.minecraft\.gametest\.framework\.GameTestServer\/\]: All (\d+) required tests passed :\)$/)
-            if (summary.matches()) {
-                successSummaries.add(summary.group(1).toInteger())
-            }
-        }
-        if (successSummaries.size() != 1) {
-            throw new GradleException("Expected exactly one authoritative GameTest success summary in " + log)
-        }
-        def expectedProcess = new ProcessBuilder("python3", "tools/expected-gametest-count.py")
-                .directory(project.projectDir)
-                .redirectErrorStream(true)
-                .start()
-        String expectedOutput = expectedProcess.inputStream.getText("UTF-8").trim()
-        if (expectedProcess.waitFor() != 0) {
-            throw new GradleException("Expected GameTest count check failed: " + expectedOutput)
-        }
-        int expected = expectedOutput.toInteger()
-        int actual = successSummaries.first()
-        if (actual != expected) {
-            throw new GradleException("GameTest count mismatch: expected " + expected + ", runner reported " + actual)
-        }
-        logger.lifecycle("GameTest count verified: " + actual)
-    }
-}
-
-tasks.named("runServerGameTest").configure {
-    finalizedBy(tasks.named("verifyGameTestCount"))
-}
-
-tasks.register("runGameTest") {
-    group = "verification"
-    description = "Runs the isolated NeoForge GameTest server and verifies its expected test count."
-    dependsOn(tasks.named("runServerGameTest"))
-}
-
-// Unlike the release gates below, this one guards the SOURCE TREE rather than an artifact, so
-// it belongs on `check` and not on the archive tasks: there is no jar it could certify.
-tasks.register("verifyPlacementStoreWriters") {
-    group = "verification"
-    description = "Requires the placement-height record to keep exactly its approved production owners."
-    doLast {
-        def process = new ProcessBuilder("python3", "tools/verify-placement-store-writers.py")
-                .directory(project.projectDir).redirectErrorStream(true).start()
-        String output = process.inputStream.getText("UTF-8").trim()
-        if (process.waitFor() != 0) {
-            throw new GradleException("Placement store writer check failed:\n" + output)
-        }
-        logger.lifecycle(output)
-    }
-}
-
-tasks.named("check").configure {
-    dependsOn(tasks.named("runGameTest"))
-    dependsOn(tasks.named("verifyPlacementStoreWriters"))
-}
-
-tasks.register("verifyReleaseAllowlist") {
-    dependsOn(tasks.named("jar"), tasks.named("sourcesJar"))
-    doLast {
-        def artifacts = [
-                [kind: "runtime", file: tasks.named("jar").get().archiveFile.get().asFile],
-                [kind: "sources", file: tasks.named("sourcesJar").get().archiveFile.get().asFile]
-        ]
-        artifacts.each { artifact ->
-            def process = new ProcessBuilder(
-                    "python3",
-                    "tools/verify-release-allowlist.py",
-                    "--artifact",
-                    artifact.file.absolutePath,
-                    "--kind",
-                    artifact.kind
-            ).directory(project.projectDir).redirectErrorStream(true).start()
-            String output = process.inputStream.getText("UTF-8").trim()
-            if (process.waitFor() != 0) {
-                throw new GradleException(output)
-            }
-            logger.lifecycle(output)
-        }
-    }
-}
-
-// String-level hygiene gate: no shipping archive entry may even NAME the dev-diagnostics
-// classes. This is why the release-safe seam is a no-op bridge — the boundary stays
-// un-regressable even if a future refactor moves a class between source sets.
-tasks.register("verifyReleaseJarHygiene") {
-    dependsOn(tasks.named("jar"), tasks.named("sourcesJar"))
-    doLast {
-        def forbiddenTokens = [
-                "LiveCursorIntentRecorder",
-                "SlabModelStaleSentinel",
-                "TargetDyOverlay",
-                "SlabbedDevtools",
-                "SlabRigCommand",
-                "SlabTestKit",
-                "slabbed_devtools"
-        ]
-        [tasks.named("jar").get().archiveFile.get().asFile,
-         tasks.named("sourcesJar").get().archiveFile.get().asFile].each { archive ->
-            new java.util.zip.ZipFile(archive).withCloseable { zip ->
-                zip.entries().each { entry ->
-                    if (entry.isDirectory()) {
-                        return
-                    }
-                    String bytes = new String(zip.getInputStream(entry).readAllBytes(),
-                            java.nio.charset.StandardCharsets.ISO_8859_1)
-                    forbiddenTokens.each { token ->
-                        if (bytes.contains(token)) {
-                            throw new GradleException("Release hygiene violation: "
-                                    + archive.name + " entry " + entry.name
-                                    + " names forbidden dev token '" + token + "'")
-                        }
-                    }
-                }
-            }
-            logger.lifecycle("Release jar hygiene verified: " + archive.name
-                    + " (no dev-diagnostics tokens)")
-        }
-    }
-}
-
-tasks.named("build").configure {
-    dependsOn(tasks.named("verifyReleaseAllowlist"))
-    dependsOn(tasks.named("verifyReleaseJarHygiene"))
-}
-
-// A bare `gradle jar` must never yield an unchecked artifact. The release gates finalize the
-// archive tasks themselves, so every route that produces a jar is gated, not only `build`.
-tasks.named("jar").configure {
-    finalizedBy(tasks.named("verifyReleaseAllowlist"), tasks.named("verifyReleaseJarHygiene"))
-}
-
-tasks.named("sourcesJar").configure {
-    finalizedBy(tasks.named("verifyReleaseAllowlist"), tasks.named("verifyReleaseJarHygiene"))
 }
 
 tasks.named("processResources", ProcessResources).configure {
     def replaceProperties = [
             minecraft_version      : project.minecraft_version,
             minecraft_version_range: project.minecraft_version_range,
-            neo_version            : project.neo_version,
+            forge_version          : project.forge_version,
+            forge_version_range    : project.forge_version_range,
             loader_version_range   : project.loader_version_range,
             mod_id                 : project.mod_id,
             mod_name               : project.mod_name,
             mod_license            : project.mod_license,
-            mod_version            : project.mod_version
+            mod_version            : project.mod_version,
+            mod_authors            : project.mod_authors,
+            mod_description        : project.mod_description
     ]
     inputs.properties replaceProperties
-    filesMatching("META-INF/neoforge.mods.toml") {
+    filesMatching("META-INF/mods.toml") {
         expand replaceProperties
     }
 }
 
-tasks.withType(JavaCompile).configureEach {
-    options.encoding = "UTF-8"
-    options.release = 21
-}
-
-jar {
-    from("LICENSE") {
-        rename { "${it}_${project.base.archivesName.get()}" }
-    }
+tasks.named("jar", Jar).configure {
     manifest {
-        attributes 'Slabbed-Git-Sha': slabbedGitSha,
-                'Slabbed-Build-Time': slabbedBuildTime
+        attributes([
+                "Specification-Title"     : project.mod_id,
+                "Specification-Vendor"    : project.mod_authors,
+                "Specification-Version"   : "1",
+                "Implementation-Title"    : project.name,
+                "Implementation-Version"  : project.mod_version,
+                "Implementation-Vendor"   : project.mod_authors
+        ])
     }
 }
 
-publishing {
-    publications {
-        register("mavenJava", MavenPublication) {
-            from components.java
-        }
-    }
-    repositories {
-    }
+tasks.withType(JavaCompile).configureEach {
+    options.compilerArgs << "-Xmaxerrs" << "5000"
 }

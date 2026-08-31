@@ -10,10 +10,10 @@ import net.minecraft.client.renderer.chunk.RenderChunkRegion;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.chunk.LevelChunk;
-import net.neoforged.bus.api.IEventBus;
+import net.minecraftforge.eventbus.api.IEventBus;
 import net.neoforged.neoforge.attachment.AttachmentType;
 import net.neoforged.neoforge.client.event.ClientTickEvent;
-import net.neoforged.neoforge.event.level.ChunkEvent;
+import net.minecraftforge.event.level.ChunkEvent;
 
 import java.util.ArrayList;
 import java.util.HashMap;
