@@ -266,23 +266,30 @@ public final class SlabAnchorAttachment {
      * blocks and adjacent-side-merged slabs). The live geometric paths still compute the
      * value used here and act as the first-frame fallback before the anchor syncs.
      */
-    private static final ThreadLocal<BlockPos> WYSIWYG_FOLLOW_CLICKED_LOWERED_FACE = new ThreadLocal<>();
+    /** A follow mark: the landing cell plus the clicked face's height that sent it there. */
+    private record WysiwygFollowMark(BlockPos pos, double clickedDy) {
+    }
 
-    public static void markWysiwygFollowClickedLoweredFace(BlockPos placedPos) {
-        WYSIWYG_FOLLOW_CLICKED_LOWERED_FACE.set(placedPos == null ? null : placedPos.immutable());
+    private static final ThreadLocal<WysiwygFollowMark> WYSIWYG_FOLLOW_CLICKED_LOWERED_FACE =
+            new ThreadLocal<>();
+
+    public static void markWysiwygFollowClickedLoweredFace(BlockPos placedPos, double clickedDy) {
+        WYSIWYG_FOLLOW_CLICKED_LOWERED_FACE.set(placedPos == null
+                ? null : new WysiwygFollowMark(placedPos.immutable(), clickedDy));
     }
 
     public static void clearWysiwygFollowClickedLoweredFace() {
         WYSIWYG_FOLLOW_CLICKED_LOWERED_FACE.remove();
     }
 
-    private static boolean consumeWysiwygFollowClickedLoweredFace(BlockPos pos) {
-        BlockPos marked = WYSIWYG_FOLLOW_CLICKED_LOWERED_FACE.get();
-        if (marked != null && marked.equals(pos)) {
+    /** The marked clicked-face height for this landing, or NaN when this cell holds no mark. */
+    private static double consumeWysiwygFollowClickedLoweredFace(BlockPos pos) {
+        WysiwygFollowMark marked = WYSIWYG_FOLLOW_CLICKED_LOWERED_FACE.get();
+        if (marked != null && marked.pos().equals(pos)) {
             WYSIWYG_FOLLOW_CLICKED_LOWERED_FACE.remove();
-            return true;
+            return marked.clickedDy();
         }
-        return false;
+        return Double.NaN;
     }
 
     /**
@@ -323,10 +330,21 @@ public final class SlabAnchorAttachment {
         if (isAnchored(world, pos) || isFrozenFlat(world, pos)) {
             return;
         }
-        if ((state.getBlock() instanceof SlabBlock || SlabSupport.isBeta35FenceWallVariantContactObject(state))
-                && consumeWysiwygFollowClickedLoweredFace(pos)) {
-            addAnchorUnchecked(world, pos);
-            return;
+        if (state.getBlock() instanceof SlabBlock
+                || SlabSupport.isBeta35FenceWallVariantContactObject(state)) {
+            double followDy = consumeWysiwygFollowClickedLoweredFace(pos);
+            if (!Double.isNaN(followDy)) {
+                if (Math.abs(followDy + 0.5d) < 1.0e-6d) {
+                    addAnchorUnchecked(world, pos);
+                } else {
+                    // Deeper than −0.5 (maintainer ruling, 2026-09-01: WYSIWYG at any depth):
+                    // the placement capture stores the clicked face's exact height as a numeric
+                    // fact, and that fact is the whole freeze. No anchor — the numeric fact must
+                    // not broaden slab anchor eligibility — and no FLAT stamp, which would sit
+                    // over the deep fact and mislead every follower that consults it.
+                }
+                return;
+            }
         }
         // Same law, flush side: stamp the grid height the player pointed at, before the resolver
         // gets a chance to read the scenery under the landing cell and pull the piece down onto it.

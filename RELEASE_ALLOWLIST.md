@@ -32,6 +32,7 @@ com/slabbed/anchor/DeepDyConsentAttachment$GrantResult.class
 com/slabbed/anchor/DeepDyConsentAttachment$Stamp.class
 com/slabbed/anchor/DeepDyConsentAttachment$State.class
 com/slabbed/anchor/DeepDyConsentAttachment.class
+com/slabbed/anchor/SlabAnchorAttachment$WysiwygFollowMark.class
 com/slabbed/anchor/SlabAnchorAttachment.class
 com/slabbed/anchor/SlabAnchorMarker.class
 com/slabbed/anchor/SlabPlacementHeightAttachment$EncodedFacts.class
@@ -186,6 +187,7 @@ com/slabbed/anchor/DeepDyConsentAttachment$GrantResult.class
 com/slabbed/anchor/DeepDyConsentAttachment$Stamp.class
 com/slabbed/anchor/DeepDyConsentAttachment$State.class
 com/slabbed/anchor/DeepDyConsentAttachment.class
+com/slabbed/anchor/SlabAnchorAttachment$WysiwygFollowMark.class
 com/slabbed/anchor/SlabAnchorAttachment.class
 com/slabbed/anchor/SlabAnchorMarker.class
 com/slabbed/anchor/SlabPlacementHeightAttachment$EncodedFacts.class

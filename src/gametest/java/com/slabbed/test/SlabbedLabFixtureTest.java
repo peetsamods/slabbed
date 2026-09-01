@@ -2458,7 +2458,7 @@ public final class SlabbedLabFixtureTest {
         BlockPos loweredNeighbor = underSlabFence.east();
 
         world.setBlock(loweredSlab, slab(SlabType.BOTTOM), Block.UPDATE_ALL);
-        SlabAnchorAttachment.markWysiwygFollowClickedLoweredFace(loweredSlab);
+        SlabAnchorAttachment.markWysiwygFollowClickedLoweredFace(loweredSlab, -0.5d);
         SlabAnchorAttachment.freezeLoweredOnPlace(world, loweredSlab, world.getBlockState(loweredSlab));
         SlabAnchorAttachment.clearWysiwygFollowClickedLoweredFace();
         ctx.assertTrue(SlabAnchorAttachment.isAnchored(world, loweredSlab),
@@ -2508,7 +2508,7 @@ public final class SlabbedLabFixtureTest {
         BlockPos adjacentLog = underSlabFence.south();
 
         world.setBlock(loweredSlab, slab(SlabType.TOP), Block.UPDATE_ALL);
-        SlabAnchorAttachment.markWysiwygFollowClickedLoweredFace(loweredSlab);
+        SlabAnchorAttachment.markWysiwygFollowClickedLoweredFace(loweredSlab, -0.5d);
         SlabAnchorAttachment.freezeLoweredOnPlace(world, loweredSlab, world.getBlockState(loweredSlab));
         SlabAnchorAttachment.clearWysiwygFollowClickedLoweredFace();
         ctx.assertTrue(SlabAnchorAttachment.isAnchored(world, loweredSlab),
@@ -2565,7 +2565,7 @@ public final class SlabbedLabFixtureTest {
         BlockPos lowerFence = underSlabFence.below();
 
         world.setBlock(loweredSlab, slab(SlabType.TOP), Block.UPDATE_ALL);
-        SlabAnchorAttachment.markWysiwygFollowClickedLoweredFace(loweredSlab);
+        SlabAnchorAttachment.markWysiwygFollowClickedLoweredFace(loweredSlab, -0.5d);
         SlabAnchorAttachment.freezeLoweredOnPlace(world, loweredSlab, world.getBlockState(loweredSlab));
         SlabAnchorAttachment.clearWysiwygFollowClickedLoweredFace();
         assertSlabDy(ctx, world, loweredSlab, -0.5d,
@@ -2645,7 +2645,7 @@ public final class SlabbedLabFixtureTest {
         };
 
         world.setBlock(loweredSlab, slab(SlabType.TOP), Block.UPDATE_ALL);
-        SlabAnchorAttachment.markWysiwygFollowClickedLoweredFace(loweredSlab);
+        SlabAnchorAttachment.markWysiwygFollowClickedLoweredFace(loweredSlab, -0.5d);
         SlabAnchorAttachment.freezeLoweredOnPlace(world, loweredSlab, world.getBlockState(loweredSlab));
         SlabAnchorAttachment.clearWysiwygFollowClickedLoweredFace();
         assertSlabDy(ctx, world, loweredSlab, -0.5d,
@@ -2760,7 +2760,7 @@ public final class SlabbedLabFixtureTest {
         };
 
         world.setBlock(loweredSlab, slab(SlabType.TOP), Block.UPDATE_ALL);
-        SlabAnchorAttachment.markWysiwygFollowClickedLoweredFace(loweredSlab);
+        SlabAnchorAttachment.markWysiwygFollowClickedLoweredFace(loweredSlab, -0.5d);
         SlabAnchorAttachment.freezeLoweredOnPlace(world, loweredSlab, world.getBlockState(loweredSlab));
         SlabAnchorAttachment.clearWysiwygFollowClickedLoweredFace();
         assertSlabDy(ctx, world, loweredSlab, -0.5d,
@@ -2849,7 +2849,7 @@ public final class SlabbedLabFixtureTest {
         BlockPos staleAnchoredFence = flatRootFence.below();
 
         world.setBlock(loweredSlab, slab(SlabType.TOP), Block.UPDATE_ALL);
-        SlabAnchorAttachment.markWysiwygFollowClickedLoweredFace(loweredSlab);
+        SlabAnchorAttachment.markWysiwygFollowClickedLoweredFace(loweredSlab, -0.5d);
         SlabAnchorAttachment.freezeLoweredOnPlace(world, loweredSlab, world.getBlockState(loweredSlab));
         SlabAnchorAttachment.clearWysiwygFollowClickedLoweredFace();
         assertSlabDy(ctx, world, loweredSlab, -0.5d,
@@ -2864,7 +2864,7 @@ public final class SlabbedLabFixtureTest {
                 "P26 fence stale-chain setup: direct under-slab connector root must be flat even without marker");
 
         world.setBlock(staleAnchoredFence, Blocks.BIRCH_FENCE.defaultBlockState(), Block.UPDATE_ALL);
-        SlabAnchorAttachment.markWysiwygFollowClickedLoweredFace(staleAnchoredFence);
+        SlabAnchorAttachment.markWysiwygFollowClickedLoweredFace(staleAnchoredFence, -0.5d);
         SlabAnchorAttachment.freezeLoweredOnPlace(world, staleAnchoredFence, world.getBlockState(staleAnchoredFence));
         SlabAnchorAttachment.clearWysiwygFollowClickedLoweredFace();
         ctx.assertTrue(SlabAnchorAttachment.isAnchored(world, staleAnchoredFence),
@@ -2901,14 +2901,14 @@ public final class SlabbedLabFixtureTest {
         BlockPos loweredFenceBelow = underSlabFence.below();
 
         world.setBlock(loweredSlab, slab(SlabType.TOP), Block.UPDATE_ALL);
-        SlabAnchorAttachment.markWysiwygFollowClickedLoweredFace(loweredSlab);
+        SlabAnchorAttachment.markWysiwygFollowClickedLoweredFace(loweredSlab, -0.5d);
         SlabAnchorAttachment.freezeLoweredOnPlace(world, loweredSlab, world.getBlockState(loweredSlab));
         SlabAnchorAttachment.clearWysiwygFollowClickedLoweredFace();
         assertSlabDy(ctx, world, loweredSlab, -0.5d,
                 "P26 fence/live repro setup: clicked top slab must render in the lowered visible lane");
 
         world.setBlock(adjacentFenceSlab, slab(SlabType.TOP), Block.UPDATE_ALL);
-        SlabAnchorAttachment.markWysiwygFollowClickedLoweredFace(adjacentFenceSlab);
+        SlabAnchorAttachment.markWysiwygFollowClickedLoweredFace(adjacentFenceSlab, -0.5d);
         SlabAnchorAttachment.freezeLoweredOnPlace(world, adjacentFenceSlab, world.getBlockState(adjacentFenceSlab));
         SlabAnchorAttachment.clearWysiwygFollowClickedLoweredFace();
         world.setBlock(adjacentFence, Blocks.BIRCH_FENCE.defaultBlockState(), Block.UPDATE_ALL);
@@ -2977,7 +2977,7 @@ public final class SlabbedLabFixtureTest {
         BlockPos adjacentLog = underSlabFence.south();
 
         world.setBlock(loweredSlab, slab(SlabType.TOP), Block.UPDATE_ALL);
-        SlabAnchorAttachment.markWysiwygFollowClickedLoweredFace(loweredSlab);
+        SlabAnchorAttachment.markWysiwygFollowClickedLoweredFace(loweredSlab, -0.5d);
         SlabAnchorAttachment.freezeLoweredOnPlace(world, loweredSlab, world.getBlockState(loweredSlab));
         SlabAnchorAttachment.clearWysiwygFollowClickedLoweredFace();
         assertSlabDy(ctx, world, loweredSlab, -0.5d,

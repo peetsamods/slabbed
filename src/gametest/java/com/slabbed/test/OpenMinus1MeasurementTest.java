@@ -28,9 +28,9 @@ import net.minecraftforge.gametest.PrefixGameTestTemplate;
  * face matches neither branch. The intent mixin is byte-identical to the donor, so the gap is
  * cross-line, not a port artefact.
  *
- * <p>This test PINS THE MEASURED BEHAVIOUR, not the spec intent. Closing the gap would widen
- * an owner-tolerance gate, which is reserved to a maintainer ruling; when that ruling lands,
- * flip the expectation here to −1.0 in the same change.
+ * <p>Ruled (maintainer ruling, 2026-09-01): WYSIWYG applies at any depth — the landing takes
+ * the clicked face's height exactly. This row asserts the ruling; the 0.0 grid landing it
+ * originally pinned was the measured pre-ruling gap.
  */
 @GameTestHolder("slabbed")
 @PrefixGameTestTemplate(false)
@@ -39,7 +39,7 @@ public final class OpenMinus1MeasurementTest {
     private static final double EPS = 1.0e-6;
 
     @GameTest(template = TEMPLATE)
-    public void sideClickOnMinus1SlabMeasuredGridLanding(GameTestHelper ctx) {
+    public void sideClickOnMinus1SlabExtendsAtMinus1(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         BlockPos anchor = ctx.absolutePos(new BlockPos(2, 2, 2));
         BlockPos landing = anchor.east();
@@ -76,9 +76,8 @@ public final class OpenMinus1MeasurementTest {
         ctx.assertTrue(landed.getBlock() instanceof SlabBlock,
                 "expected a slab in the landing cell, got " + landed);
         double dy = SlabSupport.getYOffset(world, landing, landed);
-        ctx.assertTrue(Math.abs(dy) < EPS,
-                "OPEN-MINUS1 pinned measurement moved: landing dy = " + dy
-                        + " (pinned 0.0; spec intent EXTEND = -1.0 needs a maintainer ruling)");
+        ctx.assertTrue(Math.abs(dy - (-1.0d)) < EPS,
+                "OPEN-MINUS1: landing dy = " + dy + " (ruled EXTEND = -1.0)");
         ctx.succeed();
     }
 }

@@ -1337,17 +1337,32 @@ public final class SlabSupport {
      * agreement, and it must stay in step with
      * {@code SlabAnchorAttachment.markWysiwygFlatClickedFlushFace}.
      *
-     * <p>Restricted to a flush clicked owner: a side placement beside a LOWERED or compound owner
-     * genuinely inherits that owner's height — the same law, read off a lowered face — and those
-     * lanes route here deliberately. Widening past that reddens four such pins at once.
+     * <p>A lowered clicked owner is inherited EXACTLY, at any depth down to the envelope
+     * (maintainer ruling, 2026-09-01: WYSIWYG at any depth). Before that ruling only a flush
+     * owner answered here and deeper faces fell to the below-derivation, which reads scenery the
+     * aim never named and landed a −1.0 side placement at grid height. The freeze hook's follow
+     * consume must stay depth-aware in step with this: −0.5 landings anchor, deeper landings are
+     * carried by the numeric fact alone — an anchor there broadens slab anchor eligibility,
+     * which `loweredNonAnchorPlacementStillStoresExactHeight` pins against.
      */
     public static double placementSeatDy(
             BlockGetter world, BlockPos pos, BlockState state, Direction clickedFace) {
         if (clickedFace != null && clickedFace.getAxis().isHorizontal()) {
             BlockPos ownerPos = pos.relative(clickedFace.getOpposite());
             BlockState owner = world.getBlockState(ownerPos);
-            if (!owner.isAir() && Math.abs(getYOffset(world, ownerPos, owner)) <= 1.0e-6d) {
-                return 0.0d;
+            if (!owner.isAir()) {
+                double ownerDy = getYOffset(world, ownerPos, owner);
+                if (Math.abs(ownerDy) <= 1.0e-6d) {
+                    return 0.0d;
+                }
+                // WYSIWYG at any depth (maintainer ruling, 2026-09-01): a side placement takes
+                // the clicked owner's height exactly — the face the player pointed at IS the
+                // landing height, at −0.5, −1.0, or anywhere down to the envelope. The former
+                // exact −0.5 gate left deeper faces to the below-derivation, which reads scenery
+                // the aim never named and landed a −1.0 side placement at grid height.
+                if (ownerDy < -1.0e-6d) {
+                    return Math.max(ownerDy, minResolvedDy());
+                }
             }
         }
         double columnDy = sameBlockColumnDy(world, pos, state);

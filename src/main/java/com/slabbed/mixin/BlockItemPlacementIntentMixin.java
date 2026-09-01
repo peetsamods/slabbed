@@ -676,11 +676,16 @@ public abstract class BlockItemPlacementIntentMixin {
         BlockState clickedState = level.getBlockState(clicked);
         Direction face = context.getClickedFace();
         double clickedDy = SlabSupport.getYOffset(level, clicked, clickedState);
-        if (Math.abs(clickedDy + 0.5d) < 1.0e-6d) {
+        // Any lowered face arms the follow, not only −0.5 (maintainer ruling, 2026-09-01:
+        // WYSIWYG at any depth). Arming matters beyond the height itself: the consume in
+        // freezeLoweredOnPlace is what keeps the structural FROZEN_FLAT stamp off a landing
+        // whose exact deep fact the capture is about to record — unarmed, the two writers of
+        // one transaction disagree and every follower of the stamped face floats.
+        if (clickedDy < -1.0e-6d) {
             if (heldIsSlab && face.getAxis().isHorizontal()) {
-                SlabAnchorAttachment.markWysiwygFollowClickedLoweredFace(clicked.relative(face));
+                SlabAnchorAttachment.markWysiwygFollowClickedLoweredFace(clicked.relative(face), clickedDy);
             } else if (heldIsSlab && face == Direction.UP && clickedState.getBlock() instanceof SlabBlock) {
-                SlabAnchorAttachment.markWysiwygFollowClickedLoweredFace(clicked.above());
+                SlabAnchorAttachment.markWysiwygFollowClickedLoweredFace(clicked.above(), clickedDy);
             }
         } else if (Math.abs(clickedDy) < 1.0e-6d
                 && heldIsSlab

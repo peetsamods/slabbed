@@ -46,7 +46,9 @@ consume) — it does not independently re-invoke every application site (see L1 
   height authority; absence of a fact selects the legacy geometric lane.
 - **L3 — Collision (PER-PORT ruling, NOT a universal invariant).** **This line ships
   lowered-collision-follow** ("solid where you see it", `BlockCollisionsLoweredAboveMixin`):
-  collision follows the visual `dy`. Other lines legitimately ship collision-never-offset.
+  collision follows the visual `dy`. Ruled for Forge 1.20.1 explicitly, not inherited
+  (maintainer ruling, 2026-09-01: WYSIWYG applies in every aspect, standing included).
+  Other lines legitimately ship collision-never-offset.
   Because collision follows here, WYSIWYG extends to a quad on this line, and stair lowering is
   a closed decision rather than an open one (see the former `OPEN-STAIRS` row below).
 - **L4 — Terrain Slabs owns its own offset, and authorship decides who a block belongs to**
@@ -166,7 +168,8 @@ ceiling followers never consult their own fact — they are live followers of th
 | `CS-CAP` | deep combined-slab tower | stacked lowered | **capped at `SlabSupport.minResolvedDy()`** — −3.0 for every save | window radius still derives from the envelope, so consent-deep values stay targetable | `CombinedSlabChainingMatrixTest`, `DeepDyConsentTest`, `P6InteractionParityTest`, `SlabPlacementHeightLifecycleTest` |
 
 **`CS-CAP` is a NAME, not a number.** The cap is `SlabSupport.minResolvedDy()`, which is
-`PlacementDepthPolicy.MIN_TARGETABLE_DY` (−3.0) for every save. It may not go deeper without
+`PlacementDepthPolicy.MIN_TARGETABLE_DY` (−3.0) for every save. The −3.0 envelope stands for
+Forge 1.20.1 by explicit ruling, not inheritance (maintainer ruling, 2026-09-01). It may not go deeper without
 moving that constant: the pick window and the collision broadphase are sized to it, so a height
 past it would render and then refuse to be clicked or stood on. Both are per-cell scans on the
 picking and entity-movement paths and both scale linearly with it, so depth is bought at a
@@ -229,7 +232,7 @@ These are tracked deliberately — the spec is the oracle; the gap is the findin
 
 | SPEC-ID | case | spec intent | current on this line | status |
 |---|---|---|---|---|
-| `OPEN-MINUS1` | side-click a −1.0-lowered slab | EXTEND (stay −1.0) | **measured 2026-09-01: grid landing at 0.0** — the WYSIWYG follow gate arms only at exactly −0.5, and the intent path is byte-identical to the donor, so the gap is cross-line (`OpenMinus1MeasurementTest` pins the measured value) | measured; closing the gap widens an owner-tolerance gate and awaits a maintainer ruling |
+| `OPEN-MINUS1` | side-click a −1.0-lowered slab | EXTEND (stay −1.0) | **closed on this line (maintainer ruling, 2026-09-01: WYSIWYG at any depth)** — the landing takes the clicked face's height exactly, stored as a numeric fact with no anchor (`OpenMinus1MeasurementTest` asserts the ruling). Pre-ruling the follow gate armed only at −0.5 and a −1.0 side placement landed at grid 0.0; that gap was donor behaviour and remains open on the other lines until the cross-line campaign | closed here; apply cross-line in one campaign |
 | `OPEN-STAIRS` | stairs visual lowering vs collision | donor left the choice open | **closed on this line**: collision follows the visual stepable height (`SlabbedLabFixtureTest` stair collision row) | closed by the L3 collision-follow ruling |
 
 ---
