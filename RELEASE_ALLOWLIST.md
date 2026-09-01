@@ -37,6 +37,7 @@ com/slabbed/anchor/SlabAnchorMarker.class
 com/slabbed/anchor/SlabPlacementHeightAttachment$EncodedFacts.class
 com/slabbed/anchor/SlabPlacementHeightAttachment.class
 com/slabbed/anchor/SlabbedAnchorNetwork$BucketSyncPacket.class
+com/slabbed/anchor/SlabbedAnchorNetwork$ChunkClearPacket.class
 com/slabbed/anchor/SlabbedAnchorNetwork$ConsentSyncPacket.class
 com/slabbed/anchor/SlabbedAnchorNetwork$PlacementDeltaPacket.class
 com/slabbed/anchor/SlabbedAnchorNetwork$PlacementFullPacket.class
@@ -190,6 +191,7 @@ com/slabbed/anchor/SlabAnchorMarker.class
 com/slabbed/anchor/SlabPlacementHeightAttachment$EncodedFacts.class
 com/slabbed/anchor/SlabPlacementHeightAttachment.class
 com/slabbed/anchor/SlabbedAnchorNetwork$BucketSyncPacket.class
+com/slabbed/anchor/SlabbedAnchorNetwork$ChunkClearPacket.class
 com/slabbed/anchor/SlabbedAnchorNetwork$ConsentSyncPacket.class
 com/slabbed/anchor/SlabbedAnchorNetwork$PlacementDeltaPacket.class
 com/slabbed/anchor/SlabbedAnchorNetwork$PlacementFullPacket.class

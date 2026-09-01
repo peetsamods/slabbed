@@ -22,10 +22,16 @@ import net.minecraftforge.network.simple.SimpleChannel;
 /**
  * The explicit sync a Forge capability needs and a NeoForge attachment does not.
  *
- * <p>Three server-to-client messages: a whole marker bucket, a whole placement-height map, and a
- * single placement delta. The delta exists because a whole-map resend on every placement is
- * O(chunk) on the wire and hits a payload cliff in a heavily built chunk; the full form is used
- * only when a player starts watching a chunk, and on unwatch to clear what they were told.
+ * <p>Server-to-client lanes: a whole marker bucket, a whole placement-height map, a single
+ * placement delta, the level consent stamp, and a whole-chunk clear. The delta exists because a
+ * whole-map resend on every placement is O(chunk) on the wire and hits a payload cliff in a
+ * heavily built chunk; the full form is used only when a player starts watching a chunk.
+ *
+ * <p>Watch sends only the lanes that carry data. An empty lane would apply as a no-op, and in a
+ * normal world almost every chunk is empty in every lane, so sending them all is the join cost of
+ * this layer with none of its effect. That makes the unwatch clear load-bearing: the mirror must
+ * be empty for a chunk before the next watch, or a lane skipped as empty would leave stale facts
+ * readable. One clear message names the chunk rather than one message per lane.
  *
  * <p>Nothing here makes the client authoritative. It fills {@link SlabbedClientMirror}, which is a
  * render and prediction input; server law always reads the capability.
@@ -36,7 +42,7 @@ public final class SlabbedAnchorNetwork {
      * version string the two sides connect and silently drop each other's height packets, which
      * recreates exactly the server/client split this channel exists to close.
      */
-    private static final String PROTOCOL_VERSION = "1";
+    private static final String PROTOCOL_VERSION = "2";
 
     private static final int MAX_POSITIONS_PER_PACKET = 1 << 20;
 
@@ -76,6 +82,11 @@ public final class SlabbedAnchorNetwork {
                 .encoder(ConsentSyncPacket::encode)
                 .decoder(ConsentSyncPacket::decode)
                 .consumerMainThread(SlabbedAnchorNetwork::handleConsent)
+                .add();
+        CHANNEL.messageBuilder(ChunkClearPacket.class, 4, NetworkDirection.PLAY_TO_CLIENT)
+                .encoder(ChunkClearPacket::encode)
+                .decoder(ChunkClearPacket::decode)
+                .consumerMainThread(SlabbedAnchorNetwork::handleChunkClear)
                 .add();
 
         MinecraftForge.EVENT_BUS.addListener(SlabbedAnchorNetwork::onChunkWatch);
@@ -141,12 +152,19 @@ public final class SlabbedAnchorNetwork {
     }
 
     private static PlacementFullPacket fullPacket(LevelChunk chunk, @Nullable SlabbedChunkStore store) {
-        SlabbedChunkStore.PlacementPair placement =
-                store == null ? SlabbedChunkStore.PlacementPair.EMPTY : store.placementPair();
+        return fullPacket(chunk, placementOf(store));
+    }
+
+    private static PlacementFullPacket fullPacket(
+            LevelChunk chunk, SlabbedChunkStore.PlacementPair placement) {
         return new PlacementFullPacket(
                 chunk.getLevel().dimension().location(),
                 chunk.getPos().x, chunk.getPos().z,
                 placement.positions(), placement.halfSteps());
+    }
+
+    private static SlabbedChunkStore.PlacementPair placementOf(@Nullable SlabbedChunkStore store) {
+        return store == null ? SlabbedChunkStore.PlacementPair.EMPTY : store.placementPair();
     }
 
     private static void onChunkWatch(ChunkWatchEvent.Watch event) {
@@ -156,28 +174,33 @@ public final class SlabbedAnchorNetwork {
         ResourceLocation dimension = chunk.getLevel().dimension().location();
         for (SlabAnchorMarker marker : SlabAnchorMarker.values()) {
             long[] positions = store == null ? new long[0] : store.markerPositions(marker);
+            // Empty lanes are not sent. The mirror holds nothing for a chunk it has not been
+            // told about, and unwatch clears the whole chunk, so an empty send is a no-op that
+            // every chunk in view would pay for.
+            if (positions.length == 0) {
+                continue;
+            }
             CHANNEL.send(
                     PacketDistributor.PLAYER.with(() -> player),
                     new BucketSyncPacket(
                             dimension, chunk.getPos().x, chunk.getPos().z, marker, positions));
         }
-        CHANNEL.send(
-                PacketDistributor.PLAYER.with(() -> player), fullPacket(chunk, store));
+        SlabbedChunkStore.PlacementPair placement = placementOf(store);
+        if (placement.positions().length > 0) {
+            CHANNEL.send(
+                    PacketDistributor.PLAYER.with(() -> player), fullPacket(chunk, placement));
+        }
     }
 
     private static void onChunkUnwatch(ChunkWatchEvent.UnWatch event) {
         ServerPlayer player = event.getPlayer();
-        ResourceLocation dimension = event.getLevel().dimension().location();
-        int chunkX = event.getPos().x;
-        int chunkZ = event.getPos().z;
-        for (SlabAnchorMarker marker : SlabAnchorMarker.values()) {
-            CHANNEL.send(
-                    PacketDistributor.PLAYER.with(() -> player),
-                    new BucketSyncPacket(dimension, chunkX, chunkZ, marker, new long[0]));
-        }
+        // One message for every lane at once. Sent unconditionally: the server does not track
+        // what it told this player, and a clear for a chunk the mirror never held is free.
         CHANNEL.send(
                 PacketDistributor.PLAYER.with(() -> player),
-                new PlacementFullPacket(dimension, chunkX, chunkZ, new long[0], new byte[0]));
+                new ChunkClearPacket(
+                        event.getLevel().dimension().location(),
+                        event.getPos().x, event.getPos().z));
     }
 
     // -------------------------------------------------------- client handlers
@@ -203,6 +226,10 @@ public final class SlabbedAnchorNetwork {
 
     private static void handleConsent(ConsentSyncPacket packet, Supplier<NetworkEvent.Context> ctx) {
         SlabbedClientMirror.applyConsent(packet.stamp());
+    }
+
+    private static void handleChunkClear(ChunkClearPacket packet, Supplier<NetworkEvent.Context> ctx) {
+        SlabbedClientMirror.clearChunk(packet.dimension(), packet.chunkX(), packet.chunkZ());
     }
 
     // ---------------------------------------------------------------- packets
@@ -284,6 +311,19 @@ public final class SlabbedAnchorNetwork {
                 halfSteps[i] = buf.readByte();
             }
             return new PlacementFullPacket(dimension, chunkX, chunkZ, positions, halfSteps);
+        }
+    }
+
+    /** Drops every mirrored lane for one chunk. The unwatch clear. */
+    public record ChunkClearPacket(ResourceLocation dimension, int chunkX, int chunkZ) {
+        static void encode(ChunkClearPacket packet, FriendlyByteBuf buf) {
+            buf.writeResourceLocation(packet.dimension());
+            buf.writeInt(packet.chunkX());
+            buf.writeInt(packet.chunkZ());
+        }
+
+        static ChunkClearPacket decode(FriendlyByteBuf buf) {
+            return new ChunkClearPacket(buf.readResourceLocation(), buf.readInt(), buf.readInt());
         }
     }
 

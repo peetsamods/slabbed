@@ -139,6 +139,16 @@ public final class SlabbedClientMirror {
         DeepDyConsentAttachment.acceptClientStamp(stamp);
     }
 
+    /**
+     * Drops every lane for one chunk.
+     *
+     * <p>The unwatch clear. It is what lets the watch send skip empty lanes: a chunk the mirror
+     * holds nothing for reads as absent, so the next watch only has to name what is there.
+     */
+    public static void clearChunk(ResourceLocation dimension, int chunkX, int chunkZ) {
+        ENTRIES.remove(new Key(dimension, ChunkPos.asLong(chunkX, chunkZ)));
+    }
+
     /** Drops everything. Called on disconnect so a second world never reads the first one's facts. */
     public static void clear() {
         ENTRIES.clear();
