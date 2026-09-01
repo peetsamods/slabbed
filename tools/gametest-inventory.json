@@ -13,6 +13,7 @@
     {"path": "com/slabbed/test/Mc1211GoblinRouteClientEntrypoint.java", "classification": "client_only"},
     {"path": "com/slabbed/test/NeighborUpdateInvarianceTest.java", "classification": "registered_server"},
     {"path": "com/slabbed/test/NeverPopBreadthTest.java", "classification": "registered_server"},
+    {"path": "com/slabbed/test/OpenMinus1MeasurementTest.java", "classification": "registered_server"},
     {"path": "com/slabbed/test/P6InteractionParityTest.java", "classification": "registered_server"},
     {"path": "com/slabbed/test/P7VisualParityTest.java", "classification": "registered_server"},
     {"path": "com/slabbed/test/SlabHeightStepCullTest.java", "classification": "registered_server"},

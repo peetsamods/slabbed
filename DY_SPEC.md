@@ -229,7 +229,7 @@ These are tracked deliberately — the spec is the oracle; the gap is the findin
 
 | SPEC-ID | case | spec intent | current on this line | status |
 |---|---|---|---|---|
-| `OPEN-MINUS1` | side-click a −1.0-lowered slab | EXTEND (stay −1.0) | not yet measured on this line | carry-over from the donor; measure before ruling |
+| `OPEN-MINUS1` | side-click a −1.0-lowered slab | EXTEND (stay −1.0) | **measured 2026-09-01: grid landing at 0.0** — the WYSIWYG follow gate arms only at exactly −0.5, and the intent path is byte-identical to the donor, so the gap is cross-line (`OpenMinus1MeasurementTest` pins the measured value) | measured; closing the gap widens an owner-tolerance gate and awaits a maintainer ruling |
 | `OPEN-STAIRS` | stairs visual lowering vs collision | donor left the choice open | **closed on this line**: collision follows the visual stepable height (`SlabbedLabFixtureTest` stair collision row) | closed by the L3 collision-follow ruling |
 
 ---

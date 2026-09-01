@@ -132,6 +132,7 @@ sourceSets {
                     "com/slabbed/test/Mc1211GoblinRouteCanaryGameTest.java",
                     "com/slabbed/test/NeighborUpdateInvarianceTest.java",
                     "com/slabbed/test/NeverPopBreadthTest.java",
+                    "com/slabbed/test/OpenMinus1MeasurementTest.java",
                     "com/slabbed/test/P6InteractionParityTest.java",
                     "com/slabbed/test/P7VisualParityTest.java",
                     "com/slabbed/test/SlabHeightStepCullTest.java",
