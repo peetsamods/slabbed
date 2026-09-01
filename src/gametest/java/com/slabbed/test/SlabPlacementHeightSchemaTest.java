@@ -1,5 +1,6 @@
 package com.slabbed.test;
 
+import com.slabbed.dev.SlabbedTestAccess;
 import com.slabbed.anchor.SlabPlacementHeightAttachment;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.Block;

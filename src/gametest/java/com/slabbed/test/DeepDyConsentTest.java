@@ -1,5 +1,6 @@
 package com.slabbed.test;
 
+import com.slabbed.dev.SlabbedTestAccess;
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import com.slabbed.anchor.DeepDyConsentAttachment;

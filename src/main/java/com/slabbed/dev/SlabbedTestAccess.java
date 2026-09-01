@@ -1,4 +1,4 @@
-package com.slabbed.test;
+package com.slabbed.dev;
 
 import com.slabbed.anchor.DeepDyConsentAttachment;
 import com.slabbed.anchor.SlabAnchorMarker;

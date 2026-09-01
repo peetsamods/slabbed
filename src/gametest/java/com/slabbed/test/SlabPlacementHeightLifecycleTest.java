@@ -1,5 +1,6 @@
 package com.slabbed.test;
 
+import com.slabbed.dev.SlabbedTestAccess;
 import com.slabbed.anchor.SlabAnchorAttachment;
 import com.slabbed.anchor.SlabPlacementHeightAttachment;
 import com.slabbed.client.ClientDy;

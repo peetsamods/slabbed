@@ -122,17 +122,16 @@ sourceSets {
                     "com/slabbed/test/SlabPlacementHeightSchemaTest.java",
                     "com/slabbed/test/SlabbedHotPathAllocationRegressionTest.java",
                     "com/slabbed/test/SlabbedLabFixtureTest.java",
-                    // Not a test: the suite's reach into the capability seam that replaced
-                    // the donor's attachment handles. Carries no @GameTest, so it does not
-                    // move the suite count.
-                    "com/slabbed/test/SlabbedTestAccess.java",
                     "com/slabbed/test/TerrainSlabsHeadlessClassifierTest.java",
                     "com/slabbed/test/UpFaceEdgeCombineGuardTest.java",
                     "com/slabbed/test/VanillaDownstreamOwnershipTest.java",
                     // Pulled in from src/main so the fixture builder compiles for the suite
                     // WITHOUT shipping: main's own exclude keeps com/slabbed/dev/** out of the
                     // jar, and the release hygiene gate asserts it never reaches an archive.
-                    "com/slabbed/dev/SlabbedLabFixtures.java"
+                    "com/slabbed/dev/SlabbedLabFixtures.java",
+                    // Same arrangement: the suite's reach into the capability seam that
+                    // replaced the donor's attachment handles.
+                    "com/slabbed/dev/SlabbedTestAccess.java"
             ])
         }
         resources {
@@ -236,9 +235,50 @@ tasks.matching { it.name == "runGameTestServer" }.configureEach {
     dependsOn(tasks.named("syncGameTestStructures"))
 }
 
+// The suite that RAN must be the suite that was intended. The count script proves the source
+// side; this proves the runtime side by reading the server's own summary line. Neither alone is
+// enough: the script can print 258 while the namespace filter discovers zero, and the log can
+// report a pass from a stale run.
+tasks.register("verifyGameTestCount") {
+    doLast {
+        if ("false".equalsIgnoreCase(System.getProperty("slabbed.lawGate"))) {
+            throw new GradleException(
+                    "slabbed.lawGate=false is characterization-only and cannot satisfy runGameTest")
+        }
+        def log = layout.buildDirectory.file("run/gameTest/logs/latest.log").get().asFile
+        if (!log.isFile()) {
+            throw new GradleException("no GameTest log at " + log + " - the run did not produce one")
+        }
+        def matcher = (log.text =~ /All (\d+) required tests passed/)
+        if (matcher.count != 1) {
+            throw new GradleException(
+                    "expected exactly one GameTest pass summary in the log, found " + matcher.count)
+        }
+        def reported = ((log.text =~ /All (\d+) required tests passed/)[0][1]) as int
+        def proc = ["python3", "tools/expected-gametest-count.py"].execute(null, projectDir)
+        def out = new StringBuilder(), err = new StringBuilder()
+        proc.waitForProcessOutput(out, err)
+        if (proc.exitValue() != 0) {
+            throw new GradleException("expected-gametest-count.py failed: " + err)
+        }
+        def expected = out.toString().trim() as int
+        if (reported != expected) {
+            throw new GradleException(
+                    "GameTest count mismatch: the server ran " + reported
+                            + " but the source inventory expects " + expected
+                            + " - a green with the wrong count is a false green")
+        }
+        logger.lifecycle("GameTest count verified: " + reported)
+    }
+}
+
+tasks.matching { it.name == "runGameTestServer" }.configureEach {
+    finalizedBy(tasks.named("verifyGameTestCount"))
+}
+
 tasks.register("runGameTest") {
     group = "verification"
-    description = "Runs the isolated Forge GameTest server on a clean run directory."
+    description = "Runs the isolated Forge GameTest server and verifies its expected test count."
     dependsOn(tasks.named("runGameTestServer"))
 }
 
