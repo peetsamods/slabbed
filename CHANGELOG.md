@@ -96,7 +96,14 @@ published under this label yet - the version is bumped, the release is not cut.
 
 - Replace NeoForge data attachments with a chunk capability and an explicit
   sync channel: whole marker buckets and the placement map on chunk watch, a
-  constant-size delta per placement.
+  constant-size delta per placement. Chunks with no Slabbed data send nothing,
+  and every client-visible height fact is published to render workers under a
+  single copy-on-write discipline.
+- The sync channel is optional in both directions (maintainer ruling,
+  2026-09-01): a client with Slabbed joins vanilla and non-Slabbed servers,
+  and a Slabbed server accepts vanilla clients. Without the channel no height
+  facts arrive and every block resolves to its geometric height. Two Slabbed
+  installs at different wire versions still refuse to pair.
 - Persist deep-mode consent through the level's own saved data. A Forge level
   capability is never serialized by the engine, so the seeded design would have
   reset consent on every restart.
