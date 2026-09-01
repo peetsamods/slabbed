@@ -19,7 +19,6 @@ import net.minecraft.world.InteractionResult;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.context.UseOnContext;
-import net.minecraft.world.level.GameType;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.CeilingHangingSignBlock;
@@ -30,8 +29,8 @@ import net.minecraft.world.level.block.state.properties.SlabType;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
-import net.neoforged.neoforge.gametest.GameTestHolder;
-import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
+import net.minecraftforge.gametest.GameTestHolder;
+import net.minecraftforge.gametest.PrefixGameTestTemplate;
 
 /**
  * Headless proof of the Terrain Slabs compatibility gate, driven by the classifier
@@ -42,7 +41,7 @@ import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
  * <p>Each row self-calibrates: the control cell must actually lower, so a row whose
  * environment stopped producing offsets fails instead of passing vacuously.
  */
-@GameTestHolder("fabric-gametest-api-v1")
+@GameTestHolder("slabbed")
 @PrefixGameTestTemplate(false)
 public final class TerrainSlabsHeadlessClassifierTest {
     private static final String TEMPLATE = "empty";
@@ -53,7 +52,7 @@ public final class TerrainSlabsHeadlessClassifierTest {
     private static final String UNSUFFIXED_BLOCK_NAME = "shim_terrain_step";
     private static final double EPS = 1.0e-9;
 
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = TEMPLATE)
+    @GameTest(template = TEMPLATE)
     public void classifierFollowsOwnedNamespaceNotBlockClass(GameTestHelper ctx) {
         BlockState canonical = shimState(ctx, CANONICAL_NAMESPACE);
         BlockState legacy = shimState(ctx, LEGACY_NAMESPACE);
@@ -85,7 +84,7 @@ public final class TerrainSlabsHeadlessClassifierTest {
      * change without going red may simply be measuring something narrower than its name claims;
      * the authored half is pinned separately below.
      */
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = TEMPLATE)
+    @GameTest(template = TEMPLATE)
     public void anUnauthoredTerrainSlabStaysFlushOnALoweredSupport(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         BlockPos terrainSupport = ctx.absolutePos(new BlockPos(1, 2, 1));
@@ -108,7 +107,7 @@ public final class TerrainSlabsHeadlessClassifierTest {
         ctx.succeed();
     }
 
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = TEMPLATE)
+    @GameTest(template = TEMPLATE)
     public void terrainSlabSupportDoesNotContaminateTheOccupantAbove(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         BlockPos terrainSupport = ctx.absolutePos(new BlockPos(1, 2, 1));
@@ -149,7 +148,7 @@ public final class TerrainSlabsHeadlessClassifierTest {
      * block seats as the one curated opaque-cube exception. The flush contrast is asserted here
      * too, in the same run, so this row cannot pass with the lane deleted.
      */
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = TEMPLATE)
+    @GameTest(template = TEMPLATE)
     public void namedTerrainSurfaceIsADirectSeatForSlabsAndObjects(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         BlockPos slabSupport = ctx.absolutePos(new BlockPos(1, 2, 5));
@@ -218,7 +217,7 @@ public final class TerrainSlabsHeadlessClassifierTest {
      * the world-hole pin deleted, and without the control-namespace cell it would pass in an
      * environment that stopped producing offsets at all.
      */
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = TEMPLATE)
+    @GameTest(template = TEMPLATE)
     public void anAuthoredCompatSlabSeatsAndAnUnauthoredOneStaysFlush(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         BlockPos authoredSupport = ctx.absolutePos(new BlockPos(1, 2, 1));
@@ -275,7 +274,7 @@ public final class TerrainSlabsHeadlessClassifierTest {
      * that checked only the first course would pass with the depth term deleted, because one
      * course is exactly where the constant and the correct answer agree.
      */
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = TEMPLATE)
+    @GameTest(template = TEMPLATE)
     public void aColumnOnACompatSurfaceDescendsOncePerCourse(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         BlockPos compatRoot = ctx.absolutePos(new BlockPos(1, 2, 1));
@@ -324,7 +323,7 @@ public final class TerrainSlabsHeadlessClassifierTest {
      * <p>The vanilla twin in the same run is the calibration: if the seat lane stops working
      * altogether, the row fails rather than passing because both cells agree on nothing.
      */
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = TEMPLATE)
+    @GameTest(template = TEMPLATE)
     public void aModdedSlabGetsTheSameDirectSeatAsAVanillaOne(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         BlockPos moddedSurface = ctx.absolutePos(new BlockPos(1, 2, 1));
@@ -370,7 +369,7 @@ public final class TerrainSlabsHeadlessClassifierTest {
      * <p>The authored and unauthored halves are ordered authored-first so the mutation that
      * closes the support lane reddens the parity claim before the unauthored contrast can run.
      */
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = TEMPLATE)
+    @GameTest(template = TEMPLATE)
     public void aPlacedCompatSlabSupportsItsOccupantAndAGeneratedOneDoesNot(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         BlockPos ground = ctx.absolutePos(new BlockPos(1, 1, 1));
@@ -424,7 +423,7 @@ public final class TerrainSlabsHeadlessClassifierTest {
      * <p>Own row so the direct-lane mutation reddens it alone: the occupant row above goes
      * through the generic face lane, not this one.
      */
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = TEMPLATE)
+    @GameTest(template = TEMPLATE)
     public void aFollowerOnAPlacedCompatSlabRidesItsRealFace(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         BlockPos compatSupport = ctx.absolutePos(new BlockPos(1, 2, 1));
@@ -480,7 +479,7 @@ public final class TerrainSlabsHeadlessClassifierTest {
      * reason under its own mutation — the seat mutation reddens the first assert, the freeze
      * mutation passes it and reddens the stamp assert.
      */
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = TEMPLATE)
+    @GameTest(template = TEMPLATE)
     public void aCompatSlabPlacedOnAFlushSlabSeatsLikeAVanillaOne(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         BlockPos compatGround = ctx.absolutePos(new BlockPos(1, 1, 1));
@@ -554,7 +553,7 @@ public final class TerrainSlabsHeadlessClassifierTest {
      * remain, and the authored cell is the claim. The offsets are passed in rather than resolved,
      * so this measures the classifier and nothing upstream of it.
      */
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = TEMPLATE)
+    @GameTest(template = TEMPLATE)
     public void anAuthoredCompatSlabIsClassifiedForVerticalCoherence(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         BlockPos vanillaLower = ctx.absolutePos(new BlockPos(1, 2, 1));
@@ -595,7 +594,7 @@ public final class TerrainSlabsHeadlessClassifierTest {
      * above would let that row's earlier assertion fail first and shadow this one, so the
      * mutation meant to prove this claim could never reach it.
      */
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = TEMPLATE)
+    @GameTest(template = TEMPLATE)
     public void anAuthoredCompatSlabIsClassifiedForOccludedOccupancy(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         BlockPos vanilla = ctx.absolutePos(new BlockPos(1, 3, 1));
@@ -635,7 +634,7 @@ public final class TerrainSlabsHeadlessClassifierTest {
      * number. Absent both a fact and a prediction the cell is generated ground and stays flush,
      * which is what keeps world holes shut.
      */
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = TEMPLATE)
+    @GameTest(template = TEMPLATE)
     public void aPredictedCompatSlabResolvesLikeAVanillaOneBeforeItsFactArrives(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         com.slabbed.anchor.ClientRenderDyPrediction.clear();
@@ -684,7 +683,7 @@ public final class TerrainSlabsHeadlessClassifierTest {
      * top plane reports the face it actually crossed. Its own row so a break here reads as
      * "the environment stopped producing correct faces" and never as the compat claim below.
      */
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = TEMPLATE)
+    @GameTest(template = TEMPLATE)
     public void aLoweredVanillaSlabReportsTheFaceTheRayCrossed(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         BlockPos subject = ctx.absolutePos(new BlockPos(3, 3, 3));
@@ -715,7 +714,7 @@ public final class TerrainSlabsHeadlessClassifierTest {
      * shape-internals check reading "basisTop=0.5 outlineTop=0.0" would be the first red a reader
      * saw otherwise, and it does not mention targeting at all.
      */
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = TEMPLATE)
+    @GameTest(template = TEMPLATE)
     public void aLoweredCompatSlabReportsTheFaceTheRayCrossed(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         BlockPos subject = ctx.absolutePos(new BlockPos(3, 3, 3));
@@ -739,7 +738,7 @@ public final class TerrainSlabsHeadlessClassifierTest {
 
         // The consequence, not just the number: a wrong face is only a defect because of where it
         // puts the block. Drive the real transaction from the raycast's own hit.
-        Player player = ctx.makeMockPlayer(GameType.SURVIVAL);
+        Player player = ctx.makeMockPlayer();
         player.setPos(subject.getX() + 3.5D, subject.getY() + 1.0D, subject.getZ() + 0.5D);
         ItemStack stack = new ItemStack(Blocks.STONE_SLAB);
         player.setItemInHand(InteractionHand.MAIN_HAND, stack);
@@ -758,7 +757,7 @@ public final class TerrainSlabsHeadlessClassifierTest {
      * reachable at all. Its own row, so a break here reads as "the ceiling lane stopped working"
      * and never as the compat claim below.
      */
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = TEMPLATE)
+    @GameTest(template = TEMPLATE)
     public void aVanillaTopSlabUndersideHoldsAHangingDripstone(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         BlockPos slab = ctx.absolutePos(new BlockPos(3, 5, 3));
@@ -794,7 +793,7 @@ public final class TerrainSlabsHeadlessClassifierTest {
      * makes registry namespace the only variable in the row, and a red there means the row lost
      * its teeth rather than that the claim regressed.
      */
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = TEMPLATE)
+    @GameTest(template = TEMPLATE)
     public void aCompatTopSlabUndersideHoldsAHangingDripstone(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         BlockPos compatSlab = ctx.absolutePos(new BlockPos(3, 5, 3));
@@ -845,7 +844,7 @@ public final class TerrainSlabsHeadlessClassifierTest {
      * see; only the registry path differs. The suffix-matching twin calibrates in the same run, so
      * a row that stopped reaching the compat lane at all fails rather than passing quietly.
      */
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = TEMPLATE)
+    @GameTest(template = TEMPLATE)
     public void aCompatBottomSlabPresentsAStandableTopFaceWhateverItIsNamed(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         BlockPos vanillaSlab = ctx.absolutePos(new BlockPos(1, 2, 1));
@@ -883,7 +882,7 @@ public final class TerrainSlabsHeadlessClassifierTest {
      * whether that block's collision face is full, which a slab's never is - so both answers come
      * from Slabbed, and both must be blind to who registered the slab.
      */
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = TEMPLATE)
+    @GameTest(template = TEMPLATE)
     public void aHangingSignAttachesToACompatTopSlabAsToAVanillaOne(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         BlockPos vanillaSlab = ctx.absolutePos(new BlockPos(2, 5, 3));
@@ -935,7 +934,7 @@ public final class TerrainSlabsHeadlessClassifierTest {
      * an ordinary subject in this run, so the claim below reads as "the ceiling role declines it"
      * rather than "the store was not working".
      */
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = TEMPLATE)
+    @GameTest(template = TEMPLATE)
     public void aStoredHeightUnderACompatCeilingYieldsToTheCeilingRole(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
 
@@ -992,7 +991,7 @@ public final class TerrainSlabsHeadlessClassifierTest {
      * establish. Without a lowered floor beneath the subject both classifications resolve flush,
      * the break has no height to disturb, and a row built that way measures nothing.
      */
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = TEMPLATE)
+    @GameTest(template = TEMPLATE)
     public void aVanillaCeilingBreakHandsAFactlessChainBackToTheFloor(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         BlockPos ceiling = ctx.absolutePos(new BlockPos(3, 4, 3));
@@ -1015,7 +1014,7 @@ public final class TerrainSlabsHeadlessClassifierTest {
      * so this row cannot pass by both sides agreeing on nothing: the vanilla twin's own row above
      * establishes that the movement is real.
      */
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = TEMPLATE)
+    @GameTest(template = TEMPLATE)
     public void aCompatCeilingBreakMatchesItsVanillaTwin(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         BlockPos vanillaCeiling = ctx.absolutePos(new BlockPos(2, 4, 3));
@@ -1049,7 +1048,7 @@ public final class TerrainSlabsHeadlessClassifierTest {
      * <p>Compared against a vanilla twin resolved in the same run, with the twin's own descent
      * asserted first: two zeroes agreeing is exactly the failure this row exists to catch.
      */
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = TEMPLATE)
+    @GameTest(template = TEMPLATE)
     public void aHangerUnderAnAuthoredCompatCeilingTracksItLikeAVanillaOne(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         double vanilla = hangerDyUnderAuthoredCeiling(ctx, world, ctx.absolutePos(new BlockPos(1, 4, 1)),
@@ -1078,7 +1077,7 @@ public final class TerrainSlabsHeadlessClassifierTest {
      * admission produces a hanger half a block low here while the row above stays green - the
      * half-fix this row exists to fail.
      */
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = TEMPLATE)
+    @GameTest(template = TEMPLATE)
     public void aHangerUnderAnAuthoredCompatTopSlabTakesTheSameMergeAsAVanillaOne(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         BlockState vanillaTop = Blocks.STONE_SLAB.defaultBlockState()
@@ -1113,7 +1112,7 @@ public final class TerrainSlabsHeadlessClassifierTest {
      * the first hanger would pass with the cursor walk deleted, because the direct leg answers the
      * first one.
      */
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = TEMPLATE)
+    @GameTest(template = TEMPLATE)
     public void aCascadedHangerUnderACompatCeilingFollowsLikeAVanillaOne(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         double[] vanilla = cascadedHangerDysUnderAuthoredCeiling(ctx, world,
@@ -1149,7 +1148,7 @@ public final class TerrainSlabsHeadlessClassifierTest {
      * ceiling resolves lowered while its hanger is refused the tracking leg - the exact split
      * this row exists to fail on.
      */
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = TEMPLATE)
+    @GameTest(template = TEMPLATE)
     public void aStampAuthoredCompatCeilingWithACompoundHeightTracksLikeAVanillaOne(
             GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
@@ -1176,7 +1175,7 @@ public final class TerrainSlabsHeadlessClassifierTest {
      * schema looks like: the anchor is the only authorship left. The support is removed too,
      * so nothing below can seat the hanger by geometry and the ceiling alone answers.
      */
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = TEMPLATE)
+    @GameTest(template = TEMPLATE)
     public void anAnchorAuthoredCompatCeilingWithACompoundHeightTracksLikeAVanillaOne(
             GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
@@ -1401,7 +1400,7 @@ public final class TerrainSlabsHeadlessClassifierTest {
      */
     private static void placeAgainstUndersideWithHeldItem(
             GameTestHelper ctx, Block held, BlockPos supportPos) {
-        Player player = ctx.makeMockPlayer(GameType.SURVIVAL);
+        Player player = ctx.makeMockPlayer();
         player.setPos(supportPos.getX() + 0.5D, supportPos.getY() - 3.0D, supportPos.getZ() + 0.5D);
         player.setXRot(-90.0F);
         player.setYRot(0.0F);
@@ -1439,7 +1438,7 @@ public final class TerrainSlabsHeadlessClassifierTest {
         return world.clip(new net.minecraft.world.level.ClipContext(
                 from, to, net.minecraft.world.level.ClipContext.Block.OUTLINE,
                 net.minecraft.world.level.ClipContext.Fluid.NONE,
-                net.minecraft.world.phys.shapes.CollisionContext.empty()));
+                (net.minecraft.world.entity.Entity) null));
     }
 
     /** Places one course on the resolved TOP FACE of {@code support}, where a real ray lands. */
@@ -1449,7 +1448,7 @@ public final class TerrainSlabsHeadlessClassifierTest {
         double supportDy = SlabSupport.getYOffset(world, support, supportState);
         double localTop = (supportState.getBlock() instanceof net.minecraft.world.level.block.SlabBlock
                 ? 0.5d : 1.0d) + supportDy;
-        Player player = ctx.makeMockPlayer(GameType.SURVIVAL);
+        Player player = ctx.makeMockPlayer();
         player.setPos(support.getX() + 2.5D, support.getY() + 1.0D, support.getZ() + 0.5D);
         ItemStack stack = new ItemStack(held);
         player.setItemInHand(InteractionHand.MAIN_HAND, stack);
@@ -1461,7 +1460,7 @@ public final class TerrainSlabsHeadlessClassifierTest {
     }
 
     private static void placeWithHeldItem(GameTestHelper ctx, Block held, BlockPos subject, BlockPos hitPos) {
-        Player player = ctx.makeMockPlayer(GameType.SURVIVAL);
+        Player player = ctx.makeMockPlayer();
         // Stand beside the target, not inside it: a slab in the player's own feet cell is an
         // obstructed placement and vanilla refuses it before any Slabbed code runs.
         player.setPos(subject.getX() + 2.5D, subject.getY(), subject.getZ() + 0.5D);
@@ -1497,7 +1496,7 @@ public final class TerrainSlabsHeadlessClassifierTest {
     }
 
     private static void placeStoneWithHeldItem(GameTestHelper ctx, BlockPos subject, BlockPos hitPos) {
-        Player player = ctx.makeMockPlayer(GameType.SURVIVAL);
+        Player player = ctx.makeMockPlayer();
         player.setPos(subject.getX() + 0.5D, subject.getY(), subject.getZ() + 0.5D);
         ItemStack stack = new ItemStack(Blocks.STONE);
         player.setItemInHand(InteractionHand.MAIN_HAND, stack);

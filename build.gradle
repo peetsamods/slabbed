@@ -83,14 +83,33 @@ sourceSets {
             exclude "slabbed.debug.mixins.json"
         }
     }
+    // Standalone classifier shim that claims the Terrain Slabs mod id inside the GameTest server
+    // only. It must never depend on main and must never ship: the compat gate's loaded-check leg
+    // is only provable headlessly if something answers to that mod id.
+    tsshim {
+        java {
+            setSrcDirs(["src/tsshim/java"])
+        }
+        resources {
+            setSrcDirs(["src/tsshim/resources"])
+        }
+        compileClasspath += configurations.compileClasspath
+        runtimeClasspath += output
+    }
     gametest {
         java {
-            setSrcDirs(["src/gametest/java"])
+            setSrcDirs(["src/gametest/java", "src/main/java"])
             // Tests graduate one at a time as they are translated off the donor's registration.
             // Keep this list explicit: the suite-count gate reads it to prove the suite that ran
             // is the suite that was intended.
             setIncludes([
-                    "com/slabbed/test/NeighborUpdateInvarianceTest.java"
+                    "com/slabbed/test/NeighborUpdateInvarianceTest.java",
+                    "com/slabbed/test/SlabbedLabFixtureTest.java",
+                    // Pulled in from src/main so the fixture builder compiles for the suite
+                    // WITHOUT shipping: main's own exclude keeps com/slabbed/dev/** out of the
+                    // jar, and the release hygiene gate asserts it never reaches an archive.
+                    "com/slabbed/dev/SlabbedLabFixtures.java",
+                    "com/slabbed/test/TerrainSlabsHeadlessClassifierTest.java"
             ])
         }
         resources {
@@ -145,6 +164,11 @@ minecraft {
                     source sourceSets.main
                     source sourceSets.gametest
                 }
+                // Loaded ONLY here. The real Terrain Slabs mod and this shim claim the same id,
+                // so they can never coexist in one run.
+                terrain_slabs {
+                    source sourceSets.tsshim
+                }
             }
         }
     }
@@ -185,6 +209,7 @@ tasks.register("syncGameTestStructures", Sync) {
 
 tasks.matching { it.name == "runGameTestServer" }.configureEach {
     dependsOn(tasks.named("gametestClasses"))
+    dependsOn(tasks.named("tsshimClasses"))
     dependsOn(tasks.named("syncGameTestStructures"))
 }
 

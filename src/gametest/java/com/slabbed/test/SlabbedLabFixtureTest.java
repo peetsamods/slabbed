@@ -25,7 +25,6 @@ import net.minecraft.world.level.Explosion;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.context.UseOnContext;
-import net.minecraft.world.level.GameType;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.CarpetBlock;
@@ -47,8 +46,8 @@ import net.minecraft.world.phys.Vec3;
 import net.minecraft.world.phys.shapes.CollisionContext;
 import net.minecraft.world.phys.shapes.Shapes;
 import net.minecraft.world.phys.shapes.VoxelShape;
-import net.neoforged.neoforge.gametest.GameTestHolder;
-import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
+import net.minecraftforge.gametest.GameTestHolder;
+import net.minecraftforge.gametest.PrefixGameTestTemplate;
 
 /**
  * Server GameTest exercising the basic Slabbed Lab fixture lifecycle.
@@ -63,7 +62,7 @@ import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
  *   4. restore FULL support → assert stone
  *   5. neighbor-update pulse on FULL → assert FULL support still matches post-pulse
  */
-@GameTestHolder("fabric-gametest-api-v1")
+@GameTestHolder("slabbed")
 @PrefixGameTestTemplate(false)
 public final class SlabbedLabFixtureTest {
     private static final double MC1211_SERVER_STATE_EPSILON = 1.0e-6d;
@@ -82,7 +81,7 @@ public final class SlabbedLabFixtureTest {
      * <p>Uses {@code fabric-gametest-api-v1:empty} (built-in 8×8×8 all-air structure).
      * Fixture footprint: X=0..4, Y=0..1, Z=0..1 (pulse at Z=1) — fits within bounds.
      */
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = "empty")
+    @GameTest(template = "empty")
     public void labSupportCycle(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         // Use a y+1 fixture origin to avoid template-floor occupancy in MC1211 empty templates.
@@ -145,7 +144,7 @@ public final class SlabbedLabFixtureTest {
      * <p>This deliberately does not measure model dy, renderer dy, outline,
      * raycast, client attachment sync, render-view bridge lookup, or reload.
      */
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = "empty")
+    @GameTest(template = "empty")
     public void mc1211ServerStateOverlapMatrix(GameTestHelper ctx) {
         boolean goblinOnly = Boolean.getBoolean("slabbed.mc1211.goblinOnly");
         boolean sidePlaceStoneLoweringOnly = Boolean.getBoolean("slabbed.mc1211.sidePlaceStoneLoweringOnly");
@@ -412,7 +411,7 @@ public final class SlabbedLabFixtureTest {
      * at minY=0.0. This test fails against that regressed state and passes
      * once parity is restored.
      */
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = "empty")
+    @GameTest(template = "empty")
     public void outlineRaycastParity(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         BlockPos origin = fixtureTestOrigin(ctx);
@@ -460,7 +459,7 @@ public final class SlabbedLabFixtureTest {
      * helper restores them via an explicit {@code BlockEntityProvider}
      * category check without re-opening the generic solid-cube fallback.
      */
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = "empty")
+    @GameTest(template = "empty")
     public void blockEntityFullCubeSitsOnSlab(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         BlockPos origin = fixtureTestOrigin(ctx);
@@ -500,7 +499,7 @@ public final class SlabbedLabFixtureTest {
      * onto slabs. The previous selective-only policy that excluded solid cubes
      * has been retired.
      */
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = "empty")
+    @GameTest(template = "empty")
     public void solidCubeLowersOverSlab(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         BlockPos origin = fixtureTestOrigin(ctx);
@@ -524,7 +523,7 @@ public final class SlabbedLabFixtureTest {
         ctx.succeed();
     }
 
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = "empty")
+    @GameTest(template = "empty")
     public void loweredFullBlockCollisionStaysWithinCell(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         BlockPos slab = ctx.absolutePos(new BlockPos(2, 2, 2));
@@ -576,7 +575,7 @@ public final class SlabbedLabFixtureTest {
      * {@code slab.x + finalDx}; a fixed one stops at the lowered stone's true front face, well
      * short of that.
      */
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = "empty")
+    @GameTest(template = "empty")
     public void anArrowShotThroughALoweredBlocksHangingHalfStopsThere(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         BlockPos slab = ctx.absolutePos(new BlockPos(2, 2, 2));
@@ -600,7 +599,7 @@ public final class SlabbedLabFixtureTest {
                         + " short of the far side proves nothing; unimpededFinalX="
                         + unimpededFinalX);
 
-        Arrow arrow = new Arrow(world, startX, aimY, startZ, new ItemStack(Items.ARROW), null);
+        Arrow arrow = new Arrow(world, startX, aimY, startZ);
         arrow.setDeltaMovement(velocityX, 0.0d, 0.0d);
         arrow.tick();
 
@@ -629,7 +628,7 @@ public final class SlabbedLabFixtureTest {
      * between them, and the premise below asserts the sightline is clear once the block is
      * removed — so a MISS here can only come from looking through the stone.
      */
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = "empty")
+    @GameTest(template = "empty")
     public void aMobCannotSeeThroughALoweredBlocksDrawnHalf(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         BlockPos slab = ctx.absolutePos(new BlockPos(4, 2, 4));
@@ -685,7 +684,7 @@ public final class SlabbedLabFixtureTest {
      * <p>Asserted against a same-run control with the block removed, so a fully-occluded reading
      * cannot come from the fixture accidentally walling the victim in.
      */
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = "empty")
+    @GameTest(template = "empty")
     public void anExplosionIsOccludedByALoweredBlocksDrawnHalf(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         BlockPos slab = ctx.absolutePos(new BlockPos(4, 2, 9));
@@ -740,7 +739,7 @@ public final class SlabbedLabFixtureTest {
      * stop — the clearing is keyed on the stored offset, so a plain block's top half must never
      * become permeable. Then the lowered arm: the ray must clear the whole column.
      */
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = "empty")
+    @GameTest(template = "empty")
     public void anArrowFliesThroughALoweredBlocksVacatedBand(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         BlockPos slab = ctx.absolutePos(new BlockPos(2, 2, 7));
@@ -758,7 +757,7 @@ public final class SlabbedLabFixtureTest {
         ctx.assertTrue(Math.abs(controlDy) <= MC1211_SERVER_STATE_EPSILON,
                 "premise: stone with no slab beneath must be unshifted, or the control arm is"
                         + " not a control; dy=" + controlDy);
-        Arrow controlArrow = new Arrow(world, startX, bandY, centreZ, new ItemStack(Items.ARROW), null);
+        Arrow controlArrow = new Arrow(world, startX, bandY, centreZ);
         controlArrow.setDeltaMovement(velocityX, 0.0d, 0.0d);
         controlArrow.tick();
         double controlFinalX = controlArrow.getX();
@@ -778,7 +777,7 @@ public final class SlabbedLabFixtureTest {
                 "premise: the aim height must sit above the lowered stone's drawn top; bandY="
                         + bandY + " dy=" + dy);
 
-        Arrow arrow = new Arrow(world, startX, bandY, centreZ, new ItemStack(Items.ARROW), null);
+        Arrow arrow = new Arrow(world, startX, bandY, centreZ);
         arrow.setDeltaMovement(velocityX, 0.0d, 0.0d);
         arrow.tick();
         double finalX = arrow.getX();
@@ -798,7 +797,7 @@ public final class SlabbedLabFixtureTest {
      * strip the lowered stone has visibly vacated but its un-lowered collision box still covers.
      * Control arm first: with an UNSHIFTED stone the same sightline must stay blocked.
      */
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = "empty")
+    @GameTest(template = "empty")
     public void aMobSeesThroughALoweredBlocksVacatedBand(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         BlockPos slab = ctx.absolutePos(new BlockPos(4, 2, 14));
@@ -851,7 +850,7 @@ public final class SlabbedLabFixtureTest {
      * {@code block.y+0.75}, wholly inside the vacated strip. Control arm first: with an
      * UNSHIFTED stone the same geometry must stay fully occluded.
      */
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = "empty")
+    @GameTest(template = "empty")
     public void anExplosionReachesThroughALoweredBlocksVacatedBand(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         BlockPos slab = ctx.absolutePos(new BlockPos(4, 2, 19));
@@ -917,7 +916,7 @@ public final class SlabbedLabFixtureTest {
      * the placed slab must be a TOP slab (a bottom slab's underside is 0.0, so the arithmetic that
      * produced the defect would not even run).
      */
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = "empty")
+    @GameTest(template = "empty")
     public void aSlabAimedAtASideFaceCantileversInsteadOfSeatingBelow(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         BlockPos wall = ctx.absolutePos(new BlockPos(3, 3, 3));
@@ -952,7 +951,7 @@ public final class SlabbedLabFixtureTest {
                         + " placement snaps in front of the player; predicted " + clientPrediction);
 
         // The live hit: the wall's east face plane, upper half of the cell, so vanilla picks TOP.
-        Player player = ctx.makeMockPlayer(GameType.SURVIVAL);
+        Player player = ctx.makeMockPlayer();
         player.setPos(landing.getX() + 2.5d, landing.getY(), landing.getZ() + 0.5d);
         ItemStack stack = new ItemStack(Blocks.STONE_SLAB);
         player.setItemInHand(InteractionHand.MAIN_HAND, stack);
@@ -974,7 +973,7 @@ public final class SlabbedLabFixtureTest {
         ctx.succeed();
     }
 
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = "empty")
+    @GameTest(template = "empty")
     public void compoundMinusOneBlockIsSolidWhereDrawn(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         BlockPos base = ctx.absolutePos(new BlockPos(2, 1, 2));
@@ -1006,7 +1005,7 @@ public final class SlabbedLabFixtureTest {
         ctx.succeed();
     }
 
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = "empty")
+    @GameTest(template = "empty")
     public void loweredScaffoldingSideInteriorStaysPassThrough(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         BlockPos slab = ctx.absolutePos(new BlockPos(2, 2, 2));
@@ -1019,7 +1018,7 @@ public final class SlabbedLabFixtureTest {
         ctx.assertTrue(near(dy, -0.5d),
                 "P26 scaffolding setup: scaffolding over bottom slab must lower -0.5, got " + dy);
 
-        Player player = ctx.makeMockPlayer(GameType.SURVIVAL);
+        Player player = ctx.makeMockPlayer();
         player.setPos(scaffoldingPos.getX() + 0.5d, scaffoldingPos.getY() - 0.25d, scaffoldingPos.getZ() + 0.5d);
         AABB sideInterior = new AABB(
                 scaffoldingPos.getX() + 0.25d, scaffoldingPos.getY() - 0.45d, scaffoldingPos.getZ() + 0.25d,
@@ -1034,7 +1033,7 @@ public final class SlabbedLabFixtureTest {
         ctx.succeed();
     }
 
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = "empty")
+    @GameTest(template = "empty")
     public void loweredScaffoldingDoesNotInjectSolidHangingCollision(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         BlockPos slab = ctx.absolutePos(new BlockPos(2, 2, 2));
@@ -1051,7 +1050,7 @@ public final class SlabbedLabFixtureTest {
         ctx.succeed();
     }
 
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = "empty")
+    @GameTest(template = "empty")
     public void loweredScaffoldingVisualVolumeIsClimbable(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         BlockPos slab = ctx.absolutePos(new BlockPos(2, 2, 2));
@@ -1064,7 +1063,7 @@ public final class SlabbedLabFixtureTest {
         ctx.assertTrue(near(dy, -0.5d),
                 "P26 scaffolding setup: scaffolding over bottom slab must lower -0.5, got " + dy);
 
-        Player player = ctx.makeMockPlayer(GameType.SURVIVAL);
+        Player player = ctx.makeMockPlayer();
         player.setPos(scaffoldingPos.getX() + 0.5d, scaffoldingPos.getY() - 0.25d, scaffoldingPos.getZ() + 0.5d);
         AABB visualScaffoldingVolume = new AABB(scaffoldingPos).move(0.0d, dy, 0.0d);
         ctx.assertTrue(player.getBoundingBox().intersects(visualScaffoldingVolume),
@@ -1080,7 +1079,7 @@ public final class SlabbedLabFixtureTest {
         ctx.succeed();
     }
 
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = "empty")
+    @GameTest(template = "empty")
     public void loweredStairCollisionFollowsVisualStepableHeight(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         BlockPos slab = ctx.absolutePos(new BlockPos(2, 2, 2));
@@ -1092,7 +1091,7 @@ public final class SlabbedLabFixtureTest {
         ctx.succeed();
     }
 
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = "empty")
+    @GameTest(template = "empty")
     public void chainedLoweredStairCollisionFollowsVisualStepableHeight(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         BlockPos slab = ctx.absolutePos(new BlockPos(2, 2, 2));
@@ -1124,7 +1123,7 @@ public final class SlabbedLabFixtureTest {
      * This test fails against double-offset state (minY == -1.0) and trivially
      * confirms the server path produces 0.0 post-dedupe.
      */
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = "empty")
+    @GameTest(template = "empty")
     public void carpetOutlineNotDoubled(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         BlockPos origin = fixtureTestOrigin(ctx);
@@ -1154,7 +1153,7 @@ public final class SlabbedLabFixtureTest {
         ctx.succeed();
     }
 
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = "empty")
+    @GameTest(template = "empty")
     public void carpetSurvivesOnSlabTops(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         BlockPos support = ctx.absolutePos(new BlockPos(2, 1, 2));
@@ -1174,7 +1173,7 @@ public final class SlabbedLabFixtureTest {
         ctx.succeed();
     }
 
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = "empty")
+    @GameTest(template = "empty")
     public void carpetDoesNotPopOnNeighbourUpdateOverSlab(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         BlockPos support = ctx.absolutePos(new BlockPos(2, 1, 2));
@@ -1194,7 +1193,7 @@ public final class SlabbedLabFixtureTest {
         ctx.succeed();
     }
 
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = "empty")
+    @GameTest(template = "empty")
     public void redstoneWireSurvivesOnSlabTops(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         BlockPos support = ctx.absolutePos(new BlockPos(2, 1, 2));
@@ -1222,7 +1221,7 @@ public final class SlabbedLabFixtureTest {
         ctx.succeed();
     }
 
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = "empty")
+    @GameTest(template = "empty")
     public void p26DoubleTallPlantsOnBottomSlabLowerBothHalves(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         BlockPos support = ctx.absolutePos(new BlockPos(2, 1, 2));
@@ -1258,7 +1257,7 @@ public final class SlabbedLabFixtureTest {
         ctx.succeed();
     }
 
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = "empty")
+    @GameTest(template = "empty")
     public void p26CandleOnLoweredSlabContactMinusOne(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         BlockPos base = ctx.absolutePos(new BlockPos(2, 1, 2));
@@ -1279,7 +1278,7 @@ public final class SlabbedLabFixtureTest {
         ctx.succeed();
     }
 
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = "empty")
+    @GameTest(template = "empty")
     public void p26FloorBellOnBottomSlabLowersHalf(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         BlockPos support = ctx.absolutePos(new BlockPos(2, 1, 2));
@@ -1298,7 +1297,7 @@ public final class SlabbedLabFixtureTest {
         ctx.succeed();
     }
 
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = "empty")
+    @GameTest(template = "empty")
     public void p26TrapdoorTopUnderTopSlabStaysFlush(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         BlockPos trapdoor = ctx.absolutePos(new BlockPos(2, 2, 2));
@@ -1317,7 +1316,7 @@ public final class SlabbedLabFixtureTest {
         ctx.succeed();
     }
 
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = "empty")
+    @GameTest(template = "empty")
     public void p26BedHeadOnSlabLowersBothHalves(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         BlockPos foot = ctx.absolutePos(new BlockPos(2, 2, 2));
@@ -1341,7 +1340,7 @@ public final class SlabbedLabFixtureTest {
         ctx.succeed();
     }
 
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = "empty")
+    @GameTest(template = "empty")
     public void p26BedOnTopSlabStaysFlush(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         BlockPos foot = ctx.absolutePos(new BlockPos(2, 2, 2));
@@ -1365,7 +1364,7 @@ public final class SlabbedLabFixtureTest {
         ctx.succeed();
     }
 
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = "empty")
+    @GameTest(template = "empty")
     public void p26TorchesFollowLoweredFullBlock(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         BlockPos support = ctx.absolutePos(new BlockPos(2, 1, 2));
@@ -1394,7 +1393,7 @@ public final class SlabbedLabFixtureTest {
         ctx.succeed();
     }
 
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = "empty")
+    @GameTest(template = "empty")
     public void flowerPotSurvivesOnSlabTop(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         BlockPos support = ctx.absolutePos(new BlockPos(2, 1, 2));
@@ -1437,7 +1436,7 @@ public final class SlabbedLabFixtureTest {
      * <p>This is the exact violation the maintainer reported: "Placing that bottom slab under a
      * floating block caused the block to inherit a lowered position. That is against the law."
      */
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = "empty")
+    @GameTest(template = "empty")
     public void frozenFlatBlockStaysFlatWhenSlabAddedBelow(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         BlockPos origin = fixtureTestOrigin(ctx);
@@ -1485,7 +1484,7 @@ public final class SlabbedLabFixtureTest {
      * directly below then lowers it to -0.5 via {@code shouldOffset → hasSlabInColumn}. The
      * frozen-flat marker is precisely what suppresses this for player-placed blocks.
      */
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = "empty")
+    @GameTest(template = "empty")
     public void unfrozenBlockLowersWhenSlabAddedBelow(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         BlockPos origin = fixtureTestOrigin(ctx);
@@ -1523,7 +1522,7 @@ public final class SlabbedLabFixtureTest {
      *   <li>air neighbour → FALSE</li>
      * </ul>
      */
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = "empty")
+    @GameTest(template = "empty")
     public void slabHeightStepFacePredicate(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         BlockPos origin = fixtureTestOrigin(ctx);
@@ -1595,7 +1594,7 @@ public final class SlabbedLabFixtureTest {
      * rendered top of the one below, so the top stone must compound to dy=-1.0 to sit FLUSH on the
      * lowered L2 slab. If it reads -0.5 it FLOATS 0.5 above the slab (a visible gap).
      */
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = "empty")
+    @GameTest(template = "empty")
     public void advCompoundStackTopMustBeFlush(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         BlockPos base = fixtureTestOrigin(ctx);
@@ -1616,7 +1615,7 @@ public final class SlabbedLabFixtureTest {
         ctx.succeed();
     }
 
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = "empty")
+    @GameTest(template = "empty")
     public void useOnSlabBesideCompoundOwnerPlacesClickedSideNotOpposite(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         buildCompoundMinusOne(ctx);
@@ -1642,7 +1641,7 @@ public final class SlabbedLabFixtureTest {
         ctx.succeed();
     }
 
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = "empty")
+    @GameTest(template = "empty")
     public void useOnSlabBesideCompoundHonestBandLowerHalf(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         buildCompoundMinusOne(ctx);
@@ -1668,7 +1667,7 @@ public final class SlabbedLabFixtureTest {
         ctx.succeed();
     }
 
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = "empty")
+    @GameTest(template = "empty")
     public void useOnSlabBesideCompoundHonestBandUpperHalf(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         buildCompoundMinusOne(ctx);
@@ -1713,7 +1712,7 @@ public final class SlabbedLabFixtureTest {
      * <p>Ordinary vanilla ground is measured beside them so a gate that started refusing
      * everything cannot pass this row.
      */
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = "empty")
+    @GameTest(template = "empty")
     public void anOffLatticeSupportStillAcceptsAPlacement(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         BlockState[] supports = {
@@ -1757,7 +1756,7 @@ public final class SlabbedLabFixtureTest {
      * <p>A subject already known to seat correctly is measured beside them in the same run, so a
      * seat that stopped being deep cannot pass this row by making every reading agree at zero.
      */
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = "empty")
+    @GameTest(template = "empty")
     public void aDeepSeatCarriesTheSubjectsThatHoldNoFact(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         BlockPos base = ctx.absolutePos(new BlockPos(2, 1, 2));
@@ -1832,7 +1831,7 @@ public final class SlabbedLabFixtureTest {
      * slab answering half a block shallower is the seat height being re-derived instead of read.
      * Both are measured in one run so a seat that stopped lowering cannot pass as agreement.
      */
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = "empty")
+    @GameTest(template = "empty")
     public void deepSeatCarriesSlabAndFullBlockToTheSameHeight(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
 
@@ -1884,7 +1883,7 @@ public final class SlabbedLabFixtureTest {
         ctx.succeed();
     }
 
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = "empty")
+    @GameTest(template = "empty")
     public void useOnAnySlabBesideCompoundHonestBandSeatsTheSame(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         buildCompoundMinusOne(ctx);
@@ -1917,7 +1916,7 @@ public final class SlabbedLabFixtureTest {
         ctx.succeed();
     }
 
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = "empty")
+    @GameTest(template = "empty")
     public void useOnSlabBesideCompoundAnchoredHonestBand(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         buildCompoundMinusOne(ctx);
@@ -1945,7 +1944,7 @@ public final class SlabbedLabFixtureTest {
         ctx.succeed();
     }
 
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = "empty")
+    @GameTest(template = "empty")
     public void useOnFenceClickingLoweredFenceOverAirFollowsToMinusHalf(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         world.setBlock(ctx.absolutePos(new BlockPos(2, 2, 2)), slab(SlabType.BOTTOM), Block.UPDATE_ALL);
@@ -1978,7 +1977,7 @@ public final class SlabbedLabFixtureTest {
         ctx.succeed();
     }
 
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = "empty")
+    @GameTest(template = "empty")
     public void flatPlacedFenceBesideLaterLoweredColumnStaysFrozenFlat(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         BlockPos column = ctx.absolutePos(new BlockPos(2, 3, 2));
@@ -2013,7 +2012,7 @@ public final class SlabbedLabFixtureTest {
         ctx.succeed();
     }
 
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = "empty")
+    @GameTest(template = "empty")
     public void useOnFenceUnderLoweredSlabDownFacePreservesVanillaDyAndStaysStable(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         BlockPos support = ctx.absolutePos(new BlockPos(2, 2, 2));
@@ -2102,7 +2101,7 @@ public final class SlabbedLabFixtureTest {
         ctx.succeed();
     }
 
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = "empty")
+    @GameTest(template = "empty")
     public void slabStackedOnLoweredSlabSeatsFlush(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         BlockPos support = ctx.absolutePos(new BlockPos(2, 4, 2));
@@ -2126,7 +2125,7 @@ public final class SlabbedLabFixtureTest {
      * deep alphabet is what carries these depths (maintainer ruling, 2026-08-21, matching
      * the reference line). The law under test is unchanged; only its arming moved.
      */
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = "empty")
+    @GameTest(template = "empty")
     public void flintAndSteelLightsALoweredCandleOnItsVisualWick(GameTestHelper ctx) {
         SlabSupport.armDeepAlphabet(true);
         try {
@@ -2162,7 +2161,7 @@ public final class SlabbedLabFixtureTest {
         ctx.succeed();
     }
 
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = "empty")
+    @GameTest(template = "empty")
     public void snowLayerPlacedOnLoweredSlabSurvivesAndSeatsFlush(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         BlockPos support = ctx.absolutePos(new BlockPos(6, 4, 2));
@@ -2180,7 +2179,7 @@ public final class SlabbedLabFixtureTest {
         ctx.succeed();
     }
 
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = "empty")
+    @GameTest(template = "empty")
     public void thickSnowFollowsTheLoweredSupport(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         BlockPos support = ctx.absolutePos(new BlockPos(6, 4, 4));
@@ -2197,7 +2196,7 @@ public final class SlabbedLabFixtureTest {
         ctx.succeed();
     }
 
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = "empty")
+    @GameTest(template = "empty")
     public void sameMaterialSlabOnLoweredDoubleSlabSeatsFlush(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         BlockPos support = ctx.absolutePos(new BlockPos(4, 4, 2));
@@ -2223,7 +2222,7 @@ public final class SlabbedLabFixtureTest {
      * deep alphabet is what carries these depths (maintainer ruling, 2026-08-21, matching
      * the reference line). The law under test is unchanged; only its arming moved.
      */
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = "empty")
+    @GameTest(template = "empty")
     public void floorFollowerOnDeepLoweredSlabSeatsFlush(GameTestHelper ctx) {
         SlabSupport.armDeepAlphabet(true);
         try {
@@ -2259,7 +2258,7 @@ public final class SlabbedLabFixtureTest {
      * deep alphabet is what carries these depths (maintainer ruling, 2026-08-21, matching
      * the reference line). The law under test is unchanged; only its arming moved.
      */
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = "empty")
+    @GameTest(template = "empty")
     public void sideContinuationOffDeepLoweredSlabSeatsFlush(GameTestHelper ctx) {
         SlabSupport.armDeepAlphabet(true);
         try {
@@ -2289,7 +2288,7 @@ public final class SlabbedLabFixtureTest {
         ctx.succeed();
     }
 
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = "empty")
+    @GameTest(template = "empty")
     public void fenceUnderDeepBottomSlabKeepsItsAuthoredFlatLane(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         BlockPos deepSlab = ctx.absolutePos(new BlockPos(2, 4, 2));
@@ -2326,7 +2325,7 @@ public final class SlabbedLabFixtureTest {
         ctx.succeed();
     }
 
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = "empty")
+    @GameTest(template = "empty")
     public void useOnFenceUnderLoweredSlabHorizontalUndersideBandPreservesVanillaDy(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         BlockPos support = ctx.absolutePos(new BlockPos(2, 2, 2));
@@ -2395,7 +2394,7 @@ public final class SlabbedLabFixtureTest {
         ctx.succeed();
     }
 
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = "empty")
+    @GameTest(template = "empty")
     public void geometricFenceUnderLoweredSlabBesideLoweredFenceStaysFlatBeforeFreezeSync(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         BlockPos support = ctx.absolutePos(new BlockPos(2, 2, 2));
@@ -2451,7 +2450,7 @@ public final class SlabbedLabFixtureTest {
         ctx.succeed();
     }
 
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = "empty")
+    @GameTest(template = "empty")
     public void geometricFenceUnderAnchoredLoweredSlabBesideLoweredFenceStaysFlatBeforeFreezeSync(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         BlockPos loweredSlab = ctx.absolutePos(new BlockPos(2, 3, 2));
@@ -2501,7 +2500,7 @@ public final class SlabbedLabFixtureTest {
         ctx.succeed();
     }
 
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = "empty")
+    @GameTest(template = "empty")
     public void useOnFenceUnderAnchoredLoweredTopSlabConnectsToAdjacentLog(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         BlockPos loweredSlab = ctx.absolutePos(new BlockPos(2, 3, 2));
@@ -2556,7 +2555,7 @@ public final class SlabbedLabFixtureTest {
         ctx.succeed();
     }
 
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = "empty")
+    @GameTest(template = "empty")
     public void useOnFenceUnderAnchoredLoweredTopSlabKeepsFenceLogAndDownwardConnections(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         BlockPos loweredSlab = ctx.absolutePos(new BlockPos(2, 3, 2));
@@ -2633,7 +2632,7 @@ public final class SlabbedLabFixtureTest {
         ctx.succeed();
     }
 
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = "empty")
+    @GameTest(template = "empty")
     public void useOnFenceUnderAnchoredLoweredTopSlabChainsDownwardRepeatedly(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         BlockPos loweredSlab = ctx.absolutePos(new BlockPos(2, 6, 2));
@@ -2748,7 +2747,7 @@ public final class SlabbedLabFixtureTest {
         ctx.succeed();
     }
 
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = "empty")
+    @GameTest(template = "empty")
     public void bottomFenceInFlatChainConnectsToAdjacentFullBlockColumn(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         BlockPos loweredSlab = ctx.absolutePos(new BlockPos(2, 6, 2));
@@ -2842,7 +2841,7 @@ public final class SlabbedLabFixtureTest {
         ctx.succeed();
     }
 
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = "empty")
+    @GameTest(template = "empty")
     public void staleAnchoredFenceBelowFlatNoSnapRootStaysFlat(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         BlockPos loweredSlab = ctx.absolutePos(new BlockPos(2, 6, 2));
@@ -2891,7 +2890,7 @@ public final class SlabbedLabFixtureTest {
         ctx.succeed();
     }
 
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = "empty")
+    @GameTest(template = "empty")
     public void useOnFenceUnderAnchoredLoweredTopSlabIgnoresLoweredFenceBelowForFlatLane(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         BlockPos loweredSlab = ctx.absolutePos(new BlockPos(2, 3, 2));
@@ -2970,7 +2969,7 @@ public final class SlabbedLabFixtureTest {
         ctx.succeed();
     }
 
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = "empty")
+    @GameTest(template = "empty")
     public void staleFenceUnderAnchoredLoweredTopSlabLogConnectorKeepsSouthRuntimeShape(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         BlockPos loweredSlab = ctx.absolutePos(new BlockPos(2, 3, 2));
@@ -3013,7 +3012,7 @@ public final class SlabbedLabFixtureTest {
         ctx.succeed();
     }
 
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = "empty")
+    @GameTest(template = "empty")
     public void steppedGlassPaneRunBreaks(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         BlockState after = connectorAState(ctx, world, Blocks.GLASS_PANE.defaultBlockState(), true);
@@ -3023,7 +3022,7 @@ public final class SlabbedLabFixtureTest {
         ctx.succeed();
     }
 
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = "empty")
+    @GameTest(template = "empty")
     public void flatGlassPaneRunStillConnects(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         BlockState after = connectorAState(ctx, world, Blocks.GLASS_PANE.defaultBlockState(), false);
@@ -3033,7 +3032,7 @@ public final class SlabbedLabFixtureTest {
         ctx.succeed();
     }
 
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = "empty")
+    @GameTest(template = "empty")
     public void glassPaneParticipatesInLoweredConnectorVisualFamily(GameTestHelper ctx) {
         ctx.assertTrue(SlabSupport.isBeta35FenceWallVariantContactObject(Blocks.GLASS_PANE.defaultBlockState()),
                 "P26 connector: glass_pane must participate in lowered connector-contact model/raycast gating");
@@ -3043,7 +3042,7 @@ public final class SlabbedLabFixtureTest {
         ctx.succeed();
     }
 
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = "empty")
+    @GameTest(template = "empty")
     public void steppedWallBreaksAndForcesUpPost(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         BlockState after = connectorAState(ctx, world, Blocks.COBBLESTONE_WALL.defaultBlockState(), true);
@@ -3057,7 +3056,7 @@ public final class SlabbedLabFixtureTest {
         ctx.succeed();
     }
 
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = "empty")
+    @GameTest(template = "empty")
     public void steppedNetherBrickFenceBreaks(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         BlockState after = connectorAState(ctx, world, Blocks.NETHER_BRICK_FENCE.defaultBlockState(), true);
@@ -3068,7 +3067,7 @@ public final class SlabbedLabFixtureTest {
         ctx.succeed();
     }
 
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = "empty")
+    @GameTest(template = "empty")
     public void steppedStoneBrickWallBreaks(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         BlockState after = connectorAState(ctx, world, Blocks.STONE_BRICK_WALL.defaultBlockState(), true);
@@ -3082,7 +3081,7 @@ public final class SlabbedLabFixtureTest {
         ctx.succeed();
     }
 
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = "empty")
+    @GameTest(template = "empty")
     public void useOnSlabClickingLoweredFaceWithSolidGroundBelowFollowsToMinusHalf(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         world.setBlock(ctx.absolutePos(new BlockPos(2, 2, 2)), slab(SlabType.BOTTOM), Block.UPDATE_ALL);
@@ -3104,7 +3103,7 @@ public final class SlabbedLabFixtureTest {
         ctx.succeed();
     }
 
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = "empty")
+    @GameTest(template = "empty")
     public void useOnCantileverSlabAgainstCantileverSlabBothStayMinusHalf(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         world.setBlock(ctx.absolutePos(new BlockPos(2, 2, 2)), slab(SlabType.BOTTOM), Block.UPDATE_ALL);
@@ -3139,7 +3138,7 @@ public final class SlabbedLabFixtureTest {
         ctx.succeed();
     }
 
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = "empty")
+    @GameTest(template = "empty")
     public void useOnCantileverSlabAnchorsAndSurvivesSourceRemoval(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         world.setBlock(ctx.absolutePos(new BlockPos(2, 2, 2)), slab(SlabType.BOTTOM), Block.UPDATE_ALL);
@@ -3169,7 +3168,7 @@ public final class SlabbedLabFixtureTest {
         ctx.succeed();
     }
 
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = "empty")
+    @GameTest(template = "empty")
     public void useOnSlabOnFlushGroundBesideLoweredStaysFrozenFlat(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         world.setBlock(ctx.absolutePos(new BlockPos(2, 2, 2)), slab(SlabType.BOTTOM), Block.UPDATE_ALL);
@@ -3195,7 +3194,7 @@ public final class SlabbedLabFixtureTest {
         ctx.succeed();
     }
 
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = "empty")
+    @GameTest(template = "empty")
     public void unmarkedStoneSlabBesideLoweredBlockDoesNotInheritDy(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         BlockPos support = ctx.absolutePos(new BlockPos(2, 2, 2));
@@ -3240,7 +3239,7 @@ public final class SlabbedLabFixtureTest {
         ctx.succeed();
     }
 
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = "empty")
+    @GameTest(template = "empty")
     public void useOnFullBlockOnBottomSlabLowersToMinusHalf(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         world.setBlock(ctx.absolutePos(new BlockPos(2, 2, 2)), slab(SlabType.BOTTOM), Block.UPDATE_ALL);
@@ -3270,7 +3269,7 @@ public final class SlabbedLabFixtureTest {
      * while the slab stopped half a block short with air beneath it. The contrast is measured
      * here so the pair can never drift apart again.
      */
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = "empty")
+    @GameTest(template = "empty")
     public void useOnSlabOnTopOfCompoundSeatsFlushLikeAFullBlock(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         buildCompoundMinusOne(ctx);
@@ -3305,7 +3304,7 @@ public final class SlabbedLabFixtureTest {
         ctx.succeed();
     }
 
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = "empty")
+    @GameTest(template = "empty")
     public void useOnSlabOnTopOfLoweredTopSlabPlacesAboveVisibleFace(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         world.setBlock(ctx.absolutePos(new BlockPos(2, 2, 2)), slab(SlabType.BOTTOM), Block.UPDATE_ALL);
@@ -3344,7 +3343,7 @@ public final class SlabbedLabFixtureTest {
         ctx.succeed();
     }
 
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = "empty")
+    @GameTest(template = "empty")
     public void slabOnAnchoredCantileverBlockFollowsToMinusHalf(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         world.setBlock(ctx.absolutePos(new BlockPos(2, 2, 2)), slab(SlabType.BOTTOM), Block.UPDATE_ALL);
@@ -3375,7 +3374,7 @@ public final class SlabbedLabFixtureTest {
      * A full block resting on SOLID GROUND beside a lowered block must NOT sink. Only cantilevered
      * (air-below) blocks lower; a grounded neighbour must stay dy=0.
      */
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = "empty")
+    @GameTest(template = "empty")
     public void advGroundedBesideLoweredMustNotSink(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         BlockPos base = fixtureTestOrigin(ctx);
@@ -3399,7 +3398,7 @@ public final class SlabbedLabFixtureTest {
      * a lowered source must lower the SAME as the 1-out block (no mid-row pop). If the 2-out block
      * reads 0 while the 1-out reads -0.5, propagation "stops at one" (inconsistent canopy).
      */
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = "empty")
+    @GameTest(template = "empty")
     public void advCantileverTwoOutConsistent(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         BlockPos base = fixtureTestOrigin(ctx);
@@ -3421,7 +3420,7 @@ public final class SlabbedLabFixtureTest {
      * removed (setBlockState AIR → onStateReplaced → removeAnchor). If it lingers, a DIFFERENT block
      * later placed in that cell (with no slab support) would inherit a phantom -0.5 lowering.
      */
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = "empty")
+    @GameTest(template = "empty")
     public void advStaleAnchorClearedAfterAirReplace(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         BlockPos slabPos = fixtureTestOrigin(ctx);
@@ -3450,7 +3449,7 @@ public final class SlabbedLabFixtureTest {
      * stone, removing it, then authoring a stone again with the slab still present, the cell stays a
      * single correct -0.5 anchor (not corrupted/doubled).
      */
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = "empty")
+    @GameTest(template = "empty")
     public void advRefillSameCellNoCorruption(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         BlockPos slabPos = fixtureTestOrigin(ctx);
@@ -3476,7 +3475,7 @@ public final class SlabbedLabFixtureTest {
      * Geometric recompute / no-stale: a NON-placed (setBlockState) cantilever block lowered off a
      * source must recompute to flat when the source is removed (it was never frozen/anchored).
      */
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = "empty")
+    @GameTest(template = "empty")
     public void advCantileverRecomputesAfterSourceBreak(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         BlockPos base = fixtureTestOrigin(ctx);
@@ -3502,7 +3501,7 @@ public final class SlabbedLabFixtureTest {
      * there is no compound ghost-window to miss (the predicate correctly returns FALSE: no step).
      * This is why the 1.21.11 boolean-flag "cull miss on compound step" does not apply on 1.21.1.
      */
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = "empty")
+    @GameTest(template = "empty")
     public void advAdjacentCompoundColumnsHomogenizeFlush(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         BlockPos o = fixtureTestOrigin(ctx);
@@ -3529,7 +3528,7 @@ public final class SlabbedLabFixtureTest {
         ctx.succeed();
     }
 
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = "empty")
+    @GameTest(template = "empty")
     public void p26RailAndUpwardPointedDripstoneVisibleOwnerTargets(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
 
@@ -3575,7 +3574,7 @@ public final class SlabbedLabFixtureTest {
         ctx.succeed();
     }
 
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = "empty")
+    @GameTest(template = "empty")
     public void p26AlwaysCeilingHungDecorationsIgnoreSlabBelow(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         BlockPos supportBelow = ctx.absolutePos(new BlockPos(2, 3, 2));
@@ -3621,7 +3620,7 @@ public final class SlabbedLabFixtureTest {
         ctx.succeed();
     }
 
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = "empty")
+    @GameTest(template = "empty")
     public void p26DownwardPointedDripstoneChainFollowsLoweredCeilingSupport(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         BlockPos temporarySlab = ctx.absolutePos(new BlockPos(2, 3, 2));
@@ -3650,7 +3649,7 @@ public final class SlabbedLabFixtureTest {
         ctx.succeed();
     }
 
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = "empty")
+    @GameTest(template = "empty")
     public void p26DownwardPointedDripstoneUnderChainFollowsLoweredCeilingSupport(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         BlockPos temporarySlab = ctx.absolutePos(new BlockPos(2, 4, 2));
@@ -3679,7 +3678,7 @@ public final class SlabbedLabFixtureTest {
         ctx.succeed();
     }
 
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = "empty")
+    @GameTest(template = "empty")
     public void p26DownwardPointedDripstoneUnderTopSlabBridgedChainStaysFlush(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         BlockPos chain = ctx.absolutePos(new BlockPos(2, 4, 2));
@@ -3706,7 +3705,7 @@ public final class SlabbedLabFixtureTest {
         ctx.succeed();
     }
 
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = "empty")
+    @GameTest(template = "empty")
     public void p26HangingLanternUnderTopSlabBridgedChainStaysFlush(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         BlockPos chain = ctx.absolutePos(new BlockPos(2, 4, 2));
@@ -3743,7 +3742,7 @@ public final class SlabbedLabFixtureTest {
         ctx.succeed();
     }
 
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = "empty")
+    @GameTest(template = "empty")
     public void p26DownwardPointedDripstoneUnderTopSlabKeepsDescendantsFlush(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         BlockPos upper = ctx.absolutePos(new BlockPos(2, 3, 2));
@@ -3772,7 +3771,7 @@ public final class SlabbedLabFixtureTest {
         ctx.succeed();
     }
 
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = "empty")
+    @GameTest(template = "empty")
     public void p26PointedDripstoneCombinesOnSlabSurfaces(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
 
@@ -3914,7 +3913,7 @@ public final class SlabbedLabFixtureTest {
     }
 
     private static Player mockPlayerNear(GameTestHelper ctx, BlockPos abs) {
-        Player player = ctx.makeMockPlayer(GameType.SURVIVAL);
+        Player player = ctx.makeMockPlayer();
         player.setPos(abs.getX() + 0.5d, abs.getY() + 1.0d, abs.getZ() + 0.5d);
         return player;
     }

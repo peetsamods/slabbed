@@ -3,9 +3,10 @@ package com.slabbed.tsshim;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.world.level.block.SlabBlock;
 import net.minecraft.world.level.block.state.BlockBehaviour;
-import net.neoforged.bus.api.IEventBus;
-import net.neoforged.fml.common.Mod;
-import net.neoforged.neoforge.registries.DeferredRegister;
+import net.minecraftforge.eventbus.api.IEventBus;
+import net.minecraftforge.fml.common.Mod;
+import net.minecraftforge.fml.javafmlmod.FMLJavaModLoadingContext;
+import net.minecraftforge.registries.DeferredRegister;
 
 /**
  * Headless stand-in for Countered Terrain Slabs. It claims the real mod id so the
@@ -74,7 +75,10 @@ public final class TerrainSlabsShim {
                 unsuffixed.get(), new net.minecraft.world.item.Item.Properties()));
     }
 
-    public TerrainSlabsShim(IEventBus modEventBus) {
+    public TerrainSlabsShim() {
+        // Forge 47 constructs the mod class with no arguments; the bus comes from the loading
+        // context rather than constructor injection.
+        IEventBus modEventBus = FMLJavaModLoadingContext.get().getModEventBus();
         CANONICAL_BLOCKS.register(modEventBus);
         LEGACY_BLOCKS.register(modEventBus);
         CONTROL_BLOCKS.register(modEventBus);
