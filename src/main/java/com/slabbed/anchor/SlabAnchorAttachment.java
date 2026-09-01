@@ -129,7 +129,34 @@ public final class SlabAnchorAttachment {
                         SlabAnchorAttachment::clearPendingToolTransition);
     }
 
-    private static LongOpenHashSet getAttachment(LevelChunk chunk, SlabAnchorMarker marker) {
+    /**
+     * The marker set as the side that is asking must see it.
+     *
+     * <p>A Forge capability does not synchronize, so the logical client's chunk capability stays
+     * empty for the whole life of the chunk and the received facts live in
+     * {@link SlabbedClientMirror}. Every client read has to land there, whether it arrived
+     * holding a {@link Level} - outline, raycast, collision, the resolver - or holding a render
+     * region, which reaches the mirror through the client lookup predicates instead. Reading the
+     * capability on the client answers false for every marker, which is not the same answer the
+     * mesh path gives for the same block. {@code SlabPlacementHeightAttachment.factsOrNull}
+     * splits the height lane on this same line.
+     */
+    private static LongOpenHashSet visibleMarkerOrNull(LevelChunk chunk, SlabAnchorMarker marker) {
+        Level level = chunk.getLevel();
+        if (level != null && level.isClientSide()) {
+            return SlabbedClientMirror.markerOrNull(chunk, marker);
+        }
+        return storedMarkerOrNull(chunk, marker);
+    }
+
+    /**
+     * The marker set from authoritative storage, never the mirror.
+     *
+     * <p>Read-modify-write uses this and not {@link #visibleMarkerOrNull}: the mirror is render
+     * input, and folding it back into a bucket that is about to be written and synced would let
+     * received state be re-authored as if it were a decision.
+     */
+    private static LongOpenHashSet storedMarkerOrNull(LevelChunk chunk, SlabAnchorMarker marker) {
         SlabbedChunkStore store = SlabbedCapabilities.chunkStore(chunk);
         return store == null ? null : store.markerOrNull(marker);
     }
@@ -357,7 +384,7 @@ public final class SlabAnchorAttachment {
         if (chunk == null) {
             return false;
         }
-        LongOpenHashSet set = getAttachment(chunk, FROZEN_FLAT_TYPE);
+        LongOpenHashSet set = visibleMarkerOrNull(chunk, FROZEN_FLAT_TYPE);
         return set != null && set.contains(pos.asLong());
     }
 
@@ -494,7 +521,7 @@ public final class SlabAnchorAttachment {
             }
             return false;
         }
-        LongOpenHashSet existing = getAttachment(chunk, type);
+        LongOpenHashSet existing = storedMarkerOrNull(chunk, type);
         LongOpenHashSet set = existing == null ? new LongOpenHashSet() : new LongOpenHashSet(existing);
         BlockState stateBefore = RuntimeDiagnostics.beta35SlabJumpSourceTruthEnabled()
                 ? world.getBlockState(pos) : null;
@@ -663,7 +690,7 @@ public final class SlabAnchorAttachment {
         if (chunk == null) {
             return false;
         }
-        LongOpenHashSet existing = getAttachment(chunk, type);
+        LongOpenHashSet existing = storedMarkerOrNull(chunk, type);
         if (existing == null || existing.isEmpty()) {
             if (TRACE) {
                 Slabbed.LOGGER.info("[ANCHOR] {} remove pos={} existed=false", label, shortPos(pos));
@@ -789,7 +816,7 @@ public final class SlabAnchorAttachment {
         if (chunk == null) {
             return false;
         }
-        LongOpenHashSet set = getAttachment(chunk, ANCHOR_TYPE);
+        LongOpenHashSet set = visibleMarkerOrNull(chunk, ANCHOR_TYPE);
         boolean anchored = set != null && set.contains(pos.asLong());
         if (TRACE && anchored) {
             Slabbed.LOGGER.info("[ANCHOR] query true side={} pos={}",
@@ -820,7 +847,7 @@ public final class SlabAnchorAttachment {
         if (chunk == null) {
             return false;
         }
-        LongOpenHashSet set = getAttachment(chunk, COMPOUND_FULL_BLOCK_ANCHOR_TYPE);
+        LongOpenHashSet set = visibleMarkerOrNull(chunk, COMPOUND_FULL_BLOCK_ANCHOR_TYPE);
         boolean compound = set != null && set.contains(pos.asLong());
         if (TRACE && compound) {
             Slabbed.LOGGER.info("[ANCHOR] compound_full_block query true side={} pos={}",
@@ -841,7 +868,7 @@ public final class SlabAnchorAttachment {
         if (chunk == null) {
             return false;
         }
-        LongOpenHashSet set = getAttachment(chunk, COMPOUND_VISIBLE_SIDE_LOWER_SLAB_TYPE);
+        LongOpenHashSet set = visibleMarkerOrNull(chunk, COMPOUND_VISIBLE_SIDE_LOWER_SLAB_TYPE);
         boolean marked = set != null && set.contains(pos.asLong());
         if (TRACE && marked) {
             Slabbed.LOGGER.info("[ANCHOR] compound_visible_side_lower_slab query true side={} pos={}",
@@ -862,7 +889,7 @@ public final class SlabAnchorAttachment {
         if (chunk == null) {
             return false;
         }
-        LongOpenHashSet set = getAttachment(chunk, COMPOUND_VISIBLE_SIDE_UPPER_SLAB_TYPE);
+        LongOpenHashSet set = visibleMarkerOrNull(chunk, COMPOUND_VISIBLE_SIDE_UPPER_SLAB_TYPE);
         boolean marked = set != null && set.contains(pos.asLong());
         if (TRACE && marked) {
             Slabbed.LOGGER.info("[ANCHOR] compound_visible_side_upper_slab query true side={} pos={}",
@@ -883,7 +910,7 @@ public final class SlabAnchorAttachment {
         if (chunk == null) {
             return false;
         }
-        LongOpenHashSet set = getAttachment(chunk, COMPOUND_VISIBLE_SIDE_DOUBLE_SLAB_TYPE);
+        LongOpenHashSet set = visibleMarkerOrNull(chunk, COMPOUND_VISIBLE_SIDE_DOUBLE_SLAB_TYPE);
         boolean marked = set != null && set.contains(pos.asLong());
         if (TRACE && marked) {
             Slabbed.LOGGER.info("[ANCHOR] compound_visible_side_double_slab query true side={} pos={}",
@@ -904,7 +931,7 @@ public final class SlabAnchorAttachment {
         if (chunk == null) {
             return false;
         }
-        LongOpenHashSet set = getAttachment(chunk, COMPOUND_VISIBLE_OWNER_TOP_SLAB_TYPE);
+        LongOpenHashSet set = visibleMarkerOrNull(chunk, COMPOUND_VISIBLE_OWNER_TOP_SLAB_TYPE);
         boolean marked = set != null && set.contains(pos.asLong());
         if (TRACE && marked) {
             Slabbed.LOGGER.info("[ANCHOR] compound_visible_owner_top_slab query true side={} pos={}",
@@ -927,7 +954,7 @@ public final class SlabAnchorAttachment {
         if (chunk == null) {
             return isPersistentLoweredBottomSlabCarrierNonRecursive(world, pos, state);
         }
-        LongOpenHashSet set = getAttachment(chunk, LOWERED_SLAB_CARRIER_TYPE);
+        LongOpenHashSet set = visibleMarkerOrNull(chunk, LOWERED_SLAB_CARRIER_TYPE);
         boolean carrier = set != null && set.contains(pos.asLong());
         if (!carrier && isPersistentLoweredBottomSlabCarrierNonRecursive(world, pos, state)) {
             carrier = true;
@@ -953,7 +980,7 @@ public final class SlabAnchorAttachment {
         if (world instanceof Level w) {
             LevelChunk chunk = w.getChunk(pos.getX() >> 4, pos.getZ() >> 4);
             if (chunk != null) {
-                LongOpenHashSet set = getAttachment(chunk, LOWERED_SLAB_CARRIER_TYPE);
+                LongOpenHashSet set = visibleMarkerOrNull(chunk, LOWERED_SLAB_CARRIER_TYPE);
                 if (set != null && set.contains(pos.asLong())) {
                     return true;
                 }
