@@ -1,0 +1,59 @@
+name: Slabbed CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - "port/forge-1.20.1-**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: slabbed-ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: Build and server GameTests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+
+      # ForgeGradle 6 and Forge 47 target Java 17. The reference lines run 21 and 25; do not
+      # copy those job definitions across without changing this.
+      - name: Set up Java 17
+        uses: actions/setup-java@03ad4de0992f5dab5e18fcb136590ce7c4a0ac95 # v5.6.0
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@3f131e8634966bd73d06cc69884922b02e6faf92 # v6.2.0
+        with:
+          cache-provider: basic
+          cache-read-only: ${{ github.event_name == 'pull_request' }}
+
+      - name: Reject local runtime jars
+        shell: bash
+        run: |
+          if [ -d run/mods ] && find run/mods -type f -name '*.jar' -print -quit | grep -q .; then
+            echo "Unexpected run/mods jar would contaminate the canonical server test environment."
+            exit 1
+          fi
+
+      # Both gates shell out to python3 from inside the build. Fail here, in seconds, rather than
+      # thirty minutes in, if a runner image ever drops it.
+      - name: Check the source gates can run
+        run: |
+          python3 tools/expected-gametest-count.py
+          python3 tools/verify-placement-store-writers.py
+
+      - name: Build and run server GameTests
+        run: ./gradlew --no-daemon --stacktrace --console=plain build runGameTest
