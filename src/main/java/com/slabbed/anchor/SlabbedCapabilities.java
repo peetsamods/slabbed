@@ -18,11 +18,15 @@ import net.minecraftforge.event.AttachCapabilitiesEvent;
 import net.minecraftforge.eventbus.api.IEventBus;
 
 /**
- * Registration and attachment for the two Slabbed capabilities that stand in for NeoForge data
- * attachments: per-chunk marker and placement storage, and per-level consent storage.
+ * Registration and attachment for the chunk capability that stands in for the NeoForge per-chunk
+ * data attachments, plus the accessor seam for per-level consent. Only the chunk storage is a
+ * capability; consent rides {@code SavedData}, for the reason recorded on {@link #consentStore}.
  *
- * <p>Both attach on logical client and server. The client copies stay empty until
- * {@link SlabbedAnchorNetwork} fills them, because a Forge capability carries no sync of its own.
+ * <p>The chunk capability attaches on both logical sides, and the client copy stays empty for the
+ * whole life of the chunk. A Forge capability carries no synchronization of its own, so
+ * {@link SlabbedAnchorNetwork} fills {@link SlabbedClientMirror} instead and never writes here.
+ * Every client-side read therefore belongs in the mirror: one that reaches this capability
+ * resolves against storage nothing populates.
  */
 public final class SlabbedCapabilities {
     public static final ResourceLocation CHUNK_STORE_ID =
