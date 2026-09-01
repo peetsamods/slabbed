@@ -310,6 +310,14 @@ tasks.named("build").configure {
     }
 }
 
+// Console-driveable dedicated server, so an operator-command lifecycle - notably deep-mode
+// consent across a real process restart - can be proven without a GUI.
+tasks.matching { it.name == "runServer" }.configureEach {
+    if (it instanceof JavaExec) {
+        it.standardInput = System.in
+    }
+}
+
 tasks.register("cleanGameTestRunDirectory", Delete) {
     delete(layout.buildDirectory.dir("run/gameTest"))
 }

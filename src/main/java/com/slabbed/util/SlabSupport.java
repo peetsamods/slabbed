@@ -2331,6 +2331,16 @@ public final class SlabSupport {
             BlockState state,
             boolean consultStoredHeight
     ) {
+        // Decline BEFORE resolving inside a world-generation region, rather than resolving and
+        // catching the escape below. Slabbed has no authority during chunk generation - no player
+        // placement exists yet - and the only consumer there is the mob-spawn collision sweep,
+        // which wants vanilla geometry anyway. Catching after the fact is correct but noisy and
+        // expensive: vanilla logs an ERROR pair before it throws, so a single spawn-area
+        // generation produced 132 logged escapes and 132 constructed exceptions (measured on a
+        // real dedicated server, 2026-08-31). The catch arm below stays as a backstop.
+        if (isWorldGenRegionView(world)) {
+            return 0.0d;
+        }
         try {
             return resolveYOffsetWithinRegion(world, pos, state, consultStoredHeight);
         } catch (IndexOutOfBoundsException outsideRenderRegion) {
