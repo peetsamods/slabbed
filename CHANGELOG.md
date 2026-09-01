@@ -1,11 +1,11 @@
 ## [Unreleased]
 
-The NeoForge 1.21.1 parity line now carries `0.5.2-alpha.2+1.21.1` (maintainer
-ruling, 2026-08-30). The label follows the shared alpha series rather than the
-line's own history: `0.5.2-alpha.1` is spent by another line's tagged release,
-so this one adopts the next number instead of reusing it — the same rule that
-previously skipped `0.5.1-alpha.1`. Nothing is tagged or published under this
-label yet — the version is bumped, the release is not cut.
+The Forge 1.20.1 line carries `0.5.2-beta.1+1.20.1-forge` (maintainer ruling,
+2026-08-31). The line was seeded from the NeoForge 1.21.1 `0.5.2-alpha.2` tip,
+so the behavior described below is the 0.5.2 behavior set carried to this
+loader; the beta label reflects that the shared alpha numbers 1-4 are spent and
+that this is a first public build on a new loader. Nothing is tagged or
+published under this label yet - the version is bumped, the release is not cut.
 
 ### Upgrade note
 
@@ -92,14 +92,34 @@ label yet — the version is bumped, the release is not cut.
   client first draws the block at vanilla height, then drops it to the correct
   flush landing when the server confirms. The final landing is correct.
 
+### Forge 1.20.1 port
+
+- Replace NeoForge data attachments with a chunk capability and an explicit
+  sync channel: whole marker buckets and the placement map on chunk watch, a
+  constant-size delta per placement.
+- Persist deep-mode consent through the level's own saved data. A Forge level
+  capability is never serialized by the engine, so the seeded design would have
+  reset consent on every restart.
+- Keep world generation alive when mob-spawn collision checks resolve heights
+  near a generation region's edge; evidence outside the bounded region declines
+  to flush instead of crashing the generator.
+- Stop the wrapped Forge block registry allocating on every height resolution;
+  the hot path now matches the reference line's allocation exactly.
+- Ship MixinExtras inside the jar, which Forge 1.20.1 does not bundle.
+- Terrain Slabs integration on this line targets releases up to 3.1.1, the
+  newest 1.20.1 build publishing the block data the integration reads; newer
+  1.20.1 releases of that mod are documented as unsupported.
+- The isolated physical-client proof routes for Sable, Snow! Real Magic,
+  Smooth Steps, and deep-mode restart behavior are not carried to this line.
+
 ### Verification
 
-- Expand the clean NeoForge server suite to 258 required GameTests with a fixed
-  independent count, permanent-placement controls, allocation guards, and exact
-  runtime/source JAR allowlists.
-- Add isolated physical-client routes for placement-height lifecycle, numeric
-  visual ownership, Terrain Slabs, Snow! Real Magic, Smooth Steps, and deep-mode
-  restart/reconnect behavior.
+- Run the full 258-test server suite on Forge 1.20.1 with the independent
+  suite-count gate and the closed-world placement-writer gate, all green from a
+  clean run directory.
+- Grow the shared test fixture so every deep test lane lies inside the region
+  the framework isolates; the prior size let a neighboring test's structure
+  satisfy an occlusion control for the wrong reason.
 
 Placement permanence is governed by [LAW.md](LAW.md).
 

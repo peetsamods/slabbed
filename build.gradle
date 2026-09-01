@@ -244,8 +244,78 @@ tasks.named("test", Test).configure {
 // A gametest run must never be able to read a previous run's log or world. The donor line hit
 // exactly this: a reused world silently changed matrix rows, and a crashed run can leave a stale
 // "All N required tests passed" summary behind for the count gate to find.
+// Release gates. Both run on `build` and as finalizers of the archive tasks, so a bare
+// `gradle jar` or `gradle jarJar` cannot produce an ungated artifact. Both depend on the reobf
+// tasks: ForgeGradle rewrites the archives IN PLACE after `jar`, so a gate ordered before reobf
+// would certify bytes that are then replaced.
+tasks.register("verifyReleaseAllowlist") {
+    dependsOn(tasks.named("reobfJar"), tasks.named("reobfJarJar"), tasks.named("sourcesJar"))
+    doLast {
+        def artifacts = [
+                [kind: "runtime", file: tasks.named("jar").get().archiveFile.get().asFile],
+                [kind: "runtime-all", file: tasks.named("jarJar").get().archiveFile.get().asFile],
+                [kind: "sources", file: tasks.named("sourcesJar").get().archiveFile.get().asFile]
+        ]
+        artifacts.each { artifact ->
+            def process = new ProcessBuilder(
+                    "python3", "tools/verify-release-allowlist.py",
+                    "--artifact", artifact.file.absolutePath,
+                    "--kind", artifact.kind
+            ).directory(project.projectDir).redirectErrorStream(true).start()
+            String output = process.inputStream.getText("UTF-8").trim()
+            if (process.waitFor() != 0) {
+                throw new GradleException(output)
+            }
+            logger.lifecycle(output)
+        }
+    }
+}
+
+// String-level hygiene: no shipping archive entry may even NAME the dev-diagnostics classes.
+// Token list carried from the reference line, extended with this line's own test-only classes.
+tasks.register("verifyReleaseJarHygiene") {
+    dependsOn(tasks.named("reobfJar"), tasks.named("reobfJarJar"), tasks.named("sourcesJar"))
+    doLast {
+        def forbiddenTokens = [
+                "LiveCursorIntentRecorder", "SlabModelStaleSentinel", "TargetDyOverlay",
+                "SlabbedDevtools", "SlabRigCommand", "SlabTestKit", "slabbed_devtools",
+                "SlabbedLabFixtures", "SlabbedTestAccess"
+        ]
+        [tasks.named("jar"), tasks.named("jarJar"), tasks.named("sourcesJar")].each { provider ->
+            def archive = provider.get().archiveFile.get().asFile
+            new java.util.zip.ZipFile(archive).withCloseable { zip ->
+                zip.entries().each { entry ->
+                    if (entry.isDirectory()) { return }
+                    def bytes = zip.getInputStream(entry).readAllBytes()
+                    def text = new String(bytes, "ISO-8859-1")
+                    forbiddenTokens.each { token ->
+                        if (text.contains(token)) {
+                            throw new GradleException("release hygiene: " + archive.name + "!"
+                                    + entry.name + " names forbidden dev token '" + token + "'")
+                        }
+                    }
+                }
+            }
+        }
+        logger.lifecycle("Release jar hygiene verified: no dev-tooling tokens in any archive")
+    }
+}
+
+tasks.named("build").configure {
+    dependsOn(tasks.named("verifyReleaseAllowlist"), tasks.named("verifyReleaseJarHygiene"))
+}
+[tasks.named("jar"), tasks.named("jarJar"), tasks.named("sourcesJar")].each { archiveTask ->
+    archiveTask.configure {
+        finalizedBy(tasks.named("verifyReleaseAllowlist"), tasks.named("verifyReleaseJarHygiene"))
+    }
+}
+
 tasks.register("cleanGameTestRunDirectory", Delete) {
     delete(layout.buildDirectory.dir("run/gameTest"))
+}
+
+tasks.named("jarJar", Jar).configure {
+    from(rootProject.file("LICENSE")) { rename { "LICENSE_" + project.mod_id } }
 }
 
 tasks.register("syncGameTestStructures", Sync) {
@@ -348,6 +418,9 @@ tasks.named("processResources", ProcessResources).configure {
 }
 
 tasks.named("jar", Jar).configure {
+    // A GPL-3.0-only artifact ships its license text. The rename keeps the entry
+    // distinguishable from any LICENSE a jar-in-jar dependency carries.
+    from(rootProject.file("LICENSE")) { rename { "LICENSE_" + project.mod_id } }
     manifest {
         attributes([
                 "Specification-Title"     : project.mod_id,

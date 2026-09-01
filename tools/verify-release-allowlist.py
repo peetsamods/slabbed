@@ -16,6 +16,13 @@ MARKERS = {
         "<!-- release-allowlist:runtime:start -->",
         "<!-- release-allowlist:runtime:end -->",
     ),
+    # The jar-in-jar artifact. On Forge 1.20.1 the -all jar is what players install - it is
+    # the only archive carrying MixinExtras - so it is allowlisted as its own closed world
+    # rather than sharing the bare runtime block it is a superset of.
+    "runtime-all": (
+        "<!-- release-allowlist:runtime-all:start -->",
+        "<!-- release-allowlist:runtime-all:end -->",
+    ),
     "sources": (
         "<!-- release-allowlist:sources:start -->",
         "<!-- release-allowlist:sources:end -->",
