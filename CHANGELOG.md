@@ -1,4 +1,10 @@
+## [Unreleased]
+
+See LAW.md — this changelog does not redefine the law.
+
 ## [0.5.2-alpha.1+26.2] — MC 26.2 alpha
+
+Released 2026-08-31 under the source tag `release/mc262-0.5.2-alpha.1`, published to Modrinth.
 
 See LAW.md — this changelog does not redefine the law.
 
