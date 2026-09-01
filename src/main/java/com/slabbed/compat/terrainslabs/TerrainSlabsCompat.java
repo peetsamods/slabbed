@@ -59,7 +59,9 @@ public final class TerrainSlabsCompat {
         }
 
         Block block = state.getBlock();
-        ResourceLocation id = BuiltInRegistries.BLOCK.getKey(block);
+        // See SlabSupport.registryIdOf: the wrapped registry allocates an Optional per call.
+        ResourceLocation id = block == null
+                ? null : block.builtInRegistryHolder().key().location();
         return isTerrainSlabsId(id);
     }
 
@@ -129,7 +131,7 @@ public final class TerrainSlabsCompat {
         if (!isLoaded() || state == null || !state.hasProperty(SlabBlock.TYPE)) {
             return CompatSlabSurfaceKind.NONE;
         }
-        ResourceLocation id = BuiltInRegistries.BLOCK.getKey(state.getBlock());
+        ResourceLocation id = com.slabbed.util.SlabSupport.registryIdOf(state);
         if (!isNamedCustomSlabSurface(id) || !state.getFluidState().isEmpty() || isSnowy(state)) {
             return CompatSlabSurfaceKind.NONE;
         }

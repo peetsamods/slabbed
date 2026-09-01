@@ -51,6 +51,7 @@ import net.minecraft.world.entity.Entity;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 import net.minecraft.world.phys.BlockHitResult;
+import javax.annotation.Nullable;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.world.phys.AABB;
@@ -813,11 +814,36 @@ public final class SlabSupport {
         return Double.isFinite(objectDy) && objectDy < -1.0e-6d;
     }
 
+    /**
+     * The block's registry id WITHOUT the Forge registry wrapper.
+     *
+     * <p>{@code BuiltInRegistries.BLOCK.getKey(block)} looks cheap and is not: on Forge the
+     * vanilla registry is wrapped, and the wrapper resolves the id through
+     * {@code getResourceKey}, which allocates an {@link java.util.Optional} on EVERY call. These
+     * namespace and path checks sit inside the dy resolver, which runs per cell in collision
+     * sweeps, so that allocation is multiplied by the hottest path in the mod. A flight recording
+     * on 2026-08-31 attributed every Optional allocated under the resolver to that one wrapper.
+     *
+     * <p>The built-in holder carries the same id as a plain field read, so this is the identical
+     * answer at zero cost. Do not "simplify" this back to the registry lookup.
+     */
+    @Nullable
+    public static ResourceLocation registryIdOf(BlockState state) {
+        if (state == null) {
+            return null;
+        }
+        try {
+            return state.getBlock().builtInRegistryHolder().key().location();
+        } catch (IllegalStateException unboundDuringBootstrap) {
+            return null;
+        }
+    }
+
     private static boolean isPaleHangingMossBlock(BlockState state) {
         if (state == null || state.isAir()) {
             return false;
         }
-        ResourceLocation id = BuiltInRegistries.BLOCK.getKey(state.getBlock());
+        ResourceLocation id = registryIdOf(state);
         if (id == null || !"minecraft".equals(id.getNamespace())) {
             return false;
         }
