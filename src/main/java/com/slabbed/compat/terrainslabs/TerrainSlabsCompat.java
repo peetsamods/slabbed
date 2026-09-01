@@ -58,11 +58,8 @@ public final class TerrainSlabsCompat {
             return false;
         }
 
-        Block block = state.getBlock();
-        // See SlabSupport.registryIdOf: the wrapped registry allocates an Optional per call.
-        ResourceLocation id = block == null
-                ? null : block.builtInRegistryHolder().key().location();
-        return isTerrainSlabsId(id);
+        // Allocation-free and guarded against unbound blocks; see SlabSupport.registryIdOf.
+        return isTerrainSlabsId(com.slabbed.util.SlabSupport.registryIdOf(state));
     }
 
     /**
