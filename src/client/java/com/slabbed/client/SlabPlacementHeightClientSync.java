@@ -147,9 +147,11 @@ public final class SlabPlacementHeightClientSync {
         }
         for (long packed : affected) {
             BlockPos pos = BlockPos.of(packed);
+            // Dirty the neighbours too: a cell's Slabbed dy is resolved from the blocks around
+            // it, so a change here can move the mesh of an adjacent cell that did not change.
             minecraft.levelRenderer.setBlocksDirty(
-                    pos.getX(), pos.getY(), pos.getZ(),
-                    pos.getX(), pos.getY(), pos.getZ());
+                    pos.getX() - 1, pos.getY() - 1, pos.getZ() - 1,
+                    pos.getX() + 1, pos.getY() + 1, pos.getZ() + 1);
             proofRefreshObserver.accept(pos);
         }
     }
@@ -158,6 +160,9 @@ public final class SlabPlacementHeightClientSync {
         // A prediction belongs to one connection. Carrying one across would draw a height for a
         // cell in a world that never authored it.
         ClientRenderDyPrediction.clear();
+        // The mirror is keyed by dimension and chunk, and every world's overworld shares a
+        // dimension id - without this, world A's authored heights are read in world B.
+        SlabbedClientMirror.clear();
         TRACKED_CHUNKS.clear();
         INITIALIZED_CHUNKS.clear();
         LAST_REFERENCES.clear();

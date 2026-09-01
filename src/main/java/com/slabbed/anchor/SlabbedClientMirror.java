@@ -108,22 +108,29 @@ public final class SlabbedClientMirror {
         Key key = new Key(dimension, chunkKey);
         if (!present) {
             Entry entry = ENTRIES.get(key);
-            if (entry != null && entry.placementDy != null) {
-                entry.placementDy.remove(packedPos);
-                if (entry.placementDy.isEmpty()) {
-                    entry.placementDy = null;
-                }
+            if (entry != null && entry.placementDy != null
+                    && entry.placementDy.containsKey(packedPos)) {
+                Long2ByteOpenHashMap next = new Long2ByteOpenHashMap(entry.placementDy);
+                next.remove(packedPos);
+                entry.placementDy = next.isEmpty() ? null : next;
                 dropIfEmpty(key, entry);
             }
             return;
         }
         Entry entry = ENTRIES.computeIfAbsent(key, k -> new Entry());
-        Long2ByteOpenHashMap map = entry.placementDy;
-        if (map == null) {
-            map = new Long2ByteOpenHashMap();
-            entry.placementDy = map;
+        Long2ByteOpenHashMap current = entry.placementDy;
+        if (current != null && current.containsKey(packedPos)
+                && current.get(packedPos) == halfSteps) {
+            return;
         }
-        map.put(packedPos, halfSteps);
+        // Copy-on-write, deliberately. A published map is never mutated again: the render sync
+        // detects change by reference identity, and the packet handler and the mesh reader touch
+        // this map from different threads. Mutating in place breaks both at once.
+        Long2ByteOpenHashMap next = current == null
+                ? new Long2ByteOpenHashMap()
+                : new Long2ByteOpenHashMap(current);
+        next.put(packedPos, halfSteps);
+        entry.placementDy = next;
     }
 
     public static void applyConsent(@Nullable DeepDyConsentAttachment.Stamp stamp) {

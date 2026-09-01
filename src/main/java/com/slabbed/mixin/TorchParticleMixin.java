@@ -3,7 +3,7 @@ package com.slabbed.mixin;
 import com.slabbed.util.SlabSupport;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.particles.ParticleTypes;
-import net.minecraft.core.particles.SimpleParticleType;
+import net.minecraft.core.particles.ParticleOptions;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.TorchBlock;
@@ -22,8 +22,11 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 @Mixin(TorchBlock.class)
 public abstract class TorchParticleMixin {
 
+    // 1.20.1 declares this field as ParticleOptions; 1.21 narrowed it to SimpleParticleType.
+    // A @Shadow whose descriptor does not match the target field is a FATAL mixin apply failure,
+    // not a compile error - do not narrow this back.
     @Shadow
-    private SimpleParticleType flameParticle;
+    private ParticleOptions flameParticle;
 
     @Inject(method = "animateTick", at = @At("HEAD"), cancellable = true)
     private void slabbed$offsetParticles(BlockState state, Level world, BlockPos pos, RandomSource random, CallbackInfo ci) {
