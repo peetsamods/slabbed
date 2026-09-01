@@ -12,8 +12,8 @@ import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.SlabBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.SlabType;
-import net.neoforged.neoforge.gametest.GameTestHolder;
-import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
+import net.minecraftforge.gametest.GameTestHolder;
+import net.minecraftforge.gametest.PrefixGameTestTemplate;
 
 /**
  * Step-face cull matrix, ported from the donor's thirteen-row suite onto this line's
@@ -30,14 +30,14 @@ import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
  * ported — this line's predicate has no tier machinery, and its hot-path cost is gated by the
  * allocation-regression test instead.
  */
-@GameTestHolder("fabric-gametest-api-v1")
+@GameTestHolder("slabbed")
 @PrefixGameTestTemplate(false)
 public final class SlabHeightStepCullTest {
     private static final String TEMPLATE = "empty";
     private static final double EPS = 1.0e-6;
 
     /** A fact-lowered cube beside a flush cube exposes a 0.5 seam: both faces redraw. */
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = TEMPLATE)
+    @GameTest(template = TEMPLATE)
     public void factLoweredCubeBesideFlushCubeRedrawsSteppedFace(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         BlockPos lowered = buildFactCube(ctx, new BlockPos(1, 3, 1), -1, -0.5);
@@ -48,7 +48,7 @@ public final class SlabHeightStepCullTest {
     }
 
     /** Two flush cubes share a fully covered face: never redraw. */
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = TEMPLATE)
+    @GameTest(template = TEMPLATE)
     public void twoFlushCubesNeverRedraw(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         BlockPos a = groundedCube(ctx, ctx.absolutePos(new BlockPos(1, 3, 3)), 0.0);
@@ -58,7 +58,7 @@ public final class SlabHeightStepCullTest {
     }
 
     /** Two cubes lowered by the SAME stored magnitude have no seam: never redraw. */
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = TEMPLATE)
+    @GameTest(template = TEMPLATE)
     public void twoEquallyFactLoweredCubesNeverRedraw(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         BlockPos a = buildFactCube(ctx, new BlockPos(1, 3, 5), -1, -0.5);
@@ -71,7 +71,7 @@ public final class SlabHeightStepCullTest {
      * The standing grounded-beside-lowered law: a grounded TOP slab beside a GEOMETRICALLY
      * lowered full block must not sink, so the 0.5 seam is real and both faces redraw.
      */
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = TEMPLATE)
+    @GameTest(template = TEMPLATE)
     public void topSlabBesideGeometricLoweredFullBlockRedrawsSteppedFace(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         BlockPos base = ctx.absolutePos(new BlockPos(1, 2, 7));
@@ -92,7 +92,7 @@ public final class SlabHeightStepCullTest {
      * The authored visual-fill family: a TOP slab beside a FACT-lowered cube follows it down
      * on this line, so the seam closes and neither face redraws.
      */
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = TEMPLATE)
+    @GameTest(template = TEMPLATE)
     public void sideFollowingTopSlabBesideFactLoweredCubeClosesTheSeam(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         BlockPos lowered = buildFactCube(ctx, new BlockPos(4, 3, 7), -1, -0.5);
@@ -108,7 +108,7 @@ public final class SlabHeightStepCullTest {
     }
 
     /** Two flush TOP slabs: never redraw. */
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = TEMPLATE)
+    @GameTest(template = TEMPLATE)
     public void twoFlushTopSlabsNeverRedraw(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         BlockPos a = ctx.absolutePos(new BlockPos(1, 3, 9));
@@ -124,7 +124,7 @@ public final class SlabHeightStepCullTest {
     }
 
     /** Two TOP slabs lowered by the same stored magnitude: never redraw. */
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = TEMPLATE)
+    @GameTest(template = TEMPLATE)
     public void twoEquallyLoweredTopSlabsNeverRedraw(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         BlockPos a = ctx.absolutePos(new BlockPos(4, 3, 9));
@@ -141,7 +141,7 @@ public final class SlabHeightStepCullTest {
     }
 
     /** THE magnitude row: -1.0 beside -0.5 is a real 0.5 seam even though BOTH are lowered. */
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = TEMPLATE)
+    @GameTest(template = TEMPLATE)
     public void minusOneCubeBesideMinusHalfCubeRedrawsSteppedFace(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         BlockPos deep = buildFactCube(ctx, new BlockPos(1, 3, 11), -2, -1.0);
@@ -154,7 +154,7 @@ public final class SlabHeightStepCullTest {
     }
 
     /** Magnitude row with a slab subject: -1.0 cube beside a -0.5 BOTTOM slab redraws both ways. */
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = TEMPLATE)
+    @GameTest(template = TEMPLATE)
     public void minusOneCubeBesideMinusHalfBottomSlabRedrawsSteppedFace(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         BlockPos deep = buildFactCube(ctx, new BlockPos(1, 3, 13), -2, -1.0);
@@ -170,7 +170,7 @@ public final class SlabHeightStepCullTest {
     }
 
     /** Two equally GEOMETRICALLY lowered cubes (no facts anywhere): never redraw. */
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = TEMPLATE)
+    @GameTest(template = TEMPLATE)
     public void twoEquallyGeometricallyLoweredCubesNeverRedraw(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         BlockPos a = geometricLoweredCube(ctx, new BlockPos(1, 2, 15));
@@ -180,7 +180,7 @@ public final class SlabHeightStepCullTest {
     }
 
     /** A geometric-lowered cube beside genuinely flush terrain redraws both ways. */
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = TEMPLATE)
+    @GameTest(template = TEMPLATE)
     public void geometricLoweredCubeBesideFlushCubeRedrawsSteppedFace(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         BlockPos lowered = geometricLoweredCube(ctx, new BlockPos(5, 2, 15));

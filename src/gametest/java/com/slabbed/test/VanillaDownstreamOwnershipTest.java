@@ -20,17 +20,17 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.EnumProperty;
 import net.minecraft.world.level.block.state.properties.RedstoneSide;
 import net.minecraft.world.level.block.state.properties.SlabType;
-import net.neoforged.neoforge.gametest.GameTestHolder;
-import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
+import net.minecraftforge.gametest.GameTestHolder;
+import net.minecraftforge.gametest.PrefixGameTestTemplate;
 
 /** Pins the vanilla-owned downstream policies restored together in parity phase P5. */
-@GameTestHolder("fabric-gametest-api-v1")
+@GameTestHolder("slabbed")
 @PrefixGameTestTemplate(false)
 public final class VanillaDownstreamOwnershipTest {
     private static final String TEMPLATE = "empty";
     private static final BlockPos RELATIVE_WIRE_POS = new BlockPos(3, 3, 3);
 
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = TEMPLATE)
+    @GameTest(template = TEMPLATE)
     public void redstoneTopologyRemainsVanillaOwned(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         BlockPos wirePos = ctx.absolutePos(RELATIVE_WIRE_POS);
@@ -95,7 +95,7 @@ public final class VanillaDownstreamOwnershipTest {
         ctx.succeed();
     }
 
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = TEMPLATE)
+    @GameTest(template = TEMPLATE)
     public void bottomSlabsRemainMobProof(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         BlockPos dryBottom = ctx.absolutePos(new BlockPos(2, 2, 2));
@@ -123,7 +123,7 @@ public final class VanillaDownstreamOwnershipTest {
         ctx.succeed();
     }
 
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = TEMPLATE)
+    @GameTest(template = TEMPLATE)
     public void chainSurvivalOverrideRemainsUnregistered(GameTestHelper ctx) {
         try (InputStream stream = VanillaDownstreamOwnershipTest.class.getClassLoader()
                 .getResourceAsStream("slabbed.mixins.json")) {
@@ -152,8 +152,8 @@ public final class VanillaDownstreamOwnershipTest {
     ) {
         boolean direct = world.getBlockState(supportPos)
                 .isValidSpawn(world, supportPos, EntityType.ZOMBIE);
-        boolean onGround = SpawnPlacements.isSpawnPositionOk(
-                EntityType.ZOMBIE, world, supportPos.above());
+        boolean onGround = net.minecraft.world.level.NaturalSpawner.isSpawnPositionOk(
+                SpawnPlacements.Type.ON_GROUND, world, supportPos.above(), EntityType.ZOMBIE);
         ctx.assertTrue(direct == expected && onGround == expected,
                 label + " expected direct/ON_GROUND spawn verdicts "
                         + expected + "/" + expected + " but got " + direct + "/" + onGround);

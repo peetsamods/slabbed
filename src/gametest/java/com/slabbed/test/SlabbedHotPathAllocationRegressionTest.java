@@ -9,8 +9,8 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
-import net.neoforged.neoforge.gametest.GameTestHolder;
-import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
+import net.minecraftforge.gametest.GameTestHolder;
+import net.minecraftforge.gametest.PrefixGameTestTemplate;
 
 /**
  * Rule 19 (RULES.md §19) enforcement automation, item 1: allocation-regression gate for the
@@ -34,7 +34,7 @@ import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
  * stay exact, per the §19 cache-vs-live rule); it asserts the relevant dy-path trace flags
  * are absent from the launch before measuring.
  */
-@GameTestHolder("fabric-gametest-api-v1")
+@GameTestHolder("slabbed")
 @PrefixGameTestTemplate(false)
 public final class SlabbedHotPathAllocationRegressionTest {
 
@@ -67,7 +67,7 @@ public final class SlabbedHotPathAllocationRegressionTest {
             "slabbed.disableStepCull"
     };
 
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = "empty")
+    @GameTest(template = "empty")
     public void hotPathAllocationRegression(GameTestHelper ctx) {
         for (String flag : DY_PATH_TRACE_FLAGS) {
             ctx.assertTrue(System.getProperty(flag) == null,
@@ -94,7 +94,7 @@ public final class SlabbedHotPathAllocationRegressionTest {
         if (!bean.isThreadAllocatedMemoryEnabled()) {
             bean.setThreadAllocatedMemoryEnabled(true);
         }
-        long tid = Thread.currentThread().threadId();
+        long tid = Thread.currentThread().getId();
 
         // Warmup: JIT + lazy class init + first-call caches, excluded from the measurement.
         // 3x the measured pass so C2 (default ~10k invocation threshold) compiles BEFORE

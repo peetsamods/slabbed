@@ -12,7 +12,6 @@ import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.context.UseOnContext;
-import net.minecraft.world.level.GameType;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.SlabBlock;
@@ -24,8 +23,8 @@ import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.Vec3;
 import net.minecraft.world.phys.shapes.CollisionContext;
 import net.minecraft.world.phys.shapes.VoxelShape;
-import net.neoforged.neoforge.gametest.GameTestHolder;
-import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
+import net.minecraftforge.gametest.GameTestHolder;
+import net.minecraftforge.gametest.PrefixGameTestTemplate;
 
 /**
  * Port of the flush-ceiling ruling coverage (maintainer ruling, 2026-07-03; adopted on this
@@ -39,14 +38,14 @@ import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
  * lowered-top-slab merge COMPENSATION ({@code slabDy + 0.5}, netting &lt;= 0.0 — flush
  * against the lowered underside, not a reach-up).
  */
-@GameTestHolder("fabric-gametest-api-v1")
+@GameTestHolder("slabbed")
 @PrefixGameTestTemplate(false)
 public final class CeilingFlushRulingTest {
     private static final String TEMPLATE = "empty";
     private static final double EPS = 1.0e-6;
 
     /** Walk B (direct): a flush TOP slab appearing above a placed TOP trapdoor must not move it. */
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = TEMPLATE)
+    @GameTest(template = TEMPLATE)
     public void topTrapdoorStaysFlushWhenTopSlabPlacedAbove(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         BlockPos wall = ctx.absolutePos(new BlockPos(2, 2, 3));
@@ -61,7 +60,7 @@ public final class CeilingFlushRulingTest {
     }
 
     /** Walk C (cascading): the lower of two stacked TOP trapdoors under a flush top slab stays flush. */
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = TEMPLATE)
+    @GameTest(template = TEMPLATE)
     public void cascadedTopTrapdoorStaysFlushUnderTopSlab(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         BlockPos wallLow = ctx.absolutePos(new BlockPos(2, 2, 3));
@@ -82,7 +81,7 @@ public final class CeilingFlushRulingTest {
     }
 
     /** Walk A (always-hung family): hanging roots under a flush top slab hang flush, not +0.5. */
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = TEMPLATE)
+    @GameTest(template = TEMPLATE)
     public void hangingRootsUnderFlushTopSlabStayFlush(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         BlockPos slab = ctx.absolutePos(new BlockPos(2, 3, 2));
@@ -97,7 +96,7 @@ public final class CeilingFlushRulingTest {
     }
 
     /** Ceiling lever: a top/double slab underside is sturdy here, so ceiling levers genuinely survive. */
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = TEMPLATE)
+    @GameTest(template = TEMPLATE)
     public void ceilingLeverUnderFlushTopSlabStaysFlush(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         BlockPos slab = ctx.absolutePos(new BlockPos(2, 3, 2));
@@ -112,7 +111,7 @@ public final class CeilingFlushRulingTest {
     }
 
     /** Ceiling button — same family, same ruling. */
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = TEMPLATE)
+    @GameTest(template = TEMPLATE)
     public void ceilingButtonUnderFlushTopSlabStaysFlush(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         BlockPos slab = ctx.absolutePos(new BlockPos(2, 3, 2));
@@ -131,7 +130,7 @@ public final class CeilingFlushRulingTest {
      * slab lifecycle — absent, placed above, removed again — pinning the transition itself rather
      * than two static snapshots that could pass through different code paths.
      */
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = TEMPLATE)
+    @GameTest(template = TEMPLATE)
     public void topTrapdoorHoldsFlushThroughSlabPlaceAndBreak(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         BlockPos wall = ctx.absolutePos(new BlockPos(2, 2, 3));
@@ -147,7 +146,7 @@ public final class CeilingFlushRulingTest {
     }
 
     /** A Y-axis chain directly under a TOP slab hangs flush; the bridge MODEL closes the visual seam. */
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = TEMPLATE)
+    @GameTest(template = TEMPLATE)
     public void chainUnderTopSlabHangsFlush(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         BlockPos chain = ctx.absolutePos(new BlockPos(2, 3, 2));
@@ -163,7 +162,7 @@ public final class CeilingFlushRulingTest {
      * bridge-only upper segment above the native 16px chain, or the visible connecting span becomes
      * unclickable once the chain no longer raises.
      */
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = TEMPLATE)
+    @GameTest(template = TEMPLATE)
     public void ceilingBridgedChainSelectionExtendsToVisibleBridge(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         BlockPos chain = ctx.absolutePos(new BlockPos(2, 3, 2));
@@ -191,7 +190,7 @@ public final class CeilingFlushRulingTest {
      * exposes it, and without the compensation the lower hanger sinks to raw -1.0 while its carrier
      * sits at -0.5.
      */
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = TEMPLATE)
+    @GameTest(template = TEMPLATE)
     public void cascadedHangingSignUnderMarkedUpperSlabFollowsCarrier(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         BlockPos slab = buildMarkedUpperTopSlab(ctx, world);
@@ -210,7 +209,7 @@ public final class CeilingFlushRulingTest {
      * The geometric compensation leg pinned on an UNANCHORED trapdoor (setBlock — no placement
      * hooks), the lane that serves support-arrives-later, worldgen, and command-placed cells.
      */
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = TEMPLATE)
+    @GameTest(template = TEMPLATE)
     public void unanchoredTrapdoorUnderMarkedUpperSlabReadsGeometricMerge(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         BlockPos slab = buildMarkedUpperTopSlab(ctx, world);
@@ -225,7 +224,7 @@ public final class CeilingFlushRulingTest {
     }
 
     /** Live-confirmed merge (2026-07-03 lineage): a placed trapdoor under the -1.0 marked slab reads -0.5. */
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = TEMPLATE)
+    @GameTest(template = TEMPLATE)
     public void controlTrapdoorUnderMarkedUpperSlabKeepsCompensation(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         BlockPos slab = buildMarkedUpperTopSlab(ctx, world);
@@ -239,7 +238,7 @@ public final class CeilingFlushRulingTest {
     }
 
     /** Walk A compensation control: roots under the -1.0 marked slab read -0.5 — survives the ruling. */
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = TEMPLATE)
+    @GameTest(template = TEMPLATE)
     public void controlHangingRootsUnderMarkedUpperSlabKeepCompensation(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         BlockPos slab = buildMarkedUpperTopSlab(ctx, world);
@@ -280,7 +279,7 @@ public final class CeilingFlushRulingTest {
     /** Real useOn click on a face of {@code clicked}; {@code yNudge} selects the upper/lower half. */
     private static void place(GameTestHelper ctx, ItemStack stack, BlockPos clicked, Direction face,
                               double yNudge) {
-        Player player = ctx.makeMockPlayer(GameType.SURVIVAL);
+        Player player = ctx.makeMockPlayer();
         player.setItemInHand(InteractionHand.MAIN_HAND, stack);
         Vec3 hit = Vec3.atCenterOf(clicked)
                 .add(face.getStepX() * 0.5, face.getStepY() * 0.5 + yNudge, face.getStepZ() * 0.5);

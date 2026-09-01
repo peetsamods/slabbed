@@ -18,7 +18,6 @@ import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.context.UseOnContext;
-import net.minecraft.world.level.GameType;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.SlabBlock;
@@ -29,19 +28,19 @@ import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
 import net.minecraft.world.phys.shapes.CollisionContext;
-import net.neoforged.neoforge.common.NeoForge;
-import net.neoforged.neoforge.event.level.BlockEvent;
-import net.neoforged.neoforge.gametest.GameTestHolder;
-import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
+import net.minecraftforge.common.MinecraftForge;
+import net.minecraftforge.event.level.BlockEvent;
+import net.minecraftforge.gametest.GameTestHolder;
+import net.minecraftforge.gametest.PrefixGameTestTemplate;
 
 /** Proves the targeting, held-use, and depth-admission boundaries owned by parity phase P6. */
-@GameTestHolder("fabric-gametest-api-v1")
+@GameTestHolder("slabbed")
 @PrefixGameTestTemplate(false)
 public final class P6InteractionParityTest {
     private static final String TEMPLATE = "empty";
     private static final double EPSILON = 1.0e-6d;
 
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = TEMPLATE)
+    @GameTest(template = TEMPLATE)
     public void supportedDepthPickWindowReturnsActualNearestOwner(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         BlockPos deepOwner = ctx.absolutePos(new BlockPos(4, 5, 3));
@@ -71,7 +70,7 @@ public final class P6InteractionParityTest {
         ctx.succeed();
     }
 
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = TEMPLATE)
+    @GameTest(template = TEMPLATE)
     public void translatedOwnerInsideHitRetainsLogicalOwner(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         BlockPos deepOwner = ctx.absolutePos(new BlockPos(4, 5, 3));
@@ -92,7 +91,7 @@ public final class P6InteractionParityTest {
         ctx.succeed();
     }
 
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = TEMPLATE)
+    @GameTest(template = TEMPLATE)
     public void ownerTieAndShallowWindowRemainStable(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         BlockPos tieFlatOwner = ctx.absolutePos(new BlockPos(3, 3, 9));
@@ -157,7 +156,7 @@ public final class P6InteractionParityTest {
         ctx.succeed();
     }
 
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = TEMPLATE)
+    @GameTest(template = TEMPLATE)
     public void heldUseCombinesOrExtendsOnceFromEitherHand(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         InteractionHand[] hands = {InteractionHand.MAIN_HAND, InteractionHand.OFF_HAND};
@@ -209,7 +208,7 @@ public final class P6InteractionParityTest {
      * deep alphabet is what carries these depths (maintainer ruling, 2026-08-21, matching
      * the reference line). The law under test is unchanged; only its arming moved.
      */
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = TEMPLATE)
+    @GameTest(template = TEMPLATE)
     public void exactDeepBoundaryIsLegalAndFrozen(GameTestHelper ctx) {
         SlabSupport.armDeepAlphabet(true);
         try {
@@ -277,7 +276,7 @@ public final class P6InteractionParityTest {
      * some future venue starts forcing it, this row would silently begin measuring the venue
      * instead of the default - so it fails loudly at that moment rather than going quietly vacuous.
      */
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = TEMPLATE)
+    @GameTest(template = TEMPLATE)
     public void theOffsetTargetingOverhaulShipsEnabled(GameTestHelper ctx) {
         ctx.assertTrue(System.getProperty("slabbed.offsetRaycast") == null,
                 "premise: this venue must not force the switch, or this row measures the venue"
@@ -289,7 +288,7 @@ public final class P6InteractionParityTest {
         ctx.succeed();
     }
 
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = TEMPLATE)
+    @GameTest(template = TEMPLATE)
     public void deepBoundaryRefusalIsTypedAndAtomic(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
 
@@ -385,7 +384,7 @@ public final class P6InteractionParityTest {
             InteractionHand selectedHand,
             Set<BlockPos> watched
     ) {
-        Player player = ctx.makeMockPlayer(GameType.SURVIVAL);
+        Player player = ctx.makeMockPlayer();
         player.setPos(owner.getX() + 0.5d, owner.getY() + 3.0d, owner.getZ() + 0.5d);
         ItemStack selected = new ItemStack(Items.STONE_SLAB, 3);
         ItemStack other = new ItemStack(Items.DIRT, 5);
@@ -398,7 +397,7 @@ public final class P6InteractionParityTest {
                 placeEvents.incrementAndGet();
             }
         };
-        NeoForge.EVENT_BUS.addListener(BlockEvent.EntityPlaceEvent.class, listener);
+        MinecraftForge.EVENT_BUS.addListener((java.util.function.Consumer<BlockEvent.EntityPlaceEvent>) listener);
         InteractionResult result;
         try {
             result = selected.useOn(new UseOnContext(
@@ -406,7 +405,7 @@ public final class P6InteractionParityTest {
                     selectedHand,
                     new BlockHitResult(hitLocation, face, owner, false)));
         } finally {
-            NeoForge.EVENT_BUS.unregister(listener);
+            MinecraftForge.EVENT_BUS.unregister(listener);
         }
         return new UseOutcome(result, selected.getCount(), other.getCount(), placeEvents.get());
     }
@@ -435,12 +434,12 @@ public final class P6InteractionParityTest {
         // and this premise deliberately authors owners the envelope forbids (the refusal rows).
         LevelChunk chunk = world.getChunk(pos.getX() >> 4, pos.getZ() >> 4);
         it.unimi.dsi.fastutil.longs.Long2ByteOpenHashMap existing =
-                chunk.getExistingDataOrNull(SlabPlacementHeightAttachment.PLACEMENT_DY_TYPE.get());
+                SlabbedTestAccess.placementFacts(chunk);
         it.unimi.dsi.fastutil.longs.Long2ByteOpenHashMap facts = existing == null
                 ? new it.unimi.dsi.fastutil.longs.Long2ByteOpenHashMap()
                 : new it.unimi.dsi.fastutil.longs.Long2ByteOpenHashMap(existing);
         facts.put(pos.asLong(), (byte) halfSteps);
-        chunk.setData(SlabPlacementHeightAttachment.PLACEMENT_DY_TYPE.get(), facts);
+        SlabbedTestAccess.putPlacementFacts(chunk, facts);
         ctx.assertTrue(SlabPlacementHeightAttachment.storedHalfSteps(chunk, pos)
                         .orElse(Integer.MIN_VALUE) == halfSteps,
                 "test premise must author " + row + " at halfSteps=" + halfSteps);

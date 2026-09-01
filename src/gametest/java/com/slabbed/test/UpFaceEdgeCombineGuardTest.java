@@ -13,7 +13,6 @@ import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.context.UseOnContext;
-import net.minecraft.world.level.GameType;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.SlabBlock;
@@ -21,8 +20,8 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.SlabType;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.Vec3;
-import net.neoforged.neoforge.gametest.GameTestHolder;
-import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
+import net.minecraftforge.gametest.GameTestHolder;
+import net.minecraftforge.gametest.PrefixGameTestTemplate;
 
 /**
  * Gesture-contract pins for the donor's up-face edge-click combine family. The donor line
@@ -35,14 +34,14 @@ import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
  * future port of the edge inference (or a remap defect) reintroduces the silent combine, these
  * rows go red.
  */
-@GameTestHolder("fabric-gametest-api-v1")
+@GameTestHolder("slabbed")
 @PrefixGameTestTemplate(false)
 public final class UpFaceEdgeCombineGuardTest {
     private static final String TEMPLATE = "empty";
     private static final double EPS = 1.0e-9;
 
     /** Edge click on a lowered slab whose inferred-direction neighbor already holds a same-material slab. */
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = TEMPLATE)
+    @GameTest(template = TEMPLATE)
     public void upFaceEdgeClickNearOccupiedNeighborDoesNotCombine(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         BlockPos clicked = buildLoweredTopSlab(ctx, new BlockPos(3, 2, 1));
@@ -65,7 +64,7 @@ public final class UpFaceEdgeCombineGuardTest {
     }
 
     /** Same edge click with an EMPTY inferred neighbor: the clicked slab itself must not combine. */
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = TEMPLATE)
+    @GameTest(template = TEMPLATE)
     public void upFaceEdgeClickWithEmptyNeighborDoesNotCombineClickedSlab(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         BlockPos clicked = buildLoweredTopSlab(ctx, new BlockPos(3, 2, 4));
@@ -82,7 +81,7 @@ public final class UpFaceEdgeCombineGuardTest {
     }
 
     /** A literal, deliberate horizontal combine click keeps vanilla's normal behavior. */
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = TEMPLATE)
+    @GameTest(template = TEMPLATE)
     public void literalHorizontalClickStillCombinesNormally(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         BlockPos ground = ctx.absolutePos(new BlockPos(5, 2, 1));
@@ -123,7 +122,7 @@ public final class UpFaceEdgeCombineGuardTest {
 
     private static InteractionResult useHeldOakSlab(GameTestHelper ctx, BlockPos clicked,
                                                     Direction face, Vec3 hit) {
-        Player player = ctx.makeMockPlayer(GameType.SURVIVAL);
+        Player player = ctx.makeMockPlayer();
         ItemStack stack = new ItemStack(Items.OAK_SLAB);
         player.setItemInHand(InteractionHand.MAIN_HAND, stack);
         return stack.useOn(new UseOnContext(player, InteractionHand.MAIN_HAND,

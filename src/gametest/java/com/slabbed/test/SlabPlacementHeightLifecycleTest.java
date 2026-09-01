@@ -18,7 +18,6 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.context.BlockPlaceContext;
 import net.minecraft.world.item.context.UseOnContext;
-import net.minecraft.world.level.GameType;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.SlabBlock;
@@ -33,19 +32,19 @@ import net.minecraft.world.phys.shapes.BooleanOp;
 import net.minecraft.world.phys.shapes.CollisionContext;
 import net.minecraft.world.phys.shapes.Shapes;
 import net.minecraft.world.phys.shapes.VoxelShape;
-import net.neoforged.neoforge.gametest.GameTestHolder;
-import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
-import net.neoforged.neoforge.common.DataMapHooks;
-import net.neoforged.neoforge.common.ItemAbilities;
-import net.neoforged.neoforge.common.NeoForge;
-import net.neoforged.neoforge.event.level.BlockEvent;
+import net.minecraftforge.gametest.GameTestHolder;
+import net.minecraftforge.gametest.PrefixGameTestTemplate;
+import net.minecraft.world.level.block.WeatheringCopper;
+import net.minecraftforge.common.ToolActions;
+import net.minecraftforge.common.MinecraftForge;
+import net.minecraftforge.event.level.BlockEvent;
 
-@GameTestHolder("fabric-gametest-api-v1")
+@GameTestHolder("slabbed")
 @PrefixGameTestTemplate(false)
 public final class SlabPlacementHeightLifecycleTest {
     private static final String TEMPLATE = "empty";
 
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = TEMPLATE)
+    @GameTest(template = TEMPLATE)
     public void flatPlacementStoresExplicitZero(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         BlockPos support = ctx.absolutePos(new BlockPos(2, 2, 2));
@@ -62,7 +61,7 @@ public final class SlabPlacementHeightLifecycleTest {
         ctx.succeed();
     }
 
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = TEMPLATE)
+    @GameTest(template = TEMPLATE)
     public void loweredAnchorPlacementStoresExactHeight(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         BlockPos support = ctx.absolutePos(new BlockPos(2, 2, 2));
@@ -80,7 +79,7 @@ public final class SlabPlacementHeightLifecycleTest {
         ctx.succeed();
     }
 
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = TEMPLATE)
+    @GameTest(template = TEMPLATE)
     public void loweredNonAnchorPlacementStillStoresExactHeight(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         world.setBlock(ctx.absolutePos(new BlockPos(2, 1, 2)),
@@ -113,7 +112,7 @@ public final class SlabPlacementHeightLifecycleTest {
         ctx.succeed();
     }
 
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = TEMPLATE)
+    @GameTest(template = TEMPLATE)
     public void transformedScaffoldingWritesActualCellOnly(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         BlockPos clicked = ctx.absolutePos(new BlockPos(3, 2, 2));
@@ -132,7 +131,7 @@ public final class SlabPlacementHeightLifecycleTest {
         ctx.succeed();
     }
 
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = TEMPLATE)
+    @GameTest(template = TEMPLATE)
     public void hauntedFactIsOverwrittenByRealPlacement(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         BlockPos support = ctx.absolutePos(new BlockPos(2, 2, 2));
@@ -159,7 +158,7 @@ public final class SlabPlacementHeightLifecycleTest {
         ctx.succeed();
     }
 
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = TEMPLATE)
+    @GameTest(template = TEMPLATE)
     public void connectorPlacementSettlesAfterFactPublication(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         BlockPos targetSupport = ctx.absolutePos(new BlockPos(3, 2, 3));
@@ -219,7 +218,7 @@ public final class SlabPlacementHeightLifecycleTest {
         ctx.succeed();
     }
 
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = TEMPLATE)
+    @GameTest(template = TEMPLATE)
     public void propertyAndEligibleKindChangesPreserveFact(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         BlockPos support = ctx.absolutePos(new BlockPos(2, 2, 2));
@@ -271,7 +270,7 @@ public final class SlabPlacementHeightLifecycleTest {
         placeHeldBlock(ctx, Blocks.COPPER_BLOCK.defaultBlockState(), copperSupport, Direction.UP, 0.0F);
         assertStored(ctx, world, copperSubject, 0,
                 "data-map transition row must start with an explicit flat fact");
-        Block nextCopper = DataMapHooks.getNextOxidizedStage(Blocks.COPPER_BLOCK);
+        Block nextCopper = WeatheringCopper.NEXT_BY_BLOCK.get().get(Blocks.COPPER_BLOCK);
         ctx.assertTrue(nextCopper != null && nextCopper != Blocks.COPPER_BLOCK,
                 "NeoForge oxidation data map must provide a distinct next stage");
         world.setBlock(copperSubject, nextCopper.defaultBlockState(), Block.UPDATE_ALL);
@@ -280,7 +279,7 @@ public final class SlabPlacementHeightLifecycleTest {
         ctx.succeed();
     }
 
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = TEMPLATE)
+    @GameTest(template = TEMPLATE)
     public void breakAndIncompatibleReplacementClearFact(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         BlockPos firstSupport = ctx.absolutePos(new BlockPos(2, 2, 2));
@@ -313,7 +312,7 @@ public final class SlabPlacementHeightLifecycleTest {
         ctx.succeed();
     }
 
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = TEMPLATE)
+    @GameTest(template = TEMPLATE)
     public void failedAndSyntheticPlacementWriteNothing(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         BlockPos synthetic = ctx.absolutePos(new BlockPos(2, 3, 5));
@@ -362,7 +361,7 @@ public final class SlabPlacementHeightLifecycleTest {
         ctx.succeed();
     }
 
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = TEMPLATE)
+    @GameTest(template = TEMPLATE)
     public void doorAndBedRemainExplicitlyLegacy(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         BlockPos doorSupport = ctx.absolutePos(new BlockPos(2, 2, 2));
@@ -399,7 +398,7 @@ public final class SlabPlacementHeightLifecycleTest {
      * and must record the height that cell's support gives it. Recording the height of the cell
      * above or below puts the block a full cell away from where it was aimed.
      */
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = TEMPLATE)
+    @GameTest(template = TEMPLATE)
     public void placingIntoAReplaceableCellRecordsThatCellsOwnHeight(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         StringBuilder failures = new StringBuilder();
@@ -407,7 +406,7 @@ public final class SlabPlacementHeightLifecycleTest {
         // Genuinely replaceable subjects only. A flower is NOT replaceable in vanilla, so a
         // flower lane would assert vanilla's behaviour rather than this line's.
         BlockState[] replaceables = {
-                Blocks.SHORT_GRASS.defaultBlockState(),
+                Blocks.GRASS.defaultBlockState(),
                 Blocks.FERN.defaultBlockState(),
                 Blocks.DEAD_BUSH.defaultBlockState(),
                 Blocks.SNOW.defaultBlockState()
@@ -456,7 +455,7 @@ public final class SlabPlacementHeightLifecycleTest {
      * combine-to-double tower with the real top-face gesture; full-height courses inherit, so the
      * whole tower shares its base's depth.
      */
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = TEMPLATE)
+    @GameTest(template = TEMPLATE)
     public void stackedSlabCoursesStopDescendingAtTheResolvedFloor(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         StringBuilder failures = new StringBuilder();
@@ -588,7 +587,7 @@ public final class SlabPlacementHeightLifecycleTest {
             Direction face,
             float yaw
     ) {
-        Player player = ctx.makeMockPlayer(GameType.SURVIVAL);
+        Player player = ctx.makeMockPlayer();
         player.setPos(clicked.getX() + 0.5d, clicked.getY() + 2.0d, clicked.getZ() + 0.5d);
         player.setYRot(yaw);
         ItemStack stack = new ItemStack(heldState.getBlock());
@@ -611,7 +610,7 @@ public final class SlabPlacementHeightLifecycleTest {
             BlockPos pos,
             BlockState finalState
     ) {
-        Player player = ctx.makeMockPlayer(GameType.SURVIVAL);
+        Player player = ctx.makeMockPlayer();
         player.setPos(pos.getX() + 0.5d, pos.getY() + 2.0d, pos.getZ() + 0.5d);
         ItemStack tool = new ItemStack(Items.IRON_AXE);
         player.setItemInHand(InteractionHand.MAIN_HAND, tool);
@@ -619,9 +618,9 @@ public final class SlabPlacementHeightLifecycleTest {
         UseOnContext context = new UseOnContext(player, InteractionHand.MAIN_HAND, hit);
         BlockEvent.BlockToolModificationEvent modification =
                 new BlockEvent.BlockToolModificationEvent(
-                        world.getBlockState(pos), context, ItemAbilities.AXE_STRIP, false);
+                        world.getBlockState(pos), context, ToolActions.AXE_STRIP, false);
         modification.setFinalState(finalState);
-        NeoForge.EVENT_BUS.post(modification);
+        MinecraftForge.EVENT_BUS.post(modification);
         ctx.assertTrue(modification.getFinalState() == finalState,
                 "tool-modification proof requires the requested final state");
     }
@@ -648,7 +647,7 @@ public final class SlabPlacementHeightLifecycleTest {
             Vec3 hitLocation,
             float yaw
     ) {
-        Player player = ctx.makeMockPlayer(GameType.SURVIVAL);
+        Player player = ctx.makeMockPlayer();
         player.setPos(clicked.getX() + 0.5d, clicked.getY() + 2.0d, clicked.getZ() + 0.5d);
         player.setYRot(yaw);
         ItemStack stack = new ItemStack(heldState.getBlock());
@@ -678,7 +677,7 @@ public final class SlabPlacementHeightLifecycleTest {
      * measuring the boundary the moment the ruling moves it, which is the defect this row exists
      * to close, not to repeat.
      */
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = TEMPLATE)
+    @GameTest(template = TEMPLATE)
     public void aDerivedSeatPastTheFloorIsHeldAtIt(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         double floor = com.slabbed.util.PlacementDepthPolicy.MIN_TARGETABLE_DY;
@@ -1029,11 +1028,11 @@ public final class SlabPlacementHeightLifecycleTest {
         net.minecraft.world.level.chunk.LevelChunk chunk =
                 world.getChunk(pos.getX() >> 4, pos.getZ() >> 4);
         it.unimi.dsi.fastutil.longs.Long2ByteOpenHashMap existing =
-                chunk.getExistingDataOrNull(SlabPlacementHeightAttachment.PLACEMENT_DY_TYPE.get());
+                SlabbedTestAccess.placementFacts(chunk);
         it.unimi.dsi.fastutil.longs.Long2ByteOpenHashMap facts = existing == null
                 ? new it.unimi.dsi.fastutil.longs.Long2ByteOpenHashMap()
                 : new it.unimi.dsi.fastutil.longs.Long2ByteOpenHashMap(existing);
         facts.put(pos.asLong(), (byte) halfSteps);
-        chunk.setData(SlabPlacementHeightAttachment.PLACEMENT_DY_TYPE.get(), facts);
+        SlabbedTestAccess.putPlacementFacts(chunk, facts);
     }
 }

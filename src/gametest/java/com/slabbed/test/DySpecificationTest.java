@@ -13,8 +13,8 @@ import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.SlabBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.SlabType;
-import net.neoforged.neoforge.gametest.GameTestHolder;
-import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
+import net.minecraftforge.gametest.GameTestHolder;
+import net.minecraftforge.gametest.PrefixGameTestTemplate;
 
 /**
  * Direct enumeration of the CORE rows of {@code DY_SPEC.md}, asserting the implementation's
@@ -32,7 +32,7 @@ import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
  * against the REAL {@code TerrainSlabsCompat} classification via the classifier shim mod that
  * claims the Terrain Slabs mod id in this run — headless, not a stub.
  */
-@GameTestHolder("fabric-gametest-api-v1")
+@GameTestHolder("slabbed")
 @PrefixGameTestTemplate(false)
 public final class DySpecificationTest {
     private static final String TEMPLATE = "empty";
@@ -40,19 +40,19 @@ public final class DySpecificationTest {
 
     // ── Full blocks ──────────────────────────────────────────────────────────
 
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = TEMPLATE)
+    @GameTest(template = TEMPLATE)
     public void specFbBottom(GameTestHelper ctx) { // FB-BOTTOM
         assertDy(ctx, "FB-BOTTOM",
                 dyOnSupportBelow(ctx, Blocks.STONE.defaultBlockState(), vanillaSlab(SlabType.BOTTOM)), -0.5);
     }
 
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = TEMPLATE)
+    @GameTest(template = TEMPLATE)
     public void specFbFlush(GameTestHelper ctx) { // FB-FLUSH (weak control)
         assertDy(ctx, "FB-FLUSH",
                 dyOnSupportBelow(ctx, Blocks.STONE.defaultBlockState(), Blocks.STONE.defaultBlockState()), 0.0);
     }
 
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = TEMPLATE)
+    @GameTest(template = TEMPLATE)
     public void specFbTsTerrain(GameTestHelper ctx) { // FB-TS-TERRAIN
         assertDy(ctx, "FB-TS-TERRAIN",
                 dyOnSupportBelow(ctx, Blocks.STONE.defaultBlockState(), shimTsSlab(ctx, SlabType.BOTTOM)), 0.0);
@@ -60,13 +60,13 @@ public final class DySpecificationTest {
 
     // ── Thin surface layers ──────────────────────────────────────────────────
 
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = TEMPLATE)
+    @GameTest(template = TEMPLATE)
     public void specTlCarpet(GameTestHelper ctx) { // TL-SLAB
         assertDy(ctx, "TL-SLAB",
                 dyOnSupportBelow(ctx, Blocks.WHITE_CARPET.defaultBlockState(), vanillaSlab(SlabType.BOTTOM)), -0.5);
     }
 
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = TEMPLATE)
+    @GameTest(template = TEMPLATE)
     public void specTlPowderSnow(GameTestHelper ctx) { // TL-POWDER-SNOW (no-exceptions lowering law)
         assertDy(ctx, "TL-POWDER-SNOW",
                 dyOnSupportBelow(ctx, Blocks.POWDER_SNOW.defaultBlockState(), vanillaSlab(SlabType.BOTTOM)), -0.5);
@@ -74,7 +74,7 @@ public final class DySpecificationTest {
 
     // ── Connecting blocks ────────────────────────────────────────────────────
 
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = TEMPLATE)
+    @GameTest(template = TEMPLATE)
     public void specCbBottom(GameTestHelper ctx) { // CB-BOTTOM
         assertDy(ctx, "CB-BOTTOM",
                 dyOnSupportBelow(ctx, Blocks.OAK_FENCE.defaultBlockState(), vanillaSlab(SlabType.BOTTOM)), -0.5);
@@ -82,13 +82,13 @@ public final class DySpecificationTest {
 
     // ── Block entities ───────────────────────────────────────────────────────
 
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = TEMPLATE)
+    @GameTest(template = TEMPLATE)
     public void specBeBottom(GameTestHelper ctx) { // BE-BOTTOM
         assertDy(ctx, "BE-BOTTOM",
                 dyOnSupportBelow(ctx, Blocks.HOPPER.defaultBlockState(), vanillaSlab(SlabType.BOTTOM)), -0.5);
     }
 
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = TEMPLATE)
+    @GameTest(template = TEMPLATE)
     public void specBeFlat(GameTestHelper ctx) { // BE-FLAT (weak control)
         assertDy(ctx, "BE-FLAT",
                 dyOnSupportBelow(ctx, Blocks.HOPPER.defaultBlockState(), Blocks.STONE.defaultBlockState()), 0.0);
@@ -96,13 +96,13 @@ public final class DySpecificationTest {
 
     // ── Ceiling-attached blocks ──────────────────────────────────────────────
 
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = TEMPLATE)
+    @GameTest(template = TEMPLATE)
     public void specChVanillaTop(GameTestHelper ctx) { // CH-VANILLA-TOP (flush ruling)
         assertDy(ctx, "CH-VANILLA-TOP",
                 dyUnderSupportAbove(ctx, Blocks.HANGING_ROOTS.defaultBlockState(), vanillaSlab(SlabType.TOP)), 0.0);
     }
 
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = TEMPLATE)
+    @GameTest(template = TEMPLATE)
     public void specChLoweredTop(GameTestHelper ctx) { // CH-LOWERED-TOP (merge compensation)
         ServerLevel world = ctx.getLevel();
         BlockPos subject = ctx.absolutePos(new BlockPos(3, 3, 3));
@@ -115,13 +115,13 @@ public final class DySpecificationTest {
                 SlabSupport.getYOffset(world, subject, world.getBlockState(subject)), -0.5);
     }
 
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = TEMPLATE)
+    @GameTest(template = TEMPLATE)
     public void specChTs(GameTestHelper ctx) { // CH-TS (L4 ceiling arm)
         assertDy(ctx, "CH-TS",
                 dyUnderSupportAbove(ctx, Blocks.HANGING_ROOTS.defaultBlockState(), shimTsSlab(ctx, SlabType.TOP)), 0.0);
     }
 
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = TEMPLATE)
+    @GameTest(template = TEMPLATE)
     public void specChFlush(GameTestHelper ctx) { // CH-FLUSH (weak control)
         assertDy(ctx, "CH-FLUSH",
                 dyUnderSupportAbove(ctx, Blocks.HANGING_ROOTS.defaultBlockState(), Blocks.STONE.defaultBlockState()), 0.0);

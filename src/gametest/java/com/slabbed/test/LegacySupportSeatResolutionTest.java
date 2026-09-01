@@ -20,7 +20,6 @@ import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.context.UseOnContext;
 import net.minecraft.world.level.BlockGetter;
-import net.minecraft.world.level.GameType;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.LanternBlock;
@@ -39,10 +38,10 @@ import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.Vec3;
 import net.minecraft.world.phys.shapes.CollisionContext;
 import net.minecraft.world.phys.shapes.VoxelShape;
-import net.neoforged.neoforge.gametest.GameTestHolder;
-import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
+import net.minecraftforge.gametest.GameTestHolder;
+import net.minecraftforge.gametest.PrefixGameTestTemplate;
 
-@GameTestHolder("fabric-gametest-api-v1")
+@GameTestHolder("slabbed")
 @PrefixGameTestTemplate(false)
 public final class LegacySupportSeatResolutionTest {
     private static final String TEMPLATE = "empty";
@@ -58,7 +57,7 @@ public final class LegacySupportSeatResolutionTest {
      * deep alphabet is what carries these depths (maintainer ruling, 2026-08-21, matching
      * the reference line). The law under test is unchanged; only its arming moved.
      */
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = TEMPLATE)
+    @GameTest(template = TEMPLATE)
     public void bedHalvesReadOneLevelValueOnTheirSharedSupports(GameTestHelper ctx) {
         SlabSupport.armDeepAlphabet(true);
         try {
@@ -116,7 +115,7 @@ public final class LegacySupportSeatResolutionTest {
      * deep alphabet is what carries these depths (maintainer ruling, 2026-08-21, matching
      * the reference line). The law under test is unchanged; only its arming moved.
      */
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = TEMPLATE)
+    @GameTest(template = TEMPLATE)
     public void doorPairOnDeepBottomSlabSeatsFlushOnTheResolvedSurface(GameTestHelper ctx) {
         SlabSupport.armDeepAlphabet(true);
         try {
@@ -171,7 +170,7 @@ public final class LegacySupportSeatResolutionTest {
         ctx.succeed();
     }
 
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = TEMPLATE)
+    @GameTest(template = TEMPLATE)
     public void factlessFollowersUseTheSupportsResolvedTopFace(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         BlockPos fullSupport = absolute(ctx, 1, 2, 1);
@@ -316,7 +315,7 @@ public final class LegacySupportSeatResolutionTest {
      * deep alphabet is what carries these depths (maintainer ruling, 2026-08-21, matching
      * the reference line). The law under test is unchanged; only its arming moved.
      */
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = TEMPLATE)
+    @GameTest(template = TEMPLATE)
     public void carpetFollowerUsesTheSupportsResolvedTopFace(GameTestHelper ctx) {
         SlabSupport.armDeepAlphabet(true);
         try {
@@ -423,7 +422,7 @@ public final class LegacySupportSeatResolutionTest {
         ctx.succeed();
     }
 
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = TEMPLATE)
+    @GameTest(template = TEMPLATE)
     public void decorationAndBlockEntityFollowResolvedSupportTopFace(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         BlockPos potSupport = absolute(ctx, 1, 2, 1);
@@ -569,7 +568,7 @@ public final class LegacySupportSeatResolutionTest {
         ctx.succeed();
     }
 
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = TEMPLATE)
+    @GameTest(template = TEMPLATE)
     public void geometricFloorContactAdmitsEquivalentStatesAndDefersConnectors(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         BlockPos saplingSupport = absolute(ctx, 1, 2, 1);
@@ -631,7 +630,7 @@ public final class LegacySupportSeatResolutionTest {
         ctx.succeed();
     }
 
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = TEMPLATE)
+    @GameTest(template = TEMPLATE)
     public void nestedFactlessFollowersUseOneBoundedSupportPath(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         BlockPos halfStepSupport = absolute(ctx, 1, 2, 1);
@@ -931,7 +930,7 @@ public final class LegacySupportSeatResolutionTest {
             Direction face,
             BlockState heldState
     ) {
-        Player player = ctx.makeMockPlayer(GameType.SURVIVAL);
+        Player player = ctx.makeMockPlayer();
         player.setPos(clicked.getX() + 0.5d, clicked.getY() + 2.0d, clicked.getZ() + 0.5d);
         ItemStack stack = new ItemStack(heldState.getBlock());
         player.setItemInHand(InteractionHand.MAIN_HAND, stack);
@@ -975,12 +974,12 @@ public final class LegacySupportSeatResolutionTest {
 
     private static void forceLegacyAnchor(ServerLevel world, BlockPos pos) {
         LevelChunk chunk = chunk(world, pos);
-        LongOpenHashSet existing = chunk.getExistingDataOrNull(SlabAnchorAttachment.ANCHOR_TYPE.get());
+        LongOpenHashSet existing = SlabbedTestAccess.marker(chunk, SlabAnchorAttachment.ANCHOR_TYPE);
         LongOpenHashSet replacement = existing == null
                 ? new LongOpenHashSet()
                 : new LongOpenHashSet(existing);
         replacement.add(pos.asLong());
-        chunk.setData(SlabAnchorAttachment.ANCHOR_TYPE.get(), replacement);
+        SlabbedTestAccess.putMarker(chunk, SlabAnchorAttachment.ANCHOR_TYPE, replacement);
     }
 
     private static void assertFactAbsent(

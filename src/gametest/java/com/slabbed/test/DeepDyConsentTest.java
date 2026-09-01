@@ -31,11 +31,11 @@ import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.SlabBlock;
 import net.minecraft.world.level.block.state.properties.SlabType;
-import net.neoforged.neoforge.gametest.GameTestHolder;
-import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
+import net.minecraftforge.gametest.GameTestHolder;
+import net.minecraftforge.gametest.PrefixGameTestTemplate;
 
 /** Save-consent, cap, and placement-permanence contract for the deeper dy alphabet. */
-@GameTestHolder("fabric-gametest-api-v1")
+@GameTestHolder("slabbed")
 @PrefixGameTestTemplate(false)
 public final class DeepDyConsentTest {
     private static final String TEMPLATE = "empty";
@@ -43,7 +43,6 @@ public final class DeepDyConsentTest {
 
     @GameTest(
             batch = "slabbed_deep_consent_legacy",
-            templateNamespace = "fabric-gametest-api-v1",
             template = TEMPLATE)
     public void absentAndDisabledSavesRemainOnTheShippedFloor(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
@@ -83,7 +82,6 @@ public final class DeepDyConsentTest {
 
     @GameTest(
             batch = "slabbed_deep_consent_new_save",
-            templateNamespace = "fabric-gametest-api-v1",
             template = TEMPLATE)
     public void newSaveInitializationStampsOffWithoutOverwritingAuthority(GameTestHelper helper) {
         MinecraftServer server = helper.getLevel().getServer();
@@ -112,8 +110,7 @@ public final class DeepDyConsentTest {
             helper.assertTrue(!DeepDyConsentAttachment.initializeNewSave(server.overworld()),
                     "new-save initialization must not overwrite unknown future authority");
             for (ServerLevel loaded : server.getAllLevels()) {
-                Stamp retained = loaded.getExistingDataOrNull(
-                        DeepDyConsentAttachment.CONSENT_TYPE.get());
+                Stamp retained = SlabbedTestAccess.consentStamp(loaded);
                 helper.assertTrue(retained != null
                                 && retained.state() == State.LOCKED_UNKNOWN
                                 && retained.serializedTag().equals(unknown.serializedTag()),
@@ -137,7 +134,6 @@ public final class DeepDyConsentTest {
 
     @GameTest(
             batch = "slabbed_deep_consent_enable",
-            templateNamespace = "fabric-gametest-api-v1",
             template = TEMPLATE)
     public void enablingIsImmediateSaveWideAndOneWay(GameTestHelper helper) {
         MinecraftServer server = helper.getLevel().getServer();
@@ -191,7 +187,6 @@ public final class DeepDyConsentTest {
 
     @GameTest(
             batch = "slabbed_deep_consent_facts",
-            templateNamespace = "fabric-gametest-api-v1",
             template = TEMPLATE)
     public void storedPlacementFactsIgnoreConsentAndSupportChanges(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
@@ -232,7 +227,6 @@ public final class DeepDyConsentTest {
 
     @GameTest(
             batch = "slabbed_deep_consent_unknown",
-            templateNamespace = "fabric-gametest-api-v1",
             template = TEMPLATE)
     public void unknownSchemaFailsClosedWithoutBeingOverwritten(GameTestHelper helper) {
         MinecraftServer server = helper.getLevel().getServer();
@@ -252,8 +246,8 @@ public final class DeepDyConsentTest {
             helper.assertTrue(DeepDyConsentAttachment.grant(server) == GrantResult.LOCKED_UNKNOWN,
                     "this build must not overwrite a newer consent schema");
             helper.assertTrue(unknown.serializedTag().equals(
-                            server.overworld().getExistingDataOrNull(
-                                    DeepDyConsentAttachment.CONSENT_TYPE.get()).serializedTag()),
+                            SlabbedTestAccess.consentStamp(
+                                    server.overworld()).serializedTag()),
                     "locked data must remain byte-for-byte unchanged");
         } finally {
             restore(server, original);
@@ -263,7 +257,6 @@ public final class DeepDyConsentTest {
 
     @GameTest(
             batch = "slabbed_deep_consent_envelope",
-            templateNamespace = "fabric-gametest-api-v1",
             template = TEMPLATE)
     public void interactionEnvelopeIsUnchangedByConsent(GameTestHelper helper) {
         for (boolean enabled : new boolean[] {false, true}) {
@@ -288,7 +281,6 @@ public final class DeepDyConsentTest {
 
     @GameTest(
             batch = "slabbed_deep_consent_command",
-            templateNamespace = "fabric-gametest-api-v1",
             template = TEMPLATE)
     public void serverCommandRequiresPermissionAndExplicitConfirmation(GameTestHelper helper) {
         MinecraftServer server = helper.getLevel().getServer();
@@ -369,7 +361,6 @@ public final class DeepDyConsentTest {
 
     @GameTest(
             batch = "slabbed_deep_consent_cache",
-            templateNamespace = "fabric-gametest-api-v1",
             template = TEMPLATE)
     public void resolverCapIsCachedAndAllocationFree(GameTestHelper helper) {
         com.sun.management.ThreadMXBean bean =
@@ -438,7 +429,7 @@ public final class DeepDyConsentTest {
     private static Map<ServerLevel, Stamp> snapshot(MinecraftServer server) {
         Map<ServerLevel, Stamp> stamps = new LinkedHashMap<>();
         for (ServerLevel level : server.getAllLevels()) {
-            stamps.put(level, level.getExistingDataOrNull(DeepDyConsentAttachment.CONSENT_TYPE.get()));
+            stamps.put(level, SlabbedTestAccess.consentStamp(level));
         }
         return stamps;
     }
@@ -446,9 +437,9 @@ public final class DeepDyConsentTest {
     private static void setSaveStamp(MinecraftServer server, Stamp stamp) {
         for (ServerLevel level : server.getAllLevels()) {
             if (stamp == null) {
-                level.removeData(DeepDyConsentAttachment.CONSENT_TYPE.get());
+                SlabbedTestAccess.clearConsentStamp(level);
             } else {
-                level.setData(DeepDyConsentAttachment.CONSENT_TYPE.get(), Stamp.fromTag(stamp.serializedTag()));
+                SlabbedTestAccess.putConsentStamp(level, Stamp.fromTag(stamp.serializedTag()));
             }
         }
     }
@@ -456,10 +447,9 @@ public final class DeepDyConsentTest {
     private static void restore(MinecraftServer server, Map<ServerLevel, Stamp> original) {
         for (Map.Entry<ServerLevel, Stamp> entry : original.entrySet()) {
             if (entry.getValue() == null) {
-                entry.getKey().removeData(DeepDyConsentAttachment.CONSENT_TYPE.get());
+                SlabbedTestAccess.clearConsentStamp(entry.getKey());
             } else {
-                entry.getKey().setData(
-                        DeepDyConsentAttachment.CONSENT_TYPE.get(),
+                SlabbedTestAccess.putConsentStamp(entry.getKey(),
                         Stamp.fromTag(entry.getValue().serializedTag()));
             }
         }
@@ -549,7 +539,7 @@ public final class DeepDyConsentTest {
             if (messages.isEmpty()) {
                 throw new AssertionError("expected a command response");
             }
-            return messages.getLast();
+            return messages.get(messages.size() - 1);
         }
     }
 }

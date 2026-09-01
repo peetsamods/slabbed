@@ -8,47 +8,51 @@ import java.util.function.Consumer;
 import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.NbtOps;
-import net.minecraft.network.RegistryFriendlyByteBuf;
+import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.level.dimension.DimensionType;
-import net.neoforged.neoforge.attachment.AttachmentSync;
-import net.neoforged.neoforge.gametest.GameTestHolder;
-import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
+import net.minecraftforge.gametest.GameTestHolder;
+import net.minecraftforge.gametest.PrefixGameTestTemplate;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
 
-@GameTestHolder("fabric-gametest-api-v1")
+@GameTestHolder("slabbed")
 @PrefixGameTestTemplate(false)
 public final class SlabPlacementHeightPersistenceSyncTest {
     private static final String TEMPLATE = "empty";
-    private static final String ATTACHMENT_KEY = "slabbed:placement_dy";
+    // The store writes its own keys straight into the capability tag, where the donor
+    // wrote one namespaced attachment blob.
+    private static final String ATTACHMENT_KEY = "placement_dy_pos";
 
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = TEMPLATE)
+    @GameTest(template = TEMPLATE)
     public void nativePersistenceAndSyncBindingsAreLive(GameTestHelper ctx) {
         LevelChunk chunk = testChunk(ctx);
         BlockPos pos = firstPosition(chunk, ctx);
         ChunkSnapshot snapshot = snapshot(chunk);
         try {
-            chunk.removeData(SlabPlacementHeightAttachment.PLACEMENT_DY_TYPE.get());
+            SlabbedTestAccess.clearPlacementFacts(chunk);
             chunk.setUnsaved(false);
 
-            ctx.assertTrue(AttachmentSync.SYNCED_ATTACHMENT_TYPES.containsValue(
-                            SlabPlacementHeightAttachment.PLACEMENT_DY_TYPE.get()),
-                    "the native attachment registry must classify placement_dy as synchronized");
+            // The donor asks a registry whether placement_dy is declared synchronized. Forge has
+            // no such registry: synchronization is explicit, performed by SlabbedAnchorNetwork,
+            // so there is nothing to interrogate. What that row was really guarding - that the
+            // store exists on the chunk and round-trips - is asserted directly below.
+            ctx.assertTrue(SlabbedTestAccess.hasStore(chunk),
+                    "the placement store must be attached to the chunk");
             ctx.assertTrue(SlabPlacementHeightAttachment.putHalfSteps(chunk, pos, -2),
                     "the persistence fixture fact must be stored");
 
-            CompoundTag encoded = chunk.writeAttachmentsToNBT(ctx.getLevel().registryAccess());
+            CompoundTag encoded = SlabbedTestAccess.saveStore(chunk);
             ctx.assertTrue(encoded != null && encoded.contains(ATTACHMENT_KEY),
                     "the native chunk serializer must include the placement_dy attachment");
 
             ctx.assertTrue(SlabPlacementHeightAttachment.remove(chunk, pos),
                     "removing the only persistence fixture fact must change the attachment");
-            CompoundTag empty = chunk.writeAttachmentsToNBT(ctx.getLevel().registryAccess());
+            CompoundTag empty = SlabbedTestAccess.saveStore(chunk);
             ctx.assertTrue(empty == null || !empty.contains(ATTACHMENT_KEY),
                     "an empty placement_dy attachment must be omitted from persistence");
 
-            chunk.readAttachmentsFromNBT(ctx.getLevel().registryAccess(), encoded);
+            SlabbedTestAccess.loadStore(chunk, encoded);
             ctx.assertTrue(SlabPlacementHeightAttachment.storedHalfSteps(chunk, pos).orElse(0) == -2,
                     "the native attachment serializer must restore the exact half-step fact");
         } finally {
@@ -57,7 +61,7 @@ public final class SlabPlacementHeightPersistenceSyncTest {
         ctx.succeed();
     }
 
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = TEMPLATE)
+    @GameTest(template = TEMPLATE)
     public void streamCodecIsCanonicalAndRoundTrips(GameTestHelper ctx) {
         Long2ByteOpenHashMap first = new Long2ByteOpenHashMap();
         first.put(BlockPos.asLong(16, -1, -16), (byte) 1);
@@ -100,8 +104,7 @@ public final class SlabPlacementHeightPersistenceSyncTest {
 
     /** Reads back only the packed positions, in the exact order the encoder wrote them. */
     private static long[] decodePositionsInWireOrder(GameTestHelper ctx, byte[] bytes) {
-        RegistryFriendlyByteBuf buffer = new RegistryFriendlyByteBuf(
-                Unpooled.wrappedBuffer(bytes), ctx.getLevel().registryAccess());
+        FriendlyByteBuf buffer = new FriendlyByteBuf(Unpooled.wrappedBuffer(bytes));
         try {
             int count = buffer.readVarInt();
             long[] positions = new long[count];
@@ -115,7 +118,7 @@ public final class SlabPlacementHeightPersistenceSyncTest {
         }
     }
 
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = TEMPLATE)
+    @GameTest(template = TEMPLATE)
     public void streamCodecRejectsUnboundedDuplicateAndTruncatedInput(GameTestHelper ctx) {
         assertDecodeRejected(ctx,
                 buffer -> buffer.writeVarInt(SlabPlacementHeightAttachment.MAX_FACTS_PER_CHUNK + 1),
@@ -139,7 +142,7 @@ public final class SlabPlacementHeightPersistenceSyncTest {
         ctx.succeed();
     }
 
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = TEMPLATE)
+    @GameTest(template = TEMPLATE)
     public void mutationsAreCopyOnWriteNoOpAwareAndRemoveEmptyStorage(GameTestHelper ctx) {
         LevelChunk chunk = testChunk(ctx);
         BlockPos firstPos = firstPosition(chunk, ctx);
@@ -147,7 +150,7 @@ public final class SlabPlacementHeightPersistenceSyncTest {
         BlockPos absentPos = firstPos.offset(2, 0, 0);
         ChunkSnapshot snapshot = snapshot(chunk);
         try {
-            chunk.removeData(SlabPlacementHeightAttachment.PLACEMENT_DY_TYPE.get());
+            SlabbedTestAccess.clearPlacementFacts(chunk);
             chunk.setUnsaved(false);
 
             ctx.assertTrue(SlabPlacementHeightAttachment.putHalfSteps(chunk, firstPos, -2),
@@ -192,7 +195,7 @@ public final class SlabPlacementHeightPersistenceSyncTest {
         ctx.succeed();
     }
 
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = TEMPLATE)
+    @GameTest(template = TEMPLATE)
     public void invalidWritesAndPhysicalCapacityAreBoundedWithoutMaximumAllocation(GameTestHelper ctx) {
         LevelChunk chunk = testChunk(ctx);
         BlockPos valid = firstPosition(chunk, ctx);
@@ -201,7 +204,7 @@ public final class SlabPlacementHeightPersistenceSyncTest {
         BlockPos above = new BlockPos(valid.getX(), chunk.getMaxBuildHeight(), valid.getZ());
         ChunkSnapshot snapshot = snapshot(chunk);
         try {
-            chunk.removeData(SlabPlacementHeightAttachment.PLACEMENT_DY_TYPE.get());
+            SlabbedTestAccess.clearPlacementFacts(chunk);
             chunk.setUnsaved(false);
 
             ctx.assertTrue(!SlabPlacementHeightAttachment.putHalfSteps(chunk, foreign, -1)
@@ -265,7 +268,7 @@ public final class SlabPlacementHeightPersistenceSyncTest {
     }
 
     private static Long2ByteOpenHashMap currentMap(LevelChunk chunk) {
-        return chunk.getExistingDataOrNull(SlabPlacementHeightAttachment.PLACEMENT_DY_TYPE.get());
+        return SlabbedTestAccess.placementFacts(chunk);
     }
 
     private static ChunkSnapshot snapshot(LevelChunk chunk) {
@@ -277,19 +280,17 @@ public final class SlabPlacementHeightPersistenceSyncTest {
 
     private static void restore(LevelChunk chunk, ChunkSnapshot snapshot) {
         if (snapshot.facts() == null) {
-            chunk.removeData(SlabPlacementHeightAttachment.PLACEMENT_DY_TYPE.get());
+            SlabbedTestAccess.clearPlacementFacts(chunk);
         } else {
-            chunk.setData(SlabPlacementHeightAttachment.PLACEMENT_DY_TYPE.get(),
-                    new Long2ByteOpenHashMap(snapshot.facts()));
+            SlabbedTestAccess.putPlacementFacts(chunk, new Long2ByteOpenHashMap(snapshot.facts()));
         }
         chunk.setUnsaved(snapshot.unsaved());
     }
 
     private static byte[] encode(GameTestHelper ctx, Long2ByteOpenHashMap facts) {
-        RegistryFriendlyByteBuf buffer = new RegistryFriendlyByteBuf(
-                Unpooled.buffer(), ctx.getLevel().registryAccess());
+        FriendlyByteBuf buffer = new FriendlyByteBuf(Unpooled.buffer());
         try {
-            SlabPlacementHeightAttachment.streamCodec().encode(buffer, facts);
+            SlabPlacementHeightAttachment.encodeStream(buffer, facts);
             byte[] encoded = new byte[buffer.readableBytes()];
             buffer.getBytes(buffer.readerIndex(), encoded);
             return encoded;
@@ -299,10 +300,9 @@ public final class SlabPlacementHeightPersistenceSyncTest {
     }
 
     private static Long2ByteOpenHashMap decode(GameTestHelper ctx, byte[] encoded) {
-        RegistryFriendlyByteBuf buffer = new RegistryFriendlyByteBuf(
-                Unpooled.wrappedBuffer(encoded), ctx.getLevel().registryAccess());
+        FriendlyByteBuf buffer = new FriendlyByteBuf(Unpooled.wrappedBuffer(encoded));
         try {
-            return SlabPlacementHeightAttachment.streamCodec().decode(buffer);
+            return SlabPlacementHeightAttachment.decodeStream(buffer);
         } finally {
             buffer.release();
         }
@@ -310,15 +310,14 @@ public final class SlabPlacementHeightPersistenceSyncTest {
 
     private static void assertDecodeRejected(
             GameTestHelper ctx,
-            Consumer<RegistryFriendlyByteBuf> writer,
+            Consumer<FriendlyByteBuf> writer,
             String message
     ) {
-        RegistryFriendlyByteBuf buffer = new RegistryFriendlyByteBuf(
-                Unpooled.buffer(), ctx.getLevel().registryAccess());
+        FriendlyByteBuf buffer = new FriendlyByteBuf(Unpooled.buffer());
         boolean rejected = false;
         try {
             writer.accept(buffer);
-            SlabPlacementHeightAttachment.streamCodec().decode(buffer);
+            SlabPlacementHeightAttachment.decodeStream(buffer);
         } catch (RuntimeException expected) {
             rejected = true;
         } finally {

@@ -14,8 +14,8 @@ import net.minecraft.world.level.block.SlabBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 import net.minecraft.world.level.block.state.properties.SlabType;
-import net.neoforged.neoforge.gametest.GameTestHolder;
-import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
+import net.minecraftforge.gametest.GameTestHolder;
+import net.minecraftforge.gametest.PrefixGameTestTemplate;
 
 /**
  * A ceiling-bridged vertical chain column reads ONE dy for every member and for the hung
@@ -27,7 +27,7 @@ import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
  * which the flush-ruling port covered. A split column (merged top segment over
  * grid-height descendants) overlaps the segment models and must never come back.
  */
-@GameTestHolder("fabric-gametest-api-v1")
+@GameTestHolder("slabbed")
 @PrefixGameTestTemplate(false)
 public final class ChainColumnLoweredCapCoherenceTest {
     private static final String TEMPLATE = "empty";
@@ -39,7 +39,7 @@ public final class ChainColumnLoweredCapCoherenceTest {
      * never the flush-bridge union that doubles the box to 1.5 (maintainer ruling, 2026-08-17:
      * the visual triad must agree, and a doubled outline is exactly the split this row forbids).
      */
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = TEMPLATE)
+    @GameTest(template = TEMPLATE)
     public void loweredCapChainOutlineIsTheMovedChainBoxWithoutTheBridgeUnion(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         BlockPos slab = buildMarkedUpperTopSlab(ctx, world);
@@ -58,7 +58,7 @@ public final class ChainColumnLoweredCapCoherenceTest {
     }
 
     /** Direct lane: a single Y-chain directly under the -1.0 marked TOP slab merges to -0.5. */
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = TEMPLATE)
+    @GameTest(template = TEMPLATE)
     public void chainDirectlyUnderLoweredMarkedTopSlabMergesAtHalf(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         BlockPos slab = buildMarkedUpperTopSlab(ctx, world);
@@ -73,7 +73,7 @@ public final class ChainColumnLoweredCapCoherenceTest {
     }
 
     /** Column coherence: every segment of a three-chain column under the -1.0 cap reads the SAME -0.5. */
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = TEMPLATE)
+    @GameTest(template = TEMPLATE)
     public void threeChainColumnUnderLoweredMarkedTopSlabReadsOneMergeValue(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         BlockPos slab = buildMarkedUpperTopSlab(ctx, world);
@@ -94,7 +94,7 @@ public final class ChainColumnLoweredCapCoherenceTest {
     }
 
     /** Net-zero compensation: a chain under a stored -0.5 TOP slab nets exactly 0.0 — grid, no overshoot. */
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = TEMPLATE)
+    @GameTest(template = TEMPLATE)
     public void chainUnderNetZeroLoweredTopSlabHangsAtGrid(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         BlockPos slab = buildStoredHalfLoweredTopSlab(ctx, world);
@@ -106,7 +106,7 @@ public final class ChainColumnLoweredCapCoherenceTest {
     }
 
     /** Net-zero column: the bridged column keeps its grid-height bridge when the merge nets flush. */
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = TEMPLATE)
+    @GameTest(template = TEMPLATE)
     public void chainColumnUnderNetZeroLoweredTopSlabStaysGrid(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         BlockPos slab = buildStoredHalfLoweredTopSlab(ctx, world);
@@ -122,7 +122,7 @@ public final class ChainColumnLoweredCapCoherenceTest {
     }
 
     /** The hung addendum below a merged column follows the column's merge value, not grid height. */
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = TEMPLATE)
+    @GameTest(template = TEMPLATE)
     public void hangingLanternUnderMergedChainColumnFollowsColumn(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         BlockPos slab = buildMarkedUpperTopSlab(ctx, world);

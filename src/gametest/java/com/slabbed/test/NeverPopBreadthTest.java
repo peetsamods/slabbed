@@ -14,7 +14,6 @@ import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.context.UseOnContext;
-import net.minecraft.world.level.GameType;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.Vec3;
 import net.minecraft.world.level.block.Block;
@@ -25,8 +24,8 @@ import net.minecraft.world.level.block.state.properties.BedPart;
 import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 import net.minecraft.world.level.block.state.properties.DoubleBlockHalf;
 import net.minecraft.world.level.block.state.properties.SlabType;
-import net.neoforged.neoforge.gametest.GameTestHolder;
-import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
+import net.minecraftforge.gametest.GameTestHolder;
+import net.minecraftforge.gametest.PrefixGameTestTemplate;
 
 /**
  * Never-pop breadth, ported from the donor suites onto this line's architecture: every subject
@@ -40,7 +39,7 @@ import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
  * followers) are pinned on their documented legacy lanes instead: no fact is captured, and the
  * geometric resolution stays stable across the mutations that vanilla itself survives.
  */
-@GameTestHolder("fabric-gametest-api-v1")
+@GameTestHolder("slabbed")
 @PrefixGameTestTemplate(false)
 public final class NeverPopBreadthTest {
     private static final String TEMPLATE = "empty";
@@ -56,7 +55,7 @@ public final class NeverPopBreadthTest {
     };
 
     /** Matrix base: each candidate placed lowered on a slab keeps its height when the slab breaks. */
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = TEMPLATE)
+    @GameTest(template = TEMPLATE)
     public void loweringCandidatesPlacedOnSlabSurviveSupportBreak(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         StringBuilder failures = new StringBuilder();
@@ -92,7 +91,7 @@ public final class NeverPopBreadthTest {
     }
 
     /** Matrix base, other direction: a block placed FLAT is never pulled down by a later slab. */
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = TEMPLATE)
+    @GameTest(template = TEMPLATE)
     public void placedFlatBlockIsNeverPulledDownByALaterSlab(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         StringBuilder failures = new StringBuilder();
@@ -122,7 +121,7 @@ public final class NeverPopBreadthTest {
     }
 
     /** Block entities placed lowered keep both their height and their block entity. */
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = TEMPLATE)
+    @GameTest(template = TEMPLATE)
     public void blockEntitiesLoweredOnSlabAreHeightLocked(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         Item[] subjects = {Items.HOPPER, Items.CHEST, Items.FURNACE, Items.BARREL};
@@ -152,7 +151,7 @@ public final class NeverPopBreadthTest {
     }
 
     /** Flat block entity is not pulled down when a slab is shoved under it. */
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = TEMPLATE)
+    @GameTest(template = TEMPLATE)
     public void flatHopperIsNotPulledDownByASlabShovedUnder(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         BlockPos ground = ctx.absolutePos(new BlockPos(2, 2, 2));
@@ -166,7 +165,7 @@ public final class NeverPopBreadthTest {
     }
 
     /** A same-kind connection-state property change never moves an already-placed fence. */
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = TEMPLATE)
+    @GameTest(template = TEMPLATE)
     public void fenceConnectionStateUpdateKeepsHeight(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         BlockPos support = ctx.absolutePos(new BlockPos(2, 2, 2));
@@ -183,7 +182,7 @@ public final class NeverPopBreadthTest {
     }
 
     /** A fence gate keeps its height and fact across an open toggle. */
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = TEMPLATE)
+    @GameTest(template = TEMPLATE)
     public void fenceGateToggleKeepsHeight(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         BlockPos support = ctx.absolutePos(new BlockPos(2, 2, 2));
@@ -203,7 +202,7 @@ public final class NeverPopBreadthTest {
      * The torch row: support removal is a genuine vanilla pop, so the mutations here are the
      * lateral and overhead edits a torch survives vanilla-wise — the height must not move.
      */
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = TEMPLATE)
+    @GameTest(template = TEMPLATE)
     public void torchOnSlabSurvivesLateralNeighborEdits(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         BlockPos support = ctx.absolutePos(new BlockPos(2, 2, 2));
@@ -227,7 +226,7 @@ public final class NeverPopBreadthTest {
     }
 
     /** The flower-pot family transform is an eligible in-place kind change: fact and height stay. */
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = TEMPLATE)
+    @GameTest(template = TEMPLATE)
     public void potTransformKeepsHeightAndFact(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         BlockPos support = ctx.absolutePos(new BlockPos(2, 2, 2));
@@ -248,7 +247,7 @@ public final class NeverPopBreadthTest {
     }
 
     /** Ceiling followers are excluded from capture: a hanging sign placement stores no fact. */
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = TEMPLATE)
+    @GameTest(template = TEMPLATE)
     public void hangingSignPlacementDoesNotCaptureAFact(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         BlockPos ceiling = ctx.absolutePos(new BlockPos(2, 4, 2));
@@ -263,7 +262,7 @@ public final class NeverPopBreadthTest {
     }
 
     /** Doors stay on the multi-cell legacy lane: no fact, and per-half height survives a toggle. */
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = TEMPLATE)
+    @GameTest(template = TEMPLATE)
     public void doorPairToggleAndNeighborInvariance(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         BlockPos support = ctx.absolutePos(new BlockPos(2, 2, 2));
@@ -297,7 +296,7 @@ public final class NeverPopBreadthTest {
     }
 
     /** Beds stay on the multi-cell legacy lane: no fact, and per-half height survives neighbor edits. */
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = TEMPLATE)
+    @GameTest(template = TEMPLATE)
     public void bedPairNeighborInvariance(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         BlockPos support = ctx.absolutePos(new BlockPos(3, 2, 3));
@@ -351,7 +350,7 @@ public final class NeverPopBreadthTest {
 
     private static void placeWithHeldItem(GameTestHelper ctx, Item item, BlockPos clicked,
                                           Direction face, double yNudge) {
-        Player player = ctx.makeMockPlayer(GameType.SURVIVAL);
+        Player player = ctx.makeMockPlayer();
         ItemStack stack = new ItemStack(item);
         player.setItemInHand(InteractionHand.MAIN_HAND, stack);
         Vec3 hit = Vec3.atCenterOf(clicked)

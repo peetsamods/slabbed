@@ -25,15 +25,15 @@ import net.minecraft.world.level.block.state.properties.SlabType;
 import net.minecraft.world.level.material.FluidState;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.shapes.CollisionContext;
-import net.neoforged.neoforge.gametest.GameTestHolder;
-import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
+import net.minecraftforge.gametest.GameTestHolder;
+import net.minecraftforge.gametest.PrefixGameTestTemplate;
 
-@GameTestHolder("fabric-gametest-api-v1")
+@GameTestHolder("slabbed")
 @PrefixGameTestTemplate(false)
 public final class SlabPlacementHeightResolverTest {
     private static final String TEMPLATE = "empty";
 
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = TEMPLATE)
+    @GameTest(template = TEMPLATE)
     public void storedFactsAreFirstResolverAuthority(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         BlockPos storedZero = ctx.absolutePos(new BlockPos(2, 2, 2));
@@ -156,7 +156,7 @@ public final class SlabPlacementHeightResolverTest {
         ctx.succeed();
     }
 
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = TEMPLATE)
+    @GameTest(template = TEMPLATE)
     public void positionedAttachmentRolesChooseTheActualOwner(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         BlockPos floorOwner = ctx.absolutePos(new BlockPos(2, 2, 2));
@@ -418,7 +418,7 @@ public final class SlabPlacementHeightResolverTest {
      * positive evidence in this resolver and a block over nothing sinks. And a view that is not
      * a render region must rethrow, so this never masks a real defect.
      */
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = TEMPLATE)
+    @GameTest(template = TEMPLATE)
     public void resolverEndsItsWalkAtARenderRegionEdge(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         BlockPos subject = ctx.absolutePos(new BlockPos(2, 3, 9));
@@ -497,7 +497,7 @@ public final class SlabPlacementHeightResolverTest {
      * would become indistinguishable from a frozen one. The two halves are asserted together
      * because a fix that satisfies only the first is the bug this row exists to prevent.
      */
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = TEMPLATE)
+    @GameTest(template = TEMPLATE)
     public void aClientPredictionReachesTheMeshAndNotTheWorld(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         BlockPos subject = ctx.absolutePos(new BlockPos(2, 2, 8));

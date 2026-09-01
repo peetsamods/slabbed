@@ -31,7 +31,7 @@ public final class SlabbedChunkStore {
             new EnumMap<>(SlabAnchorMarker.class);
 
     @Nullable
-    private Long2ByteOpenHashMap placementDy;
+    private volatile Long2ByteOpenHashMap placementDy;
 
     public SlabbedChunkStore(LevelChunk owner) {
         this.owner = owner;
@@ -92,11 +92,10 @@ public final class SlabbedChunkStore {
      * Phase 5 delta was written to remove.
      */
     public void putPlacementMap(@Nullable Long2ByteOpenHashMap replacement) {
-        if (replacement == null || replacement.isEmpty()) {
-            placementDy = null;
-        } else {
-            placementDy = new Long2ByteOpenHashMap(replacement);
-        }
+        // Stored BY REFERENCE, matching the donor's whole-map setter. The caller hands the map
+        // over and the store adopts it; a defensive copy here would silently detach the caller's
+        // object from the store and is not the contract the suite is written against.
+        placementDy = replacement == null || replacement.isEmpty() ? null : replacement;
         markUnsaved();
         SlabbedAnchorNetwork.syncPlacementFull(owner);
     }
@@ -111,14 +110,18 @@ public final class SlabbedChunkStore {
 
     /** Stores one authored height. Returns true when the stored half-step count changed. */
     public boolean putPlacementDy(long packedPos, byte halfSteps) {
-        Long2ByteOpenHashMap map = placementDy;
-        if (map == null) {
-            map = new Long2ByteOpenHashMap();
-            placementDy = map;
-        } else if (map.containsKey(packedPos) && map.get(packedPos) == halfSteps) {
+        Long2ByteOpenHashMap current = placementDy;
+        if (current != null && current.containsKey(packedPos) && current.get(packedPos) == halfSteps) {
             return false;
         }
-        map.put(packedPos, halfSteps);
+        // Copy-on-write. A published map is never mutated again: readers hold it without a lock
+        // and the render path detects change by reference identity, so an in-place put is both a
+        // race and an invisible change.
+        Long2ByteOpenHashMap next = current == null
+                ? new Long2ByteOpenHashMap()
+                : new Long2ByteOpenHashMap(current);
+        next.put(packedPos, halfSteps);
+        placementDy = next;
         markUnsaved();
         SlabbedAnchorNetwork.syncPlacementDelta(owner, packedPos, true, halfSteps);
         return true;
@@ -126,14 +129,13 @@ public final class SlabbedChunkStore {
 
     /** Clears one authored height. Returns true when an entry was removed. */
     public boolean removePlacementDy(long packedPos) {
-        Long2ByteOpenHashMap map = placementDy;
-        if (map == null || !map.containsKey(packedPos)) {
+        Long2ByteOpenHashMap current = placementDy;
+        if (current == null || !current.containsKey(packedPos)) {
             return false;
         }
-        map.remove(packedPos);
-        if (map.isEmpty()) {
-            placementDy = null;
-        }
+        Long2ByteOpenHashMap next = new Long2ByteOpenHashMap(current);
+        next.remove(packedPos);
+        placementDy = next.isEmpty() ? null : next;
         markUnsaved();
         SlabbedAnchorNetwork.syncPlacementDelta(owner, packedPos, false, (byte) 0);
         return true;

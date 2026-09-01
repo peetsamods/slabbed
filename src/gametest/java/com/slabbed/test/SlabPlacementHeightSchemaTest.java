@@ -15,15 +15,15 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.nbt.NbtOps;
 import net.minecraft.nbt.Tag;
 import net.minecraft.world.level.chunk.LevelChunk;
-import net.neoforged.neoforge.gametest.GameTestHolder;
-import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
+import net.minecraftforge.gametest.GameTestHolder;
+import net.minecraftforge.gametest.PrefixGameTestTemplate;
 
-@GameTestHolder("fabric-gametest-api-v1")
+@GameTestHolder("slabbed")
 @PrefixGameTestTemplate(false)
 public final class SlabPlacementHeightSchemaTest {
     private static final String TEMPLATE = "empty";
 
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = TEMPLATE)
+    @GameTest(template = TEMPLATE)
     public void exactFiniteHalfStepsRoundTrip(GameTestHelper ctx) {
         assertHalfSteps(ctx, -1.0d, -2);
         assertHalfSteps(ctx, -0.5d, -1);
@@ -44,7 +44,7 @@ public final class SlabPlacementHeightSchemaTest {
         ctx.succeed();
     }
 
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = TEMPLATE)
+    @GameTest(template = TEMPLATE)
     public void codecRoundTripsInCanonicalPositionOrder(GameTestHelper ctx) {
         Long2ByteOpenHashMap first = new Long2ByteOpenHashMap();
         first.put(BlockPos.asLong(16, -1, -16), (byte) 1);
@@ -70,7 +70,7 @@ public final class SlabPlacementHeightSchemaTest {
         ctx.succeed();
     }
 
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = TEMPLATE)
+    @GameTest(template = TEMPLATE)
     public void codecRejectsMalformedPairedArrays(GameTestHelper ctx) {
         CompoundTag unequal = new CompoundTag();
         unequal.putLongArray("positions", new long[] {BlockPos.asLong(1, 2, 3)});
@@ -93,7 +93,7 @@ public final class SlabPlacementHeightSchemaTest {
         ctx.succeed();
     }
 
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = TEMPLATE)
+    @GameTest(template = TEMPLATE)
     public void absentAttachmentMeansLegacyLookup(GameTestHelper ctx) {
         BlockPos pos = ctx.absolutePos(new BlockPos(3, 3, 3));
         LevelChunk chunk = ctx.getLevel().getChunk(pos.getX() >> 4, pos.getZ() >> 4);
@@ -104,7 +104,7 @@ public final class SlabPlacementHeightSchemaTest {
 
         Long2ByteOpenHashMap facts = new Long2ByteOpenHashMap();
         facts.put(pos.offset(1, 0, 0).asLong(), (byte) -1);
-        chunk.setData(SlabPlacementHeightAttachment.PLACEMENT_DY_TYPE.get(), facts);
+        SlabbedTestAccess.putPlacementFacts(chunk, facts);
         try {
             ctx.assertTrue(SlabPlacementHeightAttachment.storedHalfSteps(chunk, pos).isEmpty(),
                     "an existing map without this position must remain explicitly absent");
@@ -112,7 +112,7 @@ public final class SlabPlacementHeightSchemaTest {
             ctx.assertTrue(SlabPlacementHeightAttachment.storedHalfSteps(chunk, pos).orElse(1) == 0,
                     "a stored zero-height fact must remain distinguishable from absence");
         } finally {
-            chunk.removeData(SlabPlacementHeightAttachment.PLACEMENT_DY_TYPE.get());
+            SlabbedTestAccess.clearPlacementFacts(chunk);
         }
         ctx.succeed();
     }
@@ -133,7 +133,7 @@ public final class SlabPlacementHeightSchemaTest {
                 .orElseThrow(() -> new AssertionError("canonical schema must encode"));
     }
 
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = TEMPLATE)
+    @GameTest(template = TEMPLATE)
     public void outOfEnvelopeWritesAreDeclined(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         BlockPos pos = ctx.absolutePos(new BlockPos(2, 2, 6));
@@ -151,7 +151,7 @@ public final class SlabPlacementHeightSchemaTest {
         ctx.succeed();
     }
 
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = TEMPLATE)
+    @GameTest(template = TEMPLATE)
     public void outOfEnvelopeStoredBytesReadAsAbsentAndAreNeverRepaired(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         BlockPos support = ctx.absolutePos(new BlockPos(2, 2, 8));
@@ -161,13 +161,12 @@ public final class SlabPlacementHeightSchemaTest {
         world.setBlock(subject, Blocks.STONE.defaultBlockState(), Block.UPDATE_ALL);
         LevelChunk chunk = world.getChunkAt(subject);
 
-        Long2ByteOpenHashMap existing = chunk.getExistingDataOrNull(
-                SlabPlacementHeightAttachment.PLACEMENT_DY_TYPE.get());
+        Long2ByteOpenHashMap existing = SlabbedTestAccess.placementFacts(chunk);
         Long2ByteOpenHashMap corrupted = existing == null
                 ? new Long2ByteOpenHashMap()
                 : new Long2ByteOpenHashMap(existing);
         corrupted.put(subject.asLong(), (byte) -100);
-        chunk.setData(SlabPlacementHeightAttachment.PLACEMENT_DY_TYPE.get(), corrupted);
+        SlabbedTestAccess.putPlacementFacts(chunk, corrupted);
 
         double resolved = SlabSupport.getYOffset(world, subject, world.getBlockState(subject));
         ctx.assertTrue(Math.abs(resolved + 0.5d) <= 1.0e-9,

@@ -9,8 +9,8 @@ import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.SlabBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.SlabType;
-import net.neoforged.neoforge.gametest.GameTestHolder;
-import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
+import net.minecraftforge.gametest.GameTestHolder;
+import net.minecraftforge.gametest.PrefixGameTestTemplate;
 
 /**
  * Server-compatible MC1211 goblin route canary for the active NeoForge gametest path.
@@ -19,7 +19,7 @@ import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
  * intended goblin route now compiles, registers, and executes under the active
  * MC1211 server-compatible harness.
  */
-@GameTestHolder("fabric-gametest-api-v1")
+@GameTestHolder("slabbed")
 @PrefixGameTestTemplate(false)
 public final class Mc1211GoblinRouteCanaryGameTest {
     private static final String GOBLIN_ONLY_PROPERTY = "slabbed.mc1211.goblinOnly";
@@ -29,7 +29,7 @@ public final class Mc1211GoblinRouteCanaryGameTest {
     private static final String LEGACY_PREFIX = "[SBSB-ULTRA2]";
     private static final String ROUTE = "runServerGameTest";
 
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = "empty")
+    @GameTest(template = "empty")
     public void mc1211GoblinRouteCanary(GameTestHelper ctx) {
         boolean goblinOnly = Boolean.getBoolean(GOBLIN_ONLY_PROPERTY);
         boolean overlapOnly = Boolean.getBoolean(OVERLAP_ONLY_PROPERTY);

@@ -11,7 +11,6 @@ import net.minecraft.world.level.block.Block;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.context.UseOnContext;
-import net.minecraft.world.level.GameType;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.Vec3;
 import net.minecraft.core.Direction;
@@ -20,8 +19,8 @@ import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.SlabBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.SlabType;
-import net.neoforged.neoforge.gametest.GameTestHolder;
-import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
+import net.minecraftforge.gametest.GameTestHolder;
+import net.minecraftforge.gametest.PrefixGameTestTemplate;
 
 /**
  * Combined-slab chaining matrix — NeoForge 1.21.1 behavior-port of main1211's
@@ -59,7 +58,7 @@ import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
  * single -0.5 step, never stacks to -1.5) but NOT asserted, so the suite stays green while
  * still producing the full matrix evidence.
  */
-@GameTestHolder("fabric-gametest-api-v1")
+@GameTestHolder("slabbed")
 @PrefixGameTestTemplate(false)
 public final class CombinedSlabChainingMatrixTest {
 
@@ -128,7 +127,7 @@ public final class CombinedSlabChainingMatrixTest {
     }
 
     // ── donor column 3 + 7b: pure-vanilla bottom-slab stacks (record-heavy) ──────────
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = "empty")
+    @GameTest(template = "empty")
     public void vanillaBottomSlabStacks(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         BlockPos origin = ctx.absolutePos(new BlockPos(1, 1, 1));
@@ -190,7 +189,7 @@ public final class CombinedSlabChainingMatrixTest {
      * the column is the budget exhausting mid-descent and dropping the block, which reads in game
      * as the upper part of a tall stack snapping down.
      */
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = "empty")
+    @GameTest(template = "empty")
     public void loweredChainStaysFlushPastTheCourseBudget(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         BlockPos base = ctx.absolutePos(new BlockPos(5, 1, 5));
@@ -225,7 +224,7 @@ public final class CombinedSlabChainingMatrixTest {
     }
 
     // ── NATIVE deep-stack resolver (Phase A class 10): lowered-FB vertical chain ──────
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = "empty")
+    @GameTest(template = "empty")
     public void loweredFullBlockDeepStack(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         BlockPos base = ctx.absolutePos(new BlockPos(1, 1, 1));
@@ -283,7 +282,7 @@ public final class CombinedSlabChainingMatrixTest {
     }
 
     // ── donor column 8b: fence on a lowered full block (hard-assert, known-green) ─────
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = "empty")
+    @GameTest(template = "empty")
     public void fenceOnLoweredFullBlock(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         String cfg = "8b.fence/loweredFullBlock";
@@ -318,7 +317,7 @@ public final class CombinedSlabChainingMatrixTest {
      * bug was present, because the shallowest column is exactly where the derived answer and the
      * inherited one agree.
      */
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = "empty")
+    @GameTest(template = "empty")
     public void aSameBlockColumnSharesOneHeight(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         StringBuilder failures = new StringBuilder();
@@ -328,7 +327,7 @@ public final class CombinedSlabChainingMatrixTest {
             for (int d = 1; d <= 9; d++) {
                 world.setBlock(ground.above(d), Blocks.AIR.defaultBlockState(), Block.UPDATE_ALL);
             }
-            Player player = ctx.makeMockPlayer(GameType.SURVIVAL);
+            Player player = ctx.makeMockPlayer();
             player.setPos(ground.getX() + 3.5d, ground.getY() + 3.0d, ground.getZ() + 0.5d);
             for (int course = 1; course <= height; course++) {
                 BlockPos owner = ground.above(course - 1);

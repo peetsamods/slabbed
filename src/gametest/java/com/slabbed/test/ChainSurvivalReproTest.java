@@ -15,8 +15,8 @@ import net.minecraft.world.level.block.piston.PistonBaseBlock;
 import net.minecraft.world.level.block.SlabBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.SlabType;
-import net.neoforged.neoforge.gametest.GameTestHolder;
-import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
+import net.minecraftforge.gametest.GameTestHolder;
+import net.minecraftforge.gametest.PrefixGameTestTemplate;
 
 /**
  * Headless coverage for vanilla floating-chain behavior. The old support-loss
@@ -44,7 +44,7 @@ import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
  * chunk-reload survival is documented as an unmodeled runtime bucket in this
  * suite rather than being faked by direct state replacement.
  */
-@GameTestHolder("fabric-gametest-api-v1")
+@GameTestHolder("slabbed")
 @PrefixGameTestTemplate(false)
 public final class ChainSurvivalReproTest {
     private static final Block CHAIN_BLOCK = BuiltInRegistries.BLOCK.get(ResourceLocation.fromNamespaceAndPath("minecraft", "chain"));
@@ -72,7 +72,7 @@ public final class ChainSurvivalReproTest {
      * Y-axis chain hanging from a TOP slab underside must survive an initial
      * recheck — establishes the positive baseline.
      */
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = "empty")
+    @GameTest(template = "empty")
     public void chainUnderTopSlabSurvivesInitialRecheck(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         BlockPos chainPos = ctx.absolutePos(new BlockPos(2, 2, 2));
@@ -104,7 +104,7 @@ public final class ChainSurvivalReproTest {
      * <p>Asserts that after support removal, both world state and forced
      * recheck still keep chain state non-air under vanilla floating policy.
      */
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = "empty")
+    @GameTest(template = "empty")
     public void chainUnderTopSlabRemainsWhenSlabRemoved(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         BlockPos chainPos = ctx.absolutePos(new BlockPos(2, 2, 2));
@@ -148,7 +148,7 @@ public final class ChainSurvivalReproTest {
      * {@code isCeilingSupportBottomSurface}. Removal must still preserve the
      * vanilla floating chain.
      */
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = "empty")
+    @GameTest(template = "empty")
     public void chainUnderDoubleSlabRemainsWhenSlabRemoved(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         BlockPos chainPos = ctx.absolutePos(new BlockPos(2, 2, 2));
@@ -191,7 +191,7 @@ public final class ChainSurvivalReproTest {
      *   y:    air
      * </pre>
      */
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = "empty")
+    @GameTest(template = "empty")
     public void chainUnderTopSlabSurvivesUnrelatedNeighborRemoval(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         BlockPos chainPos = ctx.absolutePos(new BlockPos(2, 2, 2));
@@ -243,7 +243,7 @@ public final class ChainSurvivalReproTest {
      * The forced update from below must retain the upper chain under vanilla's
      * floating-chain policy.
      */
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = "empty")
+    @GameTest(template = "empty")
     public void chainStackUnderTopSlabSurvivesLowerChainRemoval(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         BlockPos lowerChainPos = ctx.absolutePos(new BlockPos(2, 2, 2));
@@ -282,7 +282,7 @@ public final class ChainSurvivalReproTest {
      * Vanilla floating-chain policy: free-floating Y-axis chain (no support
      * anywhere) survives forced recheck.
      */
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = "empty")
+    @GameTest(template = "empty")
     public void chainWithoutAnySupportSurvivesOnRecheck(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         BlockPos chainPos = ctx.absolutePos(new BlockPos(2, 2, 2));
@@ -315,7 +315,7 @@ public final class ChainSurvivalReproTest {
      * X-axis chain with a stone east control remains through an initial
      * neighbor recheck.
      */
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = "empty")
+    @GameTest(template = "empty")
     public void xAxisChainWithStoneEastSupportSurvives(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         BlockPos chainPos = ctx.absolutePos(new BlockPos(2, 2, 2));
@@ -341,7 +341,7 @@ public final class ChainSurvivalReproTest {
      * Vanilla floating-chain policy: X-axis chain remains when its sole
      * east-end support is removed.
      */
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = "empty")
+    @GameTest(template = "empty")
     public void xAxisChainRemainsWhenSoleSupportRemoved(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         BlockPos chainPos = ctx.absolutePos(new BlockPos(2, 2, 2));
@@ -370,7 +370,7 @@ public final class ChainSurvivalReproTest {
      * X-axis chain with stone east and stone north remains when the north
      * neighbor is removed.
      */
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = "empty")
+    @GameTest(template = "empty")
     public void xAxisChainSurvivesUnrelatedNeighborRemoval(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         BlockPos chainPos = ctx.absolutePos(new BlockPos(2, 2, 2));
@@ -404,7 +404,7 @@ public final class ChainSurvivalReproTest {
     /**
      * Z-axis mirror of the unrelated-neighbor removal control.
      */
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = "empty")
+    @GameTest(template = "empty")
     public void zAxisChainSurvivesUnrelatedNeighborRemoval(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         BlockPos chainPos = ctx.absolutePos(new BlockPos(2, 2, 2));
@@ -452,7 +452,7 @@ public final class ChainSurvivalReproTest {
      * surface path (e.g., adding BOTTOM to {@code isCeilingSupportBottomSurface})
      * cannot silently change semantics.
      */
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = "empty")
+    @GameTest(template = "empty")
     public void bottomSlabAboveCeilingContract(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         BlockPos chainPos = ctx.absolutePos(new BlockPos(2, 2, 2));
@@ -488,7 +488,7 @@ public final class ChainSurvivalReproTest {
      * Two adjacent X-axis chains and a stone control remain stable through a
      * forced update on the first chain.
      */
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = "empty")
+    @GameTest(template = "empty")
     public void xAxisChainColumnSurvivesForcedNeighborUpdate(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         BlockPos chainA = ctx.absolutePos(new BlockPos(2, 2, 2));
@@ -519,7 +519,7 @@ public final class ChainSurvivalReproTest {
      * Oxidizable/copper chain mirror of the vanilla TOP-slab positive
      * baseline: copper chain under TOP slab must survive initial recheck.
      */
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = "empty")
+    @GameTest(template = "empty")
     public void copperChainUnderTopSlabSurvivesInitialRecheck(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         BlockPos chainPos = ctx.absolutePos(new BlockPos(2, 2, 2));
@@ -547,7 +547,7 @@ public final class ChainSurvivalReproTest {
      * Oxidizable/copper mirror of vanilla floating-chain policy:
      * X-axis copper chain remains when sole support is removed.
      */
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = "empty")
+    @GameTest(template = "empty")
     public void copperChainRemainsWhenSoleSupportRemoved(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         BlockPos chainPos = ctx.absolutePos(new BlockPos(2, 2, 2));
@@ -575,7 +575,7 @@ public final class ChainSurvivalReproTest {
      * Oxidizable/copper chain mirror of unrelated-neighbor stability:
      * with east support intact, removing unrelated north neighbor must not pop.
      */
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = "empty")
+    @GameTest(template = "empty")
     public void copperChainSurvivesUnrelatedNeighborRemoval(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         BlockPos chainPos = ctx.absolutePos(new BlockPos(2, 2, 2));
@@ -617,7 +617,7 @@ public final class ChainSurvivalReproTest {
      *       non-air.</li>
      * </ol>
      */
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = "empty")
+    @GameTest(template = "empty")
     public void chainSurvivesMultiNeighborBurstSameTick(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         BlockPos chainPos = ctx.absolutePos(new BlockPos(2, 2, 2));
@@ -668,7 +668,7 @@ public final class ChainSurvivalReproTest {
      * remove temporary scaffolding, then pulse another nearby update.
      * The top slab remains as a control while unrelated updates are delivered.
      */
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = "empty")
+    @GameTest(template = "empty")
     public void chainPlacementOrderLikeGameplayStaysStable(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
         BlockPos chainPos = ctx.absolutePos(new BlockPos(2, 2, 2));
@@ -720,7 +720,7 @@ public final class ChainSurvivalReproTest {
      * transitions only (final block states + forced neighbor recheck). It
      * does not introspect the internal vanilla BlockEvent queue directly.
      */
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = "empty")
+    @GameTest(template = "empty")
     public void chainUnderTopSlabSurvivesNearbyPistonExtendRetract(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
 
@@ -771,7 +771,7 @@ public final class ChainSurvivalReproTest {
      * Cross-system (piston) support removal under vanilla floating policy:
      * piston moves the TOP slab support away; chain still remains.
      */
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = "empty")
+    @GameTest(template = "empty")
     public void chainRemainsWhenPistonMovesTopSlabSupportAway(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
 
@@ -818,7 +818,7 @@ public final class ChainSurvivalReproTest {
      * nearby observer receives two deterministic block changes across ticks.
      * Chain must survive this pulse ordering while TOP slab support stays intact.
      */
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = "empty")
+    @GameTest(template = "empty")
     public void chainUnderTopSlabSurvivesNearbyObserverPulseOrdering(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
 
