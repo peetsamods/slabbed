@@ -2313,7 +2313,30 @@ public final class SlabSupport {
             }
             reportUnrecognisedBoundedView(world);
             throw outsideRenderRegion;
+        } catch (RuntimeException outsideWorldGenRegion) {
+            // A world-generation region is the SECOND bounded view, and it signals an escaped
+            // walk with a plain RuntimeException rather than an IndexOutOfBoundsException, so
+            // the render-region arm above never sees it. The same law applies: evidence outside
+            // the box is unreachable, not absent, so the whole resolution declines to flush.
+            //
+            // This is reachable in ordinary play, not just in tests: mob spawning during chunk
+            // generation runs a collision sweep, our collision mixin resolves a height for each
+            // cell, and a neighbour walk near the region edge leaves the box and kills worldgen.
+            // Narrow on purpose - any other RuntimeException is a real defect and is rethrown.
+            if (isWorldGenRegionView(world)) {
+                return 0.0d;
+            }
+            throw outsideWorldGenRegion;
         }
+    }
+
+    /**
+     * A world-generation region is a fixed square of chunks around the one being generated.
+     * Unlike the render region this is a server class present on both distributions, so it needs
+     * no injected detector.
+     */
+    private static boolean isWorldGenRegionView(BlockGetter view) {
+        return view instanceof net.minecraft.server.level.WorldGenRegion;
     }
 
     private static final java.util.Set<String> REPORTED_UNRECOGNISED_VIEWS =

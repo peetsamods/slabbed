@@ -13,7 +13,6 @@ import net.minecraft.world.InteractionResult;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.context.UseOnContext;
-import net.minecraft.world.level.GameType;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.SlabBlock;
@@ -21,16 +20,16 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.SlabType;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.Vec3;
-import net.neoforged.neoforge.gametest.GameTestHolder;
-import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
+import net.minecraftforge.gametest.GameTestHolder;
+import net.minecraftforge.gametest.PrefixGameTestTemplate;
 
-@GameTestHolder("fabric-gametest-api-v1")
+@GameTestHolder("slabbed")
 @PrefixGameTestTemplate(false)
 public final class NeighborUpdateInvarianceTest {
     private static final String TEMPLATE = "empty";
     private static final int SUPPORT_Y = 2;
 
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = TEMPLATE)
+    @GameTest(template = TEMPLATE)
     public void anchoredPlacementSurvivesDirectSupportBreak(GameTestHelper ctx) {
         BlockPos support = ctx.absolutePos(new BlockPos(2, SUPPORT_Y, 2));
         BlockPos subject = support.above();
@@ -57,7 +56,7 @@ public final class NeighborUpdateInvarianceTest {
         ctx.succeed();
     }
 
-    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = TEMPLATE)
+    @GameTest(template = TEMPLATE)
     public void directSupportBreakReachesUnprotectedResolver(GameTestHelper ctx) {
         BlockPos support = ctx.absolutePos(new BlockPos(2, SUPPORT_Y, 2));
         BlockPos subject = support.above();
@@ -90,7 +89,7 @@ public final class NeighborUpdateInvarianceTest {
     }
 
     private static void placeStoneWithHeldItem(GameTestHelper ctx, BlockPos subject, BlockPos hitPos) {
-        Player player = ctx.makeMockPlayer(GameType.SURVIVAL);
+        Player player = ctx.makeMockPlayer();
         player.setPos(subject.getX() + 0.5D, subject.getY(), subject.getZ() + 0.5D);
         ItemStack stack = new ItemStack(Blocks.STONE);
         player.setItemInHand(InteractionHand.MAIN_HAND, stack);

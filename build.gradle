@@ -86,9 +86,12 @@ sourceSets {
     gametest {
         java {
             setSrcDirs(["src/gametest/java"])
-            // Forge GameTest registration differs from the NeoForge donor's.
-            // Nothing graduates here until the server suite is translated.
-            setIncludes([])
+            // Tests graduate one at a time as they are translated off the donor's registration.
+            // Keep this list explicit: the suite-count gate reads it to prove the suite that ran
+            // is the suite that was intended.
+            setIncludes([
+                    "com/slabbed/test/NeighborUpdateInvarianceTest.java"
+            ])
         }
         resources {
             setSrcDirs(["src/gametest/resources"])
@@ -131,7 +134,7 @@ minecraft {
             }
         }
         gameTestServer {
-            workingDirectory project.file("run/gameTest")
+            workingDirectory layout.buildDirectory.dir("run/gameTest").get().asFile
             property "forge.logging.markers", "REGISTRIES"
             property "forge.logging.console.level", "debug"
             property "forge.gameTestServer", "true"
@@ -167,14 +170,28 @@ dependencies {
     }
 }
 
+// A gametest run must never be able to read a previous run's log or world. The donor line hit
+// exactly this: a reused world silently changed matrix rows, and a crashed run can leave a stale
+// "All N required tests passed" summary behind for the count gate to find.
+tasks.register("cleanGameTestRunDirectory", Delete) {
+    delete(layout.buildDirectory.dir("run/gameTest"))
+}
+
 tasks.register("syncGameTestStructures", Sync) {
+    dependsOn(tasks.named("cleanGameTestRunDirectory"))
     from("gameteststructures")
-    into(layout.projectDirectory.dir("run/gameTest/gameteststructures"))
+    into(layout.buildDirectory.dir("run/gameTest/gameteststructures"))
 }
 
 tasks.matching { it.name == "runGameTestServer" }.configureEach {
     dependsOn(tasks.named("gametestClasses"))
     dependsOn(tasks.named("syncGameTestStructures"))
+}
+
+tasks.register("runGameTest") {
+    group = "verification"
+    description = "Runs the isolated Forge GameTest server on a clean run directory."
+    dependsOn(tasks.named("runGameTestServer"))
 }
 
 tasks.named("processResources", ProcessResources).configure {
