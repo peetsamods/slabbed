@@ -96,6 +96,25 @@ sourceSets {
         compileClasspath += configurations.compileClasspath
         runtimeClasspath += output
     }
+    // Plain JUnit lane. Three recorder/cursor-capture tests are deliberately absent: their
+    // subjects live in the devtools apparatus this line does not carry (maintainer ruling,
+    // 2026-08-31). SlabbedModelLoadingPluginTest is absent for a different reason - it needs the
+    // Sinytra forgified-fabric-api on the test classpath to construct a foreign quad emitter, and
+    // this line does not carry that shim. The wrapper policy it pins is covered headlessly by
+    // P7VisualParityTest and visually by the live pass.
+    test {
+        java {
+            setIncludes([
+                    "com/slabbed/util/PlacementDepthPolicyTest.java",
+                    "com/slabbed/util/PlacementVerificationVerdictTest.java",
+                    "com/slabbed/command/DeepDyCommandPolicyTest.java",
+                    "com/slabbed/client/DeepDyConsentClientSyncTest.java",
+                    "com/slabbed/mixin/ServerInteractionOwnershipContractTest.java",
+                    "com/slabbed/mixin/SlabSupportStateMixinAsyncShapeGuardContractTest.java",
+                    "com/slabbed/mixin/client/GameRendererPickOffsetRaycastMixinTest.java"
+            ])
+        }
+    }
     gametest {
         java {
             setSrcDirs(["src/gametest/java", "src/main/java"])
@@ -214,6 +233,12 @@ dependencies {
     implementation(jarJar("io.github.llamalad7:mixinextras-forge:[0.4.1,0.5)")) {
         jarJar.ranged(it, "[0.4.1,0.5)")
     }
+    testImplementation "org.junit.jupiter:junit-jupiter:5.11.4"
+    testRuntimeOnly "org.junit.platform:junit-platform-launcher:1.11.4"
+}
+
+tasks.named("test", Test).configure {
+    useJUnitPlatform()
 }
 
 // A gametest run must never be able to read a previous run's log or world. The donor line hit
@@ -274,6 +299,26 @@ tasks.register("verifyGameTestCount") {
 
 tasks.matching { it.name == "runGameTestServer" }.configureEach {
     finalizedBy(tasks.named("verifyGameTestCount"))
+}
+
+// Guards LAW 1's single-writer invariant, which no test asserts: the closed world of call sites
+// permitted to mutate the placement record. Source-level, so it is cheap and runs on `check`
+// rather than only alongside a full suite run.
+tasks.register("verifyPlacementStoreWriters") {
+    doLast {
+        def proc = ["python3", "tools/verify-placement-store-writers.py"].execute(null, projectDir)
+        def out = new StringBuilder(), err = new StringBuilder()
+        proc.waitForProcessOutput(out, err)
+        if (proc.exitValue() != 0) {
+            throw new GradleException("placement store writer gate failed:\n" + out + err)
+        }
+        logger.lifecycle(out.toString().trim())
+    }
+}
+
+tasks.named("check").configure {
+    dependsOn(tasks.named("runGameTest"))
+    dependsOn(tasks.named("verifyPlacementStoreWriters"))
 }
 
 tasks.register("runGameTest") {

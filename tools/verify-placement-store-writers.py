@@ -55,13 +55,44 @@ APPROVED_OWNERS: dict[str, dict[str, tuple[int, str]]] = {
         "com/slabbed/mixin/BlockOnStateReplacedAnchorMixin.java":
             (1, "the removal hook, the sole outer-edge caller of the removal wrapper"),
     },
-    "SlabPlacementHeightAttachment.PLACEMENT_DY_TYPE": {
-        "com/slabbed/client/SlabPlacementHeightClientSync.java":
-            (1, "the client sync reads the synchronized map to publish a render snapshot"),
-    },
     "SlabPlacementHeightAttachment.installClientRenderHalfStepsLookup": {
         "com/slabbed/client/SlabPlacementHeightClientSync.java":
             (1, "installs the render-side lookup the chunk renderer consults"),
+    },
+    # The Forge capability seam that replaced the donor's data attachments. The donor's
+    # PLACEMENT_DY_TYPE handed out the backing map by reference and so permitted an ungated
+    # in-place put; these are that same escape hatch in its Forge shape. They are reached
+    # through a store OBJECT rather than statically, which is why patterns_for grows an
+    # instance-call arm for these owners - without it this gate stays green while blind.
+    "SlabbedChunkStore.putPlacementDy": {
+        "com/slabbed/anchor/SlabPlacementHeightAttachment.java":
+            (1, "the gated writer's only store call"),
+    },
+    "SlabbedChunkStore.removePlacementDy": {
+        "com/slabbed/anchor/SlabPlacementHeightAttachment.java":
+            (1, "the gated remover's only store call"),
+    },
+    "SlabbedChunkStore.putPlacementMap": {
+        "com/slabbed/dev/SlabbedTestAccess.java":
+            (1, "test-only whole-map setter; excluded from main and from every archive"),
+    },
+    "SlabbedChunkStore.removePlacementMap": {
+        "com/slabbed/dev/SlabbedTestAccess.java":
+            (1, "test-only whole-map clear; excluded from main and from every archive"),
+    },
+    # One symbol deliberately covers BOTH placementDyOrNull owners. The store and the client
+    # mirror share the method name, so a receiver call cannot be attributed to one of them by
+    # pattern alone. Counting them together is the conservative reading: every site that takes
+    # the live map by reference, from either owner, has to be listed and argued for.
+    "SlabbedChunkStore.placementDyOrNull": {
+        "com/slabbed/anchor/SlabPlacementHeightAttachment.java":
+            (3, "the capacity check, the authoritative server read, and the client mirror read"),
+        "com/slabbed/anchor/SlabbedClientMirror.java":
+            (1, "the mirror's own declaration"),
+        "com/slabbed/client/SlabPlacementHeightClientSync.java":
+            (1, "the render sync's snapshot source"),
+        "com/slabbed/dev/SlabbedTestAccess.java":
+            (1, "test-only read of the live map"),
     },
 }
 
@@ -83,14 +114,26 @@ def load_shared_lexer():
     return lexer
 
 
+# Owners whose instances are handed out by reference and therefore reached through a variable.
+INSTANCE_MATCHED_OWNERS = frozenset({"SlabbedChunkStore", "SlabbedConsentStore"})
+
+
 def patterns_for(symbol: str) -> list[re.Pattern[str]]:
     owner, member = symbol.split(".", 1)
     o, m = re.escape(owner), re.escape(member)
-    return [
+    pats = [
         re.compile(o + r"\s*\.\s*" + m + r"\b"),          # qualified use and field access
         re.compile(o + r"\s*::\s*" + m + r"\b"),          # method reference
         re.compile(r"(?<![\w.])" + m + r"\s*\("),         # bare call via static import
     ]
+    # Instance call through any receiver, for the capability-seam objects ONLY. The donor's
+    # storage was reached statically, so the three patterns above saw every site; the Forge seam
+    # hands out a store OBJECT and `store.putPlacementDy(...)` is invisible to all of them, which
+    # would leave this gate green while blind to the surface it exists to guard. Restricted to
+    # these owners on purpose: a bare `.remove(` would match every Map and List in the tree.
+    if owner in INSTANCE_MATCHED_OWNERS:
+        pats.append(re.compile(r"\.\s*" + m + r"\s*\("))
+    return pats
 
 
 def count_sites(code: str, symbol: str) -> int:
