@@ -41,6 +41,10 @@ public final class SlabbedAnchorNetwork {
      * Bump on any wire change. A mismatched pair must fail the handshake loudly: with a stale
      * version string the two sides connect and silently drop each other's height packets, which
      * recreates exactly the server/client split this channel exists to close.
+     *
+     * <p>Absence is not a mismatch (maintainer ruling, 2026-09-01): a peer without Slabbed —
+     * vanilla or modded — must remain joinable in both directions, matching the NeoForge line.
+     * Without the channel no height facts arrive and every block resolves geometrically.
      */
     private static final String PROTOCOL_VERSION = "2";
 
@@ -49,8 +53,20 @@ public final class SlabbedAnchorNetwork {
     private static final SimpleChannel CHANNEL = NetworkRegistry.newSimpleChannel(
             new ResourceLocation(Slabbed.MOD_ID, "anchor_sync"),
             () -> PROTOCOL_VERSION,
-            PROTOCOL_VERSION::equals,
-            PROTOCOL_VERSION::equals);
+            SlabbedAnchorNetwork::acceptsPeerVersion,
+            SlabbedAnchorNetwork::acceptsPeerVersion);
+
+    /**
+     * Exact version match, or a peer that lacks the channel entirely. {@code ABSENT} is the
+     * marker Forge passes when the other side has no {@code anchor_sync} at all;
+     * {@code ACCEPTVANILLA} when the other side is not modded. Two Slabbed installs at different
+     * wire versions still fail the handshake.
+     */
+    private static boolean acceptsPeerVersion(String version) {
+        return PROTOCOL_VERSION.equals(version)
+                || NetworkRegistry.ABSENT.version().equals(version)
+                || NetworkRegistry.ACCEPTVANILLA.equals(version);
+    }
 
     private static boolean registered;
 
