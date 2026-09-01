@@ -44,6 +44,7 @@ com/slabbed/anchor/SlabbedAnchorNetwork.class
 com/slabbed/anchor/SlabbedCapabilities$1.class
 com/slabbed/anchor/SlabbedCapabilities$ChunkStoreProvider.class
 com/slabbed/anchor/SlabbedCapabilities.class
+com/slabbed/anchor/SlabbedChunkStore$PlacementPair.class
 com/slabbed/anchor/SlabbedChunkStore.class
 com/slabbed/anchor/SlabbedClientMirror$Entry.class
 com/slabbed/anchor/SlabbedClientMirror$Key.class
@@ -196,6 +197,7 @@ com/slabbed/anchor/SlabbedAnchorNetwork.class
 com/slabbed/anchor/SlabbedCapabilities$1.class
 com/slabbed/anchor/SlabbedCapabilities$ChunkStoreProvider.class
 com/slabbed/anchor/SlabbedCapabilities.class
+com/slabbed/anchor/SlabbedChunkStore$PlacementPair.class
 com/slabbed/anchor/SlabbedChunkStore.class
 com/slabbed/anchor/SlabbedClientMirror$Entry.class
 com/slabbed/anchor/SlabbedClientMirror$Key.class

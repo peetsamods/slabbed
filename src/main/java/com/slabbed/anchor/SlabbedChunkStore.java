@@ -141,31 +141,33 @@ public final class SlabbedChunkStore {
         return true;
     }
 
-    /** Placement map as parallel arrays [positions, halfSteps] for the full sync. */
-    public long[] placementPositions() {
+    /**
+     * Placement map as parallel arrays, both derived from ONE read of the copy-on-write field.
+     *
+     * <p>Deliberately a pair rather than two accessors. Two independent reads can straddle a
+     * whole-map swap: unequal lengths trip the wire encoder's pair guard and drop the
+     * connection, and an equal-size swap silently pairs a position with another position's
+     * height. The single snapshot is the invariant, so it lives inside the accessor.
+     */
+    public PlacementPair placementPair() {
         Long2ByteOpenHashMap map = placementDy;
         if (map == null || map.isEmpty()) {
-            return new long[0];
+            return PlacementPair.EMPTY;
         }
         long[] positions = new long[map.size()];
-        int i = 0;
-        for (Long2ByteMap.Entry e : map.long2ByteEntrySet()) {
-            positions[i++] = e.getLongKey();
-        }
-        return positions;
-    }
-
-    public byte[] placementHalfSteps() {
-        Long2ByteOpenHashMap map = placementDy;
-        if (map == null || map.isEmpty()) {
-            return new byte[0];
-        }
         byte[] steps = new byte[map.size()];
         int i = 0;
         for (Long2ByteMap.Entry e : map.long2ByteEntrySet()) {
-            steps[i++] = e.getByteValue();
+            positions[i] = e.getLongKey();
+            steps[i] = e.getByteValue();
+            i++;
         }
-        return steps;
+        return new PlacementPair(positions, steps);
+    }
+
+    /** Parallel placement arrays taken from one snapshot. The two are always the same length. */
+    public record PlacementPair(long[] positions, byte[] halfSteps) {
+        public static final PlacementPair EMPTY = new PlacementPair(new long[0], new byte[0]);
     }
 
     // ------------------------------------------------------------ persistence
@@ -178,10 +180,10 @@ public final class SlabbedChunkStore {
                 tag.putLongArray(marker.nbtKey(), set.toLongArray());
             }
         }
-        Long2ByteOpenHashMap map = placementDy;
-        if (map != null && !map.isEmpty()) {
-            tag.putLongArray(PLACEMENT_DY_POS_KEY, placementPositions());
-            tag.putByteArray(PLACEMENT_DY_STEPS_KEY, placementHalfSteps());
+        PlacementPair placement = placementPair();
+        if (placement.positions().length > 0) {
+            tag.putLongArray(PLACEMENT_DY_POS_KEY, placement.positions());
+            tag.putByteArray(PLACEMENT_DY_STEPS_KEY, placement.halfSteps());
         }
         return tag;
     }

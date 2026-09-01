@@ -141,11 +141,12 @@ public final class SlabbedAnchorNetwork {
     }
 
     private static PlacementFullPacket fullPacket(LevelChunk chunk, @Nullable SlabbedChunkStore store) {
+        SlabbedChunkStore.PlacementPair placement =
+                store == null ? SlabbedChunkStore.PlacementPair.EMPTY : store.placementPair();
         return new PlacementFullPacket(
                 chunk.getLevel().dimension().location(),
                 chunk.getPos().x, chunk.getPos().z,
-                store == null ? new long[0] : store.placementPositions(),
-                store == null ? new byte[0] : store.placementHalfSteps());
+                placement.positions(), placement.halfSteps());
     }
 
     private static void onChunkWatch(ChunkWatchEvent.Watch event) {
