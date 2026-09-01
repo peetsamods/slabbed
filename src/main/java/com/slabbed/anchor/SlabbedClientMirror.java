@@ -2,6 +2,7 @@ package com.slabbed.anchor;
 
 import it.unimi.dsi.fastutil.longs.Long2ByteOpenHashMap;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
+import java.util.Collections;
 import java.util.EnumMap;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -70,13 +71,13 @@ public final class SlabbedClientMirror {
         if (positions.length == 0) {
             Entry entry = ENTRIES.get(key);
             if (entry != null) {
-                entry.buckets.remove(marker);
+                entry.buckets = withMarker(entry.buckets, marker, null);
                 dropIfEmpty(key, entry);
             }
             return;
         }
-        ENTRIES.computeIfAbsent(key, k -> new Entry())
-                .buckets.put(marker, new LongOpenHashSet(positions));
+        Entry entry = ENTRIES.computeIfAbsent(key, k -> new Entry());
+        entry.buckets = withMarker(entry.buckets, marker, new LongOpenHashSet(positions));
     }
 
     public static void applyPlacementFull(
@@ -158,6 +159,26 @@ public final class SlabbedClientMirror {
         return ENTRIES.get(new Key(level.dimension().location(), chunk.getPos().toLong()));
     }
 
+    /**
+     * The bucket map with one marker replaced, or removed when {@code set} is null. Returns a
+     * fresh map every time: the caller publishes it by assigning {@link Entry#buckets}, and the
+     * published map is never touched again. Bounded by the eight marker kinds.
+     */
+    private static Map<SlabAnchorMarker, LongOpenHashSet> withMarker(
+            Map<SlabAnchorMarker, LongOpenHashSet> current,
+            SlabAnchorMarker marker,
+            @Nullable LongOpenHashSet set
+    ) {
+        EnumMap<SlabAnchorMarker, LongOpenHashSet> next = new EnumMap<>(SlabAnchorMarker.class);
+        next.putAll(current);
+        if (set == null) {
+            next.remove(marker);
+        } else {
+            next.put(marker, set);
+        }
+        return next.isEmpty() ? Collections.emptyMap() : Collections.unmodifiableMap(next);
+    }
+
     private static void dropIfEmpty(Key key, Entry entry) {
         if (entry.buckets.isEmpty() && entry.placementDy == null) {
             ENTRIES.remove(key, entry);
@@ -165,8 +186,15 @@ public final class SlabbedClientMirror {
     }
 
     private static final class Entry {
-        private final Map<SlabAnchorMarker, LongOpenHashSet> buckets =
-                new EnumMap<>(SlabAnchorMarker.class);
+        /**
+         * Swapped wholesale, never mutated after publication. The packet handler writes this on
+         * the client main thread while the render fallback lookups read it from mesh-builder
+         * worker threads, and nothing else orders the two. Putting into the map in place
+         * publishes both the map slot and the freshly built set unsafely, so a worker can read a
+         * half-built bucket; this volatile write paired with the reader's volatile read is the
+         * whole of the ordering. Same discipline as {@link #placementDy}.
+         */
+        private volatile Map<SlabAnchorMarker, LongOpenHashSet> buckets = Collections.emptyMap();
         @Nullable
         private volatile Long2ByteOpenHashMap placementDy;
     }
