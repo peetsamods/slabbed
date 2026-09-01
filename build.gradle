@@ -174,8 +174,13 @@ minecraft {
     runs {
         client {
             workingDirectory project.file("run")
+            // Deterministic world entry for automated live proof: quick-play joins the local
+            // dev server directly, so no title/world-list menu navigation is involved.
+            if (project.findProperty("slabbedQuickJoin") != null) {
+                args "--quickPlayMultiplayer", project.property("slabbedQuickJoin")
+            }
             property "forge.logging.markers", "REGISTRIES"
-            property "forge.logging.console.level", "debug"
+            property "forge.logging.console.level", (project.findProperty("slabbedLogLevel") ?: "debug")
             mods {
                 "${mod_id}" {
                     source sourceSets.main
@@ -185,7 +190,7 @@ minecraft {
         server {
             workingDirectory project.file("run")
             property "forge.logging.markers", "REGISTRIES"
-            property "forge.logging.console.level", "debug"
+            property "forge.logging.console.level", (project.findProperty("slabbedLogLevel") ?: "debug")
             args "--nogui"
             mods {
                 "${mod_id}" {
@@ -196,7 +201,7 @@ minecraft {
         gameTestServer {
             workingDirectory layout.buildDirectory.dir("run/gameTest").get().asFile
             property "forge.logging.markers", "REGISTRIES"
-            property "forge.logging.console.level", "debug"
+            property "forge.logging.console.level", (project.findProperty("slabbedLogLevel") ?: "debug")
             property "forge.gameTestServer", "true"
             property "forge.enabledGameTestNamespaces", gameTestNamespace
             args "--nogui"
