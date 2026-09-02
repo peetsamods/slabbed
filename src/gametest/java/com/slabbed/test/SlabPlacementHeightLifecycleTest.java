@@ -113,6 +113,32 @@ public final class SlabPlacementHeightLifecycleTest {
         ctx.succeed();
     }
 
+    /**
+     * A trampled sub-full support (dirt path / farmland) converts to dirt under a managed
+     * placement, and the landing sits FLAT with no anchor (maintainer ruling, 2026-09-01).
+     * Pre-ruling the slab seated 1/16 down on the path's real face and the freeze hook then
+     * anchored that sliver to a HALF-BLOCK sink; the no-anchor assertion pins against that
+     * amplification returning.
+     */
+    @GameTest(template = TEMPLATE)
+    public void placementOnDirtPathConvertsSupportAndLandsFlat(GameTestHelper ctx) {
+        ServerLevel world = ctx.getLevel();
+        BlockPos support = ctx.absolutePos(new BlockPos(2, 2, 2));
+        world.setBlock(support.below(), Blocks.DIRT.defaultBlockState(), Block.UPDATE_ALL);
+        world.setBlock(support, Blocks.DIRT_PATH.defaultBlockState(), Block.UPDATE_ALL);
+        BlockPos landing = support.above();
+
+        placeHeldBlock(ctx, bottomSlab(), support, Direction.UP, 0.0F);
+        ctx.assertTrue(world.getBlockState(support).is(Blocks.DIRT),
+                "the trampled support must convert to dirt under the placement");
+        ctx.assertTrue(world.getBlockState(landing).getBlock() instanceof SlabBlock,
+                "the slab must land in the cell above the converted support");
+        assertImmediateHeight(ctx, world, landing, 0.0d);
+        ctx.assertTrue(!SlabAnchorAttachment.isAnchored(world, landing),
+                "a flat landing on a converted support must not be anchored");
+        ctx.succeed();
+    }
+
     @GameTest(template = TEMPLATE)
     public void transformedScaffoldingWritesActualCellOnly(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();

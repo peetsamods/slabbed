@@ -759,6 +759,9 @@ public abstract class BlockItemPlacementIntentMixin {
         Object[] frame = {capture, null, null, Boolean.FALSE, null, null};
         frames.push(frame);
         try {
+            if (capture) {
+                slabbed$convertTrampledSupportBeforePlacement(context);
+            }
             InteractionResult result = original.call(context);
             if (frame[3] == Boolean.TRUE) {
                 result = InteractionResult.FAIL;
@@ -777,6 +780,28 @@ public abstract class BlockItemPlacementIntentMixin {
             if (frames.isEmpty()) {
                 PLACEMENT_HEIGHT_PLACE_FRAMES.remove();
             }
+        }
+    }
+
+    /**
+     * A trampled sub-full support (dirt path / farmland, 15/16 tall) converts to dirt under ANY
+     * placement this transaction manages, before the block lands (maintainer ruling, 2026-09-01).
+     * Vanilla converts only under solid full blocks; everything else seated on the trampled
+     * block's REAL face per FLUSH WINS, and the freeze hook then read that 1/16 sink as
+     * "lowered" and anchored the piece a HALF BLOCK down. Converting first means every later
+     * height decision in the same transaction sees a full block: seat 0, stamp FLAT, no anchor.
+     * Runs on both logical sides so the client predicts the same landing the server stores.
+     */
+    private static void slabbed$convertTrampledSupportBeforePlacement(BlockPlaceContext context) {
+        if (!context.canPlace()) {
+            return;
+        }
+        Level world = context.getLevel();
+        BlockPos supportPos = context.getClickedPos().below();
+        BlockState support = world.getBlockState(supportPos);
+        if (support.getBlock() instanceof net.minecraft.world.level.block.DirtPathBlock
+                || support.getBlock() instanceof net.minecraft.world.level.block.FarmBlock) {
+            world.setBlockAndUpdate(supportPos, Blocks.DIRT.defaultBlockState());
         }
     }
 
