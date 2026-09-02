@@ -124,6 +124,7 @@ com/slabbed/mixin/client/BlockEntityOffsetMixin.class
 com/slabbed/mixin/client/BlockModelDyTranslateMixin.class
 com/slabbed/mixin/client/CarpetDyShapeMixin.class
 com/slabbed/mixin/client/GameRendererPickOffsetRaycastMixin.class
+com/slabbed/mixin/client/ItemFrameDrawnFaceRenderMixin.class
 com/slabbed/mixin/client/MinecartRenderOffsetMixin.class
 com/slabbed/mixin/torch/
 com/slabbed/mixin/torch/TorchBlockMixin.class
@@ -281,6 +282,7 @@ com/slabbed/mixin/client/BlockEntityOffsetMixin.class
 com/slabbed/mixin/client/BlockModelDyTranslateMixin.class
 com/slabbed/mixin/client/CarpetDyShapeMixin.class
 com/slabbed/mixin/client/GameRendererPickOffsetRaycastMixin.class
+com/slabbed/mixin/client/ItemFrameDrawnFaceRenderMixin.class
 com/slabbed/mixin/client/MinecartRenderOffsetMixin.class
 com/slabbed/mixin/torch/
 com/slabbed/mixin/torch/TorchBlockMixin.class
@@ -401,6 +403,7 @@ com/slabbed/mixin/client/BlockEntityOffsetMixin.java
 com/slabbed/mixin/client/BlockModelDyTranslateMixin.java
 com/slabbed/mixin/client/CarpetDyShapeMixin.java
 com/slabbed/mixin/client/GameRendererPickOffsetRaycastMixin.java
+com/slabbed/mixin/client/ItemFrameDrawnFaceRenderMixin.java
 com/slabbed/mixin/client/MinecartRenderOffsetMixin.java
 com/slabbed/mixin/torch/
 com/slabbed/mixin/torch/TorchBlockMixin.java
