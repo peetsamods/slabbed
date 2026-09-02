@@ -16,6 +16,7 @@
     "SlabSupportStateMixin",
     "TorchParticleAccessor",
     "CampfireCookingParticleMixin",
+    "ItemFrameWysiwygMixin",
     "CampfireParticleMixin",
     "TorchParticleMixin",
     "RedstoneTorchParticleMixin",

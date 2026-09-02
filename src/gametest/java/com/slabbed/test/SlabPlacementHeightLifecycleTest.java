@@ -114,6 +114,50 @@ public final class SlabPlacementHeightLifecycleTest {
     }
 
     /**
+     * Hung decorations obey WYSIWYG (maintainer ruling, 2026-09-01): an item frame hangs on
+     * its support's DRAWN face. Self-calibrating pair — one frame on a flush support, one on a
+     * support lowered a full block; whatever vanilla's exact frame positioning is, the two
+     * frames must differ by exactly the support lowering.
+     */
+    @GameTest(template = TEMPLATE)
+    public void itemFrameHangsOnDrawnFace(GameTestHelper ctx) {
+        ServerLevel world = ctx.getLevel();
+        BlockPos flushSupport = ctx.absolutePos(new BlockPos(2, 3, 2));
+        BlockPos loweredSupport = ctx.absolutePos(new BlockPos(5, 3, 2));
+        world.setBlock(flushSupport, Blocks.STONE.defaultBlockState(), Block.UPDATE_ALL);
+        world.setBlock(loweredSupport, Blocks.STONE.defaultBlockState(), Block.UPDATE_ALL);
+        injectRawHalfSteps(world, loweredSupport, -2);
+        assertImmediateHeight(ctx, world, loweredSupport, -1.0d);
+
+        double flushY = slabbed$placeFrameOnEastFace(ctx, world, flushSupport);
+        double loweredY = slabbed$placeFrameOnEastFace(ctx, world, loweredSupport);
+        ctx.assertTrue(Math.abs((flushY - loweredY) - 1.0d) < 1.0e-6d,
+                "a frame on a -1.0 support must hang exactly 1.0 below its flush twin; flush="
+                        + flushY + " lowered=" + loweredY);
+        ctx.succeed();
+    }
+
+    private static double slabbed$placeFrameOnEastFace(
+            GameTestHelper ctx, ServerLevel world, BlockPos support) {
+        Player player = ctx.makeMockPlayer();
+        player.setPos(support.getX() + 2.5d, support.getY() + 0.5d, support.getZ() + 0.5d);
+        ItemStack stack = new ItemStack(Items.ITEM_FRAME);
+        player.setItemInHand(InteractionHand.MAIN_HAND, stack);
+        Vec3 hit = new Vec3(support.getX() + 1.0d, support.getY() + 0.5d, support.getZ() + 0.5d);
+        InteractionResult result = stack.useOn(new UseOnContext(
+                player, InteractionHand.MAIN_HAND,
+                new BlockHitResult(hit, Direction.EAST, support, false)));
+        ctx.assertTrue(result.consumesAction(), "item frame placement must be accepted");
+        BlockPos framePos = support.east();
+        var frames = world.getEntitiesOfClass(
+                net.minecraft.world.entity.decoration.ItemFrame.class,
+                new AABB(framePos).inflate(1.5d));
+        ctx.assertTrue(frames.size() == 1,
+                "exactly one frame expected at " + framePos + ", found " + frames.size());
+        return frames.get(0).getY();
+    }
+
+    /**
      * A trampled sub-full support (dirt path / farmland) converts to dirt under a managed
      * placement, and the landing sits FLAT with no anchor (maintainer ruling, 2026-09-01).
      * Pre-ruling the slab seated 1/16 down on the path's real face and the freeze hook then

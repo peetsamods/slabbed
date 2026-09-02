@@ -37,6 +37,10 @@ published under this label yet - the version is bumped, the release is not cut.
   one numeric placement height, including the legal `−3.0` boundary.
 - Campfire crackle, smoke column, and cooking smoke emit from the campfire's
   drawn height, joining torches, levers, and candles.
+- Item frames and glow item frames hang on their support's drawn face
+  (maintainer ruling, 2026-09-01: hung decorations obey WYSIWYG). A frame
+  aimed at a lowered block's visible face previously hung a full block above
+  it. Paintings are not yet covered.
 - Preserve inventory, custom-renderer, dynamic, and foreign composite model
   identity instead of wrapping models Slabbed does not own.
 - Restore reciprocal fence, wall, and pane settlement immediately after a
