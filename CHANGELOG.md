@@ -105,6 +105,11 @@ published under this label yet - the version is bumped, the release is not cut.
 - Mob path planning, Breeze aim, long-jump clearance checks, and firework
   blasts still measure the unlowered box; they query block shape outside the
   compensated entry points.
+- Fire burning on a lowered support still draws at grid height, floating above
+  the visible surface. Present on every line.
+- A deep placement can still show a sub-frame residual of the old visual snap
+  when a mesh rebuild is already in flight at the moment of placement; the
+  race itself is closed and the residual is a single stale frame at most.
 - The visual snap on a deep placement is fixed at the source (maintainer
   ruling, 2026-09-01): the render refresh that used to depend on the server
   round trip now fires the moment the client records its own prediction, so
