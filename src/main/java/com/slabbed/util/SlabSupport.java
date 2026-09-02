@@ -3147,8 +3147,16 @@ public final class SlabSupport {
             return 0.0d;
         }
 
-        // cascading: ceiling-attached block below other ceiling-attached blocks
-        // leading up to a top slab (e.g. 2nd dripstone, 2nd vine segment)
+        // cascading: ceiling-attached block below other ceiling-attached blocks leading up to a
+        // cap. The main subject left here is a vertical Y-chain — HANGING blocks, hanging
+        // roots/spore blossoms/signs, and speleothems all dispatch to ceilingHungDecorationDy at
+        // the top of this method, and that walk's cursor loop owns its own lowered-cap tail read.
+        // This loop must carry the SAME tail: a chain under an ordinary lowered full block (not a
+        // slab, so the ceiling-bridge column system above never claims it) must follow that cap
+        // exactly, or the cap's lowered box descends into the chain's grid-height top segment
+        // while a lantern on the same chain correctly follows via ceilingHungDecorationDy
+        // (maintainer ruling, 2026-09-01: a chain under an ordinary lowered cap follows it
+        // exactly). The tail below mirrors ceilingHungDecorationDy's own terminal leg.
         if (isCeilingAttached(state)) {
             BlockPos cursor = pos.above();
             for (int i = 0; i < MAX_CHAIN_DEPTH; i++) {
@@ -3160,6 +3168,19 @@ public final class SlabSupport {
                 if (isCeilingAttached(cur)) {
                     cursor = cursor.above();
                     continue;
+                }
+                // TS-COMPAT GUARD (CROSS-PORT LAW / failure mode 4): a Terrain-Slabs-owned cap is a
+                // SELF-RENDERING surface — its recursion-visible dy must never feed this tail. This
+                // leg bypasses the shared predicate, so it needs the guard directly (same as the
+                // direct top-slab leg above). No-op without Terrain Slabs loaded.
+                if (!cur.isAir() && !CompatHooks.shouldSkipOffset(cur)) {
+                    // Recursion-safe: runs under the IN_GET_Y_OFFSET guard (mirrors ceilingHungDecorationDy).
+                    double capDy = getYOffsetInner(world, cursor, cur);
+                    if (capDy < -1.0e-6d) {
+                        // A lowered TOP-slab cap needs the +0.5 merge compensation, same as
+                        // ceilingHungDecorationDy's tail, or the follower sinks 0.5 below its cap.
+                        return isTopSlab(cur) ? capDy + 0.5d : capDy;
+                    }
                 }
                 break;
             }
