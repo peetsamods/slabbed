@@ -1,5 +1,12 @@
 ## [Unreleased]
 
+The NeoForge 1.21.1 hotfix line off the released `0.5.2-alpha.2` carries
+`0.5.2-alpha.5+1.21.1` (maintainer ruling, 2026-09-02). The label
+follows the shared alpha series across lines: `alpha.3` and `alpha.4` are
+spent on other lines, so this hotfix adopts the next free number. Nothing is
+tagged or published under this label yet — the version is bumped, the release
+is not cut.
+
 ### Height resolution
 
 - A chain hanging below an ordinary (non-slab) lowered block now follows that
