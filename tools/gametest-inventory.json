@@ -4,6 +4,7 @@
     {"path": "com/slabbed/client/runtime/SlabbedRetargetTestHooks.java", "classification": "client_only"},
     {"path": "com/slabbed/test/CeilingFlushRulingTest.java", "classification": "registered_server"},
     {"path": "com/slabbed/test/ChainColumnLoweredCapCoherenceTest.java", "classification": "registered_server"},
+    {"path": "com/slabbed/test/ChainUnderLoweredFullBlockCapTest.java", "classification": "registered_server"},
     {"path": "com/slabbed/test/ChainSurvivalReproTest.java", "classification": "registered_server"},
     {"path": "com/slabbed/test/CombinedSlabChainingMatrixTest.java", "classification": "registered_server"},
     {"path": "com/slabbed/test/DeepDyConsentTest.java", "classification": "registered_server"},

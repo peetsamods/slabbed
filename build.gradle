@@ -119,6 +119,7 @@ sourceSets {
             setIncludes([
                     "com/slabbed/test/CeilingFlushRulingTest.java",
                     "com/slabbed/test/ChainColumnLoweredCapCoherenceTest.java",
+                    "com/slabbed/test/ChainUnderLoweredFullBlockCapTest.java",
                     "com/slabbed/test/ChainSurvivalReproTest.java",
                     "com/slabbed/test/CombinedSlabChainingMatrixTest.java",
                     "com/slabbed/test/DeepDyConsentTest.java",

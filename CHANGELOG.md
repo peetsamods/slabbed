@@ -1,5 +1,14 @@
 ## [Unreleased]
 
+### Height resolution
+
+- A chain hanging below an ordinary (non-slab) lowered block now follows that
+  block's exact drop, matching what already hung correctly further down the
+  same chain (maintainer ruling, 2026-09-01). Previously the chain segment
+  itself stayed at grid height, so the lowered block above visibly descended
+  into it. A chain under a lowered TOP/DOUBLE slab is unaffected: that case
+  keeps its own dedicated flush treatment.
+
 ### Verification
 
 - Enlarge the shared GameTest template so the sight and vacated-band rows,
