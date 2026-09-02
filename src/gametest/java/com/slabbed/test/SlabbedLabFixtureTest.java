@@ -3649,6 +3649,21 @@ public final class SlabbedLabFixtureTest {
         ctx.succeed();
     }
 
+    /**
+     * Reversed under a live ruling (maintainer, 2026-09-01): a chain under an ORDINARY
+     * (non-slab) lowered cap now follows that cap exactly, same as the dripstone hanging
+     * below it. Before the ruling the chain alone stayed at grid height while everything it
+     * carried correctly dropped, so the cap's lowered box visually descended into the chain's
+     * un-lowered top segment — reported live as "the chain is smooshing into the cantilever
+     * overhead". Donor-inherited: the same assertion existed unchanged on the reference line
+     * this port was seeded from.
+     *
+     * <p>Untouched by the ruling: a TOP/DOUBLE-slab cap's chain still hangs at grid height
+     * while flush (see the sibling {@code TopSlabBridgedChain} rows below) — that is a
+     * separate, still-valid 2026-08-16/17 ruling backed by a dedicated client bridge model
+     * that visually closes the gap for the slab case specifically. An ordinary cap has no
+     * such model, so leaving its chain ungrounded left a real, uncompensated gap.
+     */
     @GameTest(template = "empty")
     public void p26DownwardPointedDripstoneUnderChainFollowsLoweredCeilingSupport(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
@@ -3666,8 +3681,8 @@ public final class SlabbedLabFixtureTest {
         world.setBlock(chain, yChain(), Block.UPDATE_ALL);
         world.setBlock(dripstone, pointedDripstoneDownBase(), Block.UPDATE_ALL);
 
-        assertBlockDy(ctx, world, chain, Blocks.CHAIN, 0.0,
-                "P26 control: chain under a lowered support keeps its own grid-height chain behavior");
+        assertBlockDy(ctx, world, chain, Blocks.CHAIN, -0.5,
+                "maintainer ruling, 2026-09-01: a chain under an ordinary lowered cap follows it exactly");
         assertBlockDy(ctx, world, dripstone, Blocks.POINTED_DRIPSTONE, -0.5,
                 "P26 downward pointed dripstone under a chain must inherit the lowered ceiling support dy");
         System.out.println("[NEOFORGE_P26_DRIPSTONE_CHAIN_ROW]"
