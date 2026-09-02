@@ -1,11 +1,11 @@
-## [Unreleased]
+## [0.5.2-beta.1] - Minecraft 1.20.1 (Forge)
 
-The Forge 1.20.1 line carries `0.5.2-beta.1+1.20.1-forge` (maintainer ruling,
-2026-08-31). The line was seeded from the NeoForge 1.21.1 `0.5.2-alpha.2` tip,
-so the behavior described below is the 0.5.2 behavior set carried to this
-loader; the beta label reflects that the shared alpha numbers 1-4 are spent and
-that this is a first public build on a new loader. Nothing is tagged or
-published under this label yet - the version is bumped, the release is not cut.
+**Slabbed's first Forge release!** The mod has lived on Fabric and NeoForge
+until now — this build brings the full 0.5.2 behavior set to Forge 1.20.1,
+seeded from the NeoForge 1.21.1 `0.5.2-alpha.2` release and verified by the
+same test suite, grown to 265 tests on this line. The beta label reflects that
+the shared alpha numbers 1-4 are spent and that this is a first public build
+on a new loader.
 
 ### Upgrade note
 
