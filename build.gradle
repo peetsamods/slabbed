@@ -341,6 +341,7 @@ sourceSets {
             // 26.1.2 port: the legacy SlabbedLab gametests are Yarn-named and do NOT compile
             // under Mojang mappings, so they stay deferred. Compile ONLY the focused,
             // Mojang-named regression tests that are kept current.
+            include("com/slabbed/test/ChainUnderLoweredFullBlockCapTest.java")
             include("com/slabbed/test/GhostLoweredCollisionProofTest.java")
             include("com/slabbed/test/Slabbed2612LoweringContractTest.java")
             include("com/slabbed/test/Slabbed2612DyFingerprintTest.java")

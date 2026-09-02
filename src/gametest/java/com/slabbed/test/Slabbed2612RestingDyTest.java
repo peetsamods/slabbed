@@ -443,6 +443,18 @@ public final class Slabbed2612RestingDyTest {
         helper.succeed();
     }
 
+    /**
+     * The chain assertion here was reversed under a live ruling (maintainer, 2026-09-01): a chain
+     * under an ORDINARY (non-slab) lowered cap follows that cap exactly, same as the dripstone
+     * hanging below it. Before the ruling the chain alone stayed at grid height while everything
+     * it carried correctly dropped, so the cap's lowered box visually descended into the chain's
+     * un-lowered top segment.
+     *
+     * <p>Untouched by the ruling: a TOP/DOUBLE-slab cap's chain still hangs at grid height while
+     * flush (the ceiling-bridge column rows) — that is a separate, still-valid ruling backed by a
+     * dedicated client bridge model that closes the gap for the slab case specifically. An
+     * ordinary cap has no such model, so leaving its chain ungrounded left a real gap.
+     */
     @GameTest(structure = "fabric-gametest-api-v1:empty")
     public void downwardPointedDripstoneUnderIronChainFollowsLoweredCeilingSupport(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
@@ -461,13 +473,17 @@ public final class Slabbed2612RestingDyTest {
         helper.setBlock(chain, yChain());
         helper.setBlock(dripstone, pointedDripstoneDownBase());
 
-        expect(helper, level, chain, 0.0,
-                "CONTROL: iron chain under a lowered support keeps its own grid-height chain behavior");
+        expect(helper, level, chain, -0.5,
+                "maintainer ruling, 2026-09-01: a chain under an ordinary lowered cap follows it exactly");
         expect(helper, level, dripstone, -0.5,
                 "P26 chained pointed dripstone under an iron chain must inherit the lowered ceiling support dy");
         helper.succeed();
     }
 
+    /**
+     * Chain assertion reversed under the same live ruling as the dripstone row above (maintainer,
+     * 2026-09-01): a chain under an ordinary lowered cap follows that cap exactly.
+     */
     @GameTest(structure = "fabric-gametest-api-v1:empty")
     public void downwardSulfurSpikeUnderIronChainFollowsLoweredCeilingSupport(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
@@ -486,8 +502,8 @@ public final class Slabbed2612RestingDyTest {
         helper.setBlock(chain, yChain());
         helper.setBlock(spike, sulfurSpikeDownBase());
 
-        expect(helper, level, chain, 0.0,
-                "CONTROL: iron chain under a lowered support keeps its own grid-height chain behavior");
+        expect(helper, level, chain, -0.5,
+                "maintainer ruling, 2026-09-01: a chain under an ordinary lowered cap follows it exactly");
         expect(helper, level, spike, -0.5,
                 "P26 chained sulfur spike under an iron chain must inherit the lowered ceiling support dy");
         helper.succeed();
