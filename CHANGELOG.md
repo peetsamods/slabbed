@@ -147,7 +147,7 @@ published under this label yet - the version is bumped, the release is not cut.
 
 ### Verification
 
-- Run the full 260-test server suite on Forge 1.20.1 with the independent
+- Run the full 265-test server suite on Forge 1.20.1 with the independent
   suite-count gate and the closed-world placement-writer gate, all green from a
   clean run directory.
 - Grow the shared test fixture so every deep test lane lies inside the region

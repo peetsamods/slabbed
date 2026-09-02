@@ -22,11 +22,10 @@ import net.minecraftforge.gametest.GameTestHolder;
 import net.minecraftforge.gametest.PrefixGameTestTemplate;
 
 /**
- * DY_SPEC {@code OPEN-MINUS1}: side-clicking a −1.0-lowered slab. The spec intent is EXTEND
- * (land at the clicked slab's −1.0); the MEASURED behaviour on this line is a grid landing at
- * 0.0, because the WYSIWYG follow gate arms only for a clicked dy of exactly −0.5 and a −1.0
- * face matches neither branch. The intent mixin is byte-identical to the donor, so the gap is
- * cross-line, not a port artefact.
+ * DY_SPEC {@code OPEN-MINUS1}, CLOSED (maintainer ruling, 2026-09-01: WYSIWYG at any depth):
+ * side-clicking a −1.0-lowered slab lands the new slab at the clicked face's −1.0 exactly.
+ * The class name records the row's origin — this began as the measurement that exposed the
+ * pre-ruling grid landing — and is kept for suite-history continuity.
  *
  * <p>Ruled (maintainer ruling, 2026-09-01): WYSIWYG applies at any depth — the landing takes
  * the clicked face's height exactly. This row asserts the ruling; the 0.0 grid landing it
