@@ -105,9 +105,13 @@ published under this label yet - the version is bumped, the release is not cut.
 - Mob path planning, Breeze aim, long-jump clearance checks, and firework
   blasts still measure the unlowered box; they query block shape outside the
   compensated entry points.
-- Placing against a deeply lowered surface can show a brief visual snap: the
-  client first draws the block at vanilla height, then drops it to the correct
-  flush landing when the server confirms. The final landing is correct.
+- The visual snap on a deep placement is fixed at the source (maintainer
+  ruling, 2026-09-01): the render refresh that used to depend on the server
+  round trip now fires the moment the client records its own prediction, so
+  the first drawn frame already reads the predicted height instead of racing
+  vanilla's own mesh rebuild. Live confirmation is still owed — a real
+  placement, not a command-authored one, is the only thing that exercises the
+  path this closes.
 
 ### Forge 1.20.1 port
 

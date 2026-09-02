@@ -49,6 +49,20 @@ public final class SlabPlacementHeightClientSync {
             return;
         }
         initialized = true;
+        // The mesh rebuild vanilla's own setBlock already scheduled can start before a
+        // just-recorded prediction lands (see ClientRenderDyPrediction.record); forcing a
+        // second dirty-mark right when the prediction is written guarantees a rebuild that
+        // reads it exists, closing the race instead of depending on the server round trip.
+        ClientRenderDyPrediction.installRenderInvalidationHook(packed -> {
+            Minecraft minecraft = Minecraft.getInstance();
+            if (minecraft.level == null || minecraft.levelRenderer == null) {
+                return;
+            }
+            BlockPos pos = BlockPos.of(packed);
+            minecraft.levelRenderer.setBlocksDirty(
+                    pos.getX() - 1, pos.getY() - 1, pos.getZ() - 1,
+                    pos.getX() + 1, pos.getY() + 1, pos.getZ() + 1);
+        });
         SlabPlacementHeightAttachment.installClientRenderHalfStepsLookup(packed -> {
             RenderSnapshotState published = RENDER_SNAPSHOTS;
             if (published.level() != Minecraft.getInstance().level) {

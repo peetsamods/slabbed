@@ -4,6 +4,9 @@ import com.slabbed.anchor.ClientRenderDyPrediction;
 import com.slabbed.anchor.SlabPlacementHeightAttachment;
 import com.slabbed.client.ClientDy;
 import com.slabbed.util.SlabSupport;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.function.LongConsumer;
 import java.util.function.LongToIntFunction;
 import javax.annotation.Nullable;
 import net.minecraft.core.BlockPos;
@@ -548,6 +551,47 @@ public final class SlabPlacementHeightResolverTest {
         } finally {
             ClientRenderDyPrediction.clear();
             SlabPlacementHeightAttachment.installClientRenderHalfStepsLookup(previousLookup);
+        }
+        ctx.succeed();
+    }
+
+    /**
+     * The visual-snap fix (live, 2026-09-01): recording a prediction must fire the installed
+     * render-invalidation hook exactly once, with the packed position that was recorded. The
+     * hook exists because vanilla's own mesh rebuild — already scheduled by the time the
+     * capture mixin records this prediction — can start and read {@code ABSENT} before the
+     * record lands; without a forced second dirty-mark synchronous with the record, the first
+     * drawn frame is wrong until the (in singleplayer, near-instant) server round trip
+     * corrects it. This row cannot see a rendered frame — no gametest can — it pins the
+     * mechanism a live check depends on: the hook fires, with the right position, exactly once
+     * per call, and null is a safe no-op default (a dedicated server never installs one).
+     */
+    @GameTest(template = TEMPLATE)
+    public void recordingAPredictionFiresTheRenderInvalidationHookExactlyOnce(GameTestHelper ctx) {
+        BlockPos subject = ctx.absolutePos(new BlockPos(3, 2, 3));
+        List<Long> firedFor = new ArrayList<>();
+        LongConsumer previousHook =
+                ClientRenderDyPrediction.installRenderInvalidationHook(firedFor::add);
+        try {
+            ClientRenderDyPrediction.clear();
+            ctx.assertTrue(firedFor.isEmpty(), "premise: no hook firing before any record");
+
+            ClientRenderDyPrediction.record(subject.asLong(), -2);
+            ctx.assertTrue(firedFor.size() == 1,
+                    "record must fire the hook exactly once, fired " + firedFor.size() + " times");
+            ctx.assertTrue(firedFor.get(0) == subject.asLong(),
+                    "the hook must receive the exact position that was recorded");
+
+            ClientRenderDyPrediction.record(subject.asLong(), -1);
+            ctx.assertTrue(firedFor.size() == 2,
+                    "a second record must fire the hook again, not be deduplicated");
+
+            // A null hook (the server-side default: nothing ever installs one) must not throw.
+            ClientRenderDyPrediction.installRenderInvalidationHook(null);
+            ClientRenderDyPrediction.record(subject.asLong(), -2);
+        } finally {
+            ClientRenderDyPrediction.clear();
+            ClientRenderDyPrediction.installRenderInvalidationHook(previousHook);
         }
         ctx.succeed();
     }
