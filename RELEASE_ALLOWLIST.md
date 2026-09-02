@@ -112,6 +112,8 @@ com/slabbed/mixin/SlabSupportBlockMixin.class
 com/slabbed/mixin/SlabSupportStateMixin.class
 com/slabbed/mixin/SnowLayerBlockMixin.class
 com/slabbed/mixin/TorchParticleAccessor.class
+com/slabbed/mixin/CampfireCookingParticleMixin.class
+com/slabbed/mixin/CampfireParticleMixin.class
 com/slabbed/mixin/TorchParticleMixin.class
 com/slabbed/mixin/WallSlabConnectionMixin$1.class
 com/slabbed/mixin/WallSlabConnectionMixin.class
@@ -267,6 +269,8 @@ com/slabbed/mixin/SlabSupportBlockMixin.class
 com/slabbed/mixin/SlabSupportStateMixin.class
 com/slabbed/mixin/SnowLayerBlockMixin.class
 com/slabbed/mixin/TorchParticleAccessor.class
+com/slabbed/mixin/CampfireCookingParticleMixin.class
+com/slabbed/mixin/CampfireParticleMixin.class
 com/slabbed/mixin/TorchParticleMixin.class
 com/slabbed/mixin/WallSlabConnectionMixin$1.class
 com/slabbed/mixin/WallSlabConnectionMixin.class
@@ -386,6 +390,8 @@ com/slabbed/mixin/SlabSupportBlockMixin.java
 com/slabbed/mixin/SlabSupportStateMixin.java
 com/slabbed/mixin/SnowLayerBlockMixin.java
 com/slabbed/mixin/TorchParticleAccessor.java
+com/slabbed/mixin/CampfireCookingParticleMixin.java
+com/slabbed/mixin/CampfireParticleMixin.java
 com/slabbed/mixin/TorchParticleMixin.java
 com/slabbed/mixin/WallSlabConnectionMixin.java
 com/slabbed/mixin/WallTorchParticleMixin.java

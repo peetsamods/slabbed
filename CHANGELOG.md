@@ -17,6 +17,11 @@ published under this label yet - the version is bumped, the release is not cut.
 
 ### Placement and persistence
 
+- Placing onto a dirt path or farmland converts it to dirt first (maintainer
+  ruling, 2026-09-01), so the placed block sits at normal height instead of
+  settling onto the trampled block's slightly-lower face. Vanilla does this
+  only for solid full blocks; Slabbed extends it to every placement it
+  manages.
 - Store the exact signed half-step chosen by a real placement, persist it with
   its chunk, synchronize it to clients, and keep it permanent through neighbor
   updates and support removal.
@@ -30,6 +35,8 @@ published under this label yet - the version is bumped, the release is not cut.
 
 - Resolve model, outline, raycast, collision, culling, and client refresh from
   one numeric placement height, including the legal `−3.0` boundary.
+- Campfire crackle, smoke column, and cooking smoke emit from the campfire's
+  drawn height, joining torches, levers, and candles.
 - Preserve inventory, custom-renderer, dynamic, and foreign composite model
   identity instead of wrapping models Slabbed does not own.
 - Restore reciprocal fence, wall, and pane settlement immediately after a
@@ -121,7 +128,7 @@ published under this label yet - the version is bumped, the release is not cut.
 
 ### Verification
 
-- Run the full 258-test server suite on Forge 1.20.1 with the independent
+- Run the full 260-test server suite on Forge 1.20.1 with the independent
   suite-count gate and the closed-world placement-writer gate, all green from a
   clean run directory.
 - Grow the shared test fixture so every deep test lane lies inside the region
