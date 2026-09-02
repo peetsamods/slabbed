@@ -1,3 +1,16 @@
+## [0.5.2-alpha.6+26.2] — MC 26.2 alpha hotfix
+
+See LAW.md — this changelog does not redefine the law.
+
+### Fixes
+
+- **Chains follow a lowered beam.** A chain hanging under an ordinary lowered block (a cantilevered
+  beam, for instance — not a slab) stayed at grid height while the lantern on the same chain
+  correctly followed the beam down, so the beam's lowered body visually sank into the chain's top
+  segment. The chain now follows its cap exactly, and everything hanging from the chain agrees with
+  it (maintainer ruling, 2026-09-01). Chains under top/double slabs are untouched — they keep their
+  dedicated flush bridge rendering.
+
 ## [0.5.2-alpha.1+26.2] — MC 26.2 alpha
 
 See LAW.md — this changelog does not redefine the law.

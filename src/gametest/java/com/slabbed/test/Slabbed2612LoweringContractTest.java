@@ -929,14 +929,18 @@ public final class Slabbed2612LoweringContractTest {
     }
 
     /**
-     * Chain-vs-lantern distinction probe: a Y-axis CHAIN under a LOWERED support must NOT follow it
-     * down the way a hanging lantern does — chains are "chainables" that keep their own connect
-     * behavior (1.21.11 explicitly excludes ChainBlock from the hanger-follow). This documents the
-     * CURRENT 26.1.2 chain dy so we can reason about the gap, and proves the lantern fix did not
-     * sweep chains into the follow-down (which would smoosh/move them).
+     * Reversed under a live ruling (maintainer, 2026-09-01): a chain under an ORDINARY (non-slab)
+     * lowered cap follows that cap exactly, the same as the lantern hanging from it. The old
+     * chain-vs-lantern asymmetry this row used to document (chain 0.0 while the lantern followed
+     * to -0.5) was the reported bug: the cap's lowered box visually descended into the chain's
+     * un-lowered top segment.
+     *
+     * <p>Untouched by the ruling: a TOP/DOUBLE-slab cap's chain still hangs flush at grid height —
+     * that is the separate ceiling-bridge system with its own client model (see
+     * {@link #chainUnderTopSlabHangsFlush}).
      */
     @GameTest(structure = "fabric-gametest-api-v1:empty")
-    public void chainUnderLoweredSupportDoesNotFollowDownLikeLantern(GameTestHelper helper) {
+    public void chainUnderLoweredSupportFollowsDownLikeLantern(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
         BlockPos support = new BlockPos(2, 3, 2);
         FrozenDySceneFixture.authored(helper, () -> {
@@ -950,9 +954,9 @@ public final class Slabbed2612LoweringContractTest {
 
         helper.setBlock(support.below(), yChain());
         FrozenDySceneFixture.authorScene(helper);
-        assertDy(helper, level, support.below(), 0.0,
-                "Y-axis chain under a lowered support does NOT follow it down (chains keep connect-up; "
-                + "unlike a hanging lantern which follows to -0.5)");
+        assertDy(helper, level, support.below(), -0.5,
+                "maintainer ruling, 2026-09-01: a Y-axis chain under an ordinary lowered cap follows it "
+                + "exactly, same as a hanging lantern");
         helper.succeed();
     }
 
