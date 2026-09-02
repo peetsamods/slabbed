@@ -9,7 +9,6 @@
     "BlockModelDyTranslateMixin",
     "CarpetDyShapeMixin",
     "GameRendererPickOffsetRaycastMixin",
-    "ItemFrameRenderOffsetMixin",
     "MinecartRenderOffsetMixin"
   ],
   "injectors": { "defaultRequire": 1 }
