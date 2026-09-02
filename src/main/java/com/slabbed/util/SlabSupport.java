@@ -4154,9 +4154,16 @@ public final class SlabSupport {
         }
 
         // cascading: ceiling-attached block below other ceiling-attached blocks leading up to
-        // a top slab (e.g. 2nd dripstone, 2nd vine segment). Deliberate asymmetry: this walk
-        // carries no lowered-compensation tail — non-chain cascades resolve through
-        // ceilingHungDecorationDy, whose cursor loop owns the merge compensation.
+        // a cap. In practice only a vertical chain ever reaches this loop — every other
+        // ceiling-follower is intercepted at the top of this method by ceilingHungDecorationDy,
+        // whose own cursor loop already owns a lowered-cap tail read. This loop used to have
+        // none, so a chain hanging under an ordinary lowered block (a cantilevered full block,
+        // for instance — not a slab, so the dedicated bridge/column system above never claims
+        // it) fell all the way through to grid height while a lantern on the SAME chain, one
+        // cell further down, correctly read that cap's drop through ceilingHungDecorationDy.
+        // The cap's lowered box then visually descended into the chain's still-grid-height top
+        // segment (live, 2026-09-01). The tail read below mirrors ceilingHungDecorationDy's own
+        // leg exactly, so a chain and anything hanging from it always agree with their cap.
         if (isDynamicCeilingFollower(world, pos, state)) {
             BlockPos cursor = pos.above();
             for (int i = 0; i < MAX_CHAIN_DEPTH; i++) {
@@ -4168,6 +4175,12 @@ public final class SlabSupport {
                 if (isDynamicCeilingFollower(world, cursor, cur)) {
                     cursor = cursor.above();
                     continue;
+                }
+                if (!cur.isAir() && !isUnauthoredCompatCell(world, cursor, cur)) {
+                    double capDy = storedOwnerOrLegacyInnerYOffset(world, cursor, cur);
+                    if (capDy < -1.0e-6d) {
+                        return presentsTopSlabUnderside(cur) ? capDy + 0.5d : capDy;
+                    }
                 }
                 break;
             }
