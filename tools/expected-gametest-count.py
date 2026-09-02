@@ -9,7 +9,7 @@ ROOT = Path(__file__).resolve().parents[1]
 BUILD_FILE = ROOT / "build.gradle"
 SOURCE_ROOT = ROOT / "src" / "gametest" / "java"
 INVENTORY_FILE = ROOT / "tools" / "gametest-inventory.json"
-EXPECTED_EXECUTABLE_COUNT = 264
+EXPECTED_EXECUTABLE_COUNT = 265
 REQUIRED_LAW_TEST_PATH = "com/slabbed/test/NeighborUpdateInvarianceTest.java"
 EXPECTED_REGISTERED_SERVER_PATHS = frozenset(
     {

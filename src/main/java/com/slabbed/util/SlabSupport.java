@@ -1360,8 +1360,21 @@ public final class SlabSupport {
                 // landing height, at −0.5, −1.0, or anywhere down to the envelope. The former
                 // exact −0.5 gate left deeper faces to the below-derivation, which reads scenery
                 // the aim never named and landed a −1.0 side placement at grid height.
-                if (ownerDy < -1.0e-6d) {
-                    return Math.max(ownerDy, minResolvedDy());
+                //
+                // Bounded to the follow family and to storable depths, in step with the arming
+                // gate in the placement-intent mixin: a subject outside the family (an ordinary
+                // full block) never arms the follow, so its freeze stamps FLAT from below-
+                // geometry — inheriting a deep value here would store a fact that disagrees
+                // with that stamp in the same transaction. An unstorable depth (a face at a
+                // non-half-step height) has no fact for the capture to keep, so inheriting it
+                // here would print a number the persistence layer must drop.
+                if (ownerDy < -1.0e-6d
+                        && (state.getBlock() instanceof SlabBlock
+                                || isBeta35FenceWallVariantContactObject(state))) {
+                    double inherited = Math.max(ownerDy, minResolvedDy());
+                    if (SlabPlacementHeightAttachment.exactHalfSteps(inherited).isPresent()) {
+                        return inherited;
+                    }
                 }
             }
         }

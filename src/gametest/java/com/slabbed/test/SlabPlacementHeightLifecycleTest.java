@@ -114,10 +114,14 @@ public final class SlabPlacementHeightLifecycleTest {
     }
 
     /**
-     * Hung decorations obey WYSIWYG (maintainer ruling, 2026-09-01): an item frame hangs on
-     * its support's DRAWN face. Self-calibrating pair — one frame on a flush support, one on a
-     * support lowered a full block; whatever vanilla's exact frame positioning is, the two
-     * frames must differ by exactly the support lowering.
+     * Hung decorations obey WYSIWYG (maintainer ruling, 2026-09-01): an item frame's BOUNDING
+     * BOX — its interaction and projectile surface — hangs on its support's DRAWN face. The
+     * entity's real position deliberately stays at grid height (moving it corrupts the derived
+     * grid cell through BlockPos.containing in setPos and position packets; the drawn frame is
+     * shifted by the render layer, which no headless row can see). Self-calibrating pair — one
+     * frame on a flush support, one on a support lowered a full block; whatever vanilla's
+     * exact box math is, the two boxes must differ by exactly the support lowering while the
+     * two entity positions must NOT differ at all.
      */
     @GameTest(template = TEMPLATE)
     public void itemFrameHangsOnDrawnFace(GameTestHelper ctx) {
@@ -129,15 +133,20 @@ public final class SlabPlacementHeightLifecycleTest {
         injectRawHalfSteps(world, loweredSupport, -2);
         assertImmediateHeight(ctx, world, loweredSupport, -1.0d);
 
-        double flushY = slabbed$placeFrameOnEastFace(ctx, world, flushSupport);
-        double loweredY = slabbed$placeFrameOnEastFace(ctx, world, loweredSupport);
-        ctx.assertTrue(Math.abs((flushY - loweredY) - 1.0d) < 1.0e-6d,
-                "a frame on a -1.0 support must hang exactly 1.0 below its flush twin; flush="
-                        + flushY + " lowered=" + loweredY);
+        var flushFrame = slabbed$placeFrameOnEastFace(ctx, world, flushSupport);
+        var loweredFrame = slabbed$placeFrameOnEastFace(ctx, world, loweredSupport);
+        double boxDelta = flushFrame.getBoundingBox().minY - loweredFrame.getBoundingBox().minY;
+        ctx.assertTrue(Math.abs(boxDelta - 1.0d) < 1.0e-6d,
+                "a frame's box on a -1.0 support must hang exactly 1.0 below its flush twin; delta="
+                        + boxDelta);
+        ctx.assertTrue(Math.abs(flushFrame.getY() - loweredFrame.getY()) < 1.0e-6d,
+                "the entity POSITIONS must stay at grid height on both - a moved position"
+                        + " corrupts the frame's derived grid cell; flushY=" + flushFrame.getY()
+                        + " loweredY=" + loweredFrame.getY());
         ctx.succeed();
     }
 
-    private static double slabbed$placeFrameOnEastFace(
+    private static net.minecraft.world.entity.decoration.ItemFrame slabbed$placeFrameOnEastFace(
             GameTestHelper ctx, ServerLevel world, BlockPos support) {
         Player player = ctx.makeMockPlayer();
         player.setPos(support.getX() + 2.5d, support.getY() + 0.5d, support.getZ() + 0.5d);
@@ -154,7 +163,7 @@ public final class SlabPlacementHeightLifecycleTest {
                 new AABB(framePos).inflate(1.5d));
         ctx.assertTrue(frames.size() == 1,
                 "exactly one frame expected at " + framePos + ", found " + frames.size());
-        return frames.get(0).getY();
+        return frames.get(0);
     }
 
     /**
@@ -181,6 +190,45 @@ public final class SlabPlacementHeightLifecycleTest {
         ctx.assertTrue(!SlabAnchorAttachment.isAnchored(world, landing),
                 "a flat landing on a converted support must not be anchored");
         ctx.succeed();
+    }
+
+    /**
+     * The trampled-support conversion must never fire for a placement that NEEDS the trampled
+     * block: planting seeds on farmland proceeds vanilla, farmland intact, crop planted. The
+     * unguarded version converted the farmland first, the crop then refused to sit on dirt,
+     * and every planting click destroyed one farmland block.
+     */
+    @GameTest(template = TEMPLATE)
+    public void plantingSeedsKeepsFarmland(GameTestHelper ctx) {
+        ServerLevel world = ctx.getLevel();
+        BlockPos farmland = ctx.absolutePos(new BlockPos(2, 2, 2));
+        world.setBlock(farmland.below(), Blocks.DIRT.defaultBlockState(), Block.UPDATE_ALL);
+        world.setBlock(farmland, Blocks.FARMLAND.defaultBlockState(), Block.UPDATE_ALL);
+        BlockPos cropPos = farmland.above();
+        // Crops refuse to plant below light 8, the gametest scene carries no daylight
+        // guarantee, and light propagates asynchronously — so the light source is part of the
+        // fixture AND the planting waits for the engine to catch up.
+        world.setBlock(cropPos.west(), Blocks.GLOWSTONE.defaultBlockState(), Block.UPDATE_ALL);
+
+        ctx.runAfterDelay(10, () -> {
+            Player player = ctx.makeMockPlayer();
+            player.setPos(farmland.getX() + 0.5d, farmland.getY() + 2.0d, farmland.getZ() + 0.5d);
+            ItemStack seeds = new ItemStack(Items.WHEAT_SEEDS);
+            player.setItemInHand(InteractionHand.MAIN_HAND, seeds);
+            // Farmland's real top face sits at 15/16; a raycast never reports a grid-height hit.
+            Vec3 hit = new Vec3(
+                    farmland.getX() + 0.5d, farmland.getY() + 0.9375d, farmland.getZ() + 0.5d);
+            InteractionResult result = seeds.useOn(new UseOnContext(
+                    player, InteractionHand.MAIN_HAND,
+                    new BlockHitResult(hit, Direction.UP, farmland, false)));
+
+            ctx.assertTrue(result.consumesAction(), "planting on farmland must be accepted");
+            ctx.assertTrue(world.getBlockState(farmland).is(Blocks.FARMLAND),
+                    "the farmland must survive the planting, got " + world.getBlockState(farmland));
+            ctx.assertTrue(world.getBlockState(cropPos).is(Blocks.WHEAT),
+                    "the crop must actually be planted, got " + world.getBlockState(cropPos));
+            ctx.succeed();
+        });
     }
 
     @GameTest(template = TEMPLATE)

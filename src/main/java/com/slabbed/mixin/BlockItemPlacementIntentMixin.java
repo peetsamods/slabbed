@@ -32,6 +32,7 @@ import net.minecraft.world.level.block.PointedDripstoneBlock;
 import net.minecraft.world.level.block.PowderSnowBlock;
 import net.minecraft.world.level.block.SlabBlock;
 import net.minecraft.world.level.block.TrapDoorBlock;
+import javax.annotation.Nullable;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 import net.minecraft.world.level.block.state.properties.SlabType;
@@ -52,6 +53,9 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 @Mixin(BlockItem.class)
 public abstract class BlockItemPlacementIntentMixin {
+
+    @org.spongepowered.asm.mixin.Shadow
+    protected abstract BlockState getPlacementState(BlockPlaceContext context);
 
     private static final double LOWERED_VISUAL_BOUNDARY_EPSILON = 1.0e-6d;
     private static final String REPEAT_SEAM_TRACE_OPT_IN = "slabbed.beta4RepeatMergeTrace";
@@ -676,15 +680,30 @@ public abstract class BlockItemPlacementIntentMixin {
         BlockState clickedState = level.getBlockState(clicked);
         Direction face = context.getClickedFace();
         double clickedDy = SlabSupport.getYOffset(level, clicked, clickedState);
-        // Any lowered face arms the follow, not only −0.5 (maintainer ruling, 2026-09-01:
-        // WYSIWYG at any depth). Arming matters beyond the height itself: the consume in
-        // freezeLoweredOnPlace is what keeps the structural FROZEN_FLAT stamp off a landing
-        // whose exact deep fact the capture is about to record — unarmed, the two writers of
-        // one transaction disagree and every follower of the stamped face floats.
-        if (clickedDy < -1.0e-6d) {
-            if (heldIsSlab && face.getAxis().isHorizontal()) {
+        // Any STORABLE lowered face arms the follow, not only −0.5 (maintainer ruling,
+        // 2026-09-01: WYSIWYG at any depth). Arming matters beyond the height itself: the
+        // consume in freezeLoweredOnPlace is what keeps the structural FROZEN_FLAT stamp off a
+        // landing whose exact deep fact the capture is about to record — unarmed, the two
+        // writers of one transaction disagree and every follower of the stamped face floats.
+        //
+        // Storability is part of the arming predicate, not a downstream check: a face at a
+        // non-half-step height (a slab seated on an enchanting table's 12/16 top, for example)
+        // has no exact fact the capture could store, so an armed consume would leave the
+        // landing with no anchor, no FLAT stamp, and no fact — unfrozen against LAW 1. Those
+        // faces stay unarmed and land exactly as they did before the ruling. Connectors arm
+        // alongside slabs because the consume site accepts them: unarmed, their deep landings
+        // took a FLAT stamp from the freeze while the capture stored a deep fact — the exact
+        // two-writer disagreement above. The UP-face branch stays at exactly −0.5: a stacked
+        // slab's height comes from the seat derivation reading the real top face below it, and
+        // the wider arming gave the consume a depth the capture never stores for stacks.
+        boolean storableDepth = clickedDy < -1.0e-6d
+                && SlabPlacementHeightAttachment.exactHalfSteps(clickedDy).isPresent();
+        if (storableDepth) {
+            if ((heldIsSlab || heldIsConnector) && face.getAxis().isHorizontal()) {
                 SlabAnchorAttachment.markWysiwygFollowClickedLoweredFace(clicked.relative(face), clickedDy);
-            } else if (heldIsSlab && face == Direction.UP && clickedState.getBlock() instanceof SlabBlock) {
+            } else if (heldIsSlab && face == Direction.UP
+                    && clickedState.getBlock() instanceof SlabBlock
+                    && Math.abs(clickedDy + 0.5d) < 1.0e-6d) {
                 SlabAnchorAttachment.markWysiwygFollowClickedLoweredFace(clicked.above(), clickedDy);
             }
         } else if (Math.abs(clickedDy) < 1.0e-6d
@@ -759,12 +778,19 @@ public abstract class BlockItemPlacementIntentMixin {
         Object[] frame = {capture, null, null, Boolean.FALSE, null, null};
         frames.push(frame);
         try {
-            if (capture) {
-                slabbed$convertTrampledSupportBeforePlacement(context);
-            }
+            BlockState convertedTrampledSupport = capture
+                    ? slabbed$convertTrampledSupportBeforePlacement(context)
+                    : null;
             InteractionResult result = original.call(context);
             if (frame[3] == Boolean.TRUE) {
                 result = InteractionResult.FAIL;
+            }
+            if (convertedTrampledSupport != null && !result.consumesAction()) {
+                // The placement failed after the conversion (an obstruction discovered inside
+                // place, or any later refusal). The conversion must not outlive the placement
+                // it was made for: restore the exact prior state, moisture and all.
+                context.getLevel().setBlockAndUpdate(
+                        context.getClickedPos().below(), convertedTrampledSupport);
             }
             if (capture) {
                 slabbed$capturePlacementHeight(
@@ -784,25 +810,47 @@ public abstract class BlockItemPlacementIntentMixin {
     }
 
     /**
-     * A trampled sub-full support (dirt path / farmland, 15/16 tall) converts to dirt under ANY
-     * placement this transaction manages, before the block lands (maintainer ruling, 2026-09-01).
-     * Vanilla converts only under solid full blocks; everything else seated on the trampled
-     * block's REAL face per FLUSH WINS, and the freeze hook then read that 1/16 sink as
-     * "lowered" and anchored the piece a HALF BLOCK down. Converting first means every later
+     * A trampled sub-full support (dirt path / farmland, 15/16 tall) converts to dirt under a
+     * placement this transaction manages, before the block lands (maintainer ruling,
+     * 2026-09-01). Vanilla converts only under solid full blocks; everything else seated on the
+     * trampled block's REAL face per FLUSH WINS, and the freeze hook then read that 1/16 sink
+     * as "lowered" and anchored the piece a HALF BLOCK down. Converting first means every later
      * height decision in the same transaction sees a full block: seat 0, stamp FLAT, no anchor.
      * Runs on both logical sides so the client predicts the same landing the server stores.
+     *
+     * <p>The conversion is VIABILITY-GATED and REVERSIBLE, because it runs before the placement
+     * it serves and {@code canPlace()} tests only replaceability, not survival: without the
+     * gates, right-clicking farmland with seeds converted the farmland, the crop then refused
+     * to sit on dirt, and every planting click destroyed one farmland block. Three rules:
+     * a placement that is not viable at all converts nothing; a placement that NEEDS the
+     * trampled block to survive (crops on farmland) converts nothing and proceeds vanilla; and
+     * a conversion whose placement still fails afterwards is rolled back to the exact prior
+     * state by the caller.
+     *
+     * @return the support state that was converted away, for the caller's rollback, or null
+     *         when nothing was converted
      */
-    private static void slabbed$convertTrampledSupportBeforePlacement(BlockPlaceContext context) {
+    @Nullable
+    private BlockState slabbed$convertTrampledSupportBeforePlacement(BlockPlaceContext context) {
         if (!context.canPlace()) {
-            return;
+            return null;
         }
         Level world = context.getLevel();
         BlockPos supportPos = context.getClickedPos().below();
         BlockState support = world.getBlockState(supportPos);
-        if (support.getBlock() instanceof net.minecraft.world.level.block.DirtPathBlock
-                || support.getBlock() instanceof net.minecraft.world.level.block.FarmBlock) {
-            world.setBlockAndUpdate(supportPos, Blocks.DIRT.defaultBlockState());
+        if (!(support.getBlock() instanceof net.minecraft.world.level.block.DirtPathBlock
+                || support.getBlock() instanceof net.minecraft.world.level.block.FarmBlock)) {
+            return null;
         }
+        if (getPlacementState(context) == null) {
+            return null;
+        }
+        world.setBlockAndUpdate(supportPos, Blocks.DIRT.defaultBlockState());
+        if (getPlacementState(context) == null) {
+            world.setBlockAndUpdate(supportPos, support);
+            return null;
+        }
+        return support;
     }
 
     @ModifyArg(
