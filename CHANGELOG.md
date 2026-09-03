@@ -10,13 +10,15 @@ See LAW.md — this changelog does not redefine the law.
   present (Lithium's optimised explosion path stays in charge there). Arrows and snowballs still
   hit a lowered block where it is drawn, and mobs still cannot see through it, with Lithium
   installed. ([#74](https://github.com/peetsamods/slabbed/issues/74))
-
-### Known issues
-
-- **Lithium and lowered-block collision.** With Lithium installed, the part of a lowered block
-  that hangs below its grid cell may not be solid to movement: Lithium replaces the collision
-  search that Slabbed extends, and Slabbed's automated collision checks fail with Lithium
-  present. This hotfix fixes only the startup crash; that interaction is a separate follow-up.
+- **Lowered blocks stay solid with Lithium installed.** Lithium swaps in its own, faster search
+  for the blocks an entity can bump into, and that search never saw the part of a lowered block
+  that hangs below its grid cell, so with Lithium you could walk through the lower half of what
+  you can see. Slabbed now adds that hanging part to Lithium's search as well (only after checking
+  that Lithium's search is present and still looks the way this build was tested against; a future
+  Lithium that changes it gets a warning in the log instead of a crash).
+  One narrow edge stays open: a lowered block hanging into a 16×16×16 chunk section that is
+  otherwise completely empty is still missed by Lithium's search, which skips empty sections
+  outright.
 
 ## [0.5.2-alpha.6+26.2] — MC 26.2 alpha hotfix
 

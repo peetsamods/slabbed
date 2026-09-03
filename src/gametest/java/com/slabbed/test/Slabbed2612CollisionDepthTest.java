@@ -151,8 +151,8 @@ public final class Slabbed2612CollisionDepthTest {
      * design and the same grid reads fully clear, exactly as vanilla answers; the row asserts that
      * documented contract instead of skipping, so the plugin's condition is pinned here too.
      *
-     * <p>MUTATION that must redden this row alone: make
-     * {@code SlabbedMixinConfigPlugin.withheldWhileLithiumPresent} ignore its Lithium argument.
+     * <p>MUTATION that must redden this row alone: make {@code SlabbedMixinConfigPlugin.withheld}
+     * report the explosion mixin withheld regardless of its Lithium argument.
      */
     @GameTest(structure = "fabric-gametest-api-v1:empty")
     public void aRealExplosionIsShelteredByTheDrawnLowerHalf(GameTestHelper helper) {
@@ -194,6 +194,88 @@ public final class Slabbed2612CollisionDepthTest {
                     + "helper) is what this row measures");
         }
         helper.succeed();
+    }
+
+    /**
+     * THE BYTE CHECK HAS EYES: {@code SlabbedMixinConfigPlugin.sweeperAsksCollisionContext} is the
+     * whole admission decision for the two Lithium sweeper mixins — applied when it finds the
+     * redirected call in Lithium's sweepers, withheld otherwise (with a warning when Lithium's mod
+     * id is loaded). Its positive branch only ever runs in a Lithium venue, so this row proves
+     * the probe itself headlessly: vanilla's own {@code BlockCollisions} iterator carries the same
+     * {@code computeNext} → {@code CollisionContext.getCollisionShape} call the sweeper mixins
+     * redirect (it is the call {@code BlockCollisionsLoweredAboveMixin} redirects), so it must read
+     * as supported; a class without the call and an absent class must both read as unsupported —
+     * "unknown" is withheld, never applied.
+     *
+     * <p>MUTATION that must redden this row alone: make the probe return true when the resource is
+     * missing, or compare the call's owner to the wrong class.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void lithiumSweeperByteCheckRecognisesTheRedirectedCall(GameTestHelper helper) {
+        boolean vanillaIterator = com.slabbed.mixin.SlabbedMixinConfigPlugin
+                .sweeperAsksCollisionContext("net/minecraft/world/level/BlockCollisions");
+        boolean noSuchCall = com.slabbed.mixin.SlabbedMixinConfigPlugin
+                .sweeperAsksCollisionContext("net/minecraft/world/phys/AABB");
+        boolean absent = com.slabbed.mixin.SlabbedMixinConfigPlugin
+                .sweeperAsksCollisionContext("net/minecraft/world/level/NoSuchSweeper");
+        if (!vanillaIterator || noSuchCall || absent) {
+            throw helper.assertionException(BlockPos.ZERO,
+                    "the sweeper byte check must recognise vanilla's BlockCollisions.computeNext ("
+                    + vanillaIterator + ") and refuse a class without the call (" + noSuchCall
+                    + ") and an absent class (" + absent + ") — with Lithium installed this probe "
+                    + "is the difference between applying the sweeper mixins and a startup crash");
+        }
+        helper.succeed();
+    }
+
+    /**
+     * END TO END, movement: a REAL entity moved through the hang band stops at the drawn body. The
+     * three {@code noCollision} rows prove the query; this row proves the path players feel —
+     * {@code Entity.move} → {@code collide} — which vanilla routes through {@code BlockCollisions}
+     * and Lithium routes through its own sweeper via redirected call sites inside {@code collide}.
+     * Venue-agnostic on purpose: green here without Lithium proves the shipped seam, green with
+     * Lithium proves the sweeper mixins carry the same hanging union into Lithium's path.
+     *
+     * <p>The mover is an item entity: its quarter-block box sits entirely inside the hang band, so
+     * only the neighbour-aware union can stop it — the lowered block's own cell is never entered.
+     * No gravity, a horizontal push, and a tick budget long enough to sail well past the block if
+     * nothing stops it (item drag leaves roughly four blocks of travel from this push).
+     *
+     * <p>MUTATION that must redden this row alone in a Lithium venue: withhold the two Lithium
+     * sweeper mixins. Without Lithium: remove {@code BlockCollisionsLoweredAboveMixin}.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = 60)
+    public void aSmallEntityPushedThroughTheHangBandStopsAtTheDrawnBody(GameTestHelper helper) {
+        BlockPos abs = loweredStone(helper);
+        net.minecraft.world.entity.item.ItemEntity mover =
+                helper.spawn(net.minecraft.world.entity.EntityTypes.ITEM,
+                        new net.minecraft.world.phys.Vec3(0.5d, 1.7d, 2.5d));
+        mover.setItem(new net.minecraft.world.item.ItemStack(net.minecraft.world.item.Items.STONE));
+        mover.setNoGravity(true);
+        mover.setDeltaMovement(new net.minecraft.world.phys.Vec3(0.3d, 0.0d, 0.0d));
+        double startX = mover.getX();
+        AABB box = mover.getBoundingBox();
+        if (box.minY < abs.getY() - 0.5d + 0.05d || box.maxY > abs.getY() - 0.05d) {
+            throw helper.assertionException(helper.relativePos(abs),
+                    "premise drift: the mover's box must sit inside the hang band; box=" + box);
+        }
+        helper.runAfterDelay(15, () -> {
+            double travelled = mover.getX() - startX;
+            double frontEdge = mover.getBoundingBox().maxX;
+            if (!mover.isAlive() || travelled < 0.5d) {
+                throw helper.assertionException(helper.relativePos(abs),
+                        "premise drift: the mover must actually travel (alive=" + mover.isAlive()
+                        + " travelled=" + travelled + ")");
+            }
+            if (frontEdge > abs.getX() + 0.05d) {
+                throw helper.assertionException(helper.relativePos(abs),
+                        "WALK-THROUGH: an entity moving through a lowered block's drawn lower half "
+                        + "must be stopped at its drawn face (x=" + abs.getX() + "); after 15 ticks "
+                        + "its front edge is at " + frontEdge + " — the movement seam (vanilla "
+                        + "BlockCollisions, or Lithium's sweeper) is not carrying the hanging union");
+            }
+            helper.succeed();
+        });
     }
 
     private static net.minecraft.world.level.ClipContext colliderRay(

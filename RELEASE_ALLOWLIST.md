@@ -105,6 +105,8 @@ anything. The split above puts the fine granularity only where a leak has actual
 | `com/slabbed/mixin/HangingSignAttachedMixin` | Hanging-sign attachment from above. |
 | `com/slabbed/mixin/ItemStackUseCreatedContactMixin` | Use-on contact point for offset placement. |
 | `com/slabbed/mixin/LeverParticleMixin` | Particle origin follows the lowered block. |
+| `com/slabbed/mixin/LithiumBlockCollisionSweeperPosLoweredAboveMixin` | Lithium compat: a lowered block's hanging collision reaches Lithium's position-yielding block-collision sweeper; admitted only after the config plugin byte-checks that sweeper (maintainer ruling, 2026-09-02). |
+| `com/slabbed/mixin/LithiumBlockCollisionSweeperShapeLoweredAboveMixin` | Lithium compat: a lowered block's hanging collision reaches Lithium's shape-yielding block-collision sweeper; admitted only after the config plugin byte-checks that sweeper (maintainer ruling, 2026-09-02). |
 | `com/slabbed/mixin/LivingEntityLoweredScaffoldingMixin` | Scaffolding movement over lowered geometry. |
 | `com/slabbed/mixin/RedstoneTorchParticleMixin` | Particle origin follows the lowered block. |
 | `com/slabbed/mixin/RedstoneWireBlockMixin` | Redstone wire connection/support over lowered slabs. |
@@ -116,7 +118,7 @@ anything. The split above puts the fine granularity only where a leak has actual
 | `com/slabbed/mixin/LivingEntitySightOffsetClipMixin` | Mob sight is blocked by a lowered block's drawn body. |
 | `com/slabbed/mixin/ProjectileBlockClipOffsetMixin` | Projectiles hit a lowered block where it is drawn. |
 | `com/slabbed/mixin/ServerExplosionOcclusionOffsetClipMixin` | Explosions are sheltered by a lowered block's drawn body. |
-| `com/slabbed/mixin/SlabbedMixinConfigPlugin` | Mixin config plugin: withholds the explosion-occlusion redirect alone while Lithium owns the same call site (maintainer ruling, 2026-09-02); references no Minecraft class. |
+| `com/slabbed/mixin/SlabbedMixinConfigPlugin` | Mixin config plugin: withholds the explosion-occlusion redirect while Lithium owns the same call site, and admits the two Lithium sweeper mixins only after byte-checking Lithium's sweepers (maintainer ruling, 2026-09-02); loads no Minecraft class. |
 | `com/slabbed/mixin/TorchParticleAccessor` | Accessor supporting the torch particle mixins. |
 | `com/slabbed/mixin/TorchParticleMixin` | Particle origin follows the lowered block. |
 | `com/slabbed/mixin/WallRedstoneTorchParticleMixin` | Particle origin follows the lowered block. |
