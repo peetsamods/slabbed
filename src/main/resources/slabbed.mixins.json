@@ -2,6 +2,7 @@
   "required": true,
   "package": "com.slabbed.mixin",
   "compatibilityLevel": "JAVA_21",
+  "plugin": "com.slabbed.mixin.SlabbedMixinConfigPlugin",
   "mixins": [
     "AbstractArrowOffsetClipMixin",
     "BlockCollisionsLoweredAboveMixin",

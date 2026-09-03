@@ -4,6 +4,12 @@ See LAW.md — this changelog does not redefine the law.
 
 ### Fixes
 
+- **Starts alongside Lithium.** With Lithium installed, the game crashed on startup before the
+  title screen, because both mods rewrite the same piece of Minecraft's explosion code. It now
+  starts, and explosions behind a lowered block follow normal Minecraft rules while Lithium is
+  present (Lithium's optimised explosion path stays in charge there). Arrows and snowballs still
+  hit a lowered block where it is drawn, and mobs still cannot see through it, with Lithium
+  installed. ([#74](https://github.com/peetsamods/slabbed/issues/74))
 - **Dirt paths and farmland convert to dirt under your placements.** Placing a block on a dirt
   path or farmland now converts the trampled block to dirt first, the same way vanilla does
   under solid full blocks — so the placed piece sits on a real full surface instead of a
