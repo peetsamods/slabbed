@@ -8,7 +8,7 @@ import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.CrossCollisionBlock;
-import net.minecraft.world.level.block.RedStoneWireBlock;
+import net.minecraft.world.level.block.RedstoneWireBlock;
 import net.minecraft.world.level.block.SlabBlock;
 import net.minecraft.world.level.block.WallBlock;
 import net.minecraft.world.level.block.state.BlockState;
@@ -330,7 +330,7 @@ public final class Slabbed2612ConnectorSurvivalTest {
     /**
      * A fresh {@code redstone_wire} must report connection {@code NONE} toward a horizontally adjacent
      * ordinary full block — vanilla's own decision, which Slabbed must not override. Read directly off
-     * the wire's {@code RedStoneWireBlock.EAST} block-state property (never the render-only connection
+     * the wire's {@code RedstoneWireBlock.EAST} block-state property (never the render-only connection
      * type), driven via {@code updateShape} DIRECTLY for that one direction (the same discipline the
      * connector helpers above use), so this does not depend on a neighbour-update tick landing.
      *
@@ -358,10 +358,10 @@ public final class Slabbed2612ConnectorSurvivalTest {
         BlockState afterOrdinary = level.getBlockState(wireOrdinaryAbs).updateShape(
                 level, level, wireOrdinaryAbs, Direction.EAST, neighborOrdinaryAbs,
                 level.getBlockState(neighborOrdinaryAbs), level.getRandom());
-        if (afterOrdinary.getValue(RedStoneWireBlock.EAST) != RedstoneSide.NONE) {
+        if (afterOrdinary.getValue(RedstoneWireBlock.EAST) != RedstoneSide.NONE) {
             throw helper.assertionException(wireOrdinary,
                     "redstone_wire EAST must stay NONE next to an ordinary full block (Slabbed must not "
-                            + "override vanilla's connection decision), got " + afterOrdinary.getValue(RedStoneWireBlock.EAST));
+                            + "override vanilla's connection decision), got " + afterOrdinary.getValue(RedstoneWireBlock.EAST));
         }
 
         // Case 2: Slabbed-relevant support (bottom slab) under the wire, ordinary full block still adjacent.
@@ -376,11 +376,11 @@ public final class Slabbed2612ConnectorSurvivalTest {
         BlockState afterSlab = level.getBlockState(wireOnSlabAbs).updateShape(
                 level, level, wireOnSlabAbs, Direction.EAST, neighborNearSlabAbs,
                 level.getBlockState(neighborNearSlabAbs), level.getRandom());
-        if (afterSlab.getValue(RedStoneWireBlock.EAST) != RedstoneSide.NONE) {
+        if (afterSlab.getValue(RedstoneWireBlock.EAST) != RedstoneSide.NONE) {
             throw helper.assertionException(wireOnSlab,
                     "redstone_wire on a bottom-slab top EAST must stay NONE next to an ordinary full block "
                             + "(a widened isRedstoneSupportTopSurface must not leak into connection state), got "
-                            + afterSlab.getValue(RedStoneWireBlock.EAST));
+                            + afterSlab.getValue(RedstoneWireBlock.EAST));
         }
 
         helper.succeed();

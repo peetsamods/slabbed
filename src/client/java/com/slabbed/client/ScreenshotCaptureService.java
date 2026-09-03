@@ -12,7 +12,7 @@ import net.minecraft.client.util.ScreenshotRecorder;
 import net.minecraft.client.texture.NativeImage;
 import net.minecraft.text.Text;
 import net.minecraft.util.Identifier;
-import org.lwjgl.glfw.GLFW;
+import com.mojang.blaze3d.platform.InputConstants;
 
 import java.awt.Toolkit;
 import java.awt.datatransfer.Clipboard;
@@ -39,7 +39,7 @@ public final class ScreenshotCaptureService {
             .withZone(ZoneId.systemDefault());
     private static final Category KEY_CATEGORY = Category.create(Identifier.of("slabbed", "dev"));
     private static final KeyBinding SCREENSHOT_KEY = KeyBindingHelper.registerKeyBinding(
-            new KeyBinding("key.slabbed.screenshot", GLFW.GLFW_KEY_KP_0, KEY_CATEGORY));
+            new KeyBinding("key.slabbed.screenshot", InputConstants.KEY_NUMPAD0, KEY_CATEGORY));
     private static CaptureState captureState = CaptureState.IDLE;
     private static PendingCapture pendingCapture;
     private static boolean compareMode;

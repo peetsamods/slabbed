@@ -87,15 +87,15 @@ public final class PlacementDyCorrectionServer {
         if (player == null || packet == null || ACTIVE_SCOPE.get() != null) {
             return;
         }
-        ItemStack held = player.getItemInHand(packet.getHand());
+        ItemStack held = player.getItemInHand(packet.hand());
         if (held == null || !(held.getItem() instanceof BlockItem)) {
             return;
         }
-        BlockHitResult hit = packet.getHitResult();
+        BlockHitResult hit = packet.hitResult();
         PlacementDyPredictionBridge.GroupSignature signature = new PlacementDyPredictionBridge.GroupSignature(
                 player.level().dimension().toString(),
-                packet.getSequence(),
-                packet.getHand(),
+                packet.sequence(),
+                packet.hand(),
                 BuiltInRegistries.ITEM.getKey(held.getItem()).toString(),
                 hit.getBlockPos().asLong(),
                 hit.getDirection());

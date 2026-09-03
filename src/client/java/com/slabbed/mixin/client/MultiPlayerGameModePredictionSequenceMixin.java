@@ -86,10 +86,10 @@ public abstract class MultiPlayerGameModePredictionSequenceMixin {
         if (minecraft == null || minecraft.player == null || minecraft.level == null) {
             return;
         }
-        BlockHitResult hit = packet.getHitResult();
+        BlockHitResult hit = packet.hitResult();
         BlockPos target = hit.getBlockPos();
         BlockState afterState = minecraft.level.getBlockState(target);
-        ItemStack heldStack = minecraft.player.getItemInHand(packet.getHand());
+        ItemStack heldStack = minecraft.player.getItemInHand(packet.hand());
         double afterDy = SlabSupport.getYOffset(minecraft.level, target, afterState);
         double afterStoredDy =
                 SlabAnchorAttachment.storedPlacementDy(minecraft.level, target);

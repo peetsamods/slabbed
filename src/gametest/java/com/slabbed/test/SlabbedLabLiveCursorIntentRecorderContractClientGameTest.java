@@ -343,7 +343,7 @@ public final class SlabbedLabLiveCursorIntentRecorderContractClientGameTest impl
         try (TestSingleplayerContext singleplayer = ctx.worldBuilder()
                 .setUseConsistentSettings(true)
                 .create()) {
-            singleplayer.getClientLevel().waitForChunksDownload();
+            singleplayer.getConnection().waitForChunksDownload();
             ctx.waitFor(client -> client.level != null
                     && client.player != null
                     && client.gameMode != null, 400);
@@ -477,7 +477,7 @@ public final class SlabbedLabLiveCursorIntentRecorderContractClientGameTest impl
         try (TestSingleplayerContext singleplayer = ctx.worldBuilder()
                 .setUseConsistentSettings(true)
                 .create()) {
-            singleplayer.getClientLevel().waitForChunksDownload();
+            singleplayer.getConnection().waitForChunksDownload();
             ctx.waitFor(client -> client.level != null
                     && client.player != null
                     && client.gameMode != null, 400);
@@ -626,7 +626,7 @@ public final class SlabbedLabLiveCursorIntentRecorderContractClientGameTest impl
         try (TestSingleplayerContext singleplayer = ctx.worldBuilder()
                 .setUseConsistentSettings(true)
                 .create()) {
-            singleplayer.getClientLevel().waitForChunksDownload();
+            singleplayer.getConnection().waitForChunksDownload();
             ctx.waitFor(client -> client.level != null && client.player != null, 400);
 
             BlockPos target = singleplayer.getServer().computeOnServer(server -> {
@@ -673,7 +673,7 @@ public final class SlabbedLabLiveCursorIntentRecorderContractClientGameTest impl
                     + " hit=" + picked.getLocation());
 
             if (requireRenderedOutline) {
-                singleplayer.getClientLevel().waitForChunksRender();
+                singleplayer.getConnection().waitForChunksRender();
                 ctx.waitFor(client -> {
                     BlockOutlineRenderState outline = renderedOutlineState(client);
                     return outline != null && outline.pos().equals(target);
