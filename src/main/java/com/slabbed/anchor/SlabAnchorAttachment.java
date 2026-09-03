@@ -26,6 +26,8 @@ import net.minecraft.world.level.block.MossyCarpetBlock;
 import net.minecraft.world.level.block.SlabBlock;
 import net.minecraft.world.level.block.state.properties.SlabType;
 import net.minecraft.core.Direction;
+import net.minecraft.world.phys.shapes.VoxelShape;
+import net.minecraft.world.level.EmptyBlockGetter;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.world.level.block.state.properties.BlockStateProperties;
@@ -986,9 +988,35 @@ public final class SlabAnchorAttachment {
                 && newState.getBlock() instanceof FlowerPotBlock;
         return flowerPotStateTransition
                 || isOrdinaryFullBlockAnchorCandidate(world, pos, newState)
+                || isFullFootprintOccupant(newState)
                 || (newState.getBlock() instanceof EntityBlock
                         && !SlabSupport.isAlwaysCeilingHungDecoration(newState))
                 || isConnectingStructural(newState);
+    }
+
+    /** A same-position transform keeps the lock when the new occupant still fills the cell: at least {@value} tall. */
+    private static final double FULL_FOOTPRINT_MIN_HEIGHT = 15.0 / 16.0;
+
+    /**
+     * The transformed block still occupies the whole footprint of its cell — the hoe's farmland and the
+     * shovel's dirt path (both 15/16 tall) as much as a full cube. LAW 1: the block a player placed is
+     * still there, transformed in place, so its height stays (maintainer ruling, 2026-09-03). Judged on
+     * the state's own context-free collision shape so that the lowered-shape mixins cannot feed the
+     * shifted geometry back into this decision; slabs, carpets, plates and other partial occupants fail
+     * the height or footprint test and still clear.
+     */
+    public static boolean isFullFootprintOccupant(BlockState state) {
+        if (state == null || state.isAir() || !state.getFluidState().isEmpty()) {
+            return false;
+        }
+        VoxelShape shape = state.getCollisionShape(EmptyBlockGetter.INSTANCE, BlockPos.ZERO);
+        if (shape.isEmpty()) {
+            return false;
+        }
+        return shape.min(Direction.Axis.X) <= 0.0 && shape.max(Direction.Axis.X) >= 1.0
+                && shape.min(Direction.Axis.Z) <= 0.0 && shape.max(Direction.Axis.Z) >= 1.0
+                && shape.min(Direction.Axis.Y) <= 0.0
+                && shape.max(Direction.Axis.Y) >= FULL_FOOTPRINT_MIN_HEIGHT;
     }
 
     /** Fence / wall / pane / gate — connecting blocks that must be height-locked like solids

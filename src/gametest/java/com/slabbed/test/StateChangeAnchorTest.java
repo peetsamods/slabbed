@@ -143,4 +143,50 @@ public final class StateChangeAnchorTest {
         }
         helper.succeed();
     }
+
+    /**
+     * T7 (26.3 port audit): tilling a lowered dirt block into farmland is the same in-place kind
+     * change as grass -> dirt, now reachable through 26.3's data-driven block transformers. LAW 1
+     * says the placed height must survive it. Farmland is 15/16 tall, which the ordinary full-block
+     * eligibility gate rejects, so this row is expected to go RED on the unfixed tree — it names the
+     * gap; the fix waits for a maintainer ruling (maintainer notes, 2026-09-03).
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void inPlaceTillToFarmlandKeepsAnchorAndDy(GameTestHelper helper) {
+        assertInPlaceTransformKeepsLock(helper, Blocks.DIRT.defaultBlockState(),
+                Blocks.FARMLAND.defaultBlockState(), "dirt->farmland (hoe)");
+    }
+
+    /** T7 sibling: the shovel's grass -> dirt path transform (dirt path is also 15/16 tall). */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void inPlaceShovelToDirtPathKeepsAnchorAndDy(GameTestHelper helper) {
+        assertInPlaceTransformKeepsLock(helper, Blocks.GRASS_BLOCK.defaultBlockState(),
+                Blocks.DIRT_PATH.defaultBlockState(), "grass->dirt path (shovel)");
+    }
+
+    private static void assertInPlaceTransformKeepsLock(GameTestHelper helper, BlockState placed,
+                                                        BlockState transformed, String label) {
+        ServerLevel w = helper.getLevel();
+        BlockPos slab = helper.absolutePos(new BlockPos(3, 2, 3));
+        BlockPos block = slab.above();
+        w.setBlock(slab, bottomSlab(), Block.UPDATE_CLIENTS);
+        w.setBlock(block, placed, Block.UPDATE_CLIENTS);
+        onPlaced(w, block);
+        if (!SlabAnchorAttachment.isAnchored(w, block)) {
+            throw helper.assertionException("precondition: " + label + " subject on a bottom slab is anchored");
+        }
+        double before = SlabSupport.getYOffset(w, block, w.getBlockState(block));
+        w.setBlock(block, transformed, Block.UPDATE_ALL);
+        if (!SlabAnchorAttachment.isAnchored(w, block)) {
+            throw helper.assertionException(
+                    "LAW 1: the height-lock MUST survive the in-place " + label + " transform");
+        }
+        double after = SlabSupport.getYOffset(w, block, w.getBlockState(block));
+        if (Math.abs(after - before) > EPS) {
+            throw helper.assertionException(
+                    "LAW 1: dy must not jump on the in-place " + label + " transform: before=" + before
+                            + " after=" + after);
+        }
+        helper.succeed();
+    }
 }
