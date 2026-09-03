@@ -43,14 +43,36 @@ import java.util.List;
  * NEIGHBOR MUTATION <em>without touching the subject's cell</em> and asserts the height is
  * byte-identical afterward.
  *
- * <p><b>CENSUS MODE ({@code required = false} on every row):</b> this line does not yet carry the
- * frozen-dy placement store, so heights are recomputed from neighbors on every read and many rows
- * are EXPECTED to fail today. Each failure enumerates exactly which (subject, mutation) cells move
- * a placed block — that census is the deliverable driving Slice 2. Rows flip to {@code required}
- * (blocking) as Slice 2b–2e lands the frozen store on this line. Height authority here is
- * {@link SlabSupport#getYOffset}; the donor's raw placement-dy store reads are adapted to it
- * (see the port report), and the two store-corruption fixtures are omitted because the store they
- * corrupt does not exist on this line.
+ * <p><b>CORRECTED 2026-09-03 — the two claims below were stale and contradicted by this file's own
+ * code.</b> They read "required = false on every row" and "the two store-corruption fixtures are
+ * omitted because the store they corrupt does not exist" — both false as soon as the placement-dy
+ * store landed (Slice 2b onward) and were never updated. The actual, current, traced state:
+ *
+ * <p><b>9 of 15 rows are still {@code required = false} (census, non-blocking)</b> — every row
+ * that calls bare {@link #runSubject}: {@code torchOnMarkedSlab}, {@code fullBlockOnLoweredStack},
+ * {@code flatFullBlockControl}, {@code flatSlabControl}, {@code cantileverSlab},
+ * {@code slabOnLoweredFullBlock}, {@code candlePlacedFlat}, {@code c3_pair_door_toggle_and_neighbor_invariance},
+ * {@code c3_pair_bed_neighbor_invariance}. Bare {@link #runSubject} runs under whatever
+ * {@link SlabAnchorAttachment#FROZEN_DY_ENABLED} currently defaults to — today, {@code false} — so
+ * <b>these 9 rows are the ones actually exercising the shipped configuration, and none of them
+ * blocks the build.</b> A LAW 1 violation in exactly the configuration players run today would not
+ * fail {@code runGameTest}.
+ *
+ * <p><b>6 of 15 rows are {@code required} (blocking)</b>: {@code fenceGateOnMarkedSlab},
+ * {@code slabOnDeepLoweredFullBlock}, {@code missingPlacementDyResolvesStableFlatAcrossNeighborEdit},
+ * {@code corruptPlacementDyResolvesStablePositiveZeroAcrossNeighborEdit},
+ * {@code aimedCarpetOnMinusOneOwner}, {@code aimedPowderSnowOnMinusOneOwner}. Every one calls
+ * {@link #runSubjectWithFrozenStore}, which force-enables the store for that row only — so these 6
+ * gate a configuration this line does not yet ship by default, not the shipped one.
+ *
+ * <p><b>Follow-up owed once the store's default flips to on (the plan's Phase 3):</b> promote the
+ * 9 census rows above to required (or fold them into the frozen-store path, whichever the store
+ * port's own rig-building needs), then run the measured reachability audit — build each subject,
+ * strip its protection, apply every {@link #MUTATIONS} entry, and record which one actually moves
+ * the resolver's answer — before trusting a green run here as proof (see the project standing rule
+ * on S-2 reachability). That audit is deliberately NOT done in this pass: doing it against subjects
+ * whose rigs will likely change shape when the store lands risks measuring a scene that gets
+ * rebuilt anyway. Height authority here is {@link SlabSupport#getYOffset}.
  */
 public final class NeighborUpdateInvarianceTest {
 
