@@ -12,6 +12,15 @@ In development. Entries land here as they are proved.
 
 ### Fixed
 
+- **A chain hanging from a lowered beam now hangs from where the beam actually is.** A chain
+  under an ordinary lowered block — a cantilevered beam, say, rather than a slab — stayed at
+  full grid height while a lantern further down the same chain correctly dropped with the beam.
+  The beam's lowered body then sat inside the top link of the chain, and the chain disagreed
+  with the lantern hanging off it. The chain now follows its cap exactly, and so does everything
+  hanging below it, however long the chain is. Chains under top and double slabs are unchanged.
+  *(Proved by a failing test first, with controls pinning both boundaries; the whole suite is
+  green.)*
+
 - **A tall stack of blocks in a lowered hole no longer sinks into itself part-way up.** Blocks
   resting on a lowered block sit at the same depth as the block under them, all the way up — but
   past the seventh course, an older block (one carrying no saved height, so any build made before

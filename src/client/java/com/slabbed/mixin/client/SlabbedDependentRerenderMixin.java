@@ -61,7 +61,12 @@ public abstract class SlabbedDependentRerenderMixin {
         int maxX = pos.getX() + 2;
         int minZ = pos.getZ() - 2;
         int maxZ = pos.getZ() + 2;
-        int minY = pos.getY() - 1;
+        // SYMMETRIC in Y. The upward span covers blocks stacked ON a lowered support. The
+        // DOWNWARD span is not 1: a ceiling-attached run (a chain column, and whatever hangs from
+        // it) resolves its height from the cap at the TOP of the run, so up to MAX_CHAIN_DEPTH
+        // cells BELOW this one depend on it. With a 1-cell margin only the first link refreshed
+        // and the rest of the run kept a baked mesh at the old height. Strictly additive, as above.
+        int minY = pos.getY() - SlabSupport.chainRerenderDepth();
         int maxY = pos.getY() + SlabSupport.chainRerenderDepth();
         SlabDependentRemeshScheduler.enqueue(world, minX, minY, minZ, maxX, maxY, maxZ);
     }

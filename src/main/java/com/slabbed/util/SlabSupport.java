@@ -1323,7 +1323,8 @@ public final class SlabSupport {
      * pale hanging moss. These attach to the block ABOVE and have no floor variant, so their dy
      * must be a pure function of that support and must never be lowered by a block below them in
      * the column. Chains and pointed dripstone are deliberately NOT here: chains extend to reach
-     * their support (ruling of record), and the speleothem family keeps its own merge grammar.
+     * their support, and the speleothem family keeps its own merge grammar. Both resolve a lowered
+     * cap through the cascading ceiling walk's terminal cap read (maintainer ruling, 2026-09-01).
      * Lanterns are NOT here either: a standing lantern legitimately rests on a support, so it
      * keeps the normal path (HANGING lanterns are already excluded from the below-walk).
      */
@@ -1378,6 +1379,19 @@ public final class SlabSupport {
             if (isCeilingAttached(world, cursor, cur)) {
                 cursor = cursor.up();
                 continue;
+            }
+            // TERMINAL CAP READ — the SAME leg the cascading walk in getYOffsetInner carries, and
+            // it must stay the same. This walk's prologue resolves a cap directly above; this leg
+            // resolves one reached THROUGH a run of ceiling-attached blocks (an always-hung
+            // decoration under a chain). Without it a hanging sign reads 0.0 while the chain it
+            // hangs from follows the cap, which is the exact split the ruling forbids. Slabs are
+            // excluded here too (loweredFullHeightSupportDy answers NaN for every SlabBlock), so a
+            // slab cap leaves BOTH the chain and the sign at grid height and they still agree.
+            if (!cur.isAir() && !CompatHooks.shouldSkipOffset(cur)) {
+                double capDy = loweredFullHeightSupportDy(world, cursor, cur);
+                if (Double.isFinite(capDy) && capDy < -1.0e-6) {
+                    return capDy;
+                }
             }
             break;
         }
@@ -1597,8 +1611,11 @@ public final class SlabSupport {
         // A lantern / soul lantern / spore blossom / hanging roots / pale hanging
         // moss hanging beneath a support that itself renders lowered must inherit
         // the support's negative dy, or the lowered support's underside clips down
-        // into the hanger's top (the lantern-jammed-into-log artifact). Chains are
-        // EXCLUDED so they keep extending to reach the support. Runs BEFORE the
+        // into the hanger's top (the lantern-jammed-into-log artifact). Chains are EXCLUDED from
+        // THIS lane because it reads only the cell directly above, and a chain is a run whose cap
+        // may be several cells up; a chain follows its cap through the cascading walk's terminal
+        // cap read below, so this exclusion is about REACH, not about a chain ignoring its cap.
+        // Runs BEFORE the
         // +0.5 ceiling branch; the helpers return 0.0/NaN for a normal
         // (non-lowered) support so the already-correct flush and +0.5 cases stay
         // untouched. The helpers are recursion-safe mirrors of the dy logic above
@@ -1696,8 +1713,16 @@ public final class SlabSupport {
             return 0.5;
         }
 
-        // cascading: ceiling-attached block below other ceiling-attached blocks
-        // leading up to a top slab (e.g. 2nd dripstone, 2nd vine segment)
+        // cascading: ceiling-attached block below other ceiling-attached blocks leading up to a
+        // cap (e.g. 2nd dripstone, 2nd vine segment, a Y-chain column, a lantern hung below one).
+        // This walk MUST carry the same lowered-cap read as the other two ceiling lanes — the
+        // always-hung family's ceilingHungDecorationDy and the lantern family's
+        // isLoweredUndersideHangerOwner branch, both of which resolve their support ABOVE. Without
+        // it a chain under an ordinary lowered cap stayed at grid height while a lantern lower
+        // down the same chain followed the cap correctly, so the cap's lowered body descended into
+        // the chain's top segment and the chain disagreed with what hangs from it (maintainer
+        // ruling, 2026-09-01: a chain under an ordinary lowered cap follows it exactly, and so
+        // does everything hanging from it).
         if (isCeilingAttached(world, pos, state)) {
             BlockPos cursor = pos.up();
             for (int i = 0; i < MAX_CHAIN_DEPTH; i++) {
@@ -1708,6 +1733,21 @@ public final class SlabSupport {
                 if (isCeilingAttached(world, cursor, cur)) {
                     cursor = cursor.up();
                     continue;
+                }
+                // TERMINAL CAP READ — the run's terminator is its cap, so its rendered dy is the
+                // answer for every member of the run. loweredFullHeightSupportDy answers NaN for
+                // every SlabBlock, so a TOP or DOUBLE slab ceiling is deliberately NOT claimed
+                // here and keeps its own flush treatment: do not widen this leg to slabs.
+                // TS-COMPAT GUARD (CROSS-PORT LAW): a Terrain-Slabs-owned cap is a SELF-RENDERING
+                // surface whose dy must never feed a Slabbed follower. This leg bypasses the
+                // shared predicate, so it carries the guard directly. No-op without Terrain Slabs.
+                if (!cur.isAir() && !CompatHooks.shouldSkipOffset(cur)) {
+                    // Recursion-safe: loweredFullHeightSupportDy never re-enters getYOffset, so it
+                    // is safe under the IN_GET_Y_OFFSET guard (same contract as the two lanes above).
+                    double capDy = loweredFullHeightSupportDy(world, cursor, cur);
+                    if (Double.isFinite(capDy) && capDy < -1.0e-6) {
+                        return capDy;
+                    }
                 }
                 break;
             }
@@ -1815,8 +1855,12 @@ public final class SlabSupport {
     /**
      * Decorative ceiling hangers that must FOLLOW a lowered support down so they
      * stay flush instead of clipping up into it: lanterns, soul lanterns, spore
-     * blossoms, hanging roots, and pale hanging moss. Chains are deliberately
-     * EXCLUDED — they extend to reach their support rather than tracking its dy.
+     * blossoms, hanging roots, and pale hanging moss.
+     *
+     * <p>Chains stay out of THIS lane because this lane reads only the cell directly above, and a
+     * chain is a run whose cap may be several cells up. A chain follows its cap through the
+     * cascading ceiling walk's terminal cap read instead — it does track its cap's dy (maintainer
+     * ruling, 2026-09-01), so do not read this exclusion as "a chain ignores its cap".
      */
     private static boolean isLoweredUndersideHangerOwner(BlockState state) {
         if (state == null || state.isAir()) {

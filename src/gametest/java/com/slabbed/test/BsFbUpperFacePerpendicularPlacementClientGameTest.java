@@ -495,9 +495,10 @@ public final class BsFbUpperFacePerpendicularPlacementClientGameTest implements 
     /**
      * Regression guard for Fix 1 (hanger-follow). A decorative hanger
      * (lantern / spore blossom) beneath a LOWERED full-block support must inherit
-     * the support's -0.5 so it hangs flush instead of clipping up into it; a CHAIN
-     * under the same lowered support must NOT follow (it extends to reach the
-     * support). Verified by SlabSupport.getYOffset state-readback — the single
+     * the support's -0.5 so it hangs flush instead of clipping up into it. This method covers the
+     * lantern/spore-blossom families only; a chain under the same lowered support ALSO follows it
+     * now (maintainer ruling, 2026-09-01) and is pinned by ChainUnderLoweredFullBlockCapTest, not
+     * here. Verified by SlabSupport.getYOffset state-readback — the single
      * value every visual consumer reads. Throws on regression.
      */
     private static void runHangerFollowUnderLoweredSupportProof(
@@ -535,9 +536,11 @@ public final class BsFbUpperFacePerpendicularPlacementClientGameTest implements 
         });
 
         StringBuilder fail = new StringBuilder();
-        // Chain non-regression is guaranteed structurally: chains are absent from
-        // the isLoweredUndersideHangerOwner allowlist, so they never enter the
-        // follow branches (verified by reading that predicate).
+        // NO CHAIN CLAIM IS MADE HERE. Chains are still absent from the
+        // isLoweredUndersideHangerOwner allowlist, but absence from it is NO LONGER a structural
+        // guarantee that a chain stays flush: a chain follows its cap through the cascading
+        // ceiling walk's terminal cap read instead. Chain behaviour is pinned by
+        // ChainUnderLoweredFullBlockCapTest; do not re-derive it from this predicate.
         boolean supportLowered = approx(lanternSupportDy.get(), -0.5);
         if (!supportLowered) {
             fail.append("[hanger-follow] FIXTURE INVALID: support not lowered, supportDy=")
