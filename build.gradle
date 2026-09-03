@@ -240,12 +240,18 @@ java {
     targetCompatibility = JavaVersion.VERSION_21
 }
 
+// Every `-Dslabbed.*` on the Gradle command line is forwarded verbatim into the forked game JVM
+// (client, server, gametest). Without this, a `-D` on the Gradle line lands on Gradle's own JVM and
+// the game never sees it — the launch LOOKS armed and silently is not. This must stay a PREFIX
+// match, never an allowlist: an allowlist here (`slabbed.mc1211.*` plus one literal, until
+// 2026-09-03) let a dev-client pass launched with `-Dslabbed.frozenDy=true` run with the store OFF.
+// Do not re-narrow it. The /slabdy overlay's `frozen=` field reads the live flag and is the
+// discriminator for whether a switch actually arrived.
 def slabbedForwardedRunPropertyArgs = {
     System.properties.findAll { key, value ->
         key instanceof String
                 && value != null
-                && (key.startsWith("slabbed.mc1211.")
-                || key == "slabbed.bsfb.live.trace")
+                && key.startsWith("slabbed.")
     }.collect { key, value -> "-D${key}=${value}" }
 }
 
