@@ -204,26 +204,73 @@ public final class Slabbed2612CollisionDepthTest {
      * the probe itself headlessly: vanilla's own {@code BlockCollisions} iterator carries the same
      * {@code computeNext} → {@code CollisionContext.getCollisionShape} call the sweeper mixins
      * redirect (it is the call {@code BlockCollisionsLoweredAboveMixin} redirects), so it must read
-     * as supported; a class without the call and an absent class must both read as unsupported —
+     * as supported under ITS exact descriptor (the erased {@code ()Ljava/lang/Object;}); the same
+     * class asked for the Lithium shape-sweeper descriptor must read as unsupported — the probe is
+     * as strict as the injection, a same-named method with another descriptor is a crash, not a
+     * match; a class without the call and an absent class must both read as unsupported —
      * "unknown" is withheld, never applied.
      *
-     * <p>MUTATION that must redden this row alone: make the probe return true when the resource is
-     * missing, or compare the call's owner to the wrong class.
+     * <p>MUTATION that must redden this row alone: make the probe match {@code computeNext} by
+     * name only, return true when the resource is missing, or compare the call's owner to the
+     * wrong class.
      */
     @GameTest(structure = "fabric-gametest-api-v1:empty")
     public void lithiumSweeperByteCheckRecognisesTheRedirectedCall(GameTestHelper helper) {
-        boolean vanillaIterator = com.slabbed.mixin.SlabbedMixinConfigPlugin
-                .sweeperAsksCollisionContext("net/minecraft/world/level/BlockCollisions");
-        boolean noSuchCall = com.slabbed.mixin.SlabbedMixinConfigPlugin
-                .sweeperAsksCollisionContext("net/minecraft/world/phys/AABB");
-        boolean absent = com.slabbed.mixin.SlabbedMixinConfigPlugin
-                .sweeperAsksCollisionContext("net/minecraft/world/level/NoSuchSweeper");
-        if (!vanillaIterator || noSuchCall || absent) {
+        boolean vanillaIterator = com.slabbed.mixin.SlabbedMixinConfigPlugin.sweeperAsksCollisionContext(
+                "net/minecraft/world/level/BlockCollisions", "computeNext()Ljava/lang/Object;");
+        boolean wrongDescriptor = com.slabbed.mixin.SlabbedMixinConfigPlugin.sweeperAsksCollisionContext(
+                "net/minecraft/world/level/BlockCollisions",
+                "computeNext()Lnet/minecraft/world/phys/shapes/VoxelShape;");
+        boolean noSuchCall = com.slabbed.mixin.SlabbedMixinConfigPlugin.sweeperAsksCollisionContext(
+                "net/minecraft/world/phys/AABB", "computeNext()Ljava/lang/Object;");
+        boolean absent = com.slabbed.mixin.SlabbedMixinConfigPlugin.sweeperAsksCollisionContext(
+                "net/minecraft/world/level/NoSuchSweeper", "computeNext()Ljava/lang/Object;");
+        if (!vanillaIterator || wrongDescriptor || noSuchCall || absent) {
             throw helper.assertionException(BlockPos.ZERO,
-                    "the sweeper byte check must recognise vanilla's BlockCollisions.computeNext ("
-                    + vanillaIterator + ") and refuse a class without the call (" + noSuchCall
-                    + ") and an absent class (" + absent + ") — with Lithium installed this probe "
-                    + "is the difference between applying the sweeper mixins and a startup crash");
+                    "the sweeper byte check must recognise vanilla's BlockCollisions.computeNext under "
+                    + "its exact descriptor (" + vanillaIterator + "), refuse the same method under "
+                    + "another descriptor (" + wrongDescriptor + "), refuse a class without the call ("
+                    + noSuchCall + ") and an absent class (" + absent + ") — with Lithium installed "
+                    + "this probe is the difference between applying the sweeper mixins and a "
+                    + "startup crash");
+        }
+        helper.succeed();
+    }
+
+    /**
+     * THE POSITION SWEEPER IS PINNED: {@code findSupportingBlock} is the one consumer that walks
+     * the position-yielding collision iterator (vanilla's {@code BlockCollisions<BlockPos>}; under
+     * Lithium its {@code ...SweeperBlockPos}). Every other row here drives the shape-yielding walk,
+     * so a dead position redirect stayed green in both venues. A box wholly inside the hang band
+     * must report the cell BELOW the lowered block as its support — that cell is where the
+     * hanging union lives, and both seams return the queried position — in both venues.
+     *
+     * <p>MUTATION that must redden this row alone in a Lithium venue: make
+     * {@code LithiumBlockCollisionSweeperPosLoweredAboveMixin} return the cell's own shape.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void theHangBandReportsTheCellBelowAsSupport(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        BlockPos abs = loweredStone(helper);
+        net.minecraft.world.entity.item.ItemEntity probe =
+                helper.spawn(net.minecraft.world.entity.EntityTypes.ITEM,
+                        new net.minecraft.world.phys.Vec3(2.5d, 1.7d, 2.5d));
+        probe.setItem(new net.minecraft.world.item.ItemStack(net.minecraft.world.item.Items.STONE));
+        probe.setNoGravity(true);
+        AABB box = probe.getBoundingBox();
+        if (box.minY < abs.getY() - 0.5d + 0.05d || box.maxY > abs.getY() - 0.05d) {
+            throw helper.assertionException(helper.relativePos(abs),
+                    "premise drift: the probe's box must sit inside the hang band; box=" + box);
+        }
+        java.util.Optional<BlockPos> support = level.findSupportingBlock(probe, box);
+        BlockPos expected = abs.below();
+        if (support.isEmpty() || !support.get().equals(expected)) {
+            throw helper.assertionException(helper.relativePos(abs),
+                    "a box inside the hang band must be supported by the cell below the lowered "
+                    + "block (" + expected.toShortString() + "), where the hanging union lives; got "
+                    + support.map(BlockPos::toShortString).orElse("EMPTY") + " — the position-"
+                    + "yielding seam (vanilla BlockPos iterator, or Lithium's BlockPos sweeper) is "
+                    + "not carrying the hanging union");
         }
         helper.succeed();
     }
