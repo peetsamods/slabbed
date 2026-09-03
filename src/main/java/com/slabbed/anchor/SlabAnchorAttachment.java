@@ -241,11 +241,16 @@ public final class SlabAnchorAttachment {
             return ABSENT;
         }
 
-        public static PlacementDyFact present(double value) {
-            if (!Double.isFinite(value)) {
-                throw new IllegalArgumentException("placement dy must be finite");
-            }
-            return new PlacementDyFact(true, Double.doubleToRawLongBits(value));
+        /**
+         * The ONE door from a stored byte of sixteenths back to a height. Every reader of
+         * {@link #PLACEMENT_DY_TYPE} — the direct chunk read and the client mesh bridge alike —
+         * comes through here. Do not add a factory that takes a {@code double} height: a stored
+         * byte passed to it widens silently (-8 sixteenths reads as -8.0 blocks), the compiler
+         * says nothing, and the block is drawn eight blocks underground while every direct read
+         * stays right. {@code storedByteReadsAsTheSameHeightThroughEveryDoor} pins this.
+         */
+        public static PlacementDyFact fromStoredSixteenths(byte sixteenths) {
+            return new PlacementDyFact(true, Double.doubleToRawLongBits(dequantiseDy(sixteenths)));
         }
 
         public double valueOrNaN() {
@@ -433,8 +438,7 @@ public final class SlabAnchorAttachment {
             });
             long key = pos.asLong();
             PlacementDyFact current = map.containsKey(key)
-                    ? new PlacementDyFact(true,
-                            Double.doubleToRawLongBits(dequantiseDy(map.get(key))))
+                    ? PlacementDyFact.fromStoredSixteenths(map.get(key))
                     : PlacementDyFact.absent();
             if (current.equals(desired)) {
                 continue;
@@ -538,7 +542,7 @@ public final class SlabAnchorAttachment {
         Long2ByteOpenHashMap map = chunk.getAttached(PLACEMENT_DY_TYPE);
         long key = pos.asLong();
         return (map != null && map.containsKey(key))
-                ? new PlacementDyFact(true, Double.doubleToRawLongBits(dequantiseDy(map.get(key))))
+                ? PlacementDyFact.fromStoredSixteenths(map.get(key))
                 : PlacementDyFact.absent();
     }
 
