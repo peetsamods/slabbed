@@ -3,7 +3,7 @@ package com.slabbed.client;
 import com.slabbed.Slabbed;
 import com.slabbed.anchor.SlabAnchorAttachment;
 import com.slabbed.util.SlabSupport;
-import it.unimi.dsi.fastutil.longs.Long2DoubleOpenHashMap;
+import it.unimi.dsi.fastutil.longs.Long2ByteOpenHashMap;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
@@ -38,7 +38,7 @@ import java.util.Map;
 public final class SlabAnchorClientSync {
     private static final Map<Long, WorldChunk> TRACKED_CHUNKS = new HashMap<>();
     private static final Map<AttachmentSnapshotKey, LongOpenHashSet> ATTACHMENT_SNAPSHOTS = new HashMap<>();
-    private static final Map<Long, Long2DoubleOpenHashMap> DY_SNAPSHOTS = new HashMap<>();
+    private static final Map<Long, Long2ByteOpenHashMap> DY_SNAPSHOTS = new HashMap<>();
     private static boolean initialized;
 
     private record AttachmentSnapshotKey(long chunkPos, AttachmentType<LongOpenHashSet> attachmentType) {
@@ -116,7 +116,7 @@ public final class SlabAnchorClientSync {
             if (chunk == null) {
                 return null;
             }
-            Long2DoubleOpenHashMap map = chunk.getAttached(SlabAnchorAttachment.PLACEMENT_DY_TYPE);
+            Long2ByteOpenHashMap map = chunk.getAttached(SlabAnchorAttachment.PLACEMENT_DY_TYPE);
             long key = pos.asLong();
             return map != null && map.containsKey(key)
                     ? SlabAnchorAttachment.PlacementDyFact.present(map.get(key))
@@ -170,7 +170,7 @@ public final class SlabAnchorClientSync {
 
         // FROZEN-DY: rerender stored-height cells already synced at chunk-load time, then
         // snapshot the dy map so the poll can catch later attachment syncs.
-        Long2DoubleOpenHashMap initialDy = chunk.getAttached(SlabAnchorAttachment.PLACEMENT_DY_TYPE);
+        Long2ByteOpenHashMap initialDy = chunk.getAttached(SlabAnchorAttachment.PLACEMENT_DY_TYPE);
         if (initialDy != null && !initialDy.isEmpty()) {
             MinecraftClient mc = MinecraftClient.getInstance();
             if (mc.worldRenderer != null) {
@@ -243,8 +243,8 @@ public final class SlabAnchorClientSync {
     /** FROZEN-DY analog of {@link #pollAttachmentChange}: rerender the union of old/new stored cells. */
     private static void pollPlacementDyChange(MinecraftClient mc, WorldChunk chunk) {
         long chunkPos = chunk.getPos().toLong();
-        Long2DoubleOpenHashMap oldMap = DY_SNAPSHOTS.get(chunkPos);
-        Long2DoubleOpenHashMap newMap = copyDyMap(chunk.getAttached(SlabAnchorAttachment.PLACEMENT_DY_TYPE));
+        Long2ByteOpenHashMap oldMap = DY_SNAPSHOTS.get(chunkPos);
+        Long2ByteOpenHashMap newMap = copyDyMap(chunk.getAttached(SlabAnchorAttachment.PLACEMENT_DY_TYPE));
         boolean oldEmpty = oldMap == null || oldMap.isEmpty();
         boolean newEmpty = newMap == null || newMap.isEmpty();
         if ((oldEmpty && newEmpty) || (!oldEmpty && !newEmpty && oldMap.equals(newMap))) {
@@ -259,8 +259,8 @@ public final class SlabAnchorClientSync {
         DY_SNAPSHOTS.put(chunkPos, newMap);
     }
 
-    private static Long2DoubleOpenHashMap copyDyMap(Long2DoubleOpenHashMap map) {
-        return map == null ? null : new Long2DoubleOpenHashMap(map);
+    private static Long2ByteOpenHashMap copyDyMap(Long2ByteOpenHashMap map) {
+        return map == null ? null : new Long2ByteOpenHashMap(map);
     }
 
     private static void scheduleDyRerenders(MinecraftClient mc, it.unimi.dsi.fastutil.longs.LongSet keys) {

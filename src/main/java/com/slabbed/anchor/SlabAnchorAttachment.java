@@ -9,7 +9,7 @@ import com.mojang.serialization.codecs.RecordCodecBuilder;
 import com.slabbed.Slabbed;
 import com.slabbed.util.SlabSupport;
 import com.slabbed.util.RuntimeDiagnostics;
-import it.unimi.dsi.fastutil.longs.Long2DoubleOpenHashMap;
+import it.unimi.dsi.fastutil.longs.Long2ByteOpenHashMap;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 import net.fabricmc.fabric.api.attachment.v1.AttachmentRegistry;
 import net.fabricmc.fabric.api.attachment.v1.AttachmentSyncPredicate;
@@ -149,6 +149,16 @@ public final class SlabAnchorAttachment {
         return PACKET_CODEC;
     }
 
+    /**
+     * Package-private proof seam for the placement-dy capacity regression test, mirroring
+     * {@link #packetCodecForTesting()}. Returns the exact codec registered on
+     * {@link #PLACEMENT_DY_TYPE}, so the test cannot exercise a duplicate approximation of the
+     * production sync path.
+     */
+    static PacketCodec<RegistryByteBuf, Long2ByteOpenHashMap> dyMapPacketCodecForTesting() {
+        return DY_MAP_PACKET_CODEC;
+    }
+
     public static final AttachmentType<LongOpenHashSet> ANCHOR_TYPE =
             AttachmentRegistry.<LongOpenHashSet>create(ANCHOR_ID, builder -> builder
                     .persistent(SET_CODEC)
@@ -243,57 +253,116 @@ public final class SlabAnchorAttachment {
         }
     }
 
-    private static final Codec<DyEntry> DY_ENTRY_CODEC = RecordCodecBuilder.create(inst -> inst.group(
-            Codec.LONG.fieldOf("p").forGetter(DyEntry::pos),
-            Codec.DOUBLE.fieldOf("d").forGetter(DyEntry::dy)
-    ).apply(inst, DyEntry::new));
+    /**
+     * Sixteenths of a block: the vanilla pixel grid, and a power of two so the maths is exact.
+     *
+     * <p>Ported from the Fabric 1.21.11 line 2026-09-03 together with
+     * {@link ChunkPositionDyMapPacketCodec}. Before it, this store held a raw {@code double} per
+     * cell and synchronized sixteen bytes per stored height with no grouping and no write guard —
+     * measurably worse than the eight-byte marker sets that already had to be compacted for issue
+     * #38. {@code PlacementDyAttachmentCapacityTest} proved the consequence: 1,024 stored heights
+     * in one chunk (four tiled sixteen-by-sixteen layers, an ordinary afternoon of building)
+     * encoded to 32,768 bytes and threw straight out of {@code setAttached}.
+     */
+    private static final double QUANTUM_DENOMINATOR = 16.0;
 
-    private static Long2DoubleOpenHashMap newDyMap() {
-        Long2DoubleOpenHashMap m = new Long2DoubleOpenHashMap();
-        m.defaultReturnValue(Double.NaN);
-        return m;
+    /** Sentinel for "this height cannot be represented exactly on the stored grid". */
+    public static final int UNREPRESENTABLE = Integer.MIN_VALUE;
+
+    /**
+     * Largest number of bytes this attachment may encode to.
+     *
+     * <p>Fabric rejects a synchronized attachment whose Netty backing array exceeds 32,502 bytes,
+     * and Netty rounds that array up to a power of two, so 16,384 is the largest capacity that
+     * clears the ceiling and a write of 16,385 bytes is already over. Fabric prefixes one boolean
+     * of its own, leaving 16,383 for the codec — the same arithmetic that made 2,047 raw longs fit
+     * and 2,048 fail in issue #38, restated for this attachment.
+     */
+    static final int SYNC_SAFE_ENCODED_BYTES = 16_383;
+
+    /** One WARN per session when a chunk saturates, not one per click there. */
+    private static volatile boolean dyBudgetReported = false;
+
+    /**
+     * The exact sixteenth-grid value for {@code dy}, or {@link #UNREPRESENTABLE} when the height is
+     * not finite or does not land exactly on the grid. An off-grid height is DECLINED, never
+     * rounded: rounding would silently move a placed block, which is the one thing LAW.md forbids.
+     */
+    public static int quantiseDy(double dy) {
+        if (!Double.isFinite(dy)) {
+            return UNREPRESENTABLE;
+        }
+        double sixteenths = dy * QUANTUM_DENOMINATOR;
+        int rounded = (int) Math.rint(sixteenths);
+        if (Math.abs(sixteenths - rounded) > 1.0e-9d) {
+            return UNREPRESENTABLE;
+        }
+        if (rounded < Byte.MIN_VALUE || rounded > Byte.MAX_VALUE) {
+            return UNREPRESENTABLE;
+        }
+        return rounded;
     }
 
-    private static final Codec<Long2DoubleOpenHashMap> DY_MAP_CODEC = DY_ENTRY_CODEC.listOf().xmap(
-            list -> {
-                Long2DoubleOpenHashMap m = newDyMap();
-                for (DyEntry e : list) {
-                    m.put(e.pos(), e.dy());
-                }
-                return m;
-            },
-            map -> {
-                java.util.List<DyEntry> l = new java.util.ArrayList<>(map.size());
-                for (var e : map.long2DoubleEntrySet()) {
-                    l.add(new DyEntry(e.getLongKey(), e.getDoubleValue()));
-                }
-                return l;
-            }
-    );
+    /** The stored grid value back as a height. Exact: both sides are powers of two. */
+    public static double dequantiseDy(byte sixteenths) {
+        return sixteenths / QUANTUM_DENOMINATOR;
+    }
 
-    private static final PacketCodec<RegistryByteBuf, Long2DoubleOpenHashMap> DY_MAP_PACKET_CODEC =
-            PacketCodec.of(
-                    (map, buf) -> {
-                        buf.writeVarInt(map.size());
-                        for (var e : map.long2DoubleEntrySet()) {
-                            buf.writeLong(e.getLongKey());
-                            buf.writeDouble(e.getDoubleValue());
-                        }
-                    },
-                    buf -> {
-                        int n = buf.readVarInt();
-                        Long2DoubleOpenHashMap m = newDyMap();
-                        for (int i = 0; i < n; i++) {
-                            long k = buf.readLong();
-                            double v = buf.readDouble();
-                            m.put(k, v);
-                        }
-                        return m;
-                    }
-            );
+    private static Long2ByteOpenHashMap newDyMap() {
+        return new Long2ByteOpenHashMap();
+    }
 
-    public static final AttachmentType<Long2DoubleOpenHashMap> PLACEMENT_DY_TYPE =
-            AttachmentRegistry.<Long2DoubleOpenHashMap>create(PLACEMENT_DY_ID, builder -> builder
+    /**
+     * Disk form: packed positions beside their quantised heights, both in ascending position order
+     * so a save is stable.
+     */
+    private static final Codec<Long2ByteOpenHashMap> DY_MAP_CODEC = RecordCodecBuilder.create(
+            inst -> inst.group(
+                    Codec.LONG_STREAM.fieldOf("positions")
+                            .forGetter(map -> java.util.stream.LongStream.of(sortedDyPositions(map))),
+                    Codec.INT_STREAM.fieldOf("dy_sixteenths")
+                            .forGetter(map -> java.util.stream.IntStream.of(
+                                    dyHeightsInPositionOrder(map)))
+            ).apply(inst, SlabAnchorAttachment::dyMapFromStreams));
+
+    private static long[] sortedDyPositions(Long2ByteOpenHashMap map) {
+        long[] positions = map.keySet().toLongArray();
+        java.util.Arrays.sort(positions);
+        return positions;
+    }
+
+    private static int[] dyHeightsInPositionOrder(Long2ByteOpenHashMap map) {
+        long[] positions = sortedDyPositions(map);
+        int[] heights = new int[positions.length];
+        for (int i = 0; i < positions.length; i++) {
+            heights[i] = map.get(positions[i]);
+        }
+        return heights;
+    }
+
+    private static Long2ByteOpenHashMap dyMapFromStreams(
+            java.util.stream.LongStream positions, java.util.stream.IntStream heights) {
+        long[] p = positions.toArray();
+        int[] h = heights.toArray();
+        Long2ByteOpenHashMap map = newDyMap();
+        int n = Math.min(p.length, h.length);
+        for (int i = 0; i < n; i++) {
+            map.put(p[i], (byte) h[i]);
+        }
+        return map;
+    }
+
+    /**
+     * Wire form: {@link ChunkPositionDyMapPacketCodec}, which groups by 16-cubed section, stores
+     * occupancy as a non-empty-word mask, and stores heights as a per-section palette. The height
+     * alphabet a real build produces is tiny, so a section built on one lowered surface costs a
+     * single palette byte for the whole section.
+     */
+    private static final PacketCodec<RegistryByteBuf, Long2ByteOpenHashMap> DY_MAP_PACKET_CODEC =
+            ChunkPositionDyMapPacketCodec.INSTANCE;
+
+    public static final AttachmentType<Long2ByteOpenHashMap> PLACEMENT_DY_TYPE =
+            AttachmentRegistry.<Long2ByteOpenHashMap>create(PLACEMENT_DY_ID, builder -> builder
                     .persistent(DY_MAP_CODEC)
                     .syncWith(DY_MAP_PACKET_CODEC, AttachmentSyncPredicate.all())
             );
@@ -345,7 +414,7 @@ public final class SlabAnchorAttachment {
      * nothing at all.
      */
     private static int writePlacementDyFactsInternal(World world, Map<BlockPos, PlacementDyFact> facts) {
-        IdentityHashMap<WorldChunk, Long2DoubleOpenHashMap> copies = new IdentityHashMap<>();
+        IdentityHashMap<WorldChunk, Long2ByteOpenHashMap> copies = new IdentityHashMap<>();
         IdentityHashMap<WorldChunk, Boolean> changedChunks = new IdentityHashMap<>();
         int writes = 0;
         for (Map.Entry<BlockPos, PlacementDyFact> entry : facts.entrySet()) {
@@ -358,17 +427,14 @@ public final class SlabAnchorAttachment {
             if (chunk == null) {
                 continue;
             }
-            Long2DoubleOpenHashMap map = copies.computeIfAbsent(chunk, ignored -> {
-                Long2DoubleOpenHashMap existing = chunk.getAttached(PLACEMENT_DY_TYPE);
-                Long2DoubleOpenHashMap copy = existing == null
-                        ? newDyMap()
-                        : new Long2DoubleOpenHashMap(existing);
-                copy.defaultReturnValue(Double.NaN);
-                return copy;
+            Long2ByteOpenHashMap map = copies.computeIfAbsent(chunk, ignored -> {
+                Long2ByteOpenHashMap existing = chunk.getAttached(PLACEMENT_DY_TYPE);
+                return existing == null ? newDyMap() : new Long2ByteOpenHashMap(existing);
             });
             long key = pos.asLong();
             PlacementDyFact current = map.containsKey(key)
-                    ? new PlacementDyFact(true, Double.doubleToRawLongBits(map.get(key)))
+                    ? new PlacementDyFact(true,
+                            Double.doubleToRawLongBits(dequantiseDy(map.get(key))))
                     : PlacementDyFact.absent();
             if (current.equals(desired)) {
                 continue;
@@ -378,7 +444,36 @@ public final class SlabAnchorAttachment {
                 if (!Double.isFinite(value)) {
                     throw new IllegalArgumentException("non-finite authoritative placement dy");
                 }
-                map.put(key, value);
+                int quantised = quantiseDy(value);
+                if (quantised == UNREPRESENTABLE) {
+                    // DECLINED, never rounded: a rounded height is a moved block, and LAW.md
+                    // forbids a placed block moving. The cell keeps whatever the live lanes
+                    // answer for it, exactly as it would with no fact at all.
+                    if (TRACE) {
+                        Slabbed.LOGGER.info(
+                                "[PLACEMENT_DY] declined pos={} dy={} reason=not_on_sixteenth_grid",
+                                pos.toShortString(), value);
+                    }
+                    continue;
+                }
+                Long2ByteOpenHashMap candidate = new Long2ByteOpenHashMap(map);
+                candidate.put(key, (byte) quantised);
+                if (ChunkPositionDyMapPacketCodec.encodedByteLength(candidate)
+                        > SYNC_SAFE_ENCODED_BYTES) {
+                    // The chunk is saturated. Decline the new fact rather than let setAttached
+                    // throw and take the whole chunk's synchronization down with it; the cell
+                    // falls back to the live lanes, which is this line's pre-store behaviour.
+                    if (!dyBudgetReported) {
+                        dyBudgetReported = true;
+                        Slabbed.LOGGER.warn(
+                                "[PLACEMENT_DY] chunk {},{} is at its synchronization budget ({} "
+                                        + "bytes); further placement heights there are not stored. "
+                                        + "This message appears once per session.",
+                                chunk.getPos().x, chunk.getPos().z, SYNC_SAFE_ENCODED_BYTES);
+                    }
+                    continue;
+                }
+                map.put(key, (byte) quantised);
             } else {
                 map.remove(key);
             }
@@ -440,10 +535,10 @@ public final class SlabAnchorAttachment {
         if (chunk == null) {
             return PlacementDyFact.absent();
         }
-        Long2DoubleOpenHashMap map = chunk.getAttached(PLACEMENT_DY_TYPE);
+        Long2ByteOpenHashMap map = chunk.getAttached(PLACEMENT_DY_TYPE);
         long key = pos.asLong();
         return (map != null && map.containsKey(key))
-                ? new PlacementDyFact(true, Double.doubleToRawLongBits(map.get(key)))
+                ? new PlacementDyFact(true, Double.doubleToRawLongBits(dequantiseDy(map.get(key))))
                 : PlacementDyFact.absent();
     }
 
@@ -800,10 +895,9 @@ public final class SlabAnchorAttachment {
         if (world != null && !world.isClient()) {
             WorldChunk dyChunk = world.getChunk(pos.getX() >> 4, pos.getZ() >> 4);
             if (dyChunk != null) {
-                Long2DoubleOpenHashMap dyMap = dyChunk.getAttached(PLACEMENT_DY_TYPE);
+                Long2ByteOpenHashMap dyMap = dyChunk.getAttached(PLACEMENT_DY_TYPE);
                 if (dyMap != null && dyMap.containsKey(pos.asLong())) {
-                    Long2DoubleOpenHashMap copy = new Long2DoubleOpenHashMap(dyMap);
-                    copy.defaultReturnValue(Double.NaN);
+                    Long2ByteOpenHashMap copy = new Long2ByteOpenHashMap(dyMap);
                     copy.remove(pos.asLong());
                     dyChunk.setAttached(PLACEMENT_DY_TYPE, copy);
                 }
