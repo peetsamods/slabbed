@@ -28,6 +28,7 @@ com/slabbed/anchor/DeepDyConsentAttachment$Stamp.class
 com/slabbed/anchor/DeepDyConsentAttachment$State.class
 com/slabbed/anchor/DeepDyConsentAttachment$TagSerializer.class
 com/slabbed/anchor/DeepDyConsentAttachment.class
+com/slabbed/anchor/SlabAnchorAttachment$WysiwygFollowMark.class
 com/slabbed/anchor/SlabAnchorAttachment.class
 com/slabbed/anchor/ClientRenderDyPrediction$Entry.class
 com/slabbed/anchor/ClientRenderDyPrediction.class

@@ -1,5 +1,16 @@
 ## [Unreleased]
 
+### Placement
+
+- Side placements are true WYSIWYG at any depth (maintainer ruling,
+  2026-09-01): a slab — or a fence, wall, or pane — placed against a lowered
+  block's visible side face lands at exactly the height of the face you aimed
+  at, whether that is −0.5, −1.0, or anywhere down to the −3.0 envelope.
+  Previously only a −0.5 face was followed, and deeper side placements landed
+  at normal grid height. Faces at heights the placement store cannot represent
+  (a slab seated on an enchanting table's top, for example) are unaffected and
+  land exactly as before.
+
 ### Height resolution
 
 - A chain hanging below an ordinary (non-slab) lowered block now follows that

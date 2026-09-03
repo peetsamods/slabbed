@@ -676,11 +676,31 @@ public abstract class BlockItemPlacementIntentMixin {
         BlockState clickedState = level.getBlockState(clicked);
         Direction face = context.getClickedFace();
         double clickedDy = SlabSupport.getYOffset(level, clicked, clickedState);
-        if (Math.abs(clickedDy + 0.5d) < 1.0e-6d) {
-            if (heldIsSlab && face.getAxis().isHorizontal()) {
-                SlabAnchorAttachment.markWysiwygFollowClickedLoweredFace(clicked.relative(face));
-            } else if (heldIsSlab && face == Direction.UP && clickedState.getBlock() instanceof SlabBlock) {
-                SlabAnchorAttachment.markWysiwygFollowClickedLoweredFace(clicked.above());
+        // Any STORABLE lowered face arms the follow, not only −0.5 (maintainer ruling,
+        // 2026-09-01: WYSIWYG at any depth). Arming matters beyond the height itself: the
+        // consume in freezeLoweredOnPlace is what keeps the structural FROZEN_FLAT stamp off a
+        // landing whose exact deep fact the capture is about to record — unarmed, the two
+        // writers of one transaction disagree and every follower of the stamped face floats.
+        //
+        // Storability is part of the arming predicate, not a downstream check: a face at a
+        // non-half-step height (a slab seated on an enchanting table's 12/16 top, for example)
+        // has no exact fact the capture could store, so an armed consume would leave the
+        // landing with no anchor, no FLAT stamp, and no fact — unfrozen against LAW 1. Those
+        // faces stay unarmed and land exactly as they did before the ruling. Connectors arm
+        // alongside slabs because the consume site accepts them: unarmed, their deep landings
+        // took a FLAT stamp from the freeze while the capture stored a deep fact — the exact
+        // two-writer disagreement above. The UP-face branch stays at exactly −0.5: a stacked
+        // slab's height comes from the seat derivation reading the real top face below it, and
+        // the wider arming gave the consume a depth the capture never stores for stacks.
+        boolean storableDepth = clickedDy < -1.0e-6d
+                && SlabPlacementHeightAttachment.exactHalfSteps(clickedDy).isPresent();
+        if (storableDepth) {
+            if ((heldIsSlab || heldIsConnector) && face.getAxis().isHorizontal()) {
+                SlabAnchorAttachment.markWysiwygFollowClickedLoweredFace(clicked.relative(face), clickedDy);
+            } else if (heldIsSlab && face == Direction.UP
+                    && clickedState.getBlock() instanceof SlabBlock
+                    && Math.abs(clickedDy + 0.5d) < 1.0e-6d) {
+                SlabAnchorAttachment.markWysiwygFollowClickedLoweredFace(clicked.above(), clickedDy);
             }
         } else if (Math.abs(clickedDy) < 1.0e-6d
                 && heldIsSlab
