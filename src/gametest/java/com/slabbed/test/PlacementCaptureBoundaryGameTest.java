@@ -5,7 +5,7 @@ import com.slabbed.anchor.C3TestPhaseTrace;
 import com.slabbed.anchor.SlabAnchorAttachment;
 import com.slabbed.compat.CompatHooks;
 import com.slabbed.util.SlabSupport;
-import it.unimi.dsi.fastutil.longs.Long2DoubleOpenHashMap;
+import it.unimi.dsi.fastutil.longs.Long2ByteOpenHashMap;
 import net.minecraft.block.Block;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.Blocks;
@@ -260,12 +260,16 @@ public final class PlacementCaptureBoundaryGameTest {
     /** Test-only fixture: plant an exact raw value in the store without going through a placement. */
     static void forceStore(ServerWorld world, BlockPos pos, double dy) {
         WorldChunk chunk = world.getChunk(pos.getX() >> 4, pos.getZ() >> 4);
-        Long2DoubleOpenHashMap existing = chunk.getAttached(SlabAnchorAttachment.PLACEMENT_DY_TYPE);
-        Long2DoubleOpenHashMap copy = existing == null
-                ? new Long2DoubleOpenHashMap()
-                : new Long2DoubleOpenHashMap(existing);
-        copy.defaultReturnValue(Double.NaN);
-        copy.put(pos.asLong(), dy);
+        Long2ByteOpenHashMap existing = chunk.getAttached(SlabAnchorAttachment.PLACEMENT_DY_TYPE);
+        Long2ByteOpenHashMap copy = existing == null
+                ? new Long2ByteOpenHashMap()
+                : new Long2ByteOpenHashMap(existing);
+        int quantised = SlabAnchorAttachment.quantiseDy(dy);
+        if (quantised == SlabAnchorAttachment.UNREPRESENTABLE) {
+            throw new IllegalArgumentException(
+                    "fixture: " + dy + " is not on the stored sixteenth grid");
+        }
+        copy.put(pos.asLong(), (byte) quantised);
         chunk.setAttached(SlabAnchorAttachment.PLACEMENT_DY_TYPE, copy);
     }
 

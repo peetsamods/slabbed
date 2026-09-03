@@ -26,7 +26,8 @@
       "com.slabbed.test.LandingRuleLawTest",
       "com.slabbed.test.PlacementCaptureBoundaryGameTest",
       "com.slabbed.test.PlacementDyOverlayTest",
-      "com.slabbed.anchor.FrozenFlatAttachmentCapacityTest"
+      "com.slabbed.anchor.FrozenFlatAttachmentCapacityTest",
+      "com.slabbed.anchor.PlacementDyAttachmentCapacityTest"
     ]
   },
   "depends": {

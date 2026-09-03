@@ -3,7 +3,7 @@ package com.slabbed.test;
 import com.slabbed.Slabbed;
 import com.slabbed.anchor.SlabAnchorAttachment;
 import com.slabbed.util.SlabSupport;
-import it.unimi.dsi.fastutil.longs.Long2DoubleOpenHashMap;
+import it.unimi.dsi.fastutil.longs.Long2ByteOpenHashMap;
 import net.minecraft.block.Block;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.Blocks;
@@ -60,7 +60,7 @@ import java.util.List;
  *
  * <p><b>6 of 15 rows are {@code required} (blocking)</b>: {@code fenceGateOnMarkedSlab},
  * {@code slabOnDeepLoweredFullBlock}, {@code missingPlacementDyResolvesStableFlatAcrossNeighborEdit},
- * {@code corruptPlacementDyResolvesStablePositiveZeroAcrossNeighborEdit},
+ * {@code offGridHeightIsDeclinedNeverRounded},
  * {@code aimedCarpetOnMinusOneOwner}, {@code aimedPowderSnowOnMinusOneOwner}. Every one calls
  * {@link #runSubjectWithFrozenStore}, which force-enables the store for that row only — so these 6
  * gate a configuration this line does not yet ship by default, not the shipped one.
@@ -122,26 +122,34 @@ public final class NeighborUpdateInvarianceTest {
     /** Test-only fixture: drop exactly one placement-dy fact, leaving the block itself untouched. */
     private static void removePlacementDyOnly(TestContext h, ServerWorld world, BlockPos subject) {
         WorldChunk chunk = world.getChunk(subject.getX() >> 4, subject.getZ() >> 4);
-        Long2DoubleOpenHashMap existing = chunk.getAttached(SlabAnchorAttachment.PLACEMENT_DY_TYPE);
+        Long2ByteOpenHashMap existing = chunk.getAttached(SlabAnchorAttachment.PLACEMENT_DY_TYPE);
         h.assertTrue(existing != null && existing.containsKey(subject.asLong()),
                 "premise: subject PLACEMENT_DY fact was already absent at " + subject);
-        Long2DoubleOpenHashMap copy = new Long2DoubleOpenHashMap(existing);
-        copy.defaultReturnValue(Double.NaN);
+        Long2ByteOpenHashMap copy = new Long2ByteOpenHashMap(existing);
         copy.remove(subject.asLong());
         chunk.setAttached(SlabAnchorAttachment.PLACEMENT_DY_TYPE, copy);
     }
 
-    /** Test-only corruption fixture: overwrite exactly one placement-dy fact with the supplied bits. */
-    private static void overwritePlacementDyRaw(
-            TestContext h, ServerWorld world, BlockPos subject, long rawBits
+    /**
+     * Test-only fixture: overwrite exactly one placement-dy fact with the supplied height.
+     *
+     * <p>Took raw {@code long} bits before the store was quantised onto the sixteenth grid
+     * (2026-09-03). Raw bits no longer have a meaning here: the store holds a signed byte of
+     * sixteenths, so a non-finite or off-grid value cannot be planted at all — which is the point
+     * of the new contract, and what {@code offGridHeightIsDeclinedNeverRounded} now asserts.
+     */
+    private static void overwritePlacementDy(
+            TestContext h, ServerWorld world, BlockPos subject, double dy
     ) {
         WorldChunk chunk = world.getChunk(subject.getX() >> 4, subject.getZ() >> 4);
-        Long2DoubleOpenHashMap existing = chunk.getAttached(SlabAnchorAttachment.PLACEMENT_DY_TYPE);
+        Long2ByteOpenHashMap existing = chunk.getAttached(SlabAnchorAttachment.PLACEMENT_DY_TYPE);
         h.assertTrue(existing != null && existing.containsKey(subject.asLong()),
                 "premise: subject PLACEMENT_DY fact was absent before overwrite at " + subject);
-        Long2DoubleOpenHashMap copy = new Long2DoubleOpenHashMap(existing);
-        copy.defaultReturnValue(Double.NaN);
-        copy.put(subject.asLong(), Double.longBitsToDouble(rawBits));
+        int quantised = SlabAnchorAttachment.quantiseDy(dy);
+        h.assertTrue(quantised != SlabAnchorAttachment.UNREPRESENTABLE,
+                "fixture premise: " + dy + " is not on the stored sixteenth grid");
+        Long2ByteOpenHashMap copy = new Long2ByteOpenHashMap(existing);
+        copy.put(subject.asLong(), (byte) quantised);
         chunk.setAttached(SlabAnchorAttachment.PLACEMENT_DY_TYPE, copy);
     }
 
@@ -510,52 +518,48 @@ public final class NeighborUpdateInvarianceTest {
     }
 
     /**
-     * STABLE-FLAT law for a CORRUPT fact: NaN / ±Infinity in the store resolve to raw positive
-     * {@code 0.0} before and after a neighbour edit, and the stored bits themselves are left exactly
-     * as found (a read never repairs, rewrites, or re-derives the store).
+     * STABLE-FLAT law, restated for the quantised store (2026-09-03).
+     *
+     * <p>This row previously planted raw NaN / ±Infinity bits in the store and asserted they were
+     * preserved byte-for-byte while resolving to positive {@code 0.0}. That contract died with the
+     * raw-double store: heights are now a signed byte of sixteenths, so a non-finite or off-grid
+     * value cannot be represented, let alone planted. The replacement contract is strictly
+     * stronger and is what the store actually promises — <b>an unrepresentable height is DECLINED
+     * at write time, never rounded and never stored</b>. Rounding would silently relocate a placed
+     * block, which is the one outcome LAW.md forbids outright, so declining is not a fallback here;
+     * it is the correct answer.
      */
     @GameTest(templateName = "fabric-gametest-api-v1:empty")
-    public void corruptPlacementDyResolvesStablePositiveZeroAcrossNeighborEdit(TestContext h) {
-        ServerWorld world = h.getWorld();
-        long positiveZeroBits = Double.doubleToRawLongBits(0.0d);
-        long[] corruptBits = {
-                Double.doubleToRawLongBits(Double.NaN),
-                Double.doubleToRawLongBits(Double.POSITIVE_INFINITY),
-                Double.doubleToRawLongBits(Double.NEGATIVE_INFINITY)
+    public void offGridHeightIsDeclinedNeverRounded(TestContext h) {
+        // On the grid: every sixteenth, and the two values a real placement produces most.
+        double[] representable = {0.0d, -0.5d, -1.0d, -1.5d, -0.0625d, 1.0d, -3.0d};
+        for (double dy : representable) {
+            int quantised = SlabAnchorAttachment.quantiseDy(dy);
+            h.assertTrue(quantised != SlabAnchorAttachment.UNREPRESENTABLE,
+                    dy + " is on the sixteenth grid and must be storable");
+            h.assertTrue(
+                    Double.doubleToRawLongBits(
+                            SlabAnchorAttachment.dequantiseDy((byte) quantised))
+                            == Double.doubleToRawLongBits(dy),
+                    "round-trip through the stored grid changed " + dy + " to "
+                            + SlabAnchorAttachment.dequantiseDy((byte) quantised));
+        }
+
+        // Off the grid, or outside what a byte of sixteenths can hold: declined, not rounded.
+        double[] unrepresentable = {
+                Double.NaN,
+                Double.POSITIVE_INFINITY,
+                Double.NEGATIVE_INFINITY,
+                -0.03d,      // between two sixteenths
+                -0.51d,      // just off -0.5
+                -9.0d,       // beyond the signed-byte range
+                8.0d,
         };
-        boolean previous = SlabAnchorAttachment.FROZEN_DY_ENABLED;
-        SlabAnchorAttachment.FROZEN_DY_ENABLED = true;
-        try {
-            for (long corruptRawBits : corruptBits) {
-                clearArena(h, world);
-                BlockPos subject = frozenLoweredSubject(h, world);
-
-                overwritePlacementDyRaw(h, world, subject, corruptRawBits);
-                SlabAnchorAttachment.PlacementDyFact corruptBefore =
-                        SlabAnchorAttachment.rawPlacementDyFact(world, subject);
-                h.assertTrue(corruptBefore.present() && corruptBefore.rawBits() == corruptRawBits,
-                        "premise: exact corrupt PLACEMENT_DY bits were not stored; wanted="
-                                + Long.toHexString(corruptRawBits)
-                                + " observed=" + Long.toHexString(corruptBefore.rawBits()));
-
-                double fallbackBefore = dy(world, subject);
-                world.breakBlock(subject.down(), false);
-                h.assertTrue(!world.getBlockState(subject).isAir(),
-                        "premise: corrupt-value neighbor edit removed the subject");
-                SlabAnchorAttachment.PlacementDyFact corruptAfter =
-                        SlabAnchorAttachment.rawPlacementDyFact(world, subject);
-                double fallbackAfter = dy(world, subject);
-                h.assertTrue(corruptAfter.present() && corruptAfter.rawBits() == corruptRawBits,
-                        "premise: neighbor edit changed corrupt PLACEMENT_DY bits");
-                h.assertTrue(Double.doubleToRawLongBits(fallbackBefore) == positiveZeroBits
-                                && Double.doubleToRawLongBits(fallbackAfter) == positiveZeroBits,
-                        "corrupt PLACEMENT_DY must resolve raw positive 0.0 before/after neighbor edit; "
-                                + "corrupt=" + Long.toHexString(corruptRawBits)
-                                + " fallbackBefore=" + fallbackBefore
-                                + " fallbackAfter=" + fallbackAfter);
-            }
-        } finally {
-            SlabAnchorAttachment.FROZEN_DY_ENABLED = previous;
+        for (double dy : unrepresentable) {
+            h.assertTrue(
+                    SlabAnchorAttachment.quantiseDy(dy) == SlabAnchorAttachment.UNREPRESENTABLE,
+                    dy + " is not exactly on the stored sixteenth grid and must be declined, "
+                            + "but it quantised to " + SlabAnchorAttachment.quantiseDy(dy));
         }
         h.complete();
     }
