@@ -20,6 +20,12 @@ See LAW.md — this changelog does not redefine the law.
 
 ### Fixes
 
+- **Cushions sit on lowered blocks.** 26.3's new cushions are placed onto whatever surface you aim
+  at, but placing one on a lowered block was silently refused: the game checked the block's grid cell,
+  which the cushion overlaps, and concluded the cushion was buried inside stone even though the stone is
+  drawn below it. A block now only counts as burying a cushion where its drawn body actually overlaps
+  it, so a cushion aimed at a lowered block's visible top lands there and stays (maintainer ruling,
+  2026-09-03). Cushions on ordinary blocks are unchanged.
 - **Tilling and shovelling keep a lowered block lowered.** Turning a lowered dirt block into farmland
   with a hoe, or a lowered grass block into a dirt path with a shovel, used to drop the block back to
   normal height, because the freshly transformed block is a sliver shorter than a full cube and the
