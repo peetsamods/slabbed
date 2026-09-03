@@ -105,6 +105,7 @@ anything. The split above puts the fine granularity only where a leak has actual
 | `com/slabbed/mixin/DecoratedPotParticleMixin` | Particle origin follows the lowered block. |
 | `com/slabbed/mixin/FencePaneSlabConnectionMixin` | Fence/pane connection against a lowered slab. |
 | `com/slabbed/mixin/HangingSignAttachedMixin` | Hanging-sign attachment from above. |
+| `com/slabbed/mixin/ItemFrameWysiwygMixin` | Item-frame bounding box hangs on the support's drawn face; entity position untouched. |
 | `com/slabbed/mixin/ItemStackUseCreatedContactMixin` | Use-on contact point for offset placement. |
 | `com/slabbed/mixin/LeverParticleMixin` | Particle origin follows the lowered block. |
 | `com/slabbed/mixin/LivingEntityLoweredScaffoldingMixin` | Scaffolding movement over lowered geometry. |

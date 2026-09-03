@@ -17,6 +17,7 @@
     "DecoratedPotParticleMixin",
     "FencePaneSlabConnectionMixin",
     "HangingSignAttachedMixin",
+    "ItemFrameWysiwygMixin",
     "ItemStackUseCreatedContactMixin",
     "LeverParticleMixin",
     "LivingEntityLoweredScaffoldingMixin",
