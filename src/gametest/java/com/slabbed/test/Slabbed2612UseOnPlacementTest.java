@@ -502,17 +502,18 @@ public final class Slabbed2612UseOnPlacementTest {
     }
 
     /**
-     * The solid-ground variant of the row above. Here the aimed -1.0 landing would sit fully
-     * INSIDE the dirt below. Measured (2026-09-02): the store keeps the aim verbatim (fact
-     * -1.0) while the derivation lane floors at the anchored -0.5 — the burial arbitration
-     * between WYSIWYG and FLUSH WINS is OPEN and pre-dates the any-depth port (the store lane
-     * is untouched by it); it is tracked as its own follow-up awaiting a maintainer ruling.
-     * What this row pins is the TWO-WRITER step the ruling did close: the freeze must never
-     * stamp FROZEN_FLAT (geometric 0.0) over a landing whose stored fact is lowered —
-     * pre-ruling, the unarmed follow let the side-inherited rail do exactly that.
+     * The solid-ground variant of the row above, PINNED by the seat-clamp arbitration
+     * (maintainer ruling, 2026-09-02): the aim is honored to the physical limit of the landing
+     * cell. Slab B's aimed -1.0 landing would sit fully INSIDE the dirt below, so the SIDE arm
+     * clamps it to the REAL seat — flush 0.0 on the dirt, exactly what the control placement on
+     * the dirt top computes — and the stored fact and the derivation lane agree by construction
+     * (pre-ruling the store kept -1.0 while the derivation floored at -0.5, measured 2026-09-02).
+     * Slab A in the same row is the open-descent control (air below): the clamp must never touch
+     * it, its fact keeps the aim verbatim, and it carries the TWO-WRITER pin this row has always
+     * held — the freeze must not stamp FROZEN_FLAT (geometric 0.0) over a lowered stored fact.
      */
     @GameTest(structure = "fabric-gametest-api-v1:empty")
-    public void useOnDeepSideLandingOverSolidGroundStaysCoherent(GameTestHelper helper) {
+    public void useOnDeepSideLandingOverSolidGroundClampsToRealSeat(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
         buildCompoundMinusOne(helper);
         BlockPos owner = helper.absolutePos(new BlockPos(2, 5, 2));
@@ -527,7 +528,17 @@ public final class Slabbed2612UseOnPlacementTest {
         BlockPos a = placeSlabViaAndFindChangedSlab(helper, player, owner, Direction.EAST,
                 eastHitOffset(owner, -1.0, 0.25));
         assertSlabDy(helper, level, a, new BlockPos(3, 5, 2), -1.0,
-                "SETUP: slab A beside the -1.0 compound must land -1.0");
+                "OPEN-DESCENT CONTROL: slab A beside the -1.0 compound must land -1.0 verbatim");
+        SlabAnchorAttachment.PlacementDyFact factA = SlabAnchorAttachment.rawPlacementDyFact(level, a);
+        if (!factA.present() || Math.abs(factA.valueOrNaN() + 1.0) > 1.0e-6) {
+            throw helper.assertionException(new BlockPos(3, 5, 2),
+                    "open-descent fact must keep the aim verbatim (-1.0), got "
+                            + (factA.present() ? Double.toString(factA.valueOrNaN()) : "absent"));
+        }
+        if (SlabAnchorAttachment.isFrozenFlat(level, a)) {
+            throw helper.assertionException(new BlockPos(3, 5, 2),
+                    "the freeze must not stamp FROZEN_FLAT over a lowered stored fact");
+        }
 
         BlockPos b = placeSlabViaAndFindChangedSlab(helper, player, a, Direction.EAST,
                 eastHitOffset(a, -1.0, 0.25));
@@ -538,19 +549,19 @@ public final class Slabbed2612UseOnPlacementTest {
         }
         double storedB = SlabSupport.getYOffset(level, b, level.getBlockState(b));
         SlabAnchorAttachment.PlacementDyFact factB = SlabAnchorAttachment.rawPlacementDyFact(level, b);
-        System.out.println("[ANYDEPTH_SOLID_GROUND] derived=" + storedB
-                + " fact=" + (factB.present() ? Double.toString(factB.valueOrNaN()) : "absent"));
-        if (storedB >= -1.0e-6) {
+        if (!factB.present() || Math.abs(factB.valueOrNaN()) > 1.0e-6) {
             throw helper.assertionException(new BlockPos(4, 5, 2),
-                    "deep-face side landing over solid ground must still be lowered (aim honored to the physical limit), got " + storedB);
+                    "solid-ground landing must store the REAL seat (0.0, maintainer ruling 2026-09-02), got fact "
+                            + (factB.present() ? Double.toString(factB.valueOrNaN()) : "absent"));
         }
-        if (SlabAnchorAttachment.isFrozenFlat(level, b)) {
+        if (Math.abs(storedB) > 1.0e-6) {
             throw helper.assertionException(new BlockPos(4, 5, 2),
-                    "the freeze must not stamp FROZEN_FLAT over a lowered stored fact (stored " + storedB + ")");
+                    "the derivation lane must agree with the clamped fact (0.0), got " + storedB);
         }
-        if (!SlabAnchorAttachment.isAnchored(level, b)) {
+        if (!SlabAnchorAttachment.isFrozenFlat(level, b)) {
             throw helper.assertionException(new BlockPos(4, 5, 2),
-                    "the consumed WYSIWYG follow must anchor the lowered landing (stored " + storedB + ")");
+                    "a follow whose seat admits no lowering lands FLUSH and must take the FLAT stamp"
+                            + " — the freeze verdict must agree with the flush fact (two-writer law)");
         }
         helper.succeed();
     }

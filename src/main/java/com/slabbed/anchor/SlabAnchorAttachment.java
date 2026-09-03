@@ -653,7 +653,15 @@ public final class SlabAnchorAttachment {
         // (NEVER-POP-down preserved). This overrides the side-inherited freeze-flat rail below, which only
         // applies when the slab was placed on its OWN flush ground WITHOUT clicking the lowered block.
         if (state.getBlock() instanceof SlabBlock && consumeWysiwygFollowClickedLoweredFace(pos)) {
-            addAnchorUnchecked(world, pos);
+            // Seat clamp (maintainer ruling, 2026-09-02): the follow arms on the AIM, but the landing
+            // is clamped to the cell's real seat — a follow whose seat admits no lowering landed FLUSH
+            // and must take the FLAT stamp so the freeze verdict agrees with the flush fact the capture
+            // stores. Anchoring here regardless was the same two-writer disagreement inverted.
+            if (com.slabbed.placement.LandingResolver.realSeatAdmitsLowering(world, pos, state)) {
+                addAnchorUnchecked(world, pos);
+            } else {
+                addToAttachment(world, pos, FROZEN_FLAT_TYPE, "frozen_flat");
+            }
             return;
         }
         // The placement fact for THIS cell is published only after {@code BlockItem.place} returns, so

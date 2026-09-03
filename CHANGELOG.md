@@ -16,8 +16,9 @@ See LAW.md — this changelog does not redefine the law.
   stamped "flat" while its exact height said otherwise, and a deep slab fed neighbours a
   half-block floor instead of its real depth. The bookkeeping now follows the aimed face
   (maintainer ruling, 2026-09-01: WYSIWYG is absolute). Where the aim would bury the piece in
-  solid ground, the placement still seats on the real surface — aim is honored to the physical
-  limit, never past it.
+  solid ground, the placement now seats on the real surface — aim is honored to the physical
+  limit, never past it, and the stored height agrees with what you see (maintainer ruling,
+  2026-09-02: the burial arbitration resolves to the real seat).
 - **Item frames hang where you see the block.** An item frame placed on a lowered block's
   visible face hung at normal grid height, floating above (or beside) the surface it was
   aimed at. Frames — glow frames included — now hang on the support's drawn face (maintainer

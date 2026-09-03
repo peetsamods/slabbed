@@ -2,6 +2,7 @@ package com.slabbed.placement;
 
 import com.slabbed.anchor.SlabAnchorAttachment;
 import com.slabbed.compat.CompatHooks;
+import com.slabbed.util.SlabEnsembleCoherence;
 import com.slabbed.util.SlabSupport;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -317,11 +318,59 @@ public final class LandingResolver {
                     : aim.ownerPos().getY() + aim.ownerVisibleDy() + bottomPlaneOffset(aim.ownerState())
                             - (actualTarget.getY() + 1.0d);
         } else {
-            landingDy = aim.ownerVisibleDy() + aim.ownerPos().getY() - actualTarget.getY();
+            landingDy = clampToRealSeat(world, actualTarget, finalState,
+                    aim.ownerVisibleDy() + aim.ownerPos().getY() - actualTarget.getY());
         }
         return Double.isFinite(landingDy)
                 ? new PlacementResolution(actualTarget, landingDy, false)
                 : null;
+    }
+
+    /**
+     * SIDE-arm seat clamp (maintainer ruling, 2026-09-02): the aim is honored to the physical limit
+     * of the landing cell — a side-inherited depth may not increase collision-body overlap with the
+     * support directly below beyond the same states' vanilla adjacent-cell baseline. The landing is
+     * raised in half-steps until the overlap clears, seating it on the REAL surface (flush over a
+     * solid full block), at grid height at the latest. Open descent — air below, or a support whose
+     * top plane sits at or below the aimed depth — inherits the aim verbatim; that is the any-depth
+     * ruling (2026-09-01) and this clamp must never raise it. Placement-time only: this is part of
+     * the aim interpretation LAW.md names as the single legitimate geometry consultation, and the
+     * clamped value is what gets frozen. Uses the SAME overlap predicate as the translated-occupancy
+     * refusal gate so the mint and the gate cannot judge one placement differently; scenes the clamp
+     * cannot make physical (e.g. the raised seat collides with a body from above) still refuse there.
+     */
+    /**
+     * Whether the landing cell's real seat admits ANY lowered landing (maintainer ruling,
+     * 2026-09-02). The WYSIWYG follow arms only on a lowered aim, so for its consume site
+     * "the clamped landing is lowered" reduces to exactly this cell question: a half-step
+     * landing that does not survive the seat clamp means the whole transaction seats flush,
+     * and the freeze verdict must agree with the flush fact the capture stores — never anchor
+     * a landing the clamp raised to grid height.
+     */
+    public static boolean realSeatAdmitsLowering(BlockGetter world, BlockPos target, BlockState state) {
+        return clampToRealSeat(world, target, state, -0.5d) < -1.0e-6d;
+    }
+
+    private static double clampToRealSeat(
+            BlockGetter world, BlockPos target, BlockState finalState, double aimDy) {
+        if (world == null || !Double.isFinite(aimDy) || aimDy >= -1.0e-6d) {
+            return aimDy;
+        }
+        BlockPos belowPos = target.below();
+        BlockState belowState = world.getBlockState(belowPos);
+        if (belowState.isAir()) {
+            return aimDy;
+        }
+        double belowDy = visibleOwnerDy(world, belowPos, belowState);
+        double clamped = aimDy;
+        while (clamped < -1.0e-6d
+                && SlabEnsembleCoherence.relativeTranslationIncreasesBodyOverlap(
+                        belowState, belowPos, belowDy, finalState, target, clamped)) {
+            // Never overshoot past grid height: at 0.0 the candidate sits at the vanilla baseline,
+            // so the overlap predicate is false by construction and the loop terminates.
+            clamped = Math.min(clamped + 0.5d, 0.0d);
+        }
+        return clamped;
     }
 
     /**
