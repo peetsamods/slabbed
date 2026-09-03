@@ -68,6 +68,8 @@ com/slabbed/mixin/AbstractArrowOffsetClipMixin.class
 com/slabbed/mixin/ExplosionOcclusionOffsetClipMixin.class
 com/slabbed/mixin/LivingEntitySightOffsetClipMixin.class
 com/slabbed/mixin/BlockCollisionsLoweredAboveMixin.class
+com/slabbed/mixin/CampfireCookingParticleMixin.class
+com/slabbed/mixin/CampfireParticleMixin.class
 com/slabbed/mixin/CandleParticleMixin.class
 com/slabbed/mixin/BlockItemPlacementIntentMixin$1.class
 com/slabbed/mixin/BlockItemPlacementIntentMixin$2.class
@@ -189,6 +191,8 @@ com/slabbed/mixin/AbstractArrowOffsetClipMixin.java
 com/slabbed/mixin/ExplosionOcclusionOffsetClipMixin.java
 com/slabbed/mixin/LivingEntitySightOffsetClipMixin.java
 com/slabbed/mixin/BlockCollisionsLoweredAboveMixin.java
+com/slabbed/mixin/CampfireCookingParticleMixin.java
+com/slabbed/mixin/CampfireParticleMixin.java
 com/slabbed/mixin/CandleParticleMixin.java
 com/slabbed/mixin/BlockItemPlacementIntentMixin.java
 com/slabbed/mixin/BlockOnPlacedAnchorMixin.java

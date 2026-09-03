@@ -6,6 +6,8 @@
     "HangingSignAttachedMixin",
     "ItemFrameWysiwygMixin",
     "CandleParticleMixin",
+    "CampfireParticleMixin",
+    "CampfireCookingParticleMixin",
     "LeverParticleMixin",
     "CarpetBlockMixin",
     "SnowLayerBlockMixin",
