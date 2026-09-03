@@ -247,10 +247,13 @@ public abstract class ServerInteractBlockHitToleranceMixin {
         if (!changed) {
             return;
         }
+        // Swing exactly as vanilla's 26.3 use-item path does: the held item's own interact animation
+        // (read before the consume empties a last stack) and the attack-strength reset that came with it.
+        SwingAnimation swingAnimation = player.getItemInHand(packet.hand()).getInteractAnimation();
         if (!player.isCreative()) {
             player.getItemInHand(packet.hand()).consume(1, player);
         }
-        player.swing(packet.hand(), SwingAnimation.DEFAULT, true);
+        player.swingAndResetAttackStrength(packet.hand(), swingAnimation, true);
         ci.cancel();
     }
 
