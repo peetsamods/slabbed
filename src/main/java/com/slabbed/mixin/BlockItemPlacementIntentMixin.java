@@ -184,6 +184,55 @@ public abstract class BlockItemPlacementIntentMixin {
         }
     }
 
+    @org.spongepowered.asm.mixin.Shadow
+    protected abstract BlockState getPlacementState(BlockPlaceContext context);
+
+    /**
+     * A trampled sub-full support (dirt path / farmland, 15/16 tall) converts to dirt under a
+     * placement this transaction manages, before the block lands (maintainer ruling,
+     * 2026-09-01). Vanilla converts only under solid full blocks; everything else seated on
+     * the trampled block whose 1/16-short top no height decision in this transaction reads
+     * honestly (the resolver's top plane hardcodes a full cube for non-slabs). Converting
+     * first means every later decision sees a real full block: seat 0, stamp FLAT, no anchor.
+     * Runs on both logical sides so the client predicts the same landing the server stores.
+     *
+     * <p>VIABILITY-GATED and REVERSIBLE, because it runs before the placement it serves and
+     * {@code canPlace()} tests only replaceability, not survival: without the gates,
+     * right-clicking farmland with seeds converted the farmland, the crop then refused to sit
+     * on dirt, and every planting click destroyed one farmland block. Three rules: a placement
+     * that is not viable at all converts nothing; a placement that NEEDS the trampled block to
+     * survive (crops on farmland) converts nothing and proceeds vanilla; and a conversion
+     * whose placement still fails afterwards is rolled back by the caller.
+     *
+     * <p>The viability probes call {@code getPlacementState}, whose body runs this mixin's
+     * dripstone-pin wrap; a pointed-dripstone continuation never targets a cell whose support
+     * is trampled (dripstone cannot survive on one), so the probe cannot consume a live pin.
+     *
+     * @return the support state that was converted away, for the caller's rollback, or null
+     *         when nothing was converted
+     */
+    private BlockState slabbed$convertTrampledSupportBeforePlacement(BlockPlaceContext context) {
+        if (!context.canPlace()) {
+            return null;
+        }
+        Level world = context.getLevel();
+        BlockPos supportPos = context.getClickedPos().below();
+        BlockState support = world.getBlockState(supportPos);
+        if (!(support.getBlock() instanceof net.minecraft.world.level.block.DirtPathBlock
+                || support.getBlock() instanceof net.minecraft.world.level.block.FarmlandBlock)) {
+            return null;
+        }
+        if (getPlacementState(context) == null) {
+            return null;
+        }
+        world.setBlockAndUpdate(supportPos, Blocks.DIRT.defaultBlockState());
+        if (getPlacementState(context) == null) {
+            world.setBlockAndUpdate(supportPos, support);
+            return null;
+        }
+        return support;
+    }
+
     @WrapMethod(method = "place")
     private InteractionResult slabbed$c3PlaceScope(
             BlockPlaceContext context,
@@ -193,7 +242,15 @@ public abstract class BlockItemPlacementIntentMixin {
         Deque<PlacementFrame> frames = C3_PLACE_FRAMES.get();
         frames.push(frame);
         try {
+            BlockState convertedTrampledSupport = slabbed$convertTrampledSupportBeforePlacement(context);
             InteractionResult result = original.call(context);
+            if (convertedTrampledSupport != null && (result == null || !result.consumesAction())) {
+                // The placement failed after the conversion (an obstruction discovered inside
+                // place, or any later refusal). The conversion must not outlive the placement
+                // it was made for: restore the exact prior state, moisture and all.
+                context.getLevel().setBlockAndUpdate(
+                        context.getClickedPos().below(), convertedTrampledSupport);
+            }
             BlockPlaceContext evidenceContext = frame.actualContext == null ? context : frame.actualContext;
             PriorPlaceState prior = slabbed$placePriorState.get();
             slabbed$placePriorState.remove();
