@@ -11,14 +11,25 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 /**
- * Clears the persistent slab-anchor at {@code pos} when the anchored block itself is
- * broken or replaced.
+ * Clears the placement fact and every anchor/marker at {@code pos} when the block there stops
+ * being that block — broken, replaced by a different block, or pushed out by a piston.
  *
- * <p>Vanilla 1.21 only invokes {@code onStateReplaced} when the {@link net.minecraft.block.Block
- * block} kind changes — property-only updates do not fire this hook, so the anchor
- * survives state transitions on the same block. Crucially, this hook fires on the OLD
- * state at {@code pos} (the anchored block) — it does NOT fire when a neighbour like
- * the supporting bottom slab below is broken, so anchor persistence is preserved.
+ * <p>INVARIANT: a same-block state transition is the block STAYING, and its placed height stays
+ * with it. Fences, walls and panes are rewritten in place by vanilla's neighbour update when
+ * something appears beside them (same block, new connection shape); waterlogging, redstone power
+ * and stair shape are the same kind of transition. None of those may clear the fact — a height
+ * that vanishes on a reshape is a neighbour edit moving a placed block, which LAW.md forbids.
+ *
+ * <p>On this Minecraft version {@code WorldChunk.setBlockState} invokes {@code onStateReplaced} for
+ * EVERY server-side state change, same block or not; vanilla's own implementation applies its
+ * "different block?" test inside the method body, so a head injection sees every reshape. The
+ * guard below is load-bearing. Do not remove it on the strength of a claim that the hook only
+ * fires on a block-kind change — it does not, and the law gate's {@code fence_on_marked_slab}
+ * subject reddens the moment the guard is gone.
+ *
+ * <p>This hook fires on the OLD state at {@code pos} only; it never fires for a neighbour's edit
+ * (the supporting slab below being broken, for example), so anchor persistence across neighbour
+ * edits holds by construction.
  */
 @Mixin(AbstractBlock.class)
 public abstract class BlockOnStateReplacedAnchorMixin {
@@ -26,6 +37,10 @@ public abstract class BlockOnStateReplacedAnchorMixin {
     @Inject(method = "onStateReplaced", at = @At("HEAD"))
     private void slabbed$clearSlabAnchor(BlockState oldState, World world, BlockPos pos,
                                          BlockState newState, boolean moved, CallbackInfo ci) {
+        // Same block, new state: the block stayed, so its placed height and markers stay with it.
+        if (oldState.isOf(newState.getBlock())) {
+            return;
+        }
         SlabAnchorAttachment.removeAnchor(world, pos);
     }
 }
