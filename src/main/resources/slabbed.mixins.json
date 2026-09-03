@@ -21,6 +21,8 @@
     "ItemFrameWysiwygMixin",
     "ItemStackUseCreatedContactMixin",
     "LeverParticleMixin",
+    "LithiumBlockCollisionSweeperPosLoweredAboveMixin",
+    "LithiumBlockCollisionSweeperShapeLoweredAboveMixin",
     "LivingEntityLoweredScaffoldingMixin",
     "LivingEntitySightOffsetClipMixin",
     "ProjectileBlockClipOffsetMixin",
