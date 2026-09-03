@@ -2,6 +2,7 @@ package com.slabbed.anchor;
 
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.LongConsumer;
 
 /**
  * The height a placement transaction already resolved on the client, held only until the
@@ -29,15 +30,46 @@ public final class ClientRenderDyPrediction {
     private static final Map<Long, Entry> PENDING = new ConcurrentHashMap<>();
     private static volatile int currentTick;
 
+    /**
+     * Forces an immediate chunk-render refresh around a packed position, installed by the
+     * client sync layer. Side-agnostic by construction (a plain {@link LongConsumer}, no
+     * Minecraft client class referenced here) so this class stays loadable on a dedicated
+     * server; null there, since nothing installs it.
+     */
+    private static volatile LongConsumer renderInvalidationHook;
+
     private ClientRenderDyPrediction() {
     }
 
     private record Entry(int halfSteps, int expiresAtTick) {
     }
 
-    /** Records what the client resolved for a cell it just placed into. */
+    /** Installs the client render-refresh hook and returns the previous one, for bounded tests. */
+    public static LongConsumer installRenderInvalidationHook(LongConsumer hook) {
+        LongConsumer previous = renderInvalidationHook;
+        renderInvalidationHook = hook;
+        return previous;
+    }
+
+    /**
+     * Records what the client resolved for a cell it just placed into, then immediately
+     * requests a render refresh for it.
+     *
+     * <p>The placement capture that calls this runs after vanilla's own {@code setBlock},
+     * which already scheduled a mesh rebuild — a rebuild that can start before this record
+     * lands and read {@link #halfStepsOrAbsent} as absent, drawing the block at whatever the
+     * live fallback answers until the authoritative server fact syncs back and triggers a
+     * second, correct rebuild. In singleplayer that round trip completes within a tick, so the
+     * wrong frame reads as a near-instant snap (live, 2026-09-01) rather than a visible pop.
+     * Requesting the refresh here, synchronously, closes the race instead of racing it: any
+     * mesh worker that reads after this line sees the prediction already recorded.
+     */
     public static void record(long packedPos, int halfSteps) {
         PENDING.put(packedPos, new Entry(halfSteps, currentTick + LIFETIME_TICKS));
+        LongConsumer hook = renderInvalidationHook;
+        if (hook != null) {
+            hook.accept(packedPos);
+        }
     }
 
     /**

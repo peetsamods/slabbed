@@ -28,6 +28,13 @@
   it. The frame's drawn position and its interaction surface move together;
   paintings are not yet covered.
 
+### Rendering fixes behind deep placements
+
+- Close the client-prediction render race behind deep placement snaps: the
+  first drawn frame after a deep placement could briefly read the wrong
+  height until the server round trip corrected it. The placement's predicted
+  height now forces its own render refresh the moment it is recorded.
+
 ### Height resolution
 
 - A chain hanging below an ordinary (non-slab) lowered block now follows that
