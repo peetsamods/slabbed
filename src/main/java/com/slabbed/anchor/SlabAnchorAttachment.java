@@ -356,7 +356,16 @@ public final class SlabAnchorAttachment {
                 || SlabSupport.isBeta35FenceWallVariantContactObject(state)) {
             double followDy = consumeWysiwygFollowClickedLoweredFace(pos);
             if (!Double.isNaN(followDy)) {
-                if (Math.abs(followDy + 0.5d) < 1.0e-6d) {
+                // Seat clamp (maintainer ruling, 2026-09-02): the marker carries the AIM, but the
+                // landing is honored only to the physical limit of the cell. Judge the verdict on
+                // the clamped depth the capture stores, or the fact and the freeze disagree again.
+                double landedDy = SlabSupport.clampToRealSeat(
+                        world, pos, state, Math.max(followDy, SlabSupport.minResolvedDy()));
+                if (landedDy >= -1.0e-6d) {
+                    // Raised to grid height by the support below: a flush landing, stamped FLAT
+                    // so nothing shoved under it later can pull it down.
+                    addToAttachment(world, pos, FROZEN_FLAT_TYPE, "frozen_flat");
+                } else if (Math.abs(landedDy + 0.5d) < 1.0e-6d) {
                     addAnchorUnchecked(world, pos);
                 } else {
                     // Deeper than −0.5 (maintainer ruling, 2026-09-01: WYSIWYG at any depth):

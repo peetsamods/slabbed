@@ -30,6 +30,10 @@ import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
  * <p>Ruled (maintainer ruling, 2026-09-01): WYSIWYG applies at any depth — the landing takes
  * the clicked face's height exactly. This row asserts the ruling; the 0.0 grid landing it
  * originally pinned on the reference line was the measured pre-ruling gap.
+ *
+ * <p>OPEN means open: the landing cell has air below. With solid ground under it the aim is
+ * honored only to the physical limit and the slab seats flush (maintainer ruling, 2026-09-02);
+ * that scene has its own pinned row.
  */
 @GameTestHolder("fabric-gametest-api-v1")
 @PrefixGameTestTemplate(false)
@@ -43,9 +47,12 @@ public final class OpenMinus1MeasurementTest {
         BlockPos anchor = ctx.absolutePos(new BlockPos(2, 2, 2));
         BlockPos landing = anchor.east();
 
-        // Floor under both cells so the placement has real support scenery.
+        // Floor under the clicked slab only. The landing cell descends into OPEN air: that is the
+        // spec's OPEN premise, and it is load-bearing — solid ground under the landing cell makes
+        // the placement seat flush on it instead (maintainer ruling, 2026-09-02, pinned by
+        // useOnDeepSideLandingOverSolidGroundClampsToRealSeat), which this row must not confuse
+        // with the pre-ruling grid landing it was written to expose.
         world.setBlockAndUpdate(anchor.below(), Blocks.STONE.defaultBlockState());
-        world.setBlockAndUpdate(landing.below(), Blocks.STONE.defaultBlockState());
 
         BlockState bottomSlab = Blocks.OAK_SLAB.defaultBlockState();
         world.setBlockAndUpdate(anchor, bottomSlab);

@@ -16,6 +16,12 @@
   at normal grid height. Faces at heights the placement store cannot represent
   (a slab seated on an enchanting table's top, for example) are unaffected and
   land exactly as before.
+- A deep side placement lands on the real surface, never inside it (maintainer
+  ruling, 2026-09-02). When the landing cell has solid ground directly under
+  it, the slab now seats on that ground — flush over a full block, exactly
+  where a click on the ground itself would put it — instead of being recorded
+  a full block deep inside the dirt. Side placements over open air keep
+  following the aim all the way down.
 
 ### Rendering and physics
 

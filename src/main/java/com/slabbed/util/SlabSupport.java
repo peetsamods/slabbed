@@ -1280,6 +1280,40 @@ public final class SlabSupport {
     }
 
     /**
+     * Seat clamp for a side-inherited depth (maintainer ruling, 2026-09-02): the aim is honored
+     * to the physical limit of the landing cell. A depth that would increase collision-body
+     * overlap with the support directly below beyond the same states' vanilla adjacent-cell
+     * baseline is raised in half-steps until the overlap clears — flush over a solid full block,
+     * grid height at the latest. Open descent (air below, or a support whose top plane sits at or
+     * below the aim) inherits the aim verbatim; that is the any-depth ruling (2026-09-01) and this
+     * clamp must never raise it. Placement-time only, and the clamped value is what gets stored.
+     * The freeze hook's follow consume judges its verdict on the same clamp, so the numeric fact
+     * and the freeze verdict cannot disagree about one landing.
+     */
+    public static double clampToRealSeat(
+            BlockGetter world, BlockPos target, BlockState placedState, double aimDy) {
+        if (world == null || target == null || placedState == null
+                || !Double.isFinite(aimDy) || aimDy >= -1.0e-6d) {
+            return aimDy;
+        }
+        BlockPos belowPos = target.below();
+        BlockState belowState = world.getBlockState(belowPos);
+        if (belowState.isAir()) {
+            return aimDy;
+        }
+        double belowDy = getYOffset(world, belowPos, belowState);
+        double clamped = aimDy;
+        while (clamped < -1.0e-6d
+                && SlabEnsembleCoherence.relativeTranslationIncreasesBodyOverlap(
+                        belowState, belowPos, belowDy, placedState, target, clamped)) {
+            // Never overshoot past grid height: at 0.0 the candidate sits at the vanilla
+            // baseline, so the predicate is false by construction and the loop terminates.
+            clamped = Math.min(clamped + 0.5d, 0.0d);
+        }
+        return clamped;
+    }
+
+    /**
      * Seat derivation for a caller that has already established the gesture is a SEAT — the
      * placed block resting on the cell below, which is the thing that was clicked.
      *
@@ -1345,7 +1379,11 @@ public final class SlabSupport {
                 if (ownerDy < -1.0e-6d
                         && (state.getBlock() instanceof SlabBlock
                                 || isBeta35FenceWallVariantContactObject(state))) {
-                    double inherited = Math.max(ownerDy, minResolvedDy());
+                    // Seat clamp (maintainer ruling, 2026-09-02): honored to the physical limit
+                    // of the landing cell — see clampToRealSeat. Over solid ground the clamp
+                    // answers flush, exactly the seat the control placement on that support gives.
+                    double inherited = clampToRealSeat(world, pos, state,
+                            Math.max(ownerDy, minResolvedDy()));
                     if (SlabPlacementHeightAttachment.exactHalfSteps(inherited).isPresent()) {
                         return inherited;
                     }
