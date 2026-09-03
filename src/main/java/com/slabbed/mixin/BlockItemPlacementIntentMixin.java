@@ -1516,6 +1516,12 @@ public abstract class BlockItemPlacementIntentMixin {
             if (remapDecision.legal()) {
                 return;
             }
+            // A HEAD cancel skips the RETURN inject that clears the WYSIWYG follow mark, and the
+            // any-depth arming (maintainer ruling, 2026-09-01) can have armed it for this same
+            // -1.0 click before this injector ran (injector order at one point is not
+            // guaranteed). Clear it here or the stale mark leaks into the NEXT placement's
+            // freeze on this thread.
+            SlabAnchorAttachment.clearWysiwygFollowClickedLoweredFace();
             cir.setReturnValue(InteractionResult.PASS);
             return;
         }
@@ -1529,17 +1535,27 @@ public abstract class BlockItemPlacementIntentMixin {
             if (remapDecision.legal()) {
                 return;
             }
+            // Same stale-mark guard as the top-hit refusal above.
+            SlabAnchorAttachment.clearWysiwygFollowClickedLoweredFace();
             cir.setReturnValue(InteractionResult.PASS);
         }
     }
 
     /**
      * WYSIWYG side-click follow (LAW 1 (the placement law), 2026-06-19): when the player places a SLAB by clicking the
-     * SIDE face of a -0.5 lowered block, mark the predicted placement cell so {@code freezeLoweredOnPlace}
+     * SIDE face of a lowered block, mark the predicted placement cell so {@code freezeLoweredOnPlace}
      * anchors it on the lowered surface (where the crosshair clicked) instead of freezing it flat at grid
-     * height (the reported "lands 0.5 high"). Gated to a -0.5 lowered click so it does not touch the
-     * compound (-1.0) side-placement path, which the RC3 compound-visible markers own. The companion
-     * RETURN inject clears the marker so a cancelled/mismatched placement never leaks.
+     * height (the reported "lands 0.5 high"). ANY lowered side face arms the follow, not only -0.5
+     * (maintainer ruling, 2026-09-01: WYSIWYG at any depth) — unarmed, a deep landing over solid ground
+     * took the side-inherited FROZEN_FLAT stamp while the capture stored the exact deep fact: the two
+     * writers of one transaction disagreed, and the flat marker misled every consumer that reads it.
+     * For a -1.0 compound-owner side click the consumed mark deliberately bypasses BOTH
+     * FROZEN_FLAT rails in the freeze — over air the un-marked path anchored anyway, and over solid
+     * ground the FLAT stamp was exactly the two-writer contradiction the ruling removes; the RC3
+     * marker authors still run independently at place RETURN. The UP-face branch stays
+     * at exactly -0.5: a stacked slab's height comes from the seat derivation reading the real top face
+     * below it, and a wider UP arming hands the consume a depth the stack lane never stores. The
+     * companion RETURN inject clears the marker so a cancelled/mismatched placement never leaks.
      */
     @Inject(method = "useOn", at = @At("HEAD"))
     private void slabbed$markWysiwygSideClickFollow(
@@ -1555,10 +1571,12 @@ public abstract class BlockItemPlacementIntentMixin {
         BlockState clickedState = level.getBlockState(clicked);
         Direction face = context.getClickedFace();
         double clickedDy = SlabSupport.getYOffset(level, clicked, clickedState);
-        if (Math.abs(clickedDy + 0.5d) < 1.0e-6d) {   // clicked a -0.5 lowered surface
+        if (Double.isFinite(clickedDy) && clickedDy < -1.0e-6d) {   // clicked a lowered surface, any depth
             if (face.getAxis().isHorizontal()) {
                 SlabAnchorAttachment.markWysiwygFollowClickedLoweredFace(clicked.relative(face));
-            } else if (face == Direction.UP && clickedState.getBlock() instanceof SlabBlock) {
+            } else if (face == Direction.UP
+                    && clickedState.getBlock() instanceof SlabBlock
+                    && Math.abs(clickedDy + 0.5d) < 1.0e-6d) {
                 SlabAnchorAttachment.markWysiwygFollowClickedLoweredFace(clicked.above());
             }
         }

@@ -446,6 +446,115 @@ public final class Slabbed2612UseOnPlacementTest {
         helper.succeed();
     }
 
+    /**
+     * WYSIWYG at any depth (maintainer ruling, 2026-09-01): a side placement takes the clicked
+     * face's height EXACTLY, at any depth — and the freeze must agree with the store in the same
+     * transaction. Chain: the RC3 lane lands slab A at -1.0 beside the compound; clicking A's own
+     * -1.0 face (A is a PLAIN deep slab — no compound marker, the formerly unowned case) must land
+     * B at -1.0 with the follow consumed as an ANCHOR, never the side-inherited FROZEN_FLAT stamp.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void useOnSlabBesidePlainDeepSlabInheritsExactDepth(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        buildCompoundMinusOne(helper);
+        BlockPos owner = helper.absolutePos(new BlockPos(2, 5, 2));
+        SlabAnchorAttachment.addAnchor(level, owner, level.getBlockState(owner));
+        SlabAnchorAttachment.addCompoundFullBlockAnchor(level, owner, level.getBlockState(owner));
+        Player player = mockPlayerNear(helper, helper.absolutePos(new BlockPos(3, 6, 2)));
+
+        // A: the RC3 lane's own product — a plain slab stored at -1.0, east of the compound.
+        BlockPos a = placeSlabViaAndFindChangedSlab(helper, player, owner, Direction.EAST,
+                eastHitOffset(owner, -1.0, 0.25));
+        assertSlabDy(helper, level, a, new BlockPos(3, 5, 2), -1.0,
+                "SETUP: slab A beside the -1.0 compound must land -1.0 (established RC3 lane)");
+
+        // B: clicking A's OWN -1.0 face. Air below the landing cell. (Over air the anchor arm
+        // is reachable without the mark too — the DISCRIMINATORS here are the exact -1.0 landing
+        // and the derivation probe below; the marker asserts are anti-regression tripwires.)
+        BlockPos b = placeSlabViaAndFindChangedSlab(helper, player, a, Direction.EAST,
+                eastHitOffset(a, -1.0, 0.25));
+        BlockPos expectedB = helper.absolutePos(new BlockPos(4, 5, 2));
+        if (!b.equals(expectedB)) {
+            throw helper.assertionException(new BlockPos(4, 5, 2),
+                    "slab B landed at " + helper.relativePos(b).toShortString() + " not the east cell (4,5,2)");
+        }
+        assertSlabDy(helper, level, b, new BlockPos(4, 5, 2), -1.0,
+                "WYSIWYG any-depth: slab B clicking a plain -1.0 slab's face must land -1.0 exactly");
+        if (SlabAnchorAttachment.isFrozenFlat(level, b)) {
+            throw helper.assertionException(new BlockPos(4, 5, 2),
+                    "deep landing B must not carry the FROZEN_FLAT stamp over its -1.0 stored fact");
+        }
+        if (!SlabAnchorAttachment.isAnchored(level, b)) {
+            throw helper.assertionException(new BlockPos(4, 5, 2),
+                    "deep landing B must be anchored by the consumed WYSIWYG follow");
+        }
+
+        // The derivation lane must agree with the store when B acts as a cantilever source:
+        // a slab set beside B over air merges to B's EXACT stored depth, not the -0.5 marker floor.
+        BlockPos probe = helper.absolutePos(new BlockPos(4, 5, 3));
+        helper.setBlock(new BlockPos(4, 5, 3), bottomSlab());
+        double unstored = SlabSupport.getUnstoredYOffset(level, probe, level.getBlockState(probe));
+        if (Math.abs(unstored + 1.0) > 1.0e-6) {
+            throw helper.assertionException(new BlockPos(4, 5, 3),
+                    "derivation beside the -1.0 slab must read its stored depth exactly, got " + unstored);
+        }
+        helper.succeed();
+    }
+
+    /**
+     * The solid-ground variant of the row above. Here the aimed -1.0 landing would sit fully
+     * INSIDE the dirt below. Measured (2026-09-02): the store keeps the aim verbatim (fact
+     * -1.0) while the derivation lane floors at the anchored -0.5 — the burial arbitration
+     * between WYSIWYG and FLUSH WINS is OPEN and pre-dates the any-depth port (the store lane
+     * is untouched by it); it is tracked as its own follow-up awaiting a maintainer ruling.
+     * What this row pins is the TWO-WRITER step the ruling did close: the freeze must never
+     * stamp FROZEN_FLAT (geometric 0.0) over a landing whose stored fact is lowered —
+     * pre-ruling, the unarmed follow let the side-inherited rail do exactly that.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void useOnDeepSideLandingOverSolidGroundStaysCoherent(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        buildCompoundMinusOne(helper);
+        BlockPos owner = helper.absolutePos(new BlockPos(2, 5, 2));
+        SlabAnchorAttachment.addAnchor(level, owner, level.getBlockState(owner));
+        SlabAnchorAttachment.addCompoundFullBlockAnchor(level, owner, level.getBlockState(owner));
+        // Solid column under the SECOND landing cell (4,5,2) only.
+        for (int y = 1; y <= 4; y++) {
+            helper.setBlock(new BlockPos(4, y, 2), Blocks.DIRT.defaultBlockState());
+        }
+        Player player = mockPlayerNear(helper, helper.absolutePos(new BlockPos(3, 6, 2)));
+
+        BlockPos a = placeSlabViaAndFindChangedSlab(helper, player, owner, Direction.EAST,
+                eastHitOffset(owner, -1.0, 0.25));
+        assertSlabDy(helper, level, a, new BlockPos(3, 5, 2), -1.0,
+                "SETUP: slab A beside the -1.0 compound must land -1.0");
+
+        BlockPos b = placeSlabViaAndFindChangedSlab(helper, player, a, Direction.EAST,
+                eastHitOffset(a, -1.0, 0.25));
+        BlockPos expectedB = helper.absolutePos(new BlockPos(4, 5, 2));
+        if (!b.equals(expectedB)) {
+            throw helper.assertionException(new BlockPos(4, 5, 2),
+                    "slab B landed at " + helper.relativePos(b).toShortString() + " not the east cell (4,5,2)");
+        }
+        double storedB = SlabSupport.getYOffset(level, b, level.getBlockState(b));
+        SlabAnchorAttachment.PlacementDyFact factB = SlabAnchorAttachment.rawPlacementDyFact(level, b);
+        System.out.println("[ANYDEPTH_SOLID_GROUND] derived=" + storedB
+                + " fact=" + (factB.present() ? Double.toString(factB.valueOrNaN()) : "absent"));
+        if (storedB >= -1.0e-6) {
+            throw helper.assertionException(new BlockPos(4, 5, 2),
+                    "deep-face side landing over solid ground must still be lowered (aim honored to the physical limit), got " + storedB);
+        }
+        if (SlabAnchorAttachment.isFrozenFlat(level, b)) {
+            throw helper.assertionException(new BlockPos(4, 5, 2),
+                    "the freeze must not stamp FROZEN_FLAT over a lowered stored fact (stored " + storedB + ")");
+        }
+        if (!SlabAnchorAttachment.isAnchored(level, b)) {
+            throw helper.assertionException(new BlockPos(4, 5, 2),
+                    "the consumed WYSIWYG follow must anchor the lowered landing (stored " + storedB + ")");
+        }
+        helper.succeed();
+    }
+
     /** ground/slab/stone/slab/stone vertical compound; the top stone at (2,5,2) reads dy=-1.0. East column stays air. */
     private static void buildCompoundMinusOne(GameTestHelper helper) {
         helper.setBlock(new BlockPos(2, 1, 2), Blocks.STONE.defaultBlockState());
