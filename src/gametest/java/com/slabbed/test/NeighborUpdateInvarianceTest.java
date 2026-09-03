@@ -50,6 +50,16 @@ import java.util.List;
  * block, i.e. the punch-list for the frozen-dy restoration. The family goes fully green only once the
  * height is stored at placement and returned verbatim.
  *
+ * <p><b>Reachability (standing rule): a subject whose OWN state vanilla rewrites on a neighbour
+ * edit is a different class from every other subject here.</b> Every other subject keeps its exact
+ * state across the whole mutation catalogue; the mutations only ever change the cells around it.
+ * A connecting block (fence, wall, pane, and their kin) is rewritten IN PLACE by vanilla's
+ * neighbour update when something it connects to appears beside it (same block, new shape).
+ * That rewrite is the one path by which a "neighbour edit" reaches the subject's own cell, and
+ * it was unrepresented until {@code fence_on_marked_slab}, whose named reaching mutations are
+ * {@code add_connecting_fence_east} and {@code add_full_block_north} (a full block is a fence
+ * connection too).
+ *
  * <p>Extending: add a SUBJECT builder or a MUTATION and every existing pairing exercises it — you
  * cannot add a height behavior without this matrix testing whether it obeys the law.
  */
@@ -287,6 +297,24 @@ public final class NeighborUpdateInvarianceTest {
                             + dy(w, subject));
                 }
                 return subject;
+            }),
+            // CONNECTING subject: the only subject class whose OWN cell vanilla rewrites on a
+            // neighbour edit (same block, new connection shape). Reaching mutations, by name:
+            // add_connecting_fence_east and add_full_block_north. A placed height must survive
+            // that in-place rewrite exactly as it survives every edit that never touches the cell.
+            new NamedSubject("fence_on_marked_slab", (h, w) -> {
+                BlockPos s = markedSlabRig(h, w);
+                place(h, Items.OAK_FENCE, s, Direction.UP, 0.0);
+                BlockPos subject = s.above();
+                double landed = SlabAnchorAttachment.storedPlacementDy(w, subject);
+                if (!(Double.isFinite(landed) && landed < -1.0e-6d)) {
+                    throw h.assertionException(subject, "premise: fence on the marked slab should have"
+                            + " LANDED lowered with a stored fact, got " + landed);
+                }
+                if (!w.getBlockState(subject).is(Blocks.OAK_FENCE)) {
+                    throw h.assertionException(subject, "premise: subject cell is not the placed fence");
+                }
+                return subject;
             })
     );
 
@@ -313,7 +341,11 @@ public final class NeighborUpdateInvarianceTest {
             new NamedMutation("break_east_neighbor", (w, s) -> w.destroyBlock(s.east(), false)),
             new NamedMutation("break_west_neighbor", (w, s) -> w.destroyBlock(s.west(), false)),
             new NamedMutation("break_south_neighbor", (w, s) -> w.destroyBlock(s.south(), false)),
-            new NamedMutation("break_directly_below", (w, s) -> w.destroyBlock(s.below(), false))
+            new NamedMutation("break_directly_below", (w, s) -> w.destroyBlock(s.below(), false)),
+            // A connecting neighbour: inert for every non-connecting subject (no state change, so
+            // nothing fires), and the in-place same-block rewrite for fences/walls/panes.
+            new NamedMutation("add_connecting_fence_east", (w, s) ->
+                    w.setBlock(s.east(), Blocks.OAK_FENCE.defaultBlockState(), Block.UPDATE_ALL))
     );
 
     private record NamedMutation(String name, Mutation mutation) {
@@ -610,6 +642,22 @@ public final class NeighborUpdateInvarianceTest {
     @GameTest(structure = "fabric-gametest-api-v1:empty")
     public void aimedPowderSnowOnMinusOneOwnerSurvivesNeighborEdits(GameTestHelper h) {
         runSubjectWithFrozenStore(h, SUBJECTS.get(10));
+    }
+
+    /**
+     * REQUIRED LAW GATE: a fence's placed height survives its OWN in-place rewrite. When a
+     * connecting neighbour appears beside a fence, vanilla replaces the fence's state with the same
+     * block in a new connection shape. On this Minecraft version vanilla runs the removal hook
+     * ({@code affectNeighborsAfterRemoval}) only when the block KIND changes (a rail is the one
+     * same-block exception), so the reshape never reaches the hook, and the hook's own clear
+     * predicate additionally keeps a connecting occupant. This row pins both: the stored placement
+     * fact, and the markers with it, must be cleared only when the block leaves the cell; a reshape
+     * is the block staying, and a height that vanishes on a reshape is a neighbour edit moving a
+     * placed block.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void fenceOnMarkedSlabSurvivesNeighborEdits(GameTestHelper h) {
+        runSubjectWithFrozenStore(h, SUBJECTS.get(11));
     }
 
     @GameTest(structure = "fabric-gametest-api-v1:empty")
