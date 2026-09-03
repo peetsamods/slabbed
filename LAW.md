@@ -14,9 +14,11 @@ an acceptable setting for landing a violation.
 
 A green `NeighborUpdateInvarianceTest` row is proof only if at least one
 mutation provably reaches that subject's resolver. Every subject must name, in
-a comment, the mutation that would move it. A law gate full of unreachable rows
-is worse than no gate, because it reads as proof (maintainer ruling,
-2026-09-03).
+a comment, the mutation that would move it. Reachability is established by
+measurement, not by argument: build the subject with the real builders, strip
+its protection, apply every mutation, and record whether the resolver's answer
+actually moved. A law gate full of unreachable rows is worse than no gate,
+because it reads as proof (maintainer ruling, 2026-09-03).
 
 ## Law 2 — lowering eligibility is geometric
 
