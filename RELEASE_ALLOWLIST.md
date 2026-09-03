@@ -98,6 +98,8 @@ anything. The split above puts the fine granularity only where a leak has actual
 | `com/slabbed/mixin/BlockOnPlacedAnchorMixin` | Writes the anchor on placement. |
 | `com/slabbed/mixin/BlockOnStateReplacedAnchorMixin` | Clears the anchor on state replacement. |
 | `com/slabbed/mixin/BrewingStandParticleMixin` | Particle origin follows the lowered block. |
+| `com/slabbed/mixin/CampfireCookingParticleMixin` | Particle origin follows the lowered block. |
+| `com/slabbed/mixin/CampfireParticleMixin` | Particle origin follows the lowered block. |
 | `com/slabbed/mixin/CandleParticleMixin` | Particle origin follows the lowered block. |
 | `com/slabbed/mixin/CarpetBlockMixin` | Carpet support/shape over a lowered slab. |
 | `com/slabbed/mixin/DecoratedPotParticleMixin` | Particle origin follows the lowered block. |

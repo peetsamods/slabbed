@@ -9,6 +9,8 @@
     "BlockOnPlacedAnchorMixin",
     "BlockOnStateReplacedAnchorMixin",
     "BrewingStandParticleMixin",
+    "CampfireCookingParticleMixin",
+    "CampfireParticleMixin",
     "CandleParticleMixin",
     "CarpetBlockMixin",
     "ClipContextBlockAccessor",
