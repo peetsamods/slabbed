@@ -48,7 +48,7 @@ import java.util.List;
  * omitted because the store they corrupt does not exist" — both false as soon as the placement-dy
  * store landed (Slice 2b onward) and were never updated. The actual, current, traced state:
  *
- * <p><b>9 of 15 rows are still {@code required = false} (census, non-blocking)</b> — every row
+ * <p><b>9 of 16 rows are still {@code required = false} (census, non-blocking)</b> — every row
  * that calls bare {@link #runSubject}: {@code torchOnMarkedSlab}, {@code fullBlockOnLoweredStack},
  * {@code flatFullBlockControl}, {@code flatSlabControl}, {@code cantileverSlab},
  * {@code slabOnLoweredFullBlock}, {@code candlePlacedFlat}, {@code c3_pair_door_toggle_and_neighbor_invariance},
@@ -58,12 +58,23 @@ import java.util.List;
  * blocks the build.</b> A LAW 1 violation in exactly the configuration players run today would not
  * fail {@code runGameTest}.
  *
- * <p><b>6 of 15 rows are {@code required} (blocking)</b>: {@code fenceGateOnMarkedSlab},
- * {@code slabOnDeepLoweredFullBlock}, {@code missingPlacementDyResolvesStableFlatAcrossNeighborEdit},
+ * <p><b>7 of 16 rows are {@code required} (blocking)</b>: {@code fenceGateOnMarkedSlab},
+ * {@code fenceOnMarkedSlab}, {@code slabOnDeepLoweredFullBlock},
+ * {@code missingPlacementDyResolvesStableFlatAcrossNeighborEdit},
  * {@code offGridHeightIsDeclinedNeverRounded},
  * {@code aimedCarpetOnMinusOneOwner}, {@code aimedPowderSnowOnMinusOneOwner}. Every one calls
- * {@link #runSubjectWithFrozenStore}, which force-enables the store for that row only — so these 6
+ * {@link #runSubjectWithFrozenStore}, which force-enables the store for that row only — so these 7
  * gate a configuration this line does not yet ship by default, not the shipped one.
+ *
+ * <p><b>Reachability (standing rule): a subject whose OWN state vanilla rewrites on a neighbour
+ * edit is a different class from every other subject here.</b> Every other subject keeps its exact
+ * state across the whole mutation catalogue; the mutations only ever change the cells around it.
+ * A connecting block — fence, wall, pane, and their kin — is rewritten IN PLACE by vanilla's
+ * neighbour update when something it connects to appears beside it (same block, new shape).
+ * That rewrite is the one path by which a "neighbour edit" reaches the subject's own cell, and
+ * it was unrepresented until {@code fence_on_marked_slab}, whose named reaching mutations are
+ * {@code add_connecting_fence_east} and {@code add_full_block_north} (a full block is a fence
+ * connection too).
  *
  * <p><b>Follow-up owed once the store's default flips to on (the plan's Phase 3):</b> promote the
  * 9 census rows above to required (or fold them into the frozen-store path, whichever the store
@@ -326,6 +337,22 @@ public final class NeighborUpdateInvarianceTest {
                         "premise: aimed powder snow should have LANDED at -1.0, got "
                                 + landedDy(w, subject));
                 return subject;
+            }),
+            // CONNECTING subject: the only subject class whose OWN cell vanilla rewrites on a
+            // neighbour edit (same block, new connection shape). Reaching mutations, by name:
+            // add_connecting_fence_east and add_full_block_north. A placed height must survive
+            // that in-place rewrite exactly as it survives every edit that never touches the cell.
+            new NamedSubject("fence_on_marked_slab", (h, w) -> {
+                BlockPos s = markedSlabRig(h, w);
+                place(h, Items.OAK_FENCE, s, Direction.UP, 0.0);
+                BlockPos subject = s.up();
+                double landed = landedDy(w, subject);
+                h.assertTrue(Double.isFinite(landed) && landed < -1.0e-6d,
+                        "premise: fence on the marked slab should have LANDED lowered with a stored"
+                                + " fact, got " + landed);
+                h.assertTrue(w.getBlockState(subject).isOf(Blocks.OAK_FENCE),
+                        "premise: subject cell is not the placed fence");
+                return subject;
             })
     );
 
@@ -354,7 +381,11 @@ public final class NeighborUpdateInvarianceTest {
             new NamedMutation("break_east_neighbor", (w, s) -> w.breakBlock(s.east(), false)),
             new NamedMutation("break_west_neighbor", (w, s) -> w.breakBlock(s.west(), false)),
             new NamedMutation("break_south_neighbor", (w, s) -> w.breakBlock(s.south(), false)),
-            new NamedMutation("break_directly_below", (w, s) -> w.breakBlock(s.down(), false))
+            new NamedMutation("break_directly_below", (w, s) -> w.breakBlock(s.down(), false)),
+            // A connecting neighbour: inert for every non-connecting subject (no state change, so
+            // nothing fires), and the in-place same-block rewrite for fences/walls/panes.
+            new NamedMutation("add_connecting_fence_east", (w, s) ->
+                    w.setBlockState(s.east(), Blocks.OAK_FENCE.getDefaultState(), Block.NOTIFY_ALL))
     );
 
     private record NamedMutation(String name, Mutation mutation) {
@@ -466,6 +497,19 @@ public final class NeighborUpdateInvarianceTest {
     @GameTest(templateName = "fabric-gametest-api-v1:empty")
     public void slabOnDeepLoweredFullBlockSurvivesNeighborEdits(TestContext h) {
         runSubjectWithFrozenStore(h, SUBJECTS.get(8));
+    }
+
+    /**
+     * REQUIRED LAW GATE: a fence's placed height survives its OWN in-place rewrite. When a
+     * connecting neighbour appears beside a fence, vanilla replaces the fence's state with the same
+     * block in a new connection shape, and on this Minecraft version that replacement runs the
+     * state-replaced hook unconditionally — same block or not. The stored placement fact, and the
+     * markers with it, must be cleared only when the block KIND changes; a reshape is the block
+     * staying, and a height that vanishes on a reshape is a neighbour edit moving a placed block.
+     */
+    @GameTest(templateName = "fabric-gametest-api-v1:empty")
+    public void fenceOnMarkedSlabSurvivesNeighborEdits(TestContext h) {
+        runSubjectWithFrozenStore(h, SUBJECTS.get(11));
     }
 
     /**
