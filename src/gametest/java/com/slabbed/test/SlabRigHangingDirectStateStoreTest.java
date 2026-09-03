@@ -536,7 +536,8 @@ public final class SlabRigHangingDirectStateStoreTest {
                     "raw legacy owner identity drifted");
             requireFixture(state.run().runId().equals(runId)
                             && state.run().runNonce().toString().equals(runNonce)
-                            && state.run().routeIndex() == 6143
+                            // frozen 26.2 bytes: the reviewed route sat at index 6143 on that registry
+                            && state.run().routeIndex() == SlabRigHangingDirectState.LEGACY_ROUTE_INDEX_26_2
                             && state.run().topologyIndex() == 42
                             && state.run().selectorPage() == 1
                             && coordinate(state.run().base()).equals("8,64,8")
@@ -934,7 +935,7 @@ public final class SlabRigHangingDirectStateStoreTest {
                 sha("topologies-page-four"), sha("rig3b1-page-four"),
                 sha("painting-registry-page-four"), sha("universe-page-four"),
                 sha("plan-page-four"), "painting-page-v1:sha256:" + sha("semantic-page-four"),
-                6143, 42, 4, 4, true,
+                6573, 42, 4, 4, true,
                 new SlabRigHangingDirectState.Position(44, 64, 44), "west");
         List<SlabRigHangingDirectState.Position> plannedCells = List.of(
                 new SlabRigHangingDirectState.Position(0, 64, 0),
@@ -2102,7 +2103,7 @@ public final class SlabRigHangingDirectStateStoreTest {
                 UUID.nameUUIDFromBytes(("nonce-" + id).getBytes(StandardCharsets.UTF_8)),
                 "unknown", sha("runtime"), "26.2", sha("catalog"), sha("topologies"),
                 sha("rig3b1"), sha("painting registry"), sha("universe"), sha("plan"),
-                "painting-page-v1:sha256:" + sha("semantic"), 6143, 42, 1, 16, true,
+                "painting-page-v1:sha256:" + sha("semantic"), 6573, 42, 1, 16, true,
                 new SlabRigHangingDirectState.Position(10 + id, 64, 10), "west");
     }
 

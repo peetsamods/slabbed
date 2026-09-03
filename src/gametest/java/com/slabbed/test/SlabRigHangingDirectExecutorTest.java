@@ -54,12 +54,12 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
-/** End-to-end production-command gate for all four reviewed 6143/42 SBSBS painting pages. */
+/** End-to-end production-command gate for all four reviewed 6573/42 SBSBS painting pages. */
 public final class SlabRigHangingDirectExecutorTest {
 
     private static final Stat<Item> PAINTING_USED = Stats.ITEM_USED.get(Items.PAINTING);
     private static final String START =
-            "slabrig hangs direct 6143 topology 42 paintings 1";
+            "slabrig hangs direct 6573 topology 42 paintings 1";
     private static final String FORCE = START + " force";
     // These are a FLOOR, not the enforced ceiling: fluidityBudgetMillis() below scales them up from a
     // same-run calibration. A shared/loaded build machine can run the store's fsync-backed writes
@@ -85,7 +85,7 @@ public final class SlabRigHangingDirectExecutorTest {
     private static long cachedFluidityCalibrationNanos = -1L;
 
     private static String startCommand(int selectorPage) {
-        return "slabrig hangs direct 6143 topology 42 paintings " + selectorPage;
+        return "slabrig hangs direct 6573 topology 42 paintings " + selectorPage;
     }
 
     private static void runRemainingSelectorPages(
@@ -201,7 +201,7 @@ public final class SlabRigHangingDirectExecutorTest {
                         capturingSource(source, messages), "slabrig hangs direct status"), 1,
                         "page-4 captured waiting status");
                 String status = messages.isEmpty() ? "" : messages.getLast();
-                for (String required : List.of("6143/42/4", "schema=v2",
+                for (String required : List.of("6573/42/4", "schema=v2",
                         "phase=WAITING_DELAYED", "cases=4/4", "clearEntities=0/0",
                         "clearAttachments=0/0", "clearCells=0/0")) {
                     if (!status.contains(required)) {
@@ -432,15 +432,15 @@ public final class SlabRigHangingDirectExecutorTest {
         for (String invalid : List.of(
                 "slabrig hangs direct 6142 topology 42 paintings 4",
                 "slabrig hangs direct 6144 topology 42 paintings 4",
-                "slabrig hangs direct 6143 topology 41 paintings 4",
-                "slabrig hangs direct 6143 topology 43 paintings 4",
-                "slabrig hangs direct 6143 42 paintings 4",
-                "slabrig hangs direct 6143 topology 42 4",
-                "slabrig hangs direct 6143 topology 42 paintings 0",
-                "slabrig hangs direct 6143 topology 42 paintings 5",
-                "slabrig hangs direct 6143 paintings 4 topology 42",
-                "slabrig hangs direct 6143 topology 42 paintings 4 junk",
-                "slabrig hangs direct 6143 topology 42 paintings 4 force junk")) {
+                "slabrig hangs direct 6573 topology 41 paintings 4",
+                "slabrig hangs direct 6573 topology 43 paintings 4",
+                "slabrig hangs direct 6573 42 paintings 4",
+                "slabrig hangs direct 6573 topology 42 4",
+                "slabrig hangs direct 6573 topology 42 paintings 0",
+                "slabrig hangs direct 6573 topology 42 paintings 5",
+                "slabrig hangs direct 6573 paintings 4 topology 42",
+                "slabrig hangs direct 6573 topology 42 paintings 4 junk",
+                "slabrig hangs direct 6573 topology 42 paintings 4 force junk")) {
             int result = executeExpectingSyntaxRefusal(helper, dispatcher, source, invalid);
             if (result != 0
                     || !head(helper).stateHash().equals(planned.stateHash())
@@ -496,7 +496,7 @@ public final class SlabRigHangingDirectExecutorTest {
         requireResult(helper, execute(helper, dispatcher, fixedSource,
                 "slabrig hangs direct status"), 1, "frozen active legacy status");
         String activeStatus = messages.isEmpty() ? "" : messages.getLast();
-        for (String required : List.of("6143/42/1", "schema=legacy-v1-clear-only",
+        for (String required : List.of("6573/42/1", "schema=legacy-v1-clear-only",
                 "phase=IMMEDIATE_PARTIAL", "cases=1/16", "clearEntities=0/0",
                 "clearAttachments=0/0", "clearCells=0/0")) {
             if (!activeStatus.contains(required)) {
@@ -601,7 +601,7 @@ public final class SlabRigHangingDirectExecutorTest {
         requireResult(helper, execute(helper, dispatcher, fixedSource,
                 "slabrig hangs direct status"), 1, "frozen partial legacy status");
         String status = messages.isEmpty() ? "" : messages.getLast();
-        for (String required : List.of("6143/42/1", "schema=legacy-v1-clear-only",
+        for (String required : List.of("6573/42/1", "schema=legacy-v1-clear-only",
                 "phase=CLEARING_CELLS", "cases=1/16", "clearEntities=1/1",
                 "clearAttachments=2/2", "clearCells=1/2")) {
             if (!status.contains(required)) {
@@ -1659,7 +1659,7 @@ public final class SlabRigHangingDirectExecutorTest {
         Slabbed.LOGGER.info("[RIG-3B3A-PERF] command={} duration_ms={}",
                 command, elapsedMillis);
         boolean startClass = command.matches(
-                "slabrig hangs direct 6143 topology 42 paintings [1-4]( force)?");
+                "slabrig hangs direct 6573 topology 42 paintings [1-4]( force)?");
         long budget = startClass
                 ? fluidityBudgetMillis(helper, START_BUDGET_MILLIS, START_FLUIDITY_MULTIPLIER)
                 : fluidityBudgetMillis(helper, READ_OR_CLEAR_BUDGET_MILLIS,
@@ -1780,7 +1780,7 @@ public final class SlabRigHangingDirectExecutorTest {
                 || !plannedArtifact.contains("player_proof\tABSENT\n")
                 || !plannedArtifact.contains("execution_contract\t"
                 + SlabRigHangingDirectState.EXECUTION_CONTRACT + "\n")
-                || !plannedArtifact.contains("address\t6143/42/" + expectedPage + "\n")
+                || !plannedArtifact.contains("address\t6573/42/" + expectedPage + "\n")
                 || !plannedArtifact.contains("case_count\t" + expectedCount + "\n")
                 || occurrences(plannedArtifact, "case\t") != expectedCount) {
             throw helper.assertionException("production START did not return at exact PLANNED: "

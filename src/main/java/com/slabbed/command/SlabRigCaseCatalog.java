@@ -4,7 +4,6 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.world.item.ArmorStandItem;
 import net.minecraft.world.item.BannerItem;
-import net.minecraft.world.item.BedItem;
 import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.BoatItem;
 import net.minecraft.world.item.BucketItem;
@@ -20,7 +19,6 @@ import net.minecraft.world.item.PlayerHeadItem;
 import net.minecraft.world.item.ScaffoldingBlockItem;
 import net.minecraft.world.item.SolidBucketItem;
 import net.minecraft.world.item.StandingAndWallBlockItem;
-import net.minecraft.world.item.SignItem;
 import net.minecraft.world.level.EmptyBlockGetter;
 import net.minecraft.world.level.block.AbstractBannerBlock;
 import net.minecraft.world.level.block.AbstractCandleBlock;
@@ -45,7 +43,7 @@ import net.minecraft.world.level.block.HangingSignBlock;
 import net.minecraft.world.level.block.IronBarsBlock;
 import net.minecraft.world.level.block.LadderBlock;
 import net.minecraft.world.level.block.LanternBlock;
-import net.minecraft.world.level.block.RedStoneWireBlock;
+import net.minecraft.world.level.block.RedstoneWireBlock;
 import net.minecraft.world.level.block.SignBlock;
 import net.minecraft.world.level.block.SlabBlock;
 import net.minecraft.world.level.block.StairBlock;
@@ -106,9 +104,9 @@ public final class SlabRigCaseCatalog {
     }
 
     private static final Set<Class<?>> KNOWN_LOCAL_BLOCK_ITEM_CLASSES = Set.of(
-            BlockItem.class, BannerItem.class, BedItem.class, DoubleHighBlockItem.class,
+            BlockItem.class, BannerItem.class, DoubleHighBlockItem.class,
             GameMasterBlockItem.class, HangingSignItem.class, PlayerHeadItem.class,
-            SignItem.class, SolidBucketItem.class, StandingAndWallBlockItem.class);
+            SolidBucketItem.class, StandingAndWallBlockItem.class);
 
     public record CatalogItem(int index, String id, List<String> categories,
                               Disposition disposition, EffectPolicy effectPolicy) {
@@ -345,7 +343,7 @@ public final class SlabRigCaseCatalog {
         addFamily(families, block instanceof LadderBlock, "wall_attached");
         addFamily(families, block instanceof BushBlock, "plant");
         addFamily(families, block instanceof FallingBlock, "falling_block");
-        addFamily(families, block instanceof DiodeBlock || block instanceof RedStoneWireBlock
+        addFamily(families, block instanceof DiodeBlock || block instanceof RedstoneWireBlock
                 || block instanceof BasePressurePlateBlock || block instanceof ButtonBlock
                 || block instanceof TripWireBlock || block instanceof TripWireHookBlock, "redstone");
         addFamily(families, block instanceof EntityBlock, "block_entity");
@@ -371,7 +369,7 @@ public final class SlabRigCaseCatalog {
     }
 
     private static String route(Item item) {
-        if (item instanceof BedItem) {
+        if (item instanceof BlockItem bedCandidate && bedCandidate.getBlock() instanceof BedBlock) {
             return "bed_block_item";
         }
         if (item instanceof HangingSignItem) {

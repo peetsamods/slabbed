@@ -216,7 +216,7 @@ public final class SlabRigHangingDirectActionsTest {
 
     private static void assertReservedAir(GameTestHelper helper, ServerLevel world,
                                           SlabRigHangingDirectFixture.AbsolutePage page) {
-        if (page.plan().routeIndex() != 6143 || page.plan().topologyIndex() != 42
+        if (page.plan().routeIndex() != 6573 || page.plan().topologyIndex() != 42
                 || page.plan().selectorPage() != 1 || page.cases().size() != 16
                 || page.reservedCells().size() != 16 * 68
                 || page.clearOwnedCells().size() != 16 * 52

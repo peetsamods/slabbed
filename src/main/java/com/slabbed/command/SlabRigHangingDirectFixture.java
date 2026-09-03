@@ -22,13 +22,13 @@ import java.util.Set;
  * Pure absolute-coordinate adapter for RIG-3B3A's four production painting pages.
  *
  * <p>This class owns no command, world write, entity lookup, persistence, or cleanup. It accepts only the
- * reviewed route 6143 / topology 42 / selector-page 1..4 plan and converts every relative planner cell into
+ * reviewed route 6573 / topology 42 / selector-page 1..4 plan and converts every relative planner cell into
  * one immutable absolute ownership envelope. Production execution and tests therefore consume the same
  * geometry instead of independently reconstructing a board from bounds or visual assumptions.
  */
 public final class SlabRigHangingDirectFixture {
 
-    public static final int ROUTE_INDEX = 6143;
+    public static final int ROUTE_INDEX = 6573;
     public static final int TOPOLOGY_INDEX = 42;
     private static final int MAX_X_SIZE = 40;
     private static final int MAX_Y_SIZE = 20;
@@ -145,7 +145,7 @@ public final class SlabRigHangingDirectFixture {
         Objects.requireNonNull(origin, "origin");
         SlabRigHangingPaintingPlan.validatePage(universe, page);
         if (page.routeIndex() != ROUTE_INDEX || page.topologyIndex() != TOPOLOGY_INDEX) {
-            throw new IllegalArgumentException("direct fixture accepts only route6143/topology42");
+            throw new IllegalArgumentException("direct fixture accepts only route6573/topology42");
         }
         int caseCount = page.cases().size();
 
