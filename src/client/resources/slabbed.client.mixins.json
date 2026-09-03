@@ -9,6 +9,7 @@
     "ClientLevelBlockChangedAckMixin",
     "ClientLevelBlockChangeRemeshMixin",
     "ClientLevelLevelExtractorAccessor",
+    "EntityLightProbeLoweredBandMixin",
     "GameRendererCrosshairRetargetMixin",
     "ItemFrameDrawnFaceRenderMixin",
     "LevelExtractorImportantDirtyAccessor",
