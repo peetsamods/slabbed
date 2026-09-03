@@ -21,28 +21,44 @@ fabricApi {
     }
 }
 
+// Phase 2 (2026-09-03): this source set previously compiled only 14 of 31 files via an opaque
+// include list with no reason given. Traced instead of re-guessed: the other 17 are one coherent
+// group — a client-side proof harness (16 *ClientGameTest classes plus their one shared support
+// class, SlabbedRetargetTestHooks) written against net.fabricmc.fabric.api.client.gametest.v1.*.
+// That package does not exist for Minecraft 1.21.1: verified against the Fabric API umbrella POM
+// for every 1.21.1 release through 0.116.17 (none depends on fabric-client-gametest-api-v1) and
+// against FabricMC/fabric's own gradle.properties on the 1.21.1 branch (which versions
+// fabric-gametest-api-v1 but has no fabric-client-gametest-api-v1 entry at all). This is not a
+// version-pin problem to chase further — the module was never published for this Minecraft
+// version. The one file in this cluster that predates it, Mc1211GoblinRouteClientEntrypoint,
+// already shows the working alternative this line uses instead: a plain ClientModInitializer
+// driving itself via ClientTickEvents and ScreenshotRecorder, not the FabricClientGameTest
+// harness. Redesigning these 17 files onto that pattern is real client-testing architecture work,
+// not a hygiene change, and is out of scope here — see the plan's Phase 5/6 boundary. Excluded by
+// name, not by a silent glob, so the next reader sees exactly what is missing and why.
+def slabbedUnbuildableClientGameTests = [
+        "com/slabbed/client/runtime/SlabbedRetargetTestHooks.java",
+        "com/slabbed/test/SlabbedLabB2UpperHalfGhostWindowClientGameTest.java",
+        "com/slabbed/test/SlabbedLabBeta4AuthoredCompoundAnchorDepthClientGameTest.java",
+        "com/slabbed/test/SlabbedLabBeta4CompoundContractMatrixClientGameTest.java",
+        "com/slabbed/test/SlabbedLabBeta4CompoundLoweredFullBlockCollapseClientGameTest.java",
+        "com/slabbed/test/SlabbedLabBeta4LiveShapeGoblinClientGameTest.java",
+        "com/slabbed/test/SlabbedLabBsFbAdjacentPlacementProofClientGameTest.java",
+        "com/slabbed/test/SlabbedLabClientGameTest.java",
+        "com/slabbed/test/SlabbedLabCompatibleLoweredSlabLanePredicateBoundaryClientGameTest.java",
+        "com/slabbed/test/SlabbedLabLoweredSidePlacementLiveReproClientGameTest.java",
+        "com/slabbed/test/SlabbedLabLoweredSideSlabPlacementClientGameTest.java",
+        "com/slabbed/test/SlabbedLabModelDySingleOwnerAuditClientGameTest.java",
+        "com/slabbed/test/SlabbedLabRenderRegionLoweredCarrierBridgeClientGameTest.java",
+        "com/slabbed/test/SlabbedLabSbMixedStackBreakClientGameTest.java",
+        "com/slabbed/test/SlabbedLabUltraGoblin2StressClientGameTest.java",
+        "com/slabbed/test/SlabbedLabVanillaIllegalSlabToSlabPlacementClientGameTest.java",
+        "com/slabbed/test/SlabbedLabVerticalChainHitboxOwnershipClientGameTest.java",
+]
 sourceSets {
     gametest {
         java {
-            // Explicit deferred-client-proof split for MC 1.21.1:
-            // keep client proof classes present in-tree, but compile only the
-            // two server-compatible classes in this source set.
-            setIncludes([
-                    "com/slabbed/test/ChainSurvivalReproTest.java",
-                    "com/slabbed/test/SlabbedLabFixtureTest.java",
-                    "com/slabbed/test/Mc1211GoblinRouteCanaryGameTest.java",
-                    "com/slabbed/test/Mc1211GoblinRouteClientEntrypoint.java",
-                    "com/slabbed/test/OffsetRaycastTargetingTest.java",
-                    "com/slabbed/test/TerrainSlabsTestShim.java",
-                    "com/slabbed/test/RedstoneWireConnectionTest.java",
-                    "com/slabbed/test/BottomSlabSpawnProofTest.java",
-                    "com/slabbed/test/NeighborUpdateInvarianceTest.java",
-                    "com/slabbed/test/LandingRuleLawTest.java",
-                    "com/slabbed/test/FrozenDySceneFixture.java",
-                    "com/slabbed/test/PlacementCaptureBoundaryGameTest.java",
-                    "com/slabbed/test/PlacementDyOverlayTest.java",
-                    "com/slabbed/anchor/FrozenFlatAttachmentCapacityTest.java"
-            ])
+            exclude(slabbedUnbuildableClientGameTests)
         }
     }
 }
