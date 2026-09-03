@@ -9,7 +9,9 @@ identical copy for tools that read that name; edit both together.
    height-resolution path. `LAW.md` is supreme; no other doc may redefine it. Its enforcement is
    `NeighborUpdateInvarianceTest` (the S-2 gate), which is **blocking by default** — a violation
    fails the build. `-Dslabbed.lawGate=false` downgrades to a printed inventory and is only for
-   fixing a deliberate new RED forward, never for landing one.
+   fixing a deliberate new RED forward, never for landing one. A green S-2 row proves nothing
+   unless a mutation provably reaches that subject — every new subject names its mutation in a
+   comment.
 
 2. **The discretion law (maintainer ruling, 2026-08-07) — this repo is public and stays
    impersonal.** No personal names, no machine-local usernames or absolute home-directory paths,
