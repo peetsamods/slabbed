@@ -12,6 +12,12 @@ The default gate rejects a failed preservation row. `-Dslabbed.lawGate=false`
 may be used only to characterize a known work-in-progress failure; it is never
 an acceptable setting for landing a violation.
 
+A green `NeighborUpdateInvarianceTest` row is proof only if at least one
+mutation provably reaches that subject's resolver. Every subject must name, in
+a comment, the mutation that would move it. A law gate full of unreachable rows
+is worse than no gate, because it reads as proof (maintainer ruling,
+2026-09-03).
+
 ## Law 2 — lowering eligibility is geometric
 
 Eligibility to lower an unplaced structural block comes from the intended placement
