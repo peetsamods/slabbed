@@ -119,7 +119,7 @@ public final class SlabAnchorClientSync {
             Long2ByteOpenHashMap map = chunk.getAttached(SlabAnchorAttachment.PLACEMENT_DY_TYPE);
             long key = pos.asLong();
             return map != null && map.containsKey(key)
-                    ? SlabAnchorAttachment.PlacementDyFact.present(map.get(key))
+                    ? SlabAnchorAttachment.PlacementDyFact.fromStoredSixteenths(map.get(key))
                     : SlabAnchorAttachment.PlacementDyFact.absent();
         };
 

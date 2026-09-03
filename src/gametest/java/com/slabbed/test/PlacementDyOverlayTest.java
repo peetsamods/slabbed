@@ -47,7 +47,7 @@ public final class PlacementDyOverlayTest {
 
         SlabAnchorAttachment.PlacementDyFact backingFact(long packedPos) {
             return present.contains(packedPos)
-                    ? SlabAnchorAttachment.PlacementDyFact.present(0.25d)
+                    ? new SlabAnchorAttachment.PlacementDyFact(true, Double.doubleToRawLongBits(0.25d))
                     : SlabAnchorAttachment.PlacementDyFact.absent();
         }
 

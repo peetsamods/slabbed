@@ -98,19 +98,32 @@ public final class TargetDyOverlay {
         boolean diverged = Double.isFinite(stored)
                 ? Math.abs(stored - live) > EPS
                 : (live < -EPS || live > EPS);
+        // FOURTH DOOR: what the chunk MESHER sees. Mesh workers read the store through the client
+        // bridge (a render region has no chunk handle) while every read above goes to the chunk
+        // directly, so a conversion slip on the bridge alone draws the block somewhere else while
+        // stored/raw/live all stay right. Shown beside them and flagged the moment it differs.
+        SlabAnchorAttachment.ClientPlacementDyFactLookup bridge =
+                SlabAnchorAttachment.clientPlacementDyLookup;
+        SlabAnchorAttachment.PlacementDyFact meshFact = bridge == null ? null : bridge.lookup(pos);
+        double mesh = meshFact == null ? Double.NaN : meshFact.valueOrNaN();
+        boolean meshSplit = Double.isFinite(raw) != Double.isFinite(mesh)
+                || (Double.isFinite(raw)
+                        && Double.doubleToRawLongBits(raw) != Double.doubleToRawLongBits(mesh));
         String line5 = "  frozen=" + (SlabAnchorAttachment.FROZEN_DY_ENABLED ? "ON" : "off")
                 + " stored=" + (Double.isFinite(stored) ? format(stored) : "none")
                 + " raw=" + (backing.present() ? format(raw) : "none")
                 + " live=" + format(live)
+                + " mesh=" + (Double.isFinite(mesh) ? format(mesh) : "none")
                 + (predicted ? " PREDICTED" : "")
-                + (diverged ? " *** DIVERGED" : "");
+                + (diverged ? " *** DIVERGED" : "")
+                + (meshSplit ? " *** MESH-SPLIT" : "");
 
         int color = dy == 0.0d ? 0xffd7d7d7 : (dy < 0.0d ? 0xffffd166 : 0xffff8866);
         drawLine(context, client, line1, 8, 8, color);
         drawLine(context, client, line2, 8, 20, color);
         drawLine(context, client, line3, 8, 32, color);
         drawLine(context, client, line4, 8, 44, color);
-        drawLine(context, client, line5, 8, 56, diverged ? 0xffff5566 : color);
+        drawLine(context, client, line5, 8, 56, (diverged || meshSplit) ? 0xffff5566 : color);
     }
 
     private static void drawLine(

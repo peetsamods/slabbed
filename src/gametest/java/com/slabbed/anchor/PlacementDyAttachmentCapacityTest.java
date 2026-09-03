@@ -8,6 +8,7 @@ import net.minecraft.test.GameTest;
 import net.minecraft.test.TestContext;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.chunk.WorldChunk;
+import java.util.Map;
 
 /**
  * Capacity proof for the PLACEMENT_DY store — the sibling of
@@ -178,6 +179,43 @@ public final class PlacementDyAttachmentCapacityTest {
      * Builds {@code count} placed heights tiled across the chunk, layer by layer, using the two
      * half-step values a real placement actually produces.
      */
+    /**
+     * Every door that turns a stored byte back into a height must agree with every other door, to
+     * the bit. The chunk mesher reads the store through a client bridge that has no chunk handle;
+     * the overlay, the outline and the server read the chunk directly. A byte of sixteenths handed
+     * to a height-taking method widens silently to a whole-block height (-8 sixteenths becomes
+     * -8.0 blocks) and the compiler says nothing — the block is then drawn eight blocks underground
+     * while every direct read still answers -0.5. This row performs the conversion in the exact
+     * shape the bridge uses and checks it against the direct chunk read.
+     */
+    @GameTest(templateName = "fabric-gametest-api-v1:empty")
+    public void storedByteReadsAsTheSameHeightThroughEveryDoor(TestContext ctx) {
+        ServerWorld world = ctx.getWorld();
+        BlockPos pos = ctx.getAbsolutePos(new BlockPos(2, 2, 2));
+        double placed = -0.5d;
+        int written = SlabAnchorAttachment.writePlacementDyBatch(world,
+                Map.of(pos, Double.doubleToRawLongBits(placed)));
+        ctx.assertTrue(written == 1, "premise: exactly one fact should have been written, got " + written);
+        WorldChunk chunk = world.getChunk(pos.getX() >> 4, pos.getZ() >> 4);
+        Long2ByteOpenHashMap map = chunk.getAttached(SlabAnchorAttachment.PLACEMENT_DY_TYPE);
+        ctx.assertTrue(map != null && map.containsKey(pos.asLong()),
+                "premise: the written fact is absent from the chunk map");
+        byte stored = map.get(pos.asLong());
+        try {
+            double direct = SlabAnchorAttachment.rawPlacementDyFact(world, pos).valueOrNaN();
+            double viaBridgeShape =
+                    SlabAnchorAttachment.PlacementDyFact.fromStoredSixteenths(stored).valueOrNaN();
+            ctx.assertTrue(Double.doubleToRawLongBits(direct) == Double.doubleToRawLongBits(placed),
+                    "the direct chunk read must return the placed height; got " + direct);
+            ctx.assertTrue(Double.doubleToRawLongBits(viaBridgeShape) == Double.doubleToRawLongBits(placed),
+                    "the mesh bridge's conversion must return the placed height; got " + viaBridgeShape
+                            + " for stored byte " + stored);
+        } finally {
+            chunk.removeAttached(SlabAnchorAttachment.PLACEMENT_DY_TYPE);
+        }
+        ctx.complete();
+    }
+
     private static Long2ByteOpenHashMap denseFacts(int chunkX, int chunkZ, int baseY, int count) {
         Long2ByteOpenHashMap facts = new Long2ByteOpenHashMap();
         int written = 0;
