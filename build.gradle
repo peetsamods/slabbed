@@ -188,16 +188,19 @@ repositories {
 }
 
 dependencies {
-    // Dev-runtime mods for realistic local testing: drop a matching jar into run/mods/ and it
-    // loads for runClient. Inert when absent — nothing here is required to build or ship.
-    // Widened 2026-09-03 to cover the mods players actually run alongside Slabbed, not just
-    // Terrain Slabs. CI rejects any jar left in run/mods (see .github/workflows/ci.yml).
-    def devRuntimeJars = fileTree(dir: "${projectDir}/run/mods",
-            include: [
-                    "*terrain*slab*.jar", "*architectury*.jar", "*midnightlib*.jar",
-                    "*sodium*.jar", "*indium*.jar", "*lithium*.jar", "*c2me*.jar",
-                    "*iris*.jar", "*distanthorizons*.jar", "*distant-horizons*.jar",
-            ])
+    // Dev-runtime mods for realistic local testing are NOT wired through Gradle (corrected
+    // 2026-09-03). They live in run/mods, which is the dev CLIENT's own working directory, and
+    // Fabric Loader scans it at startup the same way it scans a real installation's mods folder —
+    // so no configuration is needed for the client to see them.
+    //
+    // Wiring them through a Gradle configuration was actively harmful: modLocalRuntime puts a jar
+    // on EVERY run configuration, and modClientRuntimeOnly still reaches runGameTest because the
+    // gametest source set inherits the client's runtime. Either way the canonical server test
+    // suite ran against Lithium/C2ME/Terrain Slabs instead of vanilla — exactly what
+    // .github/workflows/ci.yml rejects a run/mods jar to prevent, and it broke outright once
+    // C2ME's current release landed, since its modules ship as nested jars that resolve for a
+    // scanned mods folder but not for a bare classpath entry. The gametest run has its own
+    // working directory (build/run/gameTest) with its own empty mods folder, so it stays vanilla.
 
     // To change the versions see the gradle.properties file
     minecraft "com.mojang:minecraft:${project.minecraft_version}"
@@ -210,10 +213,6 @@ dependencies {
     modClientImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
     modClientImplementation "net.fabricmc.fabric-api:fabric-renderer-api-v1:${project.fabric_version}"
     modClientImplementation "net.fabricmc.fabric-api:fabric-model-loading-api-v1:${project.fabric_version}"
-
-    devRuntimeJars.each { jar ->
-        modLocalRuntime files(jar)
-    }
 
     // fabric-gametest-api-v1 is included in fabric-api bundle (already on main classpath,
     // extended to the gametest source set by configureTests { createSourceSet = true })
