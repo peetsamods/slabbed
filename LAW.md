@@ -54,8 +54,10 @@ says every block is entitled to the right height in the first place.**
 - **⚠️ VACUITY CHECK — a green S-2 row is proof ONLY if at least one mutation provably reaches that
   subject's resolver.** Anchored subjects resolve from the `pos.down()` chain alone, and no mutation
   writes *below* a subject, so their other rows can be inert by construction. **Every new subject must
-  name, in a comment, the mutation that would move it.** A law gate full of unreachable rows is worse
-  than no gate, because it reads as proof.
+  name, in a comment, the mutation that would move it.** **Reachability is established by measurement,
+  not by argument:** build the subject with the real builders, strip its protection, apply every
+  mutation, and record whether the resolver's answer actually moved. A law gate full of unreachable
+  rows is worse than no gate, because it reads as proof.
 - **The diff tripwire (S-3) is RETIRED** (maintainer ruling, 2026-08-07). With S-2 blocking, the
   executable test enforces LAW 1 directly, and the added-line vocabulary regex had become redundant
   and fired on comments. **LAW 1's sole enforcement is S-2. Do not reintroduce S-3.**
