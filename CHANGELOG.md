@@ -4,6 +4,12 @@ See LAW.md — this changelog does not redefine the law.
 
 ### Fixes
 
+- **Dirt paths and farmland convert to dirt under your placements.** Placing a block on a dirt
+  path or farmland now converts the trampled block to dirt first, the same way vanilla does
+  under solid full blocks — so the placed piece sits on a real full surface instead of a
+  1/16-sunken sliver the height bookkeeping reads dishonestly. Planting is safe: a crop that
+  NEEDS the farmland (seeds) converts nothing and plants normally, and a conversion whose
+  placement fails afterwards is rolled back exactly (maintainer ruling, 2026-09-01).
 - **Side placements are exact at every depth.** Clicking the visible side face of a deeply
   lowered block already landed the new piece at the aimed height, but the placement's internal
   bookkeeping disagreed with itself past half a block: a deep landing over solid ground was

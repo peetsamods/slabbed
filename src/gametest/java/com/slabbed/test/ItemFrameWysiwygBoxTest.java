@@ -76,7 +76,18 @@ public final class ItemFrameWysiwygBoxTest {
                     "both frames must survive on their supports (lowered=" + lowered.survives()
                             + " control=" + control.survives() + ")");
         }
-        helper.succeed();
+        // Cross-version tripwire (sibling-line finding, 2026-09-02): on some MC versions the
+        // entity xyz is re-derived FROM the box, so a box shift feeds back into the position on
+        // a later recalculation. Re-assert the split after a few ticks, not only at spawn.
+        helper.runAfterDelay(5, () -> {
+            if (Math.abs(lowered.getY() - control.getY()) > EPS) {
+                throw helper.assertionException(supportRel,
+                        "frame entity Y drifted after ticks — a deferred recalculation derived the "
+                                + "position from the shifted box; lowered Y " + lowered.getY()
+                                + " vs control " + control.getY());
+            }
+            helper.succeed();
+        });
     }
 
     @GameTest(structure = "fabric-gametest-api-v1:empty")
