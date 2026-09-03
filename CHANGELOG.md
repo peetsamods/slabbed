@@ -1,3 +1,15 @@
+## [Unreleased]
+
+### Placement
+
+- A deep side placement lands on the real surface, never inside it (maintainer
+  ruling, 2026-09-02). Clicking a lowered block's side face still lands the
+  new slab at the height of the face you aimed at, but when the landing cell
+  has solid ground directly under it the slab now seats on that ground — flush
+  over a full block, exactly where a click on the ground itself would put it —
+  instead of being recorded a full block deep inside the dirt. Side placements
+  over open air keep following the aim all the way down.
+
 ## [0.5.2-beta.1] - Minecraft 1.20.1 (Forge)
 
 **Slabbed's first Forge release!** The mod has lived on Fabric and NeoForge

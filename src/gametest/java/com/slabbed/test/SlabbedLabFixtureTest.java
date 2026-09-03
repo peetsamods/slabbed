@@ -9,6 +9,7 @@ import com.slabbed.util.SlabbedOffsetRaycast;
 import com.slabbed.util.SlabSupport;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.OptionalInt;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.gametest.framework.GameTest;
@@ -1638,6 +1639,60 @@ public final class SlabbedLabFixtureTest {
                 "P26-9: slab clicking the east face of a -1.0 compound owner must land on the east side");
         System.out.println("[NEOFORGE_COMPOUND_SIDE_OPPOSITE_PLACEMENT_SUMMARY]"
                 + " rows=1 green=1 red=0 proofScope=server_targeting_placement_authority_only");
+        ctx.succeed();
+    }
+
+    /**
+     * Seat-clamp arbitration (maintainer ruling, 2026-09-02): a deep side aim is honored to the
+     * physical limit of the landing cell. Slab B's aimed -1.0 landing would sit fully INSIDE the
+     * dirt under its cell, so the side inheritance clamps it to the REAL seat — flush 0.0 on the
+     * dirt, what the control placement on that dirt computes — and the stored fact, the read, and
+     * the FLAT stamp all agree (pre-ruling the admission declined the burial and the fallback
+     * inheritance stored the deep aim anyway). Slab A in the same row is the open-descent control
+     * (air below): the clamp must never touch it, its fact keeps the aim verbatim, and it takes no
+     * FLAT stamp — the two-writer pin of the any-depth ruling.
+     */
+    @GameTest(template = "empty")
+    public void useOnDeepSideLandingOverSolidGroundClampsToRealSeat(GameTestHelper ctx) {
+        ServerLevel world = ctx.getLevel();
+        buildCompoundMinusOne(ctx);
+        BlockPos owner = ctx.absolutePos(new BlockPos(2, 5, 2));
+        SlabAnchorAttachment.addAnchor(world, owner, world.getBlockState(owner));
+        SlabAnchorAttachment.addCompoundFullBlockAnchor(world, owner, world.getBlockState(owner));
+        // Solid column under the SECOND landing cell (4,5,2) only; the first (3,5,2) stays over air.
+        for (int y = 1; y <= 4; y++) {
+            world.setBlock(ctx.absolutePos(new BlockPos(4, y, 2)),
+                    Blocks.DIRT.defaultBlockState(), Block.UPDATE_ALL);
+        }
+        Player player = mockPlayerNear(ctx, ctx.absolutePos(new BlockPos(3, 6, 2)));
+
+        BlockPos a = placeSlabViaAndFindChangedSlab(ctx, player, owner, Direction.EAST,
+                eastHitOffset(owner, -1.0d, 0.25d));
+        ctx.assertTrue(a.equals(ctx.absolutePos(new BlockPos(3, 5, 2))),
+                "OPEN-DESCENT CONTROL: slab A must land in the east cell (3,5,2), got " + shortPos(a));
+        assertSlabDy(ctx, world, a, -1.0d,
+                "OPEN-DESCENT CONTROL: slab A beside the -1.0 compound must land -1.0 verbatim");
+        OptionalInt factA = SlabPlacementHeightAttachment.storedHalfSteps(
+                world.getChunk(a.getX() >> 4, a.getZ() >> 4), a);
+        ctx.assertTrue(factA.isPresent() && factA.getAsInt() == -2,
+                "open-descent fact must keep the aim verbatim (-1.0 = -2 half-steps), got " + factA);
+        ctx.assertTrue(!SlabAnchorAttachment.isFrozenFlat(world, a),
+                "the freeze must not stamp FROZEN_FLAT over a lowered stored fact");
+
+        BlockPos b = placeSlabViaAndFindChangedSlab(ctx, player, a, Direction.EAST,
+                eastHitOffset(a, -1.0d, 0.25d));
+        ctx.assertTrue(b.equals(ctx.absolutePos(new BlockPos(4, 5, 2))),
+                "slab B must land in the east cell (4,5,2), got " + shortPos(b));
+        OptionalInt factB = SlabPlacementHeightAttachment.storedHalfSteps(
+                world.getChunk(b.getX() >> 4, b.getZ() >> 4), b);
+        ctx.assertTrue(factB.isPresent() && factB.getAsInt() == 0,
+                "solid-ground landing must store the REAL seat (0.0, maintainer ruling 2026-09-02),"
+                        + " got " + factB);
+        assertSlabDy(ctx, world, b, 0.0d,
+                "the read must agree with the clamped fact (0.0)");
+        ctx.assertTrue(SlabAnchorAttachment.isFrozenFlat(world, b),
+                "a follow whose seat admits no lowering lands FLUSH and must take the FLAT stamp"
+                        + " (the freeze verdict must agree with the flush fact)");
         ctx.succeed();
     }
 
