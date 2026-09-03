@@ -7,7 +7,10 @@ loom {
     splitEnvironmentSourceSets()
     runs {
         client {
-            vmArgs "-Dmixin.debug=true", "-Dmixin.verbose=true", "-Dmixin.dumpTargetOnFailure=true", "-Dslabbed.debug.sbsb=true"
+            // Dev-run only. Arms the /slabdy passive overlay and the debug mixin toolchain flags.
+            // Shipped defaults are untouched — see SlabbedClientFlags, which reads these same
+            // System properties with a "false" fallback.
+            vmArgs "-Dmixin.debug=true", "-Dmixin.verbose=true", "-Dmixin.dumpTargetOnFailure=true", "-Dslabbed.debug.sbsb=true", "-Dslabbed.targetDyOverlay=true"
         }
     }
 }
@@ -44,6 +47,115 @@ sourceSets {
     }
 }
 
+// ── Suite-count gate ─────────────────────────────────────────────────────────────────────────
+// A stale persisted world in build/run/gameTest can silently drop tests while still reporting
+// BUILD SUCCESSFUL. A green run is therefore NOT proof on its own: the reported count must equal
+// the expected total computed from the registered classes (tools/expected-gametest-count.py).
+// This task turns that manual check into a machine gate: it runs after every runGameTest and
+// FAILS the build on any mismatch. Ported 2026-09-03; was present as a script with no task
+// calling it — that gap meant the false-green protection existed on disk but never ran.
+tasks.register("verifyGameTestCount") {
+    doLast {
+        File log = file("build/run/gameTest/logs/latest.log")
+        if (!log.exists()) {
+            throw new GradleException("verifyGameTestCount: ${log} not found — runGameTest did not produce a log; cannot certify the suite count.")
+        }
+        def matches = log.readLines().findAll { it.contains("required tests passed") }
+        if (matches.isEmpty()) {
+            throw new GradleException("verifyGameTestCount: no 'required tests passed' line in ${log} — the suite did not complete.")
+        }
+        def m = (matches.last() =~ /All (\d+) required tests passed/)
+        if (!m.find()) {
+            throw new GradleException("verifyGameTestCount: could not parse the count from: ${matches.last()}")
+        }
+        int reported = m.group(1).toInteger()
+        def proc = new ProcessBuilder("python3", "tools/expected-gametest-count.py")
+                .directory(projectDir).redirectErrorStream(true).start()
+        def out = proc.inputStream.text
+        if (proc.waitFor() != 0) {
+            throw new GradleException("verifyGameTestCount: tools/expected-gametest-count.py failed:\n${out}")
+        }
+        def em = (out =~ /expected suite count (\d+)/)
+        if (!em.find()) {
+            throw new GradleException("verifyGameTestCount: could not parse tools/expected-gametest-count.py output: ${out}")
+        }
+        int expected = em.group(1).toInteger()
+        if (reported != expected) {
+            throw new GradleException("verifyGameTestCount: FALSE GREEN — run reported ${reported} tests but ${expected} are registered. A stale run dir silently drops tests; rm -rf build/run/gameTest and re-run.")
+        }
+        logger.lifecycle("verifyGameTestCount: OK — ${reported}/${expected} (reported == expected).")
+    }
+}
+tasks.matching { it.name == "runGameTest" }.configureEach {
+    finalizedBy("verifyGameTestCount")
+}
+
+// ── Git hooks chain check ────────────────────────────────────────────────────────────────────
+// This repository's core.hooksPath is set PER WORKTREE to the maintainer's private safety hooks
+// (outside this repo), which themselves chain to tools/hooks/<name> after running. A task that
+// unconditionally ran `git config core.hooksPath tools/hooks` would repoint the setting straight
+// at this directory and silently drop that outer privacy layer — the safety finding recorded when
+// this line was created (2026-09-03). This task VERIFIES the chain instead of writing anything.
+tasks.register("verifyGitHooksChain") {
+    doLast {
+        if (!file(".git").exists() && !file("../../../../.git").exists()) {
+            logger.lifecycle("verifyGitHooksChain: no .git found — skipped.")
+            return
+        }
+        def proc = new ProcessBuilder("git", "config", "--get", "core.hooksPath")
+                .directory(projectDir).redirectErrorStream(true).start()
+        String hooksPath = proc.inputStream.text.trim()
+        int exit = proc.waitFor()
+        if (exit != 0 || hooksPath.isEmpty()) {
+            logger.warn("verifyGitHooksChain: core.hooksPath is unset for this worktree — commits are UNGATED. Set it to match every sibling worktree: git config --worktree core.hooksPath <path>.")
+            return
+        }
+        File hooksDir = new File(hooksPath)
+        if (!hooksDir.isAbsolute()) {
+            hooksDir = new File(projectDir, hooksPath)
+        }
+        File repoHooks = file("tools/hooks")
+        if (hooksDir.exists() && repoHooks.exists() && hooksDir.canonicalPath == repoHooks.canonicalPath) {
+            logger.warn("verifyGitHooksChain: core.hooksPath points directly at tools/hooks, bypassing the maintainer's outer privacy-scan layer if one is configured elsewhere. Confirm this is intentional.")
+            return
+        }
+        def missingChain = []
+        ["commit-msg", "pre-commit", "pre-push"].each { hookName ->
+            File configuredHook = new File(hooksDir, hookName)
+            if (configuredHook.exists() && configuredHook.canRead()) {
+                String text = configuredHook.text
+                if (!text.contains("tools/hooks/${hookName}") && !text.contains("tools/hooks/\"")) {
+                    missingChain << hookName
+                }
+            }
+        }
+        if (!missingChain.isEmpty()) {
+            logger.warn("verifyGitHooksChain: configured hook(s) ${missingChain.join(', ')} at ${hooksDir} do not appear to chain to tools/hooks/<name> — this line's S-1/S-4/S-5/S-6 gates may not be firing.")
+        } else {
+            logger.lifecycle("verifyGitHooksChain: OK — core.hooksPath=${hooksPath}, chains to tools/hooks.")
+        }
+    }
+}
+tasks.matching { it.name == "build" }.configureEach { dependsOn("verifyGitHooksChain") }
+
+// ── Classname-exclusion tripwire ─────────────────────────────────────────────────────────────
+// LAW 2's recurring bug class is a block-CLASS test standing in for a geometry/role question
+// (the snow exclusion, "rejected every slab by class", instanceof-fence). This gate diffs the
+// instanceof-*Block surface of SlabSupport against a committed baseline so a new carve-out is a
+// reviewed one-line diff, never an unconscious drift. See tools/check-classname-exclusions.py.
+tasks.register("verifyClassnameExclusions") {
+    doLast {
+        def proc = new ProcessBuilder("python3", "tools/check-classname-exclusions.py")
+                .directory(projectDir).redirectErrorStream(true).start()
+        def out = proc.inputStream.text
+        logger.lifecycle(out.trim())
+        if (proc.waitFor() != 0) {
+            throw new GradleException("verifyClassnameExclusions failed — see output above.")
+        }
+    }
+}
+tasks.matching { it.name == "build" }.configureEach { dependsOn("verifyClassnameExclusions") }
+
 version = project.mod_version
 group = project.maven_group
 
@@ -60,6 +172,17 @@ repositories {
 }
 
 dependencies {
+    // Dev-runtime mods for realistic local testing: drop a matching jar into run/mods/ and it
+    // loads for runClient. Inert when absent — nothing here is required to build or ship.
+    // Widened 2026-09-03 to cover the mods players actually run alongside Slabbed, not just
+    // Terrain Slabs. CI rejects any jar left in run/mods (see .github/workflows/ci.yml).
+    def devRuntimeJars = fileTree(dir: "${projectDir}/run/mods",
+            include: [
+                    "*terrain*slab*.jar", "*architectury*.jar", "*midnightlib*.jar",
+                    "*sodium*.jar", "*indium*.jar", "*lithium*.jar", "*c2me*.jar",
+                    "*iris*.jar", "*distanthorizons*.jar", "*distant-horizons*.jar",
+            ])
+
     // To change the versions see the gradle.properties file
     minecraft "com.mojang:minecraft:${project.minecraft_version}"
     mappings "net.fabricmc:yarn:${project.yarn_mappings}:v2"
@@ -71,6 +194,10 @@ dependencies {
     modClientImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
     modClientImplementation "net.fabricmc.fabric-api:fabric-renderer-api-v1:${project.fabric_version}"
     modClientImplementation "net.fabricmc.fabric-api:fabric-model-loading-api-v1:${project.fabric_version}"
+
+    devRuntimeJars.each { jar ->
+        modLocalRuntime files(jar)
+    }
 
     // fabric-gametest-api-v1 is included in fabric-api bundle (already on main classpath,
     // extended to the gametest source set by configureTests { createSourceSet = true })
@@ -114,9 +241,11 @@ tasks.withType(JavaExec).configureEach {
 }
 
 // Slice 2b: the gametest suite is pinned to the LEGACY (frozen-dy OFF) configuration. The shipped
-// default is frozen ON, but converting every setBlockState-built fixture to author placement facts is
-// a later slice; until then the suite's compatibility floor is OFF and the frozen-specific rows opt in
-// per-test by flipping SlabAnchorAttachment.FROZEN_DY_ENABLED in-process.
+// default is ALSO off on this line today (SlabAnchorAttachment.FROZEN_DY_ENABLED's own initializer
+// reads "false" — corrected 2026-09-03; an earlier comment here claimed the shipped default was
+// ON, which the code did not support). The placed-height store lands in a later slice; until then
+// the suite's compatibility floor is OFF and the frozen-specific rows opt in per-test by flipping
+// SlabAnchorAttachment.FROZEN_DY_ENABLED in-process.
 tasks.matching { it.name == "runGameTest" }.configureEach {
     if (it instanceof JavaExec) {
         it.doFirst {
@@ -125,39 +254,401 @@ tasks.matching { it.name == "runGameTest" }.configureEach {
     }
 }
 
+// ── Pre-release hygiene gate: ONE exclusion list, BOTH artifacts ──────────────────────────────
+// withSourcesJar() + Loom's remapSourcesJar build the sources artifact on a separate path with
+// no filter of its own, so anything excluded only from `jar` still ships in full source form in
+// the sources jar. One list, parameterised by file extension, applied to both.
+def slabbedHygieneExcludes = { String ext ->
+    [
+            "com/slabbed/dev/**",
+            "com/slabbed/debug/**",
+            "com/slabbed/client/debug/**",
+            "com/slabbed/mixin/debug/**",
+            "com/slabbed/util/DebugTraceContext.${ext}",
+            "com/slabbed/client/GapFillerOverlay.${ext}",
+            "com/slabbed/client/ScreenshotCaptureContext*.${ext}",
+            "com/slabbed/client/ScreenshotCaptureService*.${ext}",
+            "com/slabbed/client/CaptureProfile.${ext}",
+            "com/slabbed/util/SlabbedDebug.${ext}",
+            "com/slabbed/util/Beta4PlacementAuthorRecorder*.${ext}",
+            "com/slabbed/util/Beta4ManualLiveTrace*.${ext}",
+            "com/slabbed/util/Beta35FenceWallLiveInspectRecorder*.${ext}",
+            "com/slabbed/util/Beta35LiveTorchCaptureRecorder*.${ext}",
+            "com/slabbed/util/Beta35SlabHeightHitAcceptanceRecorder*.${ext}",
+            "com/slabbed/util/Beta35SlabJumpSourceTruthRecorder*.${ext}",
+            "com/slabbed/util/Mc1211TrapdoorUnderBottomRecorder*.${ext}",
+            "com/slabbed/client/runtime/ModelDyTranslateTraceBridge*.${ext}",
+            "com/slabbed/mixin/BlockItemPlaceTraceMixin*.${ext}",
+            "com/slabbed/mixin/client/Beta35FenceWallLiveInspectTickMixin.${ext}",
+            "com/slabbed/mixin/client/Beta35LiveTorchCaptureMixin.${ext}",
+            "com/slabbed/mixin/client/Beta35LiveTorchDualTraceInteractionMixin.${ext}",
+            "com/slabbed/mixin/client/Beta35SlabHeightHitAcceptanceTickMixin.${ext}",
+            "com/slabbed/mixin/client/Beta4ManualLiveClientTickTraceMixin.${ext}",
+            "com/slabbed/mixin/client/Beta4ManualLiveInteractionTraceMixin.${ext}",
+            "com/slabbed/util/SlabbedAuditBridge.${ext}",
+            "**/.gitkeep",
+            "slabbed.debug.mixins.json",
+    ].collect { it.toString() }
+}
+
 jar {
     from("LICENSE") {
         rename { "${it}_${project.base.archivesName.get()}"}
     }
 
-    // Exclude dev-only and debug-only content from public release jar
-    exclude("com/slabbed/dev/**")
-    exclude("com/slabbed/debug/**")
-    exclude("com/slabbed/client/debug/**")
-    exclude("com/slabbed/mixin/debug/**")
-    exclude("com/slabbed/util/DebugTraceContext.class")
-    exclude("com/slabbed/client/GapFillerOverlay.class")
-    exclude("com/slabbed/client/ScreenshotCaptureContext*.class")
-    exclude("com/slabbed/client/ScreenshotCaptureService*.class")
-    exclude("com/slabbed/client/CaptureProfile.class")
-    exclude("com/slabbed/util/SlabbedDebug.class")
-    exclude("com/slabbed/util/Beta4PlacementAuthorRecorder.class")
-    exclude("com/slabbed/util/Beta4ManualLiveTrace*.class")
-    exclude("com/slabbed/util/Beta35FenceWallLiveInspectRecorder*.class")
-    exclude("com/slabbed/util/Beta35LiveTorchCaptureRecorder*.class")
-    exclude("com/slabbed/util/Beta35SlabHeightHitAcceptanceRecorder*.class")
-    exclude("com/slabbed/util/Beta35SlabJumpSourceTruthRecorder*.class")
-    exclude("com/slabbed/util/Mc1211TrapdoorUnderBottomRecorder*.class")
-    exclude("com/slabbed/client/runtime/ModelDyTranslateTraceBridge*.class")
-    exclude("com/slabbed/mixin/BlockItemPlaceTraceMixin*.class")
-    exclude("com/slabbed/mixin/client/Beta35FenceWallLiveInspectTickMixin.class")
-    exclude("com/slabbed/mixin/client/Beta35LiveTorchCaptureMixin.class")
-    exclude("com/slabbed/mixin/client/Beta35LiveTorchDualTraceInteractionMixin.class")
-    exclude("com/slabbed/mixin/client/Beta35SlabHeightHitAcceptanceTickMixin.class")
-    exclude("com/slabbed/mixin/client/Beta4ManualLiveClientTickTraceMixin.class")
-    exclude("com/slabbed/mixin/client/Beta4ManualLiveInteractionTraceMixin.class")
-    exclude("com/slabbed/util/SlabbedAuditBridge.class")
-    exclude("slabbed.debug.mixins.json")
+    exclude(slabbedHygieneExcludes("class"))
+}
+
+tasks.named("sourcesJar", Jar) {
+    exclude(slabbedHygieneExcludes("java"))
+}
+
+// ── Manifest hygiene: never advertise a class the artifact does not contain ───────────────────
+// Loom computes Fabric-Loom-Client-Only-Entries from the client source set OUTPUT, not from the
+// entries that survive into the artifact, so an exclude above can leave the manifest naming a
+// class the archive no longer has. This prunes the attribute against the finished archive itself,
+// as a subtraction of names that are NOT present, so it can never remove a real entry and can
+// never go stale as the exclusion list changes.
+def pruneClientOnlyEntriesManifest = { File artifact ->
+    String attribute = "Fabric-Loom-Client-Only-Entries"
+    Map<String, byte[]> contents = new LinkedHashMap<>()
+    Map<String, Long> times = new LinkedHashMap<>()
+    Set<String> directories = new LinkedHashSet<>()
+
+    new java.util.zip.ZipFile(artifact).withCloseable { zip ->
+        for (entry in zip.entries()) {
+            times.put(entry.name, entry.time)
+            if (entry.directory) {
+                directories.add(entry.name)
+                contents.put(entry.name, new byte[0])
+            } else {
+                contents.put(entry.name, zip.getInputStream(entry).bytes)
+            }
+        }
+    }
+
+    byte[] manifestBytes = contents.get("META-INF/MANIFEST.MF")
+    if (manifestBytes == null) {
+        return
+    }
+    def manifest = new java.util.jar.Manifest(new ByteArrayInputStream(manifestBytes))
+    String declared = manifest.mainAttributes.getValue(attribute)
+    if (declared == null || declared.isEmpty()) {
+        return
+    }
+
+    List<String> present = declared.split(";").findAll { contents.containsKey(it) }
+    List<String> missing = declared.split(";").findAll { !contents.containsKey(it) }
+    if (missing.isEmpty()) {
+        return
+    }
+
+    if (present.isEmpty()) {
+        manifest.mainAttributes.remove(new java.util.jar.Attributes.Name(attribute))
+    } else {
+        manifest.mainAttributes.putValue(attribute, present.join(";"))
+    }
+    def rewritten = new ByteArrayOutputStream()
+    manifest.write(rewritten)
+    contents.put("META-INF/MANIFEST.MF", rewritten.toByteArray())
+
+    def rebuilt = new File(artifact.parentFile, artifact.name + ".manifest-pruned")
+    new java.util.zip.ZipOutputStream(new FileOutputStream(rebuilt)).withCloseable { out ->
+        contents.each { name, bytes ->
+            def entry = new java.util.zip.ZipEntry(name)
+            long time = times.get(name)
+            if (time >= 0) {
+                entry.time = time
+            }
+            out.putNextEntry(entry)
+            if (!directories.contains(name)) {
+                out.write(bytes)
+            }
+            out.closeEntry()
+        }
+    }
+    java.nio.file.Files.move(rebuilt.toPath(), artifact.toPath(),
+            java.nio.file.StandardCopyOption.REPLACE_EXISTING)
+    logger.lifecycle("[hygiene] ${artifact.name}: dropped ${missing.size()} " +
+            "${attribute} name(s) with no matching archive entry: ${missing.join(', ')}")
+}
+
+tasks.matching { it.name == "remapJar" || it.name == "remapSourcesJar" }.configureEach {
+    doLast { task -> pruneClientOnlyEntriesManifest(task.archiveFile.get().asFile) }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────────────────────
+// Release artifact allowlist — the INVERTED hygiene gate.
+//
+// slabbedHygieneExcludes above is a list of things to DROP. It cannot see a package nobody
+// thought to name. This gate is closed-world: every logical unit reaching a published artifact
+// must match a reviewed row in RELEASE_ALLOWLIST.md, and the build FAILS naming anything that
+// does not. See RELEASE_ALLOWLIST.md.
+//
+// WHICH ARTIFACTS: this line uses Yarn mappings and Loom DOES register remapJar/remapSourcesJar,
+// so jar/sourcesJar are intermediate -dev products and the REMAPPED outputs in build/libs/ are
+// what ships. The gate reads the remap tasks' archives, downstream of the manifest prune above.
+// ─────────────────────────────────────────────────────────────────────────────────────────────
+
+def releaseAllowlistFile = rootProject.file("RELEASE_ALLOWLIST.md")
+
+def releaseArtifactTaskNames = ["remapJar", "remapSourcesJar"]
+
+def releaseLogicalUnit = { String entryName ->
+    def name = entryName
+    if (name.endsWith(".class")) {
+        name = name.substring(0, name.length() - ".class".length())
+        int lastSlash = name.lastIndexOf('/')
+        int nest = name.indexOf('$', lastSlash + 1)
+        if (nest >= 0) {
+            name = name.substring(0, nest)
+        }
+    } else if (name.endsWith(".java")) {
+        name = name.substring(0, name.length() - ".java".length())
+    }
+    return name
+}
+
+def releaseAllowlistMatches = { String pattern, String unit ->
+    if (pattern.endsWith("/**")) {
+        return unit.startsWith(pattern.substring(0, pattern.length() - 2))
+    }
+    if (pattern.endsWith("/*")) {
+        def prefix = pattern.substring(0, pattern.length() - 1)
+        return unit.startsWith(prefix) && !unit.substring(prefix.length()).contains("/")
+    }
+    return unit == pattern
+}
+
+def parseReleaseAllowlist = { File file ->
+    if (!file.exists()) {
+        throw new GradleException(
+                "RELEASE_ALLOWLIST.md is missing at ${file.absolutePath}.\n"
+                        + "The release allowlist is mandatory. Restore it from git — deleting it is\n"
+                        + "not a way to make this gate pass.")
+    }
+    def approved = new LinkedHashMap<String, String>()
+    boolean inApprovedSection = false
+    file.eachLine("UTF-8") { rawLine ->
+        def line = rawLine.trim()
+        if (line.startsWith("## ")) {
+            inApprovedSection = line.toLowerCase(java.util.Locale.ROOT).startsWith("## approved")
+            return
+        }
+        if (!inApprovedSection || !line.startsWith("|")) {
+            return
+        }
+        def cells = line.split("\\|", -1).collect { it.trim() }
+        if (cells.size() < 4) {
+            return
+        }
+        def entry = cells[1]
+        def reason = cells[2]
+        if (entry.length() <= 2 || !entry.startsWith("`") || !entry.endsWith("`")) {
+            return
+        }
+        entry = entry.substring(1, entry.length() - 1).trim()
+        if (entry.isEmpty()) {
+            return
+        }
+        if (reason.replace("`", "").trim().isEmpty()) {
+            throw new GradleException(
+                    "RELEASE_ALLOWLIST.md entry '${entry}' has no reason.\n"
+                            + "An approval with no reason is how the list rots. Give it one.")
+        }
+        if (approved.containsKey(entry)) {
+            throw new GradleException(
+                    "RELEASE_ALLOWLIST.md lists '${entry}' twice. Keep one row per entry.")
+        }
+        approved.put(entry, reason)
+    }
+    if (approved.isEmpty()) {
+        throw new GradleException(
+                "RELEASE_ALLOWLIST.md parsed to zero approved entries.\n"
+                        + "Either the '## Approved' sections were emptied or the table format was broken.\n"
+                        + "Entry rows must look like: | `com/slabbed/pkg/*` | reason |")
+    }
+    return approved
+}
+
+def scanReleaseManifest = { java.util.zip.ZipFile zip, Set<String> entryNames ->
+    def phantoms = new TreeSet<String>()
+    def manifestEntry = zip.getEntry("META-INF/MANIFEST.MF")
+    if (manifestEntry == null) {
+        return phantoms
+    }
+    def manifest = new java.util.jar.Manifest(zip.getInputStream(manifestEntry))
+    ["Fabric-Loom-Client-Only-Entries"].each { attribute ->
+        String declared = manifest.mainAttributes.getValue(attribute)
+        if (declared == null || declared.isEmpty()) {
+            return
+        }
+        declared.split(";").each { name ->
+            if (!name.trim().isEmpty() && !entryNames.contains(name)) {
+                phantoms.add("${attribute}: ${name}".toString())
+            }
+        }
+    }
+    return phantoms
+}
+
+def scanReleaseArtifacts = { List<File> archives ->
+    def approved = parseReleaseAllowlist(releaseAllowlistFile)
+    def unapproved = new TreeMap<String, TreeSet<String>>()
+    def matchedPatterns = new HashSet<String>()
+    def phantoms = new TreeMap<String, TreeSet<String>>()
+    def counts = new TreeMap<String, Integer>()
+    archives.each { archive ->
+        if (!archive.exists()) {
+            throw new GradleException(
+                    "Release artifact ${archive.absolutePath} does not exist; cannot verify it.")
+        }
+        new java.util.zip.ZipFile(archive).withCloseable { zip ->
+            def entryNames = new LinkedHashSet<String>()
+            def fileCount = 0
+            zip.entries().each { entry ->
+                entryNames.add(entry.name)
+                if (entry.directory) {
+                    return
+                }
+                fileCount++
+                def unit = releaseLogicalUnit(entry.name)
+                def hit = approved.keySet().find { pattern ->
+                    releaseAllowlistMatches(pattern, unit)
+                }
+                if (hit != null) {
+                    matchedPatterns.add(hit)
+                } else {
+                    unapproved.computeIfAbsent(unit, { new TreeSet<String>() }).add(archive.name)
+                }
+            }
+            counts.put(archive.name, fileCount)
+            def archivePhantoms = scanReleaseManifest(zip, entryNames)
+            if (!archivePhantoms.isEmpty()) {
+                phantoms.put(archive.name, archivePhantoms)
+            }
+        }
+    }
+    def stale = new TreeSet<String>(approved.keySet())
+    stale.removeAll(matchedPatterns)
+    return [unapproved: unapproved, stale: stale, phantoms: phantoms, counts: counts]
+}
+
+def releaseAllowlistArchives = { ->
+    releaseArtifactTaskNames.collect { name ->
+        tasks.named(name).get().archiveFile.get().asFile
+    }
+}
+
+tasks.register("verifyReleaseAllowlist") {
+    group = "verification"
+    description = "Fails naming every class or resource that reaches a published artifact without "  +
+            "an approved entry in RELEASE_ALLOWLIST.md, and every manifest name with no archive entry."
+    releaseArtifactTaskNames.each { dependsOn(tasks.named(it)) }
+    releaseArtifactTaskNames.each { name ->
+        inputs.files(tasks.named(name).flatMap { it.archiveFile })
+    }
+    inputs.file(releaseAllowlistFile)
+
+    doLast {
+        def result = scanReleaseArtifacts(releaseAllowlistArchives())
+
+        if (!result.stale.isEmpty()) {
+            logger.warn("RELEASE_ALLOWLIST.md has {} entry/entries that match nothing in either "
+                    + "published artifact (stale approvals rot the list): {}",
+                    result.stale.size(), result.stale.join(", "))
+        }
+
+        if (!result.phantoms.isEmpty()) {
+            def detail = result.phantoms.collect { archiveName, names ->
+                "  ${archiveName}\n" + names.collect { "      ${it}" }.join("\n")
+            }.join("\n")
+            throw new GradleException(
+                    "Release manifest violation: a published artifact advertises name(s) it does "
+                            + "not contain.\n\n" + detail + "\n\n"
+                            + "A jar that lies about its own contents is a release defect even when "
+                            + "every entry in it\n"
+                            + "is approved. This is what pruneClientOnlyEntriesManifest exists to "
+                            + "prevent; if this fires,\n"
+                            + "that prune stopped running or stopped covering an attribute.")
+        }
+
+        if (!result.unapproved.isEmpty()) {
+            def detail = result.unapproved.collect { unit, archiveNames ->
+                "  ${unit}\n      reached: ${archiveNames.join(', ')}"
+            }.join("\n")
+            throw new GradleException(
+                    "Release allowlist violation: ${result.unapproved.size()} unit(s) reached a "
+                            + "published artifact with no approved entry in RELEASE_ALLOWLIST.md.\n\n"
+                            + detail + "\n\n"
+                            + "Two legitimate responses for EACH entry above:\n"
+                            + "  1. EXCLUDE it — add it to slabbedHygieneExcludes in build.gradle "
+                            + "(ONE list, both\n"
+                            + "     artifacts), and gate or remove whatever registers it, then rebuild.\n"
+                            + "  2. APPROVE it — add a row under an \"## Approved\" heading in "
+                            + "RELEASE_ALLOWLIST.md\n"
+                            + "     with a reason that would survive review. Package rows are "
+                            + "`pkg/*` (direct members\n"
+                            + "     only, NOT subpackages) or `pkg/**` (recursive, resource trees "
+                            + "only); a bare path is\n"
+                            + "     a single logical unit.\n\n"
+                            + "Widening an existing pattern purely to make this green is neither. "
+                            + "This gate is closed-world\n"
+                            + "on purpose: anything new fails by default, because anything new used "
+                            + "to SHIP by default.\n"
+                            + "Run ./gradlew releaseAllowlistReport --continue for the same list "
+                            + "without failing that task.")
+        }
+
+        println("RELEASE_ALLOWLIST_VERIFY artifacts=${result.counts.size()} "
+                + "entries=${result.counts.collect { k, v -> "${k}:${v}" }.join(' ')} "
+                + "unapproved=0 manifestPhantoms=0 stale=${result.stale.size()}")
+    }
+}
+
+tasks.register("releaseAllowlistReport") {
+    group = "verification"
+    description = "Prints every unapproved unit in the published artifacts WITHOUT failing. Review " +
+            "aid only — it does not bypass verifyReleaseAllowlist."
+    releaseArtifactTaskNames.each { dependsOn(tasks.named(it)) }
+    releaseArtifactTaskNames.each { name ->
+        inputs.files(tasks.named(name).flatMap { it.archiveFile })
+    }
+    inputs.file(releaseAllowlistFile)
+    outputs.file(layout.buildDirectory.file("reports/release-allowlist/unapproved.txt"))
+
+    doLast {
+        def result = scanReleaseArtifacts(releaseAllowlistArchives())
+        def lines = []
+        lines.add("# Units reaching a published artifact with no approved RELEASE_ALLOWLIST.md entry")
+        lines.add("# unapproved=${result.unapproved.size()} stale=${result.stale.size()} "
+                + "manifestPhantoms=${result.phantoms.values().sum { it.size() } ?: 0}")
+        result.counts.each { archiveName, count ->
+            lines.add("# ARTIFACT ${archiveName}\t${count} file entries")
+        }
+        result.unapproved.each { unit, archiveNames ->
+            lines.add("UNAPPROVED ${unit}\t${archiveNames.join(', ')}")
+        }
+        result.phantoms.each { archiveName, names ->
+            names.each { lines.add("MANIFEST-PHANTOM ${archiveName}\t${it}") }
+        }
+        result.stale.each { pattern ->
+            lines.add("STALE ${pattern}\t(approved but matches nothing)")
+        }
+        def reportFile = outputs.files.singleFile
+        reportFile.parentFile.mkdirs()
+        reportFile.text = lines.join(System.lineSeparator()) + System.lineSeparator()
+        println(lines.join("\n"))
+        println("RELEASE_ALLOWLIST_REPORT ${reportFile.absolutePath}")
+    }
+}
+
+tasks.named("build") {
+    dependsOn(tasks.named("verifyReleaseAllowlist"))
+}
+
+tasks.matching { releaseArtifactTaskNames.contains(it.name) }.configureEach {
+    finalizedBy(tasks.named("verifyReleaseAllowlist"))
 }
 
 // configure the maven publication
