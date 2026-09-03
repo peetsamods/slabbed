@@ -113,6 +113,59 @@ public final class SlabPlacementHeightLifecycleTest {
         ctx.succeed();
     }
 
+    /**
+     * Hung decorations obey WYSIWYG (maintainer ruling, 2026-09-01): an item frame's BOUNDING
+     * BOX — its interaction and projectile surface — hangs on its support's DRAWN face. The
+     * entity's real position deliberately stays at grid height (moving it corrupts the derived
+     * grid cell through BlockPos.containing in setPos and position packets; the drawn frame is
+     * shifted by the render layer, which no headless row can see). Self-calibrating pair — one
+     * frame on a flush support, one on a support lowered a full block; whatever vanilla's
+     * exact box math is, the two boxes must differ by exactly the support lowering while the
+     * two entity positions must NOT differ at all.
+     */
+    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = TEMPLATE)
+    public void itemFrameHangsOnDrawnFace(GameTestHelper ctx) {
+        ServerLevel world = ctx.getLevel();
+        BlockPos flushSupport = ctx.absolutePos(new BlockPos(2, 3, 2));
+        BlockPos loweredSupport = ctx.absolutePos(new BlockPos(5, 3, 2));
+        world.setBlock(flushSupport, Blocks.STONE.defaultBlockState(), Block.UPDATE_ALL);
+        world.setBlock(loweredSupport, Blocks.STONE.defaultBlockState(), Block.UPDATE_ALL);
+        injectRawHalfSteps(world, loweredSupport, -2);
+        assertImmediateHeight(ctx, world, loweredSupport, -1.0d);
+
+        var flushFrame = slabbed$placeFrameOnEastFace(ctx, world, flushSupport);
+        var loweredFrame = slabbed$placeFrameOnEastFace(ctx, world, loweredSupport);
+        double boxDelta = flushFrame.getBoundingBox().minY - loweredFrame.getBoundingBox().minY;
+        ctx.assertTrue(Math.abs(boxDelta - 1.0d) < 1.0e-6d,
+                "a frame's box on a -1.0 support must hang exactly 1.0 below its flush twin; delta="
+                        + boxDelta);
+        ctx.assertTrue(Math.abs(flushFrame.getY() - loweredFrame.getY()) < 1.0e-6d,
+                "the entity POSITIONS must stay at grid height on both - a moved position"
+                        + " corrupts the frame's derived grid cell; flushY=" + flushFrame.getY()
+                        + " loweredY=" + loweredFrame.getY());
+        ctx.succeed();
+    }
+
+    private static net.minecraft.world.entity.decoration.ItemFrame slabbed$placeFrameOnEastFace(
+            GameTestHelper ctx, ServerLevel world, BlockPos support) {
+        Player player = ctx.makeMockPlayer(GameType.SURVIVAL);
+        player.setPos(support.getX() + 2.5d, support.getY() + 0.5d, support.getZ() + 0.5d);
+        ItemStack stack = new ItemStack(Items.ITEM_FRAME);
+        player.setItemInHand(InteractionHand.MAIN_HAND, stack);
+        Vec3 hit = new Vec3(support.getX() + 1.0d, support.getY() + 0.5d, support.getZ() + 0.5d);
+        InteractionResult result = stack.useOn(new UseOnContext(
+                player, InteractionHand.MAIN_HAND,
+                new BlockHitResult(hit, Direction.EAST, support, false)));
+        ctx.assertTrue(result.consumesAction(), "item frame placement must be accepted");
+        BlockPos framePos = support.east();
+        var frames = world.getEntitiesOfClass(
+                net.minecraft.world.entity.decoration.ItemFrame.class,
+                new AABB(framePos).inflate(1.5d));
+        ctx.assertTrue(frames.size() == 1,
+                "exactly one frame expected at " + framePos + ", found " + frames.size());
+        return frames.get(0);
+    }
+
     @GameTest(templateNamespace = "fabric-gametest-api-v1", template = TEMPLATE)
     public void transformedScaffoldingWritesActualCellOnly(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();

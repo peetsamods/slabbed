@@ -11,6 +11,14 @@
   (a slab seated on an enchanting table's top, for example) are unaffected and
   land exactly as before.
 
+### Rendering and physics
+
+- Item frames and glow item frames hang on their support's drawn face
+  (maintainer ruling, 2026-09-01: hung decorations obey WYSIWYG). A frame
+  aimed at a lowered block's visible face previously hung a full block above
+  it. The frame's drawn position and its interaction surface move together;
+  paintings are not yet covered.
+
 ### Height resolution
 
 - A chain hanging below an ordinary (non-slab) lowered block now follows that

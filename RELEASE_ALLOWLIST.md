@@ -85,6 +85,7 @@ com/slabbed/mixin/CarpetBlockMixin.class
 com/slabbed/mixin/ChainBlockNeighborSurvivalMixin.class
 com/slabbed/mixin/FencePaneSlabConnectionMixin.class
 com/slabbed/mixin/HangingSignAttachedMixin.class
+com/slabbed/mixin/ItemFrameWysiwygMixin.class
 com/slabbed/mixin/LivingEntityLoweredScaffoldingMixin.class
 com/slabbed/mixin/LeverParticleMixin.class
 com/slabbed/mixin/RedstoneTorchParticleMixin.class
@@ -103,7 +104,7 @@ com/slabbed/mixin/client/BlockEntityOffsetMixin.class
 com/slabbed/mixin/client/BlockModelDyTranslateMixin.class
 com/slabbed/mixin/client/CarpetDyShapeMixin.class
 com/slabbed/mixin/client/GameRendererPickOffsetRaycastMixin.class
-com/slabbed/mixin/client/ItemFrameRenderOffsetMixin.class
+com/slabbed/mixin/client/ItemFrameDrawnFaceRenderMixin.class
 com/slabbed/mixin/client/MinecartRenderOffsetMixin.class
 com/slabbed/mixin/torch/
 com/slabbed/mixin/torch/TorchBlockMixin.class
@@ -196,6 +197,7 @@ com/slabbed/mixin/CarpetBlockMixin.java
 com/slabbed/mixin/ChainBlockNeighborSurvivalMixin.java
 com/slabbed/mixin/FencePaneSlabConnectionMixin.java
 com/slabbed/mixin/HangingSignAttachedMixin.java
+com/slabbed/mixin/ItemFrameWysiwygMixin.java
 com/slabbed/mixin/LivingEntityLoweredScaffoldingMixin.java
 com/slabbed/mixin/LeverParticleMixin.java
 com/slabbed/mixin/RedstoneTorchParticleMixin.java
@@ -213,7 +215,7 @@ com/slabbed/mixin/client/BlockEntityOffsetMixin.java
 com/slabbed/mixin/client/BlockModelDyTranslateMixin.java
 com/slabbed/mixin/client/CarpetDyShapeMixin.java
 com/slabbed/mixin/client/GameRendererPickOffsetRaycastMixin.java
-com/slabbed/mixin/client/ItemFrameRenderOffsetMixin.java
+com/slabbed/mixin/client/ItemFrameDrawnFaceRenderMixin.java
 com/slabbed/mixin/client/MinecartRenderOffsetMixin.java
 com/slabbed/mixin/torch/
 com/slabbed/mixin/torch/TorchBlockMixin.java

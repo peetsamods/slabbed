@@ -4,6 +4,7 @@
   "compatibilityLevel": "JAVA_21",
   "mixins": [
     "HangingSignAttachedMixin",
+    "ItemFrameWysiwygMixin",
     "CandleParticleMixin",
     "LeverParticleMixin",
     "CarpetBlockMixin",
