@@ -2,6 +2,12 @@
 
 ### Placement
 
+- Placing onto a dirt path or farmland converts it to dirt first (maintainer
+  ruling, 2026-09-01), so the placed block sits at normal height instead of
+  settling onto the trampled block's slightly-lower face. Vanilla does this
+  only for solid full blocks; Slabbed extends it to every placement it
+  manages. Plantings that need the trampled block — seeds on farmland — are
+  untouched, and a conversion whose placement falls through is rolled back.
 - Side placements are true WYSIWYG at any depth (maintainer ruling,
   2026-09-01): a slab — or a fence, wall, or pane — placed against a lowered
   block's visible side face lands at exactly the height of the face you aimed

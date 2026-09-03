@@ -53,6 +53,9 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 @Mixin(BlockItem.class)
 public abstract class BlockItemPlacementIntentMixin {
 
+    @org.spongepowered.asm.mixin.Shadow
+    protected abstract BlockState getPlacementState(BlockPlaceContext context);
+
     private static final double LOWERED_VISUAL_BOUNDARY_EPSILON = 1.0e-6d;
     private static final String REPEAT_SEAM_TRACE_OPT_IN = "slabbed.beta4RepeatMergeTrace";
     private static final ThreadLocal<CompoundVisibleSideLowerIntent> COMPOUND_VISIBLE_SIDE_LOWER_INTENT =
@@ -774,9 +777,19 @@ public abstract class BlockItemPlacementIntentMixin {
         Object[] frame = {capture, null, null, Boolean.FALSE, null, null};
         frames.push(frame);
         try {
+            BlockState convertedTrampledSupport = capture
+                    ? slabbed$convertTrampledSupportBeforePlacement(context)
+                    : null;
             InteractionResult result = original.call(context);
             if (frame[3] == Boolean.TRUE) {
                 result = InteractionResult.FAIL;
+            }
+            if (convertedTrampledSupport != null && !result.consumesAction()) {
+                // The placement failed after the conversion (an obstruction discovered inside
+                // place, or any later refusal). The conversion must not outlive the placement
+                // it was made for: restore the exact prior state, moisture and all.
+                context.getLevel().setBlockAndUpdate(
+                        context.getClickedPos().below(), convertedTrampledSupport);
             }
             if (capture) {
                 slabbed$capturePlacementHeight(
@@ -793,6 +806,50 @@ public abstract class BlockItemPlacementIntentMixin {
                 PLACEMENT_HEIGHT_PLACE_FRAMES.remove();
             }
         }
+    }
+
+    /**
+     * A trampled sub-full support (dirt path / farmland, 15/16 tall) converts to dirt under a
+     * placement this transaction manages, before the block lands (maintainer ruling,
+     * 2026-09-01). Vanilla converts only under solid full blocks; everything else seated on the
+     * trampled block's REAL face per FLUSH WINS, and the freeze hook then read that 1/16 sink
+     * as "lowered" and anchored the piece a HALF BLOCK down. Converting first means every later
+     * height decision in the same transaction sees a full block: seat 0, stamp FLAT, no anchor.
+     * Runs on both logical sides so the client predicts the same landing the server stores.
+     *
+     * <p>The conversion is VIABILITY-GATED and REVERSIBLE, because it runs before the placement
+     * it serves and {@code canPlace()} tests only replaceability, not survival: without the
+     * gates, right-clicking farmland with seeds converted the farmland, the crop then refused
+     * to sit on dirt, and every planting click destroyed one farmland block. Three rules:
+     * a placement that is not viable at all converts nothing; a placement that NEEDS the
+     * trampled block to survive (crops on farmland) converts nothing and proceeds vanilla; and
+     * a conversion whose placement still fails afterwards is rolled back to the exact prior
+     * state by the caller.
+     *
+     * @return the support state that was converted away, for the caller's rollback, or null
+     *         when nothing was converted
+     */
+    @org.jetbrains.annotations.Nullable
+    private BlockState slabbed$convertTrampledSupportBeforePlacement(BlockPlaceContext context) {
+        if (!context.canPlace()) {
+            return null;
+        }
+        Level world = context.getLevel();
+        BlockPos supportPos = context.getClickedPos().below();
+        BlockState support = world.getBlockState(supportPos);
+        if (!(support.getBlock() instanceof net.minecraft.world.level.block.DirtPathBlock
+                || support.getBlock() instanceof net.minecraft.world.level.block.FarmBlock)) {
+            return null;
+        }
+        if (getPlacementState(context) == null) {
+            return null;
+        }
+        world.setBlockAndUpdate(supportPos, Blocks.DIRT.defaultBlockState());
+        if (getPlacementState(context) == null) {
+            world.setBlockAndUpdate(supportPos, support);
+            return null;
+        }
+        return support;
     }
 
     @ModifyArg(

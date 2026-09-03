@@ -166,6 +166,71 @@ public final class SlabPlacementHeightLifecycleTest {
         return frames.get(0);
     }
 
+    /**
+     * A trampled sub-full support (dirt path / farmland) converts to dirt under a managed
+     * placement, and the landing sits FLAT with no anchor (maintainer ruling, 2026-09-01).
+     * Pre-ruling the slab seated 1/16 down on the path's real face and the freeze hook then
+     * anchored that sliver to a HALF-BLOCK sink; the no-anchor assertion pins against that
+     * amplification returning.
+     */
+    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = TEMPLATE)
+    public void placementOnDirtPathConvertsSupportAndLandsFlat(GameTestHelper ctx) {
+        ServerLevel world = ctx.getLevel();
+        BlockPos support = ctx.absolutePos(new BlockPos(2, 2, 2));
+        world.setBlock(support.below(), Blocks.DIRT.defaultBlockState(), Block.UPDATE_ALL);
+        world.setBlock(support, Blocks.DIRT_PATH.defaultBlockState(), Block.UPDATE_ALL);
+        BlockPos landing = support.above();
+
+        placeHeldBlock(ctx, bottomSlab(), support, Direction.UP, 0.0F);
+        ctx.assertTrue(world.getBlockState(support).is(Blocks.DIRT),
+                "the trampled support must convert to dirt under the placement");
+        ctx.assertTrue(world.getBlockState(landing).getBlock() instanceof SlabBlock,
+                "the slab must land in the cell above the converted support");
+        assertImmediateHeight(ctx, world, landing, 0.0d);
+        ctx.assertTrue(!SlabAnchorAttachment.isAnchored(world, landing),
+                "a flat landing on a converted support must not be anchored");
+        ctx.succeed();
+    }
+
+    /**
+     * The trampled-support conversion must never fire for a placement that NEEDS the trampled
+     * block: planting seeds on farmland proceeds vanilla, farmland intact, crop planted. The
+     * unguarded version converted the farmland first, the crop then refused to sit on dirt,
+     * and every planting click destroyed one farmland block.
+     */
+    @GameTest(templateNamespace = "fabric-gametest-api-v1", template = TEMPLATE)
+    public void plantingSeedsKeepsFarmland(GameTestHelper ctx) {
+        ServerLevel world = ctx.getLevel();
+        BlockPos farmland = ctx.absolutePos(new BlockPos(2, 2, 2));
+        world.setBlock(farmland.below(), Blocks.DIRT.defaultBlockState(), Block.UPDATE_ALL);
+        world.setBlock(farmland, Blocks.FARMLAND.defaultBlockState(), Block.UPDATE_ALL);
+        BlockPos cropPos = farmland.above();
+        // Crops refuse to plant below light 8, the gametest scene carries no daylight
+        // guarantee, and light propagates asynchronously — so the light source is part of the
+        // fixture AND the planting waits for the engine to catch up.
+        world.setBlock(cropPos.west(), Blocks.GLOWSTONE.defaultBlockState(), Block.UPDATE_ALL);
+
+        ctx.runAfterDelay(10, () -> {
+            Player player = ctx.makeMockPlayer(GameType.SURVIVAL);
+            player.setPos(farmland.getX() + 0.5d, farmland.getY() + 2.0d, farmland.getZ() + 0.5d);
+            ItemStack seeds = new ItemStack(Items.WHEAT_SEEDS);
+            player.setItemInHand(InteractionHand.MAIN_HAND, seeds);
+            // Farmland's real top face sits at 15/16; a raycast never reports a grid-height hit.
+            Vec3 hit = new Vec3(
+                    farmland.getX() + 0.5d, farmland.getY() + 0.9375d, farmland.getZ() + 0.5d);
+            InteractionResult result = seeds.useOn(new UseOnContext(
+                    player, InteractionHand.MAIN_HAND,
+                    new BlockHitResult(hit, Direction.UP, farmland, false)));
+
+            ctx.assertTrue(result.consumesAction(), "planting on farmland must be accepted");
+            ctx.assertTrue(world.getBlockState(farmland).is(Blocks.FARMLAND),
+                    "the farmland must survive the planting, got " + world.getBlockState(farmland));
+            ctx.assertTrue(world.getBlockState(cropPos).is(Blocks.WHEAT),
+                    "the crop must actually be planted, got " + world.getBlockState(cropPos));
+            ctx.succeed();
+        });
+    }
+
     @GameTest(templateNamespace = "fabric-gametest-api-v1", template = TEMPLATE)
     public void transformedScaffoldingWritesActualCellOnly(GameTestHelper ctx) {
         ServerLevel world = ctx.getLevel();
