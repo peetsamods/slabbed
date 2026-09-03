@@ -4,6 +4,10 @@ See LAW.md — this changelog does not redefine the law.
 
 ### Fixes
 
+- **Campfire smoke rises from the fire, not above it.** A lowered campfire's crackle, smoke
+  column, and cooking smoke all spawned at normal grid height, hovering in the air above the
+  visible fire. All three now emit from the campfire's drawn height (maintainer ruling,
+  2026-09-01).
 - **Chains follow a lowered beam.** A chain hanging under an ordinary lowered block (a cantilevered
   beam, for instance — not a slab) stayed at grid height while the lantern on the same chain
   correctly followed the beam down, so the beam's lowered body visually sank into the chain's top
