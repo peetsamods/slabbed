@@ -68,10 +68,24 @@ public final class SlabbedMixinConfigPlugin implements IMixinConfigPlugin {
             "net/caffeinemc/mods/lithium/common/entity/movement/ChunkAwareBlockCollisionSweeperVoxelShape";
     static final String LITHIUM_SWEEPER_POS_CLASS =
             "net/caffeinemc/mods/lithium/common/entity/movement/ChunkAwareBlockCollisionSweeperBlockPos";
-    /** The method the sweeper mixins inject into, and the call they redirect inside it. */
+    /**
+     * The exact injection points, shared with the two sweeper mixins so the probe and the
+     * injection are ONE predicate: the probe demands precisely the method descriptor and the
+     * call descriptor the {@code @Redirect} will look for, never just the names. A Lithium that
+     * keeps both names but changes either descriptor must be withheld, not admitted and crashed.
+     */
     static final String SWEEPER_ENTRY_METHOD = "computeNext";
+    static final String SWEEPER_SHAPE_ENTRY =
+            SWEEPER_ENTRY_METHOD + "()Lnet/minecraft/world/phys/shapes/VoxelShape;";
+    static final String SWEEPER_POS_ENTRY =
+            SWEEPER_ENTRY_METHOD + "()Lnet/minecraft/core/BlockPos$MutableBlockPos;";
     static final String COLLISION_CONTEXT_OWNER = "net/minecraft/world/phys/shapes/CollisionContext";
     static final String COLLISION_SHAPE_CALL = "getCollisionShape";
+    static final String COLLISION_SHAPE_CALL_DESC =
+            "(Lnet/minecraft/world/level/block/state/BlockState;Lnet/minecraft/world/level/CollisionGetter;"
+                    + "Lnet/minecraft/core/BlockPos;)Lnet/minecraft/world/phys/shapes/VoxelShape;";
+    static final String COLLISION_SHAPE_CALL_TARGET =
+            "L" + COLLISION_CONTEXT_OWNER + ";" + COLLISION_SHAPE_CALL + COLLISION_SHAPE_CALL_DESC;
 
     private static final Logger LOGGER = LoggerFactory.getLogger("slabbed/mixin");
 
@@ -82,8 +96,9 @@ public final class SlabbedMixinConfigPlugin implements IMixinConfigPlugin {
     @Override
     public void onLoad(String mixinPackage) {
         this.lithiumPresent = FabricLoader.getInstance().isModLoaded(LITHIUM_MOD_ID);
-        this.lithiumSweeperSupported = sweeperAsksCollisionContext(LITHIUM_SWEEPER_SHAPE_CLASS)
-                && sweeperAsksCollisionContext(LITHIUM_SWEEPER_POS_CLASS);
+        this.lithiumSweeperSupported =
+                sweeperAsksCollisionContext(LITHIUM_SWEEPER_SHAPE_CLASS, SWEEPER_SHAPE_ENTRY)
+                        && sweeperAsksCollisionContext(LITHIUM_SWEEPER_POS_CLASS, SWEEPER_POS_ENTRY);
         if (this.lithiumSweeperSupported) {
             LOGGER.info("Lithium's block-collision sweepers found: a lowered block's hanging collision is "
                     + "added to them{}", this.lithiumPresent
@@ -127,13 +142,21 @@ public final class SlabbedMixinConfigPlugin implements IMixinConfigPlugin {
     }
 
     /**
-     * Reads a class's ORIGINAL bytes as a resource (never loading it) and answers whether any
-     * method named {@value #SWEEPER_ENTRY_METHOD} still invokes
-     * {@code CollisionContext.getCollisionShape} — the exact instruction the sweeper mixins
-     * redirect. Absent class, unreadable bytes, or no such call all answer {@code false}, so an
-     * unknown Lithium build is withheld from, not crashed on.
+     * Reads a class's ORIGINAL bytes as a resource (never loading it) and answers whether the
+     * method whose name and descriptor are exactly {@code entry} (a {@code name()desc} string, the
+     * same one the sweeper mixin's {@code method} names) still invokes
+     * {@code CollisionContext.getCollisionShape} with exactly {@link #COLLISION_SHAPE_CALL_DESC} —
+     * the instruction the {@code @Redirect} will demand. Absent class, unreadable bytes, a method
+     * of the same name with another descriptor, or a call with another descriptor all answer
+     * {@code false}, so an unknown Lithium build is withheld from, never admitted and crashed on.
      */
-    public static boolean sweeperAsksCollisionContext(String internalName) {
+    public static boolean sweeperAsksCollisionContext(String internalName, String entry) {
+        int paren = entry.indexOf('(');
+        if (paren <= 0) {
+            return false;
+        }
+        String entryName = entry.substring(0, paren);
+        String entryDesc = entry.substring(paren);
         try (InputStream in = SlabbedMixinConfigPlugin.class.getClassLoader()
                 .getResourceAsStream(internalName + ".class")) {
             if (in == null) {
@@ -142,13 +165,14 @@ public final class SlabbedMixinConfigPlugin implements IMixinConfigPlugin {
             ClassNode node = new ClassNode();
             new ClassReader(in.readAllBytes()).accept(node, ClassReader.SKIP_DEBUG | ClassReader.SKIP_FRAMES);
             for (MethodNode method : node.methods) {
-                if (!SWEEPER_ENTRY_METHOD.equals(method.name)) {
+                if (!entryName.equals(method.name) || !entryDesc.equals(method.desc)) {
                     continue;
                 }
                 for (AbstractInsnNode insn = method.instructions.getFirst(); insn != null; insn = insn.getNext()) {
                     if (insn instanceof MethodInsnNode call
                             && COLLISION_CONTEXT_OWNER.equals(call.owner)
-                            && COLLISION_SHAPE_CALL.equals(call.name)) {
+                            && COLLISION_SHAPE_CALL.equals(call.name)
+                            && COLLISION_SHAPE_CALL_DESC.equals(call.desc)) {
                         return true;
                     }
                 }

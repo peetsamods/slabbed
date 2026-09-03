@@ -23,7 +23,9 @@ import org.spongepowered.asm.mixin.injection.Redirect;
  * for every cell of the queried box (air included), so this redirects that one call the same way.
  *
  * <p>Admitted by {@link SlabbedMixinConfigPlugin} ONLY after it has confirmed from the sweeper's
- * own bytes that the call is still there — keyed on Lithium's code, never its mod id; otherwise
+ * own bytes that this exact method and this exact call are still there (the injection point
+ * strings below are the plugin's own constants, so probe and injection cannot drift apart) —
+ * keyed on Lithium's code, never its mod id; otherwise
  * withheld, with a warning when Lithium's mod id is loaded. A Lithium refactor must degrade to
  * Lithium's rules, never crash the game. {@code require = 1} stays as the backstop for anything
  * the byte check did not foresee.
@@ -36,11 +38,11 @@ import org.spongepowered.asm.mixin.injection.Redirect;
 public abstract class LithiumBlockCollisionSweeperShapeLoweredAboveMixin {
 
     @Redirect(
-            method = "computeNext()Lnet/minecraft/world/phys/shapes/VoxelShape;",
+            method = SlabbedMixinConfigPlugin.SWEEPER_SHAPE_ENTRY,
             require = 1,
             at = @At(
                     value = "INVOKE",
-                    target = "Lnet/minecraft/world/phys/shapes/CollisionContext;getCollisionShape(Lnet/minecraft/world/level/block/state/BlockState;Lnet/minecraft/world/level/CollisionGetter;Lnet/minecraft/core/BlockPos;)Lnet/minecraft/world/phys/shapes/VoxelShape;"
+                    target = SlabbedMixinConfigPlugin.COLLISION_SHAPE_CALL_TARGET
             )
     )
     private VoxelShape slabbed$addHangingLoweredAbove(CollisionContext ctx, BlockState state,
