@@ -1,1 +1,0 @@
-// ScreenshotFlightLock removed per instructions.
