@@ -2,6 +2,12 @@
 
 See LAW.md — this changelog does not redefine the law.
 
+### Changed
+
+- **No more Indium suggestion.** The mod no longer recommends Indium; that mod never existed for
+  this Minecraft version and Slabbed has not needed it since it moved to Fabric's own rendering
+  API (maintainer ruling, 2026-09-03).
+
 ### Fixes
 
 - **Starts alongside Lithium.** With Lithium installed, the game crashed on startup before the
