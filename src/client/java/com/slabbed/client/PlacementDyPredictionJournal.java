@@ -457,10 +457,10 @@ public final class PlacementDyPredictionJournal {
             return false;
         }
         PlacementDyPredictionBridge.GroupSignature signature = batch.signature();
-        return signature.sequence() == useItemOn.getSequence()
-                && signature.hand() == useItemOn.getHand()
-                && signature.originalHitBlockPos() == useItemOn.getHitResult().getBlockPos().asLong()
-                && signature.originalHitFace() == useItemOn.getHitResult().getDirection()
+        return signature.sequence() == useItemOn.sequence()
+                && signature.hand() == useItemOn.hand()
+                && signature.originalHitBlockPos() == useItemOn.hitResult().getBlockPos().asLong()
+                && signature.originalHitFace() == useItemOn.hitResult().getDirection()
                 && signature.dimension().equals(level.dimension().toString());
     }
 

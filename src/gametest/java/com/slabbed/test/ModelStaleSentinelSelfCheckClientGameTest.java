@@ -47,7 +47,7 @@ public final class ModelStaleSentinelSelfCheckClientGameTest implements FabricCl
     @Override
     public void runTest(ClientGameTestContext ctx) {
         try (TestSingleplayerContext sp = ctx.worldBuilder().create()) {
-            sp.getClientLevel().waitForChunksRender();
+            sp.getConnection().waitForChunksRender();
 
             // Scene cells centered inside one section (local 4..11) so the poke below re-meshes the
             // torch's own section deterministically.
@@ -78,7 +78,7 @@ public final class ModelStaleSentinelSelfCheckClientGameTest implements FabricCl
                 FrozenDySceneFixture.authorCells(world, List.of(support, torch));
             });
             ctx.waitTicks(10);
-            sp.getClientLevel().waitForChunksRender();
+            sp.getConnection().waitForChunksRender();
 
             List<LinkedHashMap<String, String>> rows = new ArrayList<>();
             try {
@@ -101,7 +101,7 @@ public final class ModelStaleSentinelSelfCheckClientGameTest implements FabricCl
                     FrozenDySceneFixture.authorCells(world, List.of(poke));
                 });
                 ctx.waitTicks(15);
-                sp.getClientLevel().waitForChunksRender();
+                sp.getConnection().waitForChunksRender();
 
                 ctx.runOnClient(mc -> {
                     Float bakedDy = SlabModelStaleSentinel.peekBakedDyForTest(torch.asLong());

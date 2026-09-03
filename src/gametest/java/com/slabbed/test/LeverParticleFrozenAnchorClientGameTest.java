@@ -16,7 +16,7 @@ import net.minecraft.world.level.BlockGetter;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.LeverBlock;
-import net.minecraft.world.level.block.RedStoneWireBlock;
+import net.minecraft.world.level.block.RedstoneWireBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.AttachFace;
 import net.minecraft.world.level.block.state.properties.BlockStateProperties;
@@ -75,7 +75,7 @@ public final class LeverParticleFrozenAnchorClientGameTest implements FabricClie
         try (TestSingleplayerContext singleplayer = ctx.worldBuilder()
                 .setUseConsistentSettings(true)
                 .create()) {
-            singleplayer.getClientLevel().waitForChunksDownload();
+            singleplayer.getConnection().waitForChunksDownload();
             ctx.waitFor(client -> client.level != null && client.player != null, 400);
 
             List<LeverFixture> fixtures = singleplayer.getServer().computeOnServer(server -> {
@@ -271,7 +271,7 @@ public final class LeverParticleFrozenAnchorClientGameTest implements FabricClie
         assertWireParticleParity(baseline, lowered, paired.seed());
 
         List<ParticleSample> unpoweredSamples = captureAll("TEST33 unpowered control", () ->
-                ((RedStoneWireBlock) unpoweredState.getBlock()).animateTick(
+                ((RedstoneWireBlock) unpoweredState.getBlock()).animateTick(
                         unpoweredState, level, unpoweredFixture.pos(), RandomSource.create(paired.seed())));
         if (!unpoweredSamples.isEmpty()) {
             throw new AssertionError("TEST33_WRONG_RED_UNPOWERED_EMISSION: powered dust emitted for power=0; "
@@ -285,7 +285,7 @@ public final class LeverParticleFrozenAnchorClientGameTest implements FabricClie
                 paired.seed(), paired.executions(), baseline, lowered, unpoweredSamples.size());
         if (Math.abs(error) > EPSILON) {
             throw new AssertionError("TEST33_REDSTONE_WIRE_PARTICLE_RED: real powered "
-                    + "RedStoneWireBlock.animateTick particle retained baseline cell-relative Y instead of "
+                    + "RedstoneWireBlock.animateTick particle retained baseline cell-relative Y instead of "
                     + "the synchronized exact frozen dy=-1.5 translation; baselineY=" + baseline.y()
                     + " loweredY=" + lowered.y() + " expectedLoweredY=" + expectedLoweredY
                     + " error=" + error + " seed=" + paired.seed()
@@ -302,10 +302,10 @@ public final class LeverParticleFrozenAnchorClientGameTest implements FabricClie
         for (long seed = 0L; seed < TEST33_MAX_SEED; seed++) {
             final long candidateSeed = seed;
             List<ParticleSample> baseline = captureAll("TEST33 baseline seed=" + candidateSeed, () ->
-                    ((RedStoneWireBlock) baselineState.getBlock()).animateTick(
+                    ((RedstoneWireBlock) baselineState.getBlock()).animateTick(
                             baselineState, level, baselineFixture.pos(), RandomSource.create(candidateSeed)));
             List<ParticleSample> lowered = captureAll("TEST33 lowered seed=" + candidateSeed, () ->
-                    ((RedStoneWireBlock) loweredState.getBlock()).animateTick(
+                    ((RedstoneWireBlock) loweredState.getBlock()).animateTick(
                             loweredState, level, loweredFixture.pos(), RandomSource.create(candidateSeed)));
             if (baseline.size() == 1 && lowered.size() == 1) {
                 return new WireParticleRun(seed, baseline.getFirst(), lowered.getFirst(), (seed + 1L) * 2L);

@@ -218,7 +218,7 @@ public abstract class BlockItemPlacementIntentMixin {
         Level world = context.getLevel();
         BlockPos supportPos = context.getClickedPos().below();
         BlockState support = world.getBlockState(supportPos);
-        if (!(support.getBlock() instanceof net.minecraft.world.level.block.DirtPathBlock
+        if (!(support.getBlock() instanceof net.minecraft.world.level.block.PathBlock
                 || support.getBlock() instanceof net.minecraft.world.level.block.FarmlandBlock)) {
             return null;
         }

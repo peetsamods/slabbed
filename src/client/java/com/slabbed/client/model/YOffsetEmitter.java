@@ -255,8 +255,18 @@ public final class YOffsetEmitter implements QuadEmitter {
     }
 
     @Override
-    public QuadEmitter diffuseShade(boolean diffuseShade) {
-        return rewrap(delegate.diffuseShade(diffuseShade));
+    public QuadEmitter shadeDirectionOverride(Direction shadeDirectionOverride) {
+        return rewrap(delegate.shadeDirectionOverride(shadeDirectionOverride));
+    }
+
+    @Override
+    public QuadEmitter itemGlintRenderType(RenderType itemGlintRenderType) {
+        return rewrap(delegate.itemGlintRenderType(itemGlintRenderType));
+    }
+
+    @Override
+    public QuadEmitter itemGlintSpecialRenderType(RenderType itemGlintSpecialRenderType) {
+        return rewrap(delegate.itemGlintSpecialRenderType(itemGlintSpecialRenderType));
     }
 
     @Override
@@ -438,8 +448,18 @@ public final class YOffsetEmitter implements QuadEmitter {
     }
 
     @Override
-    public boolean diffuseShade() {
-        return delegate.diffuseShade();
+    public Direction shadeDirectionOverride() {
+        return delegate.shadeDirectionOverride();
+    }
+
+    @Override
+    public RenderType itemGlintRenderType() {
+        return delegate.itemGlintRenderType();
+    }
+
+    @Override
+    public RenderType itemGlintSpecialRenderType() {
+        return delegate.itemGlintSpecialRenderType();
     }
 
     @Override

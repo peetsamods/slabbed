@@ -125,7 +125,7 @@ public final class PlacementDyPredictionClientGameTest implements FabricClientGa
                 .setUseConsistentSettings(true)
                 .create();
         try {
-            singleplayer.getClientLevel().waitForChunksDownload();
+            singleplayer.getConnection().waitForChunksDownload();
             context.waitFor(client -> client.level != null
                     && client.player != null
                     && client.gameMode != null, 400);
