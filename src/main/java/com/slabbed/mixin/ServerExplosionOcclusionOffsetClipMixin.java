@@ -20,6 +20,14 @@ import org.spongepowered.asm.mixin.injection.Redirect;
  * {@code ServerExplosion}, not {@code Explosion} (verified in bytecode — the class's single
  * {@code Level.clip}). Routed through the OCCLUSION entry point; the ray grid makes this the most
  * frequent consumer, and rays vanilla already terminated cost nothing.
+ *
+ * <p><b>Withheld while Lithium is present</b> (maintainer ruling, 2026-09-02): Lithium's
+ * {@code world.explosions.entity_raycast} module redirects this exact call, and two redirects
+ * cannot share one call site — the second scans zero targets and, with {@code require = 1}, fails
+ * the injection check before the title screen. {@link SlabbedMixinConfigPlugin} skips this mixin
+ * alone under the mod id {@code lithium}; explosion occlusion then follows vanilla rules.
+ * {@code require = 1} stays — do not lower it to "tolerate" the conflict: a tolerated zero-match is
+ * a silent loss of the fix behind a green suite.
  */
 @Mixin(ServerExplosion.class)
 public abstract class ServerExplosionOcclusionOffsetClipMixin {
