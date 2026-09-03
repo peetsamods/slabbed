@@ -24,6 +24,7 @@
     "fabric-gametest": [
       "com.slabbed.test.ChainUnderLoweredFullBlockCapTest",
       "com.slabbed.test.GhostLoweredCollisionProofTest",
+      "com.slabbed.test.ItemFrameWysiwygBoxTest",
       "com.slabbed.test.Slabbed2612LoweringContractTest",
       "com.slabbed.test.Slabbed2612DyFingerprintTest",
       "com.slabbed.test.Slabbed2612UseOnPlacementTest",

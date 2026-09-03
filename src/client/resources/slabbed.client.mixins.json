@@ -10,7 +10,7 @@
     "ClientLevelBlockChangeRemeshMixin",
     "ClientLevelLevelExtractorAccessor",
     "GameRendererCrosshairRetargetMixin",
-    "ItemFrameRenderOffsetMixin",
+    "ItemFrameDrawnFaceRenderMixin",
     "LevelExtractorImportantDirtyAccessor",
     "LocalPlayerPickOffsetRaycastMixin",
     "MinecartRenderOffsetMixin",
