@@ -134,6 +134,68 @@ public final class Slabbed2612CollisionDepthTest {
         helper.succeed();
     }
 
+    /**
+     * END TO END, occlusion family: a REAL {@code ServerExplosion.getSeenPercent} ray grid is
+     * sheltered by a lowered block's drawn lower half. Exists for the same reason as the arrow and
+     * snowball rows — the helper rows cannot see the WIRING of the explosion redirect, and the load
+     * smoke above only proves the target class loads: withholding
+     * {@code ServerExplosionOcclusionOffsetClipMixin} left every other row green.
+     *
+     * <p>The victim is a snowball entity: its quarter-block box sits entirely inside the hang band,
+     * so every sample ray crosses the drawn body at a height vanilla's cell-bounded clip reads as
+     * air. Premise-checked on the central ray, like the sibling rows.
+     *
+     * <p>Two venues, one contract. Without Lithium the redirect fires and the grid is sheltered
+     * (seen fraction below 1). With the mod id {@code lithium} loaded — true in this JVM only when
+     * the real Lithium jar is on the run's mods path — the config plugin withholds the mixin by
+     * design and the same grid reads fully clear, exactly as vanilla answers; the row asserts that
+     * documented contract instead of skipping, so the plugin's condition is pinned here too.
+     *
+     * <p>MUTATION that must redden this row alone: make
+     * {@code SlabbedMixinConfigPlugin.withheldWhileLithiumPresent} ignore its Lithium argument.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void aRealExplosionIsShelteredByTheDrawnLowerHalf(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        BlockPos abs = loweredStone(helper);
+        // An entity's position is its FEET: the quarter-block box then spans rel y 1.625-1.875,
+        // centred in the hang band (rel 1.5-2.0), with the blast centre at the band's middle.
+        net.minecraft.world.entity.projectile.throwableitemprojectile.Snowball victim =
+                helper.spawn(net.minecraft.world.entity.EntityTypes.SNOWBALL,
+                        new net.minecraft.world.phys.Vec3(4.5d, 1.625d, 2.5d));
+        victim.setNoGravity(true);
+        victim.setDeltaMovement(net.minecraft.world.phys.Vec3.ZERO);
+        net.minecraft.world.phys.Vec3 centre =
+                helper.absoluteVec(new net.minecraft.world.phys.Vec3(0.5d, 1.75d, 2.5d));
+        // Premise: vanilla's own clip reads the central ray as clear — the band IS the discriminator.
+        if (level.clip(colliderRay(victim.getBoundingBox().getCenter(), centre)).getType()
+                != net.minecraft.world.phys.HitResult.Type.MISS) {
+            throw helper.assertionException(helper.relativePos(abs),
+                    "premise drift: vanilla must read the central ray through the hang band as clear");
+        }
+        AABB box = victim.getBoundingBox();
+        if (box.minY < abs.getY() - 0.5d + 0.05d || box.maxY > abs.getY() - 0.05d) {
+            throw helper.assertionException(helper.relativePos(abs),
+                    "premise drift: the victim's box must sit inside the hang band; box=" + box);
+        }
+        float seen = net.minecraft.world.level.ServerExplosion.getSeenPercent(centre, victim);
+        boolean lithium = net.fabricmc.loader.api.FabricLoader.getInstance().isModLoaded("lithium");
+        Slabbed.LOGGER.info("EXPLOSION-OCCLUSION | seenPercent={} lithiumPresent={}", seen, lithium);
+        if (lithium) {
+            if (Math.abs(seen - 1.0f) > EPS) {
+                throw helper.assertionException(helper.relativePos(abs),
+                        "with Lithium present the explosion redirect is withheld by design and the "
+                        + "grid must read fully clear (vanilla rules); got seenPercent=" + seen);
+            }
+        } else if (seen > 1.0f - EPS) {
+            throw helper.assertionException(helper.relativePos(abs),
+                    "a REAL explosion ray grid through the drawn lower half must be sheltered; "
+                    + "seenPercent=" + seen + " — the ServerExplosion redirect wiring (not the "
+                    + "helper) is what this row measures");
+        }
+        helper.succeed();
+    }
+
     private static net.minecraft.world.level.ClipContext colliderRay(
             net.minecraft.world.phys.Vec3 from, net.minecraft.world.phys.Vec3 to) {
         return new net.minecraft.world.level.ClipContext(from, to,

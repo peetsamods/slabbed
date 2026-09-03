@@ -1,3 +1,23 @@
+## [0.5.2-alpha.7+26.2] — MC 26.2 alpha hotfix
+
+See LAW.md — this changelog does not redefine the law.
+
+### Fixes
+
+- **Starts alongside Lithium.** With Lithium installed, the game crashed on startup before the
+  title screen, because both mods rewrite the same piece of Minecraft's explosion code. It now
+  starts, and explosions behind a lowered block follow normal Minecraft rules while Lithium is
+  present (Lithium's optimised explosion path stays in charge there). Arrows and snowballs still
+  hit a lowered block where it is drawn, and mobs still cannot see through it, with Lithium
+  installed. ([#74](https://github.com/peetsamods/slabbed/issues/74))
+
+### Known issues
+
+- **Lithium and lowered-block collision.** With Lithium installed, the part of a lowered block
+  that hangs below its grid cell may not be solid to movement: Lithium replaces the collision
+  search that Slabbed extends, and Slabbed's automated collision checks fail with Lithium
+  present. This hotfix fixes only the startup crash; that interaction is a separate follow-up.
+
 ## [0.5.2-alpha.6+26.2] — MC 26.2 alpha hotfix
 
 See LAW.md — this changelog does not redefine the law.
