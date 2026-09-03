@@ -114,6 +114,7 @@
       "com.slabbed.test.ModelStaleSentinelSelfCheckClientGameTest",
       "com.slabbed.client.SlabModelStaleSentinelClientThrottleClientGameTest",
       "com.slabbed.test.LeverParticleFrozenAnchorClientGameTest",
+      "com.slabbed.test.LoweredBandEntityLightClientGameTest",
       "com.slabbed.test.DevDiagnosticsCompanionLoadsClientGameTest"
     ]
   },

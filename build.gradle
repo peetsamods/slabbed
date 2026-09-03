@@ -432,6 +432,7 @@ sourceSets {
             include("com/slabbed/test/PlacementDyPredictionClientGameTest.java")
             include("com/slabbed/client/SlabModelStaleSentinelClientThrottleClientGameTest.java")
             include("com/slabbed/test/LeverParticleFrozenAnchorClientGameTest.java")
+            include("com/slabbed/test/LoweredBandEntityLightClientGameTest.java")
             include("com/slabbed/test/DevDiagnosticsCompanionLoadsClientGameTest.java")
             include("com/slabbed/anchor/FrozenFlatAttachmentCapacityTest.java")
             include("com/slabbed/anchor/PlacementDyAttachmentCapacityTest.java")

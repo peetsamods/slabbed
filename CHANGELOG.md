@@ -20,6 +20,11 @@ See LAW.md — this changelog does not redefine the law.
 
 ### Fixes
 
+- **Things resting on a lowered block are lit properly.** A cushion, a dropped item, or any small
+  creature sitting on the visible top of a lowered full block rendered pitch black, because the game
+  took its lighting from the grid cell the thing is in, and that cell still belongs to the block that
+  is drawn below it. Anything sitting in the open air above a lowered block is now lit like the open
+  air it is visibly in (maintainer ruling, 2026-09-03). Lighting everywhere else is unchanged.
 - **Cushions sit on lowered blocks.** 26.3's new cushions are placed onto whatever surface you aim
   at, but placing one on a lowered block was silently refused: the game checked the block's grid cell,
   which the cushion overlaps, and concluded the cushion was buried inside stone even though the stone is
