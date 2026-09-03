@@ -22,7 +22,7 @@ Establish and verify a clean Fabric Loom project skeleton for **Slabbed** (MC **
 - Target MC: `1.21.11` 
 - Loader: Fabric
 - Java: 21
-- License: MIT
+- License: GPL-3.0-only
 - Mod version: `0.1.0-alpha` 
 ## Steps
 
