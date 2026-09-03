@@ -2364,6 +2364,23 @@ public final class SlabSupport {
         if (isTsExcludedFromVerticalSupport(state)) {
             return Double.NaN;
         }
+        // WYSIWYG at any depth (maintainer ruling, 2026-09-01): a placed slab's stored exact
+        // height IS the depth it presents as a cantilever source. Store first, markers as the
+        // factless fallback — without this, a slab stored at -1.0 fed the marker floor (-0.5)
+        // into the derivation lane while the store lane landed the neighbour at -1.0: the two
+        // writers of one transaction disagreed at any depth past -0.5. A stored FLUSH fact is
+        // equally binding: that slab was PLACED flush and is not a lowered source, whatever
+        // stale marker it may carry. This read sits BELOW the Terrain-Slabs choke point above —
+        // a TS-owned slab never presents a lowered source regardless of any fact — and is a
+        // non-recursive chunk-attachment lookup like the marker reads beside it.
+        SlabAnchorAttachment.PlacementDyFact storedFact = SlabAnchorAttachment.rawPlacementDyFact(world, pos);
+        if (storedFact.present()) {
+            double stored = storedFact.valueOrNaN();
+            // Non-finite store bytes are normalized to "not a source", matching getYOffset's own
+            // finiteness policy — without this a corrupted -Infinity fact would flow verbatim into
+            // a NEIGHBOUR's derived height (the corruption contract row only covers the subject).
+            return Double.isFinite(stored) && stored < -1.0e-6d ? stored : Double.NaN;
+        }
         // -1.0 compound side-slab cases (same markers the slab branch reads to mint -1.0).
         if (SlabAnchorAttachment.isCompoundVisibleSideDoubleSlab(world, pos, state)
                 || SlabAnchorAttachment.isCompoundVisibleSideLowerSlab(world, pos, state)

@@ -4,6 +4,14 @@ See LAW.md — this changelog does not redefine the law.
 
 ### Fixes
 
+- **Side placements are exact at every depth.** Clicking the visible side face of a deeply
+  lowered block already landed the new piece at the aimed height, but the placement's internal
+  bookkeeping disagreed with itself past half a block: a deep landing over solid ground was
+  stamped "flat" while its exact height said otherwise, and a deep slab fed neighbours a
+  half-block floor instead of its real depth. The bookkeeping now follows the aimed face
+  (maintainer ruling, 2026-09-01: WYSIWYG is absolute). Where the aim would bury the piece in
+  solid ground, the placement still seats on the real surface — aim is honored to the physical
+  limit, never past it.
 - **Item frames hang where you see the block.** An item frame placed on a lowered block's
   visible face hung at normal grid height, floating above (or beside) the surface it was
   aimed at. Frames — glow frames included — now hang on the support's drawn face (maintainer
