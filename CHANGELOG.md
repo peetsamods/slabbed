@@ -10,6 +10,13 @@ See LAW.md — this changelog does not redefine the law.
 
 ### Fixes
 
+- **Tilling and shovelling keep a lowered block lowered.** Turning a lowered dirt block into farmland
+  with a hoe, or a lowered grass block into a dirt path with a shovel, used to drop the block back to
+  normal height, because the freshly transformed block is a sliver shorter than a full cube and the
+  height-lock treated it like a brand-new kind of block. The block you placed is still there, only
+  transformed, so it now stays exactly where you put it (maintainer ruling, 2026-09-03). Any in-place
+  transform whose result still fills the cell (at least 15/16 tall) keeps its height; slabs, carpets
+  and other partial replacements still clear it as before.
 - **Starts alongside Lithium.** With Lithium installed, the game crashed on startup before the
   title screen, because both mods rewrite the same piece of Minecraft's explosion code. It now
   starts, and explosions behind a lowered block follow normal Minecraft rules while Lithium is
