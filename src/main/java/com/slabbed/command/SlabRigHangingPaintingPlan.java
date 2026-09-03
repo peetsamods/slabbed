@@ -501,10 +501,10 @@ public final class SlabRigHangingPaintingPlan {
             throw new IllegalArgumentException("painting routes do not cover four faces x four frames");
         }
         SlabRigHangingCatalog.Route witness = routes.stream()
-                .filter(route -> route.index() == 6143).findFirst()
-                .orElseThrow(() -> new IllegalArgumentException("missing TEST 19 painting route 6143"));
+                .filter(route -> route.index() == 6573).findFirst()
+                .orElseThrow(() -> new IllegalArgumentException("missing TEST 19 painting route 6573"));
         if (!"west".equals(witness.clickedFace()) || !"WALL_FULL".equals(witness.supportFrame())) {
-            throw new IllegalArgumentException("route 6143 semantic drift: " + witness);
+            throw new IllegalArgumentException("route 6573 semantic drift: " + witness);
         }
     }
 

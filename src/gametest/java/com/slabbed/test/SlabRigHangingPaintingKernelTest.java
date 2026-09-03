@@ -89,7 +89,7 @@ public final class SlabRigHangingPaintingKernelTest {
                 catalog, world.registryAccess());
         SlabRigHangingPaintingPlan.Universe universe = SlabRigHangingPaintingPlan.snapshot(catalog, runtime);
         SlabRigHangingPaintingPlan.PagePlan plannerPage = SlabRigHangingPaintingPlan.page(
-                universe, 6143, 42, 1);
+                universe, 6573, 42, 1);
         AdaptedPage adapted = adaptPlannerPage(helper, plannerPage);
         SlabRigHangingKernelArtifacts.PagePlan artifactPage = artifactPage(adapted);
         SlabRigHangingKernelArtifacts.RunIdentity run = new SlabRigHangingKernelArtifacts.RunIdentity(
@@ -180,7 +180,7 @@ public final class SlabRigHangingPaintingKernelTest {
                 catalog, world.registryAccess());
         SlabRigHangingPaintingPlan.Universe universe = SlabRigHangingPaintingPlan.snapshot(catalog, runtime);
         SlabRigHangingPaintingPlan.PagePlan plannerPage = SlabRigHangingPaintingPlan.page(
-                universe, 6143, 42, 1);
+                universe, 6573, 42, 1);
         AdaptedPage adapted = adaptPlannerPage(helper, plannerPage);
         SlabRigHangingKernelArtifacts.RunIdentity run = new SlabRigHangingKernelArtifacts.RunIdentity(
                 plannerPage.planHash(), testBuildSha(), BuildStamp.RUNTIME_CONTENT_SHA256,
@@ -455,9 +455,9 @@ public final class SlabRigHangingPaintingKernelTest {
     /** Converts the pure planner's one relative page into one finite absolute disposable-world board. */
     private static AdaptedPage adaptPlannerPage(GameTestHelper helper,
                                                 SlabRigHangingPaintingPlan.PagePlan page) {
-        if (page.routeIndex() != 6143 || page.topologyIndex() != 42 || page.selectorPage() != 1
+        if (page.routeIndex() != 6573 || page.topologyIndex() != 42 || page.selectorPage() != 1
                 || page.cases().size() != SlabRigHangingPaintingPlan.PAGE_SIZE) {
-            throw helper.assertionException("kernel adapter accepts only route6143/topology42/page1");
+            throw helper.assertionException("kernel adapter accepts only route6573/topology42/page1");
         }
         BlockPos origin = helper.absolutePos(new BlockPos(8, 3, 8));
         List<AdaptedCase> cases = new ArrayList<>(page.cases().size());
@@ -554,8 +554,8 @@ public final class SlabRigHangingPaintingKernelTest {
             try {
                 player.setItemInHand(InteractionHand.MAIN_HAND, stack);
                 Vec3 hit = Vec3.atCenterOf(clicked).add(0.0, 0.5, 0.0);
-                InteractionResult result = stack.useOn(new UseOnContext(player, InteractionHand.MAIN_HAND,
-                        new BlockHitResult(hit, Direction.UP, clicked, false)));
+                InteractionResult result = canonicalResult(stack.useOn(new UseOnContext(player, InteractionHand.MAIN_HAND,
+                        new BlockHitResult(hit, Direction.UP, clicked, false))));
                 if (!result.consumesAction()) {
                     throw helper.assertionException("planned player useOn refused " + cell + " result=" + result);
                 }
@@ -750,8 +750,8 @@ public final class SlabRigHangingPaintingKernelTest {
                     backing.face().getStepX() * 0.5,
                     backing.face().getStepY() * 0.5,
                     backing.face().getStepZ() * 0.5);
-            result = attemptStack.useOn(new UseOnContext(player, InteractionHand.MAIN_HAND,
-                    new BlockHitResult(hit, backing.face(), backing.clicked(), false)));
+            result = canonicalResult(attemptStack.useOn(new UseOnContext(player, InteractionHand.MAIN_HAND,
+                    new BlockHitResult(hit, backing.face(), backing.clicked(), false))));
             if (afterUse != null) {
                 afterUse.accept(new AttemptInjection(world, owned));
             }
@@ -1108,6 +1108,25 @@ public final class SlabRigHangingPaintingKernelTest {
                                     boolean removed,
                                     String removalReason, String sortedNbt,
                                     String entityStore, String entityLiveDy) {
+    }
+
+
+    /**
+     * 26.3's {@code ItemStack.useOn} no longer returns the item's {@code InteractionResult} singleton:
+     * it re-wraps a {@code Success} through {@code heldItemTransformedTo} to carry the after-use stack,
+     * so identity comparisons against {@code SUCCESS}/{@code CONSUME} stopped holding even though the
+     * outcome is unchanged. Fold any {@code Success} back onto the singleton with the same swing source
+     * (PREDICTED = SUCCESS, SERVER_ONLY = SUCCESS_SERVER, NONE = CONSUME); every other result is itself.
+     */
+    private static InteractionResult canonicalResult(InteractionResult result) {
+        if (result instanceof InteractionResult.Success success) {
+            return switch (success.swingSource()) {
+                case PREDICTED -> InteractionResult.SUCCESS;
+                case SERVER_ONLY -> InteractionResult.SUCCESS_SERVER;
+                case NONE -> InteractionResult.CONSUME;
+            };
+        }
+        return result;
     }
 
     private record Attempt(InteractionResult result, int stackBefore, int stackAfter,

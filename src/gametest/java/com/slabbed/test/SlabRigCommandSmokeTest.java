@@ -146,10 +146,10 @@ public final class SlabRigCommandSmokeTest {
         }
         String status = String.join("\n", messages);
         for (String required : new String[]{
-                // runtimeItems: 1537 vanilla + the two compat-eligibility twin fixture BlockItems.
-                "[slabrig] hangs catalog", "runtimeItems=1539", "subjects=163", "routes=38740",
+                // runtimeItems: 1658 vanilla (26.3-pre-1) + the two compat-eligibility twin fixture BlockItems.
+                "[slabrig] hangs catalog", "runtimeItems=1660", "subjects=168", "routes=41348",
                 "paintingVariants=51", "randomPlaceable=47", "catalogHash=",
-                "minecraft=26.2", "runtimeContentSha256=", "paintingRegistry=minecraft:painting_variant",
+                "minecraft=26.3-pre-1", "runtimeContentSha256=", "paintingRegistry=minecraft:painting_variant",
                 "placeableTag=minecraft:placeable", "paintingComponent=minecraft:painting/variant",
                 "paintingHash=", "executionIdentity=", "artifactSha256=",
                 "playerProof=ABSENT", "worldMutation=NONE", "artifact="}) {
@@ -184,7 +184,7 @@ public final class SlabRigCommandSmokeTest {
         for (int page = 1; page <= 4; page++) {
             for (String suffix : List.of("", " force")) {
                 var valid = isolated.parse(
-                        "slabrig hangs direct 6143 topology 42 paintings " + page + suffix,
+                        "slabrig hangs direct 6573 topology 42 paintings " + page + suffix,
                         source);
                 if (valid.getReader().canRead() || !valid.getExceptions().isEmpty()
                         || valid.getContext().getCommand() == null) {
@@ -198,17 +198,17 @@ public final class SlabRigCommandSmokeTest {
                 "slabrig hangs direct force",
                 "slabrig hangs direct 6142 topology 42 paintings 1",
                 "slabrig hangs direct 6144 topology 42 paintings 1",
-                "slabrig hangs direct 6143 topology 41 paintings 1",
-                "slabrig hangs direct 6143 topology 43 paintings 1",
-                "slabrig hangs direct 6143 42 1",
-                "slabrig hangs direct 6143 42 paintings 1",
-                "slabrig hangs direct 6143 topology 42 1",
-                "slabrig hangs direct 6143 topology 42 paintings",
-                "slabrig hangs direct 6143 topology 42 paintings 0",
-                "slabrig hangs direct 6143 topology 42 paintings 5",
-                "slabrig hangs direct 6143 paintings 1 topology 42",
-                "slabrig hangs direct 6143 topology 42 paintings 1 junk",
-                "slabrig hangs direct 6143 topology 42 paintings 1 force junk")) {
+                "slabrig hangs direct 6573 topology 41 paintings 1",
+                "slabrig hangs direct 6573 topology 43 paintings 1",
+                "slabrig hangs direct 6573 42 1",
+                "slabrig hangs direct 6573 42 paintings 1",
+                "slabrig hangs direct 6573 topology 42 1",
+                "slabrig hangs direct 6573 topology 42 paintings",
+                "slabrig hangs direct 6573 topology 42 paintings 0",
+                "slabrig hangs direct 6573 topology 42 paintings 5",
+                "slabrig hangs direct 6573 paintings 1 topology 42",
+                "slabrig hangs direct 6573 topology 42 paintings 1 junk",
+                "slabrig hangs direct 6573 topology 42 paintings 1 force junk")) {
             var parsed = isolated.parse(invalid, source);
             if (!parsed.getReader().canRead() && parsed.getExceptions().isEmpty()
                     && parsed.getContext().getCommand() != null) {

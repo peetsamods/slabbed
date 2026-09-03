@@ -53,7 +53,14 @@ public final class SlabRigHangingDirectState {
             "AUTO_ITEM_USEON_EXPLICIT_STACK_NULL_PLAYER_PROXY";
     public static final String PLAYER_PROOF = "ABSENT";
     public static final String CLIENT_PROOF = "ABSENT";
-    public static final int ROUTE_INDEX = 6143;
+    public static final int ROUTE_INDEX = 6573;
+    /**
+     * The same painting route (west face, full wall) at its Minecraft 26.2 catalog position. Route
+     * indices are positional over the runtime item registry; 26.3 registered new items ahead of
+     * paintings, so the reviewed route moved from 6143 to 6573. The hash-pinned legacy v1/v2 stores
+     * were written on 26.2 and legitimately carry 6143, so the strict identity check accepts both.
+     */
+    public static final int LEGACY_ROUTE_INDEX_26_2 = 6143;
     public static final int TOPOLOGY_INDEX = 42;
     public static final int MIN_SELECTOR_PAGE = 1;
     public static final int MAX_SELECTOR_PAGE = 4;
@@ -265,10 +272,10 @@ public final class SlabRigHangingDirectState {
             requireSha256(universeHash, "universeHash");
             requireSha256(planHash, "planHash");
             requireText(semanticPageId, "semanticPageId");
-            if (routeIndex != ROUTE_INDEX || topologyIndex != TOPOLOGY_INDEX
+            if ((routeIndex != ROUTE_INDEX && routeIndex != LEGACY_ROUTE_INDEX_26_2) || topologyIndex != TOPOLOGY_INDEX
                     || selectorPage < MIN_SELECTOR_PAGE || selectorPage > MAX_SELECTOR_PAGE) {
                 throw new IllegalArgumentException(
-                        "production direct state accepts only route 6143/topology 42/pages 1..4");
+                        "production direct state accepts only route 6573/topology 42/pages 1..4");
             }
             if (caseCount <= 0 || caseCount > SlabRigHangingPaintingPlan.PAGE_SIZE) {
                 throw new IllegalArgumentException(

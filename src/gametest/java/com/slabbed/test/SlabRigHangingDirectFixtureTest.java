@@ -93,7 +93,7 @@ public final class SlabRigHangingDirectFixtureTest {
         assertRejected(helper, universe,
                 SlabRigHangingPaintingPlan.page(universe, otherRoute, 42, 1), origin);
         assertRejected(helper, universe,
-                SlabRigHangingPaintingPlan.page(universe, 6143, 41, 1), origin);
+                SlabRigHangingPaintingPlan.page(universe, 6573, 41, 1), origin);
         helper.succeed();
     }
 

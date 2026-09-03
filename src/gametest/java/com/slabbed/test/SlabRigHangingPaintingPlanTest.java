@@ -74,11 +74,11 @@ public final class SlabRigHangingPaintingPlanTest {
         Set<String> attemptIds = new HashSet<>();
         for (int pageNumber = 1; pageNumber <= 4; pageNumber++) {
             SlabRigHangingPaintingPlan.PagePlan first =
-                    SlabRigHangingPaintingPlan.page(universe, 6143, 42, pageNumber);
+                    SlabRigHangingPaintingPlan.page(universe, 6573, 42, pageNumber);
             SlabRigHangingPaintingPlan.PagePlan repeat =
-                    SlabRigHangingPaintingPlan.page(universe, 6143, 42, pageNumber);
+                    SlabRigHangingPaintingPlan.page(universe, 6573, 42, pageNumber);
             if (!first.equals(repeat) || first.cases().size() != expectedSizes[pageNumber - 1]
-                    || first.routeIndex() != 6143 || first.topologyIndex() != 42
+                    || first.routeIndex() != 6573 || first.topologyIndex() != 42
                     || first.selectorPage() != pageNumber
                     || !first.planHash().matches("[0-9a-f]{64}")) {
                 throw helper.assertionException("fixed-case selector page drifted: " + first);
@@ -129,7 +129,7 @@ public final class SlabRigHangingPaintingPlanTest {
                 .findFirst().orElseThrow(() -> helper.assertionException("missing pointer selector"))
                 .index();
         SlabRigHangingPaintingPlan.PagePlan page = SlabRigHangingPaintingPlan.page(
-                universe, 6143, 42, pointerSelector / 16 + 1);
+                universe, 6573, 42, pointerSelector / 16 + 1);
         SlabRigHangingPaintingPlan.CasePlan pointer = page.cases().stream()
                 .filter(entry -> entry.selector().index() == pointerSelector)
                 .findFirst().orElseThrow(() -> helper.assertionException("pointer page omitted pointer"));
@@ -148,7 +148,7 @@ public final class SlabRigHangingPaintingPlanTest {
                 || pointer.reservedCells().size() != 68
                 || !SlabRigHangingPaintingPlan.FOOTPRINT_EXPANSION
                 .equals(pointer.footprintExpansion())) {
-            throw helper.assertionException("route6143/topology42 fixture geometry drifted: " + pointer);
+            throw helper.assertionException("route6573/topology42 fixture geometry drifted: " + pointer);
         }
         if (!pointer.foundations().stream().map(foundation -> foundation.lateralIndex())
                 .toList().equals(List.of(-1, 0, 1, 2))) {
@@ -180,7 +180,7 @@ public final class SlabRigHangingPaintingPlanTest {
     public void paintingPlannerRejectsIdentityGeometryAndRangeTampering(GameTestHelper helper) {
         SlabRigHangingPaintingPlan.Universe universe = universe(helper);
         SlabRigHangingPaintingPlan.PagePlan page =
-                SlabRigHangingPaintingPlan.page(universe, 6143, 42, 1);
+                SlabRigHangingPaintingPlan.page(universe, 6573, 42, 1);
 
         SlabRigHangingPaintingPlan.Universe badUniverse = new SlabRigHangingPaintingPlan.Universe(
                 universe.schema(), universe.catalogHash(), universe.topologyCatalogHash(),
@@ -188,9 +188,9 @@ public final class SlabRigHangingPaintingPlanTest {
                 universe.paintingRegistryHash(), universe.paintingRoutes(), universe.topologies(),
                 universe.selectors(), universe.totalAttempts(), universe.selectorPageCount(),
                 universe.pageCount(), "0".repeat(64), universe.canonicalTsv());
-        expectRefusal(helper, () -> SlabRigHangingPaintingPlan.page(badUniverse, 6143, 42, 1),
+        expectRefusal(helper, () -> SlabRigHangingPaintingPlan.page(badUniverse, 6573, 42, 1),
                 "tampered universe hash");
-        expectRefusal(helper, () -> SlabRigHangingPaintingPlan.page(universe, 6143, 42, 0),
+        expectRefusal(helper, () -> SlabRigHangingPaintingPlan.page(universe, 6573, 42, 0),
                 "selector page zero");
         expectRefusal(helper, () -> SlabRigHangingPaintingPlan.page(universe, 999_999, 42, 1),
                 "unknown route");
