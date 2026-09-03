@@ -516,6 +516,92 @@ public final class NeighborUpdateInvarianceTest {
         h.succeed();
     }
 
+    /**
+     * S-2 subject: a slab cantilevered over air beside a DEEP stored lowered slab (the WYSIWYG
+     * any-depth lane, maintainer ruling 2026-09-01). NAMED MUTATION: an authoritative
+     * placement-fact rewrite on the NEIGHBOUR's cell via the public
+     * {@link SlabAnchorAttachment#writePlacementDy} lane — the one mutation class the
+     * setBlock/destroyBlock matrix above can never drive, yet since the derivation lane's
+     * store-first neighbour read ({@code SlabSupport.loweredSlabMagnitude}) it changes the
+     * depth a neighbour presents as a cantilever source. LAW assertion: the subject's own
+     * stored fact and frozen-ON read must stay byte-identical. Reachability teeth: the
+     * frozen-OFF derived read is asserted to MOVE under the mutation (the disclosed
+     * frozen-OFF divergence) — if it stops moving, this row has gone vacuous and fails.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void neighborFactRewriteKeepsStoredSubjectHeight(GameTestHelper h) {
+        ServerLevel world = h.getLevel();
+        long minusOneFiveBits = Double.doubleToRawLongBits(-1.5d);
+        boolean previous = SlabAnchorAttachment.FROZEN_DY_ENABLED;
+        SlabAnchorAttachment.FROZEN_DY_ENABLED = true;
+        try {
+            clearArena(h, world);
+            BlockPos deepStone = deepLoweredStoneRig(h, world);
+            place(h, Items.STONE_SLAB, deepStone, Direction.UP, 0.0d);
+            BlockPos neighbour = deepStone.above();
+            if (world.getBlockState(neighbour).isAir()
+                    || requiredBits(h, world, neighbour) != minusOneFiveBits) {
+                throw h.assertionException(neighbour,
+                        "premise: deep neighbour slab should hold a raw-exact stored -1.5 fact");
+            }
+            // subject: slab cantilevered over air, side-clicked on the deep neighbour's WEST face
+            place(h, Items.STONE_SLAB, neighbour, Direction.WEST, -0.25d);
+            BlockPos subject = neighbour.west();
+            if (world.getBlockState(subject).isAir()) {
+                throw h.assertionException(subject, "premise: cantilever subject slab failed to place");
+            }
+            long subjectBits = requiredBits(h, world, subject);
+            double onBefore = dy(world, subject);
+            if (subjectBits != minusOneFiveBits || !sameHeight(onBefore, -1.5d)) {
+                throw h.assertionException(subject,
+                        "premise: subject should store/read the aimed face's -1.5 (any-depth WYSIWYG); stored="
+                                + Double.longBitsToDouble(subjectBits) + " read=" + onBefore);
+            }
+            SlabAnchorAttachment.FROZEN_DY_ENABLED = false;
+            double offBefore = dy(world, subject);
+            SlabAnchorAttachment.FROZEN_DY_ENABLED = true;
+            if (!sameHeight(offBefore, -1.5d)) {
+                throw h.assertionException(subject,
+                        "premise: frozen-OFF derived read should reach the neighbour's stored -1.5 "
+                                + "(store-first neighbour read); got " + offBefore);
+            }
+
+            // THE MUTATION: rewrite the neighbour's placement fact to FLUSH through the public
+            // authoritative write lane — no block state changes, the subject's cell untouched.
+            SlabAnchorAttachment.writePlacementDy(world, neighbour, 0.0d);
+            if (requiredBits(h, world, neighbour) != Double.doubleToRawLongBits(0.0d)) {
+                throw h.assertionException(neighbour, "premise: neighbour fact rewrite did not land");
+            }
+            if (world.getBlockState(subject).isAir()) {
+                throw h.assertionException(subject, "premise: fact rewrite removed the subject");
+            }
+
+            // LAW (stored lane): the subject's own fact and frozen-ON read are byte-identical.
+            double onAfter = dy(world, subject);
+            if (requiredBits(h, world, subject) != subjectBits || !sameHeight(onBefore, onAfter)) {
+                throw h.assertionException(subject,
+                        "LAW VIOLATION — neighbour placement-fact rewrite moved the stored lane: dy "
+                                + onBefore + " -> " + onAfter);
+            }
+
+            // DISCLOSED DIVERGENCE (vacuity tripwire): the frozen-OFF derived lane reads the
+            // neighbour's fact by construction, so it MUST move here. A green on sameHeight would
+            // mean the mutation no longer reaches this subject's resolver — the row is then vacuous
+            // and must fail loudly rather than read as proof.
+            SlabAnchorAttachment.FROZEN_DY_ENABLED = false;
+            double offAfter = dy(world, subject);
+            SlabAnchorAttachment.FROZEN_DY_ENABLED = true;
+            if (sameHeight(offBefore, offAfter)) {
+                throw h.assertionException(subject,
+                        "vacuity tripwire: frozen-OFF derived read did not follow the neighbour fact "
+                                + "rewrite (expected disclosed divergence from " + offBefore + ")");
+            }
+        } finally {
+            SlabAnchorAttachment.FROZEN_DY_ENABLED = previous;
+        }
+        h.succeed();
+    }
+
     @GameTest(structure = "fabric-gametest-api-v1:empty")
     public void aimedCarpetOnMinusOneOwnerSurvivesNeighborEdits(GameTestHelper h) {
         runSubjectWithFrozenStore(h, SUBJECTS.get(9));
