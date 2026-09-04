@@ -1,6 +1,7 @@
 package com.slabbed.test;
 
 import com.slabbed.util.SlabSupport;
+import com.slabbed.anchor.SlabAnchorAttachment;
 import com.slabbed.util.SlabbedOffsetRaycast;
 import net.minecraft.block.Block;
 import net.minecraft.block.Blocks;
@@ -32,6 +33,64 @@ import net.minecraft.world.RaycastContext;
 public final class OffsetRaycastTargetingTest {
 
     private static final double EPS = 1.0e-6;
+
+    @GameTest(templateName = "fabric-gametest-api-v1:empty")
+    public void storedMinusOneSideOwnerControl(TestContext ctx) {
+        assertStoredSideOwner(ctx, -1.0d);
+    }
+
+    @GameTest(templateName = "fabric-gametest-api-v1:empty")
+    public void storedMinusOneAndHalfSideOwner(TestContext ctx) {
+        assertStoredSideOwner(ctx, -1.5d);
+    }
+
+    @GameTest(templateName = "fabric-gametest-api-v1:empty")
+    public void storedMinusThreeSideOwner(TestContext ctx) {
+        assertStoredSideOwner(ctx, -3.0d);
+    }
+
+    @GameTest(templateName = "fabric-gametest-api-v1:empty")
+    public void everyStoredSixteenthThroughMinusThreeKeepsSideOwner(TestContext ctx) {
+        for (int sixteenths = 0; sixteenths >= -48; sixteenths--) {
+            checkStoredSideOwner(ctx, sixteenths / 16.0d);
+        }
+        ctx.complete();
+    }
+
+    private static void assertStoredSideOwner(TestContext ctx, double depth) {
+        checkStoredSideOwner(ctx, depth);
+        ctx.complete();
+    }
+
+    private static void checkStoredSideOwner(TestContext ctx, double depth) {
+        boolean previous = SlabAnchorAttachment.FROZEN_DY_ENABLED;
+        SlabAnchorAttachment.FROZEN_DY_ENABLED = true;
+        try {
+            ServerWorld world = ctx.getWorld();
+            BlockPos owner = ctx.getAbsolutePos(new BlockPos(4, 5, 4));
+            world.setBlockState(owner, Blocks.STONE.getDefaultState(), Block.NOTIFY_LISTENERS);
+            int written = SlabAnchorAttachment.writePlacementDyBatch(world,
+                    java.util.Map.of(owner, Double.doubleToRawLongBits(depth)));
+            ctx.assertTrue(written == 1, "premise: stored owner depth " + depth);
+            ctx.assertTrue(SlabSupport.getYOffset(world, owner, world.getBlockState(owner)) == depth,
+                    "premise: public shape height must equal the stored depth");
+            for (double band : new double[]{0.125d, 0.5d, 0.875d}) {
+                double y = owner.getY() + depth + band;
+                for (Direction face : new Direction[]{Direction.NORTH, Direction.EAST,
+                        Direction.SOUTH, Direction.WEST}) {
+                    Vec3d center = new Vec3d(owner.getX() + 0.5d, y, owner.getZ() + 0.5d);
+                    Vec3d eye = center.add(face.getOffsetX() * 2.0d, 0.0d, face.getOffsetZ() * 2.0d);
+                    BlockHitResult hit = slabbed(world, eye, center);
+                    ctx.assertTrue(hit.getType() == HitResult.Type.BLOCK
+                                    && hit.getBlockPos().equals(owner) && hit.getSide() == face,
+                            "stored side owner depth=" + depth + " face=" + face + " got="
+                                    + hit.getType() + "/" + hit.getBlockPos() + "/" + hit.getSide());
+                }
+            }
+        } finally {
+            SlabAnchorAttachment.FROZEN_DY_ENABLED = previous;
+        }
+    }
 
     private static BlockHitResult slabbed(ServerWorld world, Vec3d eye, Vec3d end) {
         return SlabbedOffsetRaycast.raycast(world, eye, end, ShapeContext.absent());

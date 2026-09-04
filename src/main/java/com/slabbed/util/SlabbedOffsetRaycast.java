@@ -16,7 +16,7 @@ import net.minecraft.world.BlockView;
  * targeting. (MC 1.21.1 port of the 1.21.11 overhaul.)
  *
  * <p><b>Why this exists.</b> Slabbed renders some blocks at a visual Y offset
- * ({@link SlabSupport#getYOffset} returns one of {@code -1.0, -0.5, 0.0, +0.5}) and
+ * ({@link SlabSupport#getYOffset} reads the stored placement height) and
  * offsets their outline/raycast {@link VoxelShape}s to match
  * ({@code SlabSupportStateMixin}). Vanilla {@code BlockView.raycast} uses a voxel DDA
  * that returns the <em>first cell</em> along the ray that yields a hit — not the
@@ -30,13 +30,12 @@ import net.minecraft.world.BlockView;
  * {@link BlockView#raycast(Vec3d, Vec3d, Object, java.util.function.BiFunction, java.util.function.Function)}
  * helper) but, instead of stopping at the first cell, tests every block whose offset
  * outline could intersect the ray and keeps the <em>globally nearest</em> hit. At each
- * marched cell {@code C} it tests the outline of {@code C} plus the vertical neighbours
- * {@code C.up()}/{@code C.down()} that carry a non-zero visual offset.
+ * marched cell it tests every vertical owner within the supported depth window
+ * that carries a non-zero visual offset.
  *
- * <p><b>±1 window completeness.</b> Visual offsets lie in {@code {-1.0,-0.5,0.0,+0.5}}
- * and every block shape is at most one cell tall, so an owner at {@code P} occupies at
- * most {@code {P, P.down()}} or {@code {P, P.up()}}; any ray hitting it enters a cell
- * within ±1 of {@code P}.
+ * <p>The owner window includes all sixteenth-grid depths through {@code -3.0}.
+ * It searches symmetrically to preserve raised and cross-cell attachment shapes.
+ * The window controls owner discovery only; it never clamps a stored height (LAW.md).
  *
  * <p><b>Parity with vanilla.</b> For non-offset blocks the nearest hit equals vanilla's
  * first-cell hit (ray distance is monotonic in march order, and a non-offset block is
@@ -47,6 +46,9 @@ import net.minecraft.world.BlockView;
  * {@code includeFluids=false} semantics hold.
  */
 public final class SlabbedOffsetRaycast {
+
+    public static final double DEEPEST_TARGETABLE_DY = -3.0d;
+    private static final int WINDOW_RADIUS = (int) Math.ceil(-DEEPEST_TARGETABLE_DY);
 
     private SlabbedOffsetRaycast() {
     }
@@ -112,8 +114,10 @@ public final class SlabbedOffsetRaycast {
 
         void consumeCell(int x, int y, int z) {
             testPrimary(x, y, z);
-            testNeighbor(x, y - 1, z);
-            testNeighbor(x, y + 1, z);
+            for (int distance = 1; distance <= WINDOW_RADIUS; distance++) {
+                testNeighbor(x, y - distance, z);
+                testNeighbor(x, y + distance, z);
+            }
         }
 
         private void testPrimary(int x, int y, int z) {
