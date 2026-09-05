@@ -1,5 +1,7 @@
 package com.slabbed.mixin;
 
+import com.llamalad7.mixinextras.injector.wrapmethod.WrapMethod;
+import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.slabbed.anchor.SlabAnchorAttachment;
 import com.slabbed.compat.CompatHooks;
 import com.slabbed.compat.CompatSlabSurfaceKind;
@@ -48,13 +50,46 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
  *       position.</li>
  * </ol>
  *
- * <p><b>Note:</b> collision shapes are intentionally NOT offset. Offsetting
- * them causes the player to clip into full blocks when walking onto them
- * from the slab surface (the step-up from slab top to collision bottom
- * exceeds MC's 0.6 step height for full blocks).
+ * <p>Stored placement mode translates collision exactly once, including cached
+ * shapes and vanilla collision methods that delegate to outline. Its owner
+ * discovery window is extended separately so movement reaches the visible body.
  */
 @Mixin(AbstractBlock.AbstractBlockState.class)
 public abstract class SlabSupportStateMixin {
+
+    private static final ThreadLocal<Boolean> slabbed$readingBaseCollision =
+            ThreadLocal.withInitial(() -> false);
+
+    @WrapMethod(method = "getCollisionShape(Lnet/minecraft/world/BlockView;Lnet/minecraft/util/math/BlockPos;Lnet/minecraft/block/ShapeContext;)Lnet/minecraft/util/shape/VoxelShape;")
+    private VoxelShape slabbed$storedCollision(BlockView world, BlockPos pos, ShapeContext context,
+                                               Operation<VoxelShape> original) {
+        return slabbed$translateCollision(world, pos, () -> original.call(world, pos, context));
+    }
+
+    @WrapMethod(method = "getCollisionShape(Lnet/minecraft/world/BlockView;Lnet/minecraft/util/math/BlockPos;)Lnet/minecraft/util/shape/VoxelShape;")
+    private VoxelShape slabbed$storedCachedCollision(BlockView world, BlockPos pos,
+                                                     Operation<VoxelShape> original) {
+        return slabbed$translateCollision(world, pos, () -> original.call(world, pos));
+    }
+
+    private VoxelShape slabbed$translateCollision(BlockView world, BlockPos pos,
+                                                   java.util.function.Supplier<VoxelShape> original) {
+        if (!SlabAnchorAttachment.FROZEN_DY_ENABLED || slabbed$readingBaseCollision.get()
+                || slabbed$isUnsafeAsyncShapeContext()) {
+            return original.get();
+        }
+        double dy = SlabSupport.getYOffset(world, pos, (BlockState) (Object) this);
+        VoxelShape shape;
+        slabbed$readingBaseCollision.set(true);
+        try {
+            // Vanilla collision may delegate to outline, or return a cached shape. Both routes
+            // start unshifted and receive the stored translation exactly once (LAW.md).
+            shape = original.get();
+        } finally {
+            slabbed$readingBaseCollision.set(false);
+        }
+        return dy == 0.0d ? shape : shape.offset(0.0d, dy, 0.0d);
+    }
 
     /**
      * Comfort selection shape for lowered floor torches.
@@ -114,6 +149,9 @@ public abstract class SlabSupportStateMixin {
      * {@code instanceof}); safe to call on async outline workers (no world/chunk read).
      */
     private static boolean slabbed$isRenderZeroedConnectionBlock(BlockState state) {
+        if (SlabAnchorAttachment.FROZEN_DY_ENABLED) {
+            return false;
+        }
         Block block = state.getBlock();
         boolean connection = block instanceof FenceBlock
                 || block instanceof WallBlock
@@ -377,6 +415,9 @@ public abstract class SlabSupportStateMixin {
             at = @At("RETURN"), cancellable = true)
     private void slabbed$offsetOakFenceAndGrindstoneCollision(BlockView world, BlockPos pos, ShapeContext ctx,
                                                               CallbackInfoReturnable<VoxelShape> cir) {
+        if (SlabAnchorAttachment.FROZEN_DY_ENABLED) {
+            return;
+        }
         BlockState self = (BlockState) (Object) this;
         if (!SlabSupport.isBeta35FenceWallVariantContactObject(self)
                 && !SlabSupport.isBeta35FenceGateContactObject(self)
@@ -395,6 +436,9 @@ public abstract class SlabSupportStateMixin {
             at = @At("RETURN"), cancellable = true)
     private void slabbed$offsetOutline(BlockView world, BlockPos pos, ShapeContext ctx,
                                        CallbackInfoReturnable<VoxelShape> cir) {
+        if (slabbed$readingBaseCollision.get()) {
+            return;
+        }
         // In 1.21.1, getOutlineShape is called by light/opacity workers (Worker-Main, ForkJoinPool)
         // during spawn-prep. SlabSupport.getYOffset accesses chunk/anchor state and can block via
         // CompletableFuture.join, deadlocking the server. Return vanilla shape on those threads.
@@ -406,7 +450,8 @@ public abstract class SlabSupportStateMixin {
 
         // Avoid carpet recursion: carpets have their own outline mixin and should not be offset here.
         Block block = self.getBlock();
-        if (block instanceof net.minecraft.block.CarpetBlock || isPaleMossCarpet(block)) {
+        if (!SlabAnchorAttachment.FROZEN_DY_ENABLED
+                && (block instanceof net.minecraft.block.CarpetBlock || isPaleMossCarpet(block))) {
             return;
         }
 

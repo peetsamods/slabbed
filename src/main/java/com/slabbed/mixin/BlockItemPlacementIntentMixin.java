@@ -21,6 +21,7 @@ import net.minecraft.block.ShapeContext;
 import net.minecraft.block.SlabBlock;
 import net.minecraft.block.TrapdoorBlock;
 import net.minecraft.block.enums.DoubleBlockHalf;
+import net.minecraft.block.enums.BedPart;
 import net.minecraft.block.enums.SlabType;
 import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.player.PlayerEntity;
@@ -391,6 +392,17 @@ public abstract class BlockItemPlacementIntentMixin {
         if (state.getBlock() instanceof BedBlock && state.contains(Properties.BED_PART)) {
             BlockPos partnerPos = primary.offset(BedBlock.getOppositePartDirection(state));
             BlockState partner = world.getBlockState(partnerPos);
+            // Vanilla creates the head only on the server. A predicted foot still needs the
+            // resolved height immediately; the sequence-owned overlay also covers the arriving head.
+            // This exception never writes backing facts or relaxes server reciprocal validation.
+            CellSnapshot partnerSnapshot = frame.snapshots.get(partnerPos);
+            if (world.isClient() && PlacementDyOverlay.currentSequence() >= 0
+                    && frame.rootAim != null && state.get(Properties.BED_PART) == BedPart.FOOT
+                    && partnerSnapshot != null && partner.isAir()
+                    && partnerSnapshot.priorState().isAir()) {
+                return primary.asLong() <= partnerPos.asLong()
+                        ? List.of(primary, partnerPos) : List.of(partnerPos, primary);
+            }
             if (!frame.snapshots.containsKey(partnerPos)
                     || partner.getBlock() != state.getBlock()
                     || !partner.contains(Properties.BED_PART)

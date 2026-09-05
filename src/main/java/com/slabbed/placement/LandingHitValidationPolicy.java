@@ -6,6 +6,7 @@ import net.minecraft.block.AbstractBlock;
 import net.minecraft.block.BedBlock;
 import net.minecraft.block.BlockEntityProvider;
 import net.minecraft.block.BlockState;
+import net.minecraft.block.Blocks;
 import net.minecraft.block.FlowerPotBlock;
 import net.minecraft.block.PointedDripstoneBlock;
 import net.minecraft.block.SlabBlock;
@@ -111,6 +112,16 @@ public final class LandingHitValidationPolicy {
         }
 
         LandingResolver.Family heldFamily = LandingResolver.classify(heldState);
+        // Farmland's visible top is a full-width seat at 15/16, although its state is not a
+        // full cube. Validate that exact translated face; vanilla still decides whether the item
+        // can be placed there. Do not admit side hits or points outside the visible surface.
+        if (ownerState.isOf(Blocks.FARMLAND) && heldFamily != LandingResolver.Family.UNSUPPORTED
+                && hitFace == Direction.UP
+                && Math.abs(hitPos.y - (ownerPos.getY() + ownerDy + 15.0d / 16.0d)) <= EPSILON
+                && hitPos.x >= ownerPos.getX() - EPSILON && hitPos.x <= ownerPos.getX() + 1.0d + EPSILON
+                && hitPos.z >= ownerPos.getZ() - EPSILON && hitPos.z <= ownerPos.getZ() + 1.0d + EPSILON) {
+            return ownerDy;
+        }
         if (heldFamily == LandingResolver.Family.USE_CREATED_FULL_CUBE_CONTACT) {
             boolean supportedOwner = ownerState.getBlock() instanceof SlabBlock
                     || ownerState.getBlock() instanceof BlockEntityProvider

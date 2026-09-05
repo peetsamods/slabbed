@@ -63,6 +63,19 @@ sourceSets {
     }
 }
 
+// Native client proof uses the existing test mod on 1.21.1, where the
+// Fabric client-GameTest module is unavailable.
+loom {
+    runs {
+        depthClientProbe {
+            client()
+            name = "Slabbed Extended Depth Client Probe"
+            source sourceSets.gametest
+            runDir "build/run/depth-client-probe"
+        }
+    }
+}
+
 // ── Suite-count gate ─────────────────────────────────────────────────────────────────────────
 // A stale persisted world in build/run/gameTest can silently drop tests while still reporting
 // BUILD SUCCESSFUL. A green run is therefore NOT proof on its own: the reported count must equal

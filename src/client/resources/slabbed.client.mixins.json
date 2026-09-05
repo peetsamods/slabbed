@@ -4,13 +4,16 @@
   "compatibilityLevel": "JAVA_21",
   "client": [
     "BlockEntityOffsetMixin",
+    "BlockDisplayParticleMixin",
     "BlockModelDyTranslateMixin",
     "CarpetDyShapeMixin",
     "ClientPlayerInteractionManagerPredictionSequenceMixin",
     "ClientWorldPlacementDyAckMixin",
     "GameRendererPickOffsetRaycastMixin",
     "ItemFrameRenderOffsetMixin",
-    "MinecartRenderOffsetMixin"
+    "MinecartRenderOffsetMixin",
+    "PistonBlockEntityRenderScopeMixin",
+    "RedstoneBurnoutParticleMixin"
   ],
   "injectors": { "defaultRequire": 1 }
 }

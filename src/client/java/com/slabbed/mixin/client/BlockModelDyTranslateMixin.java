@@ -2,6 +2,7 @@ package com.slabbed.mixin.client;
 
 import com.slabbed.client.ClientDy;
 import com.slabbed.client.model.ChainCeilingGeometry;
+import com.slabbed.client.runtime.PistonMovingRenderScope;
 import com.slabbed.util.RuntimeDiagnostics;
 import net.minecraft.block.BlockState;
 import net.minecraft.client.render.VertexConsumer;
@@ -38,6 +39,9 @@ public class BlockModelDyTranslateMixin {
      * path would double-shift it by +0.5.
      */
     private static double slabbed$modelDy(BlockRenderView world, BlockPos pos, BlockState state) {
+        if (PistonMovingRenderScope.suppressNestedDy()) {
+            return 0.0d;
+        }
         if (ChainCeilingGeometry.usesAlternateGeometry(world, pos, state)) {
             return 0.0;
         }

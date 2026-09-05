@@ -18,6 +18,10 @@ public class CarpetDyShapeMixin {
     @Inject(method = "getOutlineShape", at = @At("RETURN"), cancellable = true)
     private void slabbed$offsetCarpetOutline(BlockState state, BlockView world, BlockPos pos, ShapeContext ctx,
                                              CallbackInfoReturnable<VoxelShape> cir) {
+        // Stored outlines have one common owner on client and server (LAW.md).
+        if (com.slabbed.anchor.SlabAnchorAttachment.FROZEN_DY_ENABLED) {
+            return;
+        }
         double dy = ClientDy.dyFor(world, pos, state);
         if (dy != 0.0) {
             cir.setReturnValue(cir.getReturnValue().offset(0.0, dy, 0.0));

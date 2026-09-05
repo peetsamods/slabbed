@@ -80,8 +80,8 @@ exclusion can leave a manifest advertising a class the archive no longer has. Th
 | `META-INF/MANIFEST.MF` | Jar manifest. Required by the loader; its `Fabric-Loom-Client-Only-Entries` attribute is separately validated against the archive by this same gate. |
 | `LICENSE_slabbed` | The mod's GPL-3.0-only licence, copied in by the `jar` block. Mod jar only. |
 | `fabric.mod.json` | Mod descriptor. Required by the loader. |
-| `slabbed.mixins.json` | Main mixin config. Declares 15 shipped main mixins; referenced from `fabric.mod.json`. |
-| `slabbed.client.mixins.json` | Client mixin config. Declares 8 shipped client mixins; referenced from `fabric.mod.json`. |
+| `slabbed.mixins.json` | Required main mixin configuration referenced from `fabric.mod.json`. |
+| `slabbed.client.mixins.json` | Required client mixin configuration referenced from `fabric.mod.json`. |
 | `assets/slabbed/**` | The mod's own lang file and the chain-ceiling-support model. Recursive by policy — asset subdirectories are content, not behaviour. |
 
 ### Entrypoints
@@ -99,7 +99,8 @@ exclusion can leave a manifest advertising a class the archive no longer has. Th
 | `com/slabbed/compat/terrainslabs/*` | Terrain Slabs compat, mod-id gated. |
 | `com/slabbed/placement/*` | Placement-law decision helpers: `LandingResolver` (one immutable server height from the player's root aim), `LandingHitValidationPolicy` (server-side interact/use validation against a deeply-lowered cell), `ConnectorPlacementSettle` (settles fence/wall/pane/bars connections after a placement's height is published). None does file I/O, registration, rendering or diagnostics. |
 | `com/slabbed/client/model/*` | Offset block-state model, the Y-offset emitter, and the alternate chain-ceiling geometry — the lowering render path. |
-| `com/slabbed/mixin/client/*` | The 8 client mixins declared in `slabbed.client.mixins.json`. Non-recursive on purpose. |
+| `com/slabbed/client/runtime/PistonMovingRenderScope` | Prevents nested piston models from applying the destination height twice. |
+| `com/slabbed/mixin/client/*` | Client mixins declared in `slabbed.client.mixins.json`. Non-recursive on purpose. |
 | `com/slabbed/mixin/torch/*` | `TorchBlockMixin` — torch attachment geometry. |
 
 ### Anchor / storage (class-level; a mixed package)
@@ -131,6 +132,17 @@ before this line's behaviour work closes — see the note beneath the table.
 | `com/slabbed/mixin/ServerInteractBlockHitToleranceMixin` | Server-side hit tolerance for offset targeting. |
 | `com/slabbed/mixin/SlabSupportBlockMixin` | Slab support surface. |
 | `com/slabbed/mixin/SlabSupportStateMixin` | Slab support state. |
+| `com/slabbed/mixin/BlockCollisionDepthWindowMixin` | Discovers stored collision owners through the supported depth. |
+| `com/slabbed/mixin/PistonPlacementDyTransferMixin` | Carries stored heights through vanilla piston movement. |
+| `com/slabbed/mixin/PistonMovingBlockDyMixin` | Preserves moving-cell heights when their final block state is installed. |
+| `com/slabbed/mixin/SnowBlockStoredSupportMixin` | Preserves snow support-face checks on translated collision shapes. |
+| `com/slabbed/mixin/CampfireCookingParticleMixin` | Translates cooking smoke to its stored campfire height. |
+| `com/slabbed/mixin/CampfireSmokeParticleMixin` | Translates campfire smoke outside the shared display-tick scope without double-shifting ambient smoke. |
+| `com/slabbed/mixin/DecoratedPotParticleMixin` | Translates pot feedback particles to the stored pot height. |
+| `com/slabbed/mixin/LeverParticleMixin` | Translates lever feedback particles to the stored lever height. |
+| `com/slabbed/mixin/CandleExtinguishParticleMixin` | Translates extinguish smoke to the stored candle height. |
+| `com/slabbed/mixin/ParticleUtilOffsetMixin` | Normalizes shape-distributed particle height and translates its origin once to stored dy. |
+| `com/slabbed/particle/*` | Shared display-particle height scope and coordinate translation. |
 | `com/slabbed/mixin/TorchParticleAccessor` | Accessor supporting the torch particle mixins. |
 | `com/slabbed/mixin/TorchParticleMixin` | Particle origin tracks the lowered block. |
 | `com/slabbed/mixin/WallSlabConnectionMixin` | Wall connection against a lowered slab. |
