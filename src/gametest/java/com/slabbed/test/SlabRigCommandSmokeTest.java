@@ -149,7 +149,7 @@ public final class SlabRigCommandSmokeTest {
                 // runtimeItems: 1658 vanilla (26.3-pre-1) + the two compat-eligibility twin fixture BlockItems.
                 "[slabrig] hangs catalog", "runtimeItems=1660", "subjects=168", "routes=41348",
                 "paintingVariants=51", "randomPlaceable=47", "catalogHash=",
-                "minecraft=26.3-pre-1", "runtimeContentSha256=", "paintingRegistry=minecraft:painting_variant",
+                "minecraft=26.3-pre-2", "runtimeContentSha256=", "paintingRegistry=minecraft:painting_variant",
                 "placeableTag=minecraft:placeable", "paintingComponent=minecraft:painting/variant",
                 "paintingHash=", "executionIdentity=", "artifactSha256=",
                 "playerProof=ABSENT", "worldMutation=NONE", "artifact="}) {
