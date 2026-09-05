@@ -86,7 +86,7 @@ anything. The split above puts the fine granularity only where a leak has actual
 | `com/slabbed/client/runtime/*` | Lowered side-slab retargeter — client targeting. |
 | `com/slabbed/compat/*` | Compat hooks and the slab-surface-kind enum consumed by third-party slab mods. |
 | `com/slabbed/compat/terrainslabs/*` | Terrain Slabs compat (dual mod-id gate). |
-| `com/slabbed/mixin/client/*` | The 12 client render/interaction mixins declared in `slabbed.client.mixins.json`; every member is a render-offset, remesh or offset-raycast mixin. |
+| `com/slabbed/mixin/client/*` | The 13 client render/interaction mixins declared in `slabbed.client.mixins.json`; every member handles render offset, emitted-effect alignment, remesh or offset raycast behavior. |
 | `com/slabbed/mixin/torch/*` | `TorchBlockMixin` — torch attachment geometry. |
 
 ### Main mixins (class-level; `com/slabbed/mixin/` is a mixed package)

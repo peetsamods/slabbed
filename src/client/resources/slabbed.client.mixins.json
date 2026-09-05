@@ -11,6 +11,7 @@
     "ClientLevelLevelExtractorAccessor",
     "GameRendererCrosshairRetargetMixin",
     "ItemFrameDrawnFaceRenderMixin",
+    "LevelEventParticleMixin",
     "LevelExtractorImportantDirtyAccessor",
     "LocalPlayerPickOffsetRaycastMixin",
     "MinecartRenderOffsetMixin",
