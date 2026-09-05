@@ -122,6 +122,7 @@ before this line's behaviour work closes — see the note beneath the table.
 
 | Entry | Reason |
 | --- | --- |
+| `com/slabbed/mixin/ArmorStandItemOffsetPlacementMixin` | Places armor stands against the stored visible support plane while retaining vanilla item collision and entity-data handling. |
 | `com/slabbed/mixin/BlockItemPlacementIntentMixin` | Captures placement intent for the placement law. |
 | `com/slabbed/mixin/BlockOnPlacedAnchorMixin` | Writes the dy anchor on placement. |
 | `com/slabbed/mixin/BlockOnStateReplacedAnchorMixin` | Clears the dy anchor on state replacement. |
@@ -133,6 +134,7 @@ before this line's behaviour work closes — see the note beneath the table.
 | `com/slabbed/mixin/SlabSupportBlockMixin` | Slab support surface. |
 | `com/slabbed/mixin/SlabSupportStateMixin` | Slab support state. |
 | `com/slabbed/mixin/BlockCollisionDepthWindowMixin` | Discovers stored collision owners through the supported depth. |
+| `com/slabbed/mixin/BoatItemOffsetRaycastMixin` | Lets boat item use target stored visible block surfaces while preserving nearer vanilla block and fluid hits. |
 | `com/slabbed/mixin/ItemFramePhysicalOffsetMixin` | Saves and synchronizes frame height so the physical body and rendered position agree. |
 | `com/slabbed/mixin/MinecartPhysicalOffsetMixin` | Keeps rail coordinates distinct from physical minecart movement, passengers and targeting. |
 | `com/slabbed/mixin/PistonPlacementDyTransferMixin` | Carries stored heights through vanilla piston movement. |
