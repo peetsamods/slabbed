@@ -19,6 +19,10 @@ public final class ClientDy {
             return 0.0;
         }
 
+        if (com.slabbed.anchor.SlabAnchorAttachment.FROZEN_DY_ENABLED) {
+            return SlabSupport.getYOffset(world, pos, state);
+        }
+
         Block block = state.getBlock();
         if (block instanceof CarpetBlock) {
             // Carpet special case: simple geometric check without anchor logic

@@ -2,6 +2,7 @@ package com.slabbed.client.model;
 import com.slabbed.Slabbed;
 import com.slabbed.anchor.SlabAnchorAttachment;
 import com.slabbed.client.ClientDy;
+import com.slabbed.client.runtime.PistonMovingRenderScope;
 import com.slabbed.util.RuntimeDiagnostics;
 import com.slabbed.util.SlabSupport;
 import net.fabricmc.fabric.api.renderer.v1.model.FabricBakedModel;
@@ -98,10 +99,13 @@ public final class OffsetBlockStateModel extends ForwardingBakedModel {
             int emitCalls,
             int appliedCalls,
             double totalAppliedDy,
-            double lastDy
+            double lastDy,
+            double minDy,
+            double maxDy
     ) {
         static ModelDyOwnerSample missing() {
-            return new ModelDyOwnerSample(false, "none", "none", "none", 0, 0, 0.0, 0.0);
+            return new ModelDyOwnerSample(false, "none", "none", "none", 0, 0, 0.0, 0.0,
+                    Double.POSITIVE_INFINITY, Double.NEGATIVE_INFINITY);
         }
     }
 
@@ -205,7 +209,11 @@ public final class OffsetBlockStateModel extends ForwardingBakedModel {
         float sourceDy;
         String dySourcePath;
         float dy;
-        if (state.getBlock() instanceof CarpetBlock) {
+        if (PistonMovingRenderScope.suppressNestedDy()) {
+            sourceDy = 0.0f;
+            dySourcePath = "fabricEmitBlockQuads:pistonMovingDestinationOwned";
+            dy = 0.0f;
+        } else if (state.getBlock() instanceof CarpetBlock) {
             sourceDy = (float) ClientDy.dyFor(view, pos, state);
             dySourcePath = "fabricEmitBlockQuads:ClientDy:carpet";
             dy = sourceDy;
@@ -213,7 +221,7 @@ public final class OffsetBlockStateModel extends ForwardingBakedModel {
             sourceDy = (float) SlabSupport.getYOffset(view, pos, state);
             dySourcePath = "fabricEmitBlockQuads:SlabSupport";
             dy = sourceDy;
-            if (dy != 0.0f) {
+            if (dy != 0.0f && !com.slabbed.anchor.SlabAnchorAttachment.FROZEN_DY_ENABLED) {
                 // Prevent visual connection offsets for fences/walls/panes,
                 // except for the explicitly proven Beta 3.5 fence/wall variants.
                 if (state.getBlock() instanceof FenceBlock || state.getBlock() instanceof WallBlock || state.getBlock() instanceof PaneBlock) {
@@ -230,6 +238,7 @@ public final class OffsetBlockStateModel extends ForwardingBakedModel {
 
         BlockPos modelDyTracePos = slabbed$modelDyOwnerTracePos;
         if (modelDyTracePos != null && modelDyTracePos.equals(pos)) {
+            synchronized (OffsetBlockStateModel.class) {
             ModelDyOwnerSample prev = slabbed$modelDyOwnerLastTrace;
             boolean applied = dy != 0.0f;
             slabbed$modelDyOwnerLastTrace = new ModelDyOwnerSample(
@@ -240,7 +249,10 @@ public final class OffsetBlockStateModel extends ForwardingBakedModel {
                     prev.emitCalls() + 1,
                     prev.appliedCalls() + (applied ? 1 : 0),
                     prev.totalAppliedDy() + (applied ? dy : 0.0),
-                    dy);
+                    dy,
+                    Math.min(prev.minDy(), dy),
+                    Math.max(prev.maxDy(), dy));
+            }
         }
 
         if (RENDER_OFFSET_TRACE
@@ -288,7 +300,9 @@ public final class OffsetBlockStateModel extends ForwardingBakedModel {
                 : sourceDy;
         final boolean clearStepCullFaces = slabbed$hasLoweredStepFace(view, pos, state, selfStepDy);
 
-        if (dy == 0.0f && !clearStepCullFaces) {
+        boolean captureZeroHeightMesh = slabbed$fullMeshBoundsTracePos != null
+                && slabbed$fullMeshBoundsTracePos.equals(pos);
+        if (dy == 0.0f && !clearStepCullFaces && !captureZeroHeightMesh) {
             slabbed$recordMc1211FullMeshBoundsSample(view, pos, state, wrapped, dy,
                     0, 0, Double.NaN, Double.NaN, Double.NaN, Double.NaN,
                     "dy_zero_no_transform");

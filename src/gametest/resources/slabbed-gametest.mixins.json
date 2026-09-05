@@ -1,0 +1,18 @@
+{
+  "required": true,
+  "package": "com.slabbed.test.mixin",
+  "compatibilityLevel": "JAVA_21",
+  "mixins": [
+    "ServerParticleCaptureMixin",
+    "WorldParticleCaptureMixin"
+  ],
+  "client": [
+    "ItemFrameRenderMatrixCaptureMixin",
+    "MinecartRenderMatrixCaptureMixin",
+    "BlockEntityRenderCaptureMixin",
+    "ClientParticleSinkCaptureMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

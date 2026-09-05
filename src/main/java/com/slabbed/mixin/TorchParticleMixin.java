@@ -1,6 +1,7 @@
 package com.slabbed.mixin;
 
 import com.slabbed.util.SlabSupport;
+import com.slabbed.particle.BlockDisplayParticleContext;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.TorchBlock;
 import net.minecraft.particle.ParticleTypes;
@@ -27,6 +28,9 @@ public abstract class TorchParticleMixin {
 
     @Inject(method = "randomDisplayTick", at = @At("HEAD"), cancellable = true)
     private void slabbed$offsetParticles(BlockState state, World world, BlockPos pos, Random random, CallbackInfo ci) {
+        if (BlockDisplayParticleContext.isActive()) {
+            return;
+        }
         double dy = SlabSupport.getYOffset(world, pos, state);
         if (dy == 0.0) {
             return;

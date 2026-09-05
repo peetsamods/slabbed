@@ -1,5 +1,6 @@
 package com.slabbed.mixin.client;
 
+import com.slabbed.anchor.SlabAnchorAttachment;
 import com.slabbed.util.SlabSupport;
 import net.minecraft.block.AbstractRailBlock;
 import net.minecraft.block.BlockState;
@@ -14,10 +15,7 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
-/**
- * Offsets minecart rendering down by 0.5 when the minecart sits on a rail
- * visually anchored to a bottom slab.
- */
+/** Keeps minecart rendering at the frozen height of its direct or one-cell-below rail owner. */
 @Mixin(MinecartEntityRenderer.class)
 public abstract class MinecartRenderOffsetMixin {
 
@@ -37,6 +35,23 @@ public abstract class MinecartRenderOffsetMixin {
 
         BlockPos pos = entity.getBlockPos();
         BlockState blockState = world.getBlockState(pos);
+
+        if (SlabAnchorAttachment.FROZEN_DY_ENABLED) {
+            if (!AbstractRailBlock.isRail(blockState)) {
+                BlockPos below = pos.down();
+                BlockState belowState = world.getBlockState(below);
+                if (!AbstractRailBlock.isRail(belowState)) {
+                    return;
+                }
+                pos = below;
+                blockState = belowState;
+            }
+            double dy = SlabSupport.getYOffset(world, pos, blockState);
+            if (Double.isFinite(dy) && dy != 0.0d) {
+                matrices.translate(0.0d, dy, 0.0d);
+            }
+            return;
+        }
 
         if (!(blockState.getBlock() instanceof AbstractRailBlock)) {
             return;

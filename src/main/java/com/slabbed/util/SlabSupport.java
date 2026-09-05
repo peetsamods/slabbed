@@ -224,17 +224,30 @@ public final class SlabSupport {
     }
 
     /**
-     * True when {@code state} is a vertical chain whose block immediately above is a top/double
-     * slab acting as a ceiling support. Such a chain renders an elongated 0..24 model at dy=0
-     * (see {@code ChainCeilingGeometry}) bridging the half-block gap; its outline/raycast still
-     * derives from the +0.5 ceiling-attach dy via {@link #ceilingBridgedVerticalChainSelectionShape}.
+     * Selects the elongated 0..24 chain geometry that bridges the half-block underside of a flat
+     * TOP slab. With frozen placement heights, both the TOP support's visible dy and the chain's
+     * stored dy must be exactly zero; lowered TOP slabs and DOUBLE slabs already meet a normal
+     * translated chain at their underside and must keep the standard model. The legacy live-height
+     * mode retains its existing top/double support rule.
      */
     public static boolean isVerticalChainDirectlyUnderCeilingSupport(
             BlockView world, BlockPos pos, BlockState state) {
-        return world != null
-                && pos != null
-                && isBeta35VerticalChainVisibleOwnerObject(state)
-                && isCeilingSupportBottomSurface(world, pos.up());
+        if (world == null || pos == null || !isBeta35VerticalChainVisibleOwnerObject(state)) {
+            return false;
+        }
+        if (!SlabAnchorAttachment.FROZEN_DY_ENABLED) {
+            return isCeilingSupportBottomSurface(world, pos.up());
+        }
+
+        BlockPos supportPos = pos.up();
+        BlockState supportState = world.getBlockState(supportPos);
+        if (!isTopSlab(supportState)
+                || Double.doubleToRawLongBits(getYOffset(world, supportPos, supportState))
+                != Double.doubleToRawLongBits(0.0d)) {
+            return false;
+        }
+        double chainDy = SlabAnchorAttachment.storedPlacementDy(world, pos);
+        return Double.doubleToRawLongBits(chainDy) == Double.doubleToRawLongBits(0.0d);
     }
 
     /**
