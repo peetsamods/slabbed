@@ -1,5 +1,6 @@
 package com.slabbed.test.mixin;
 
+import com.slabbed.test.CandleExtinguishParticleClientGameTest;
 import com.slabbed.test.LeverParticleFrozenAnchorClientGameTest;
 import net.minecraft.client.world.ClientWorld;
 import net.minecraft.particle.DustParticleEffect;
@@ -26,6 +27,8 @@ public abstract class ClientWorldParticleCaptureMixin {
             double velocityY,
             double velocityZ,
             CallbackInfo ci) {
+        CandleExtinguishParticleClientGameTest.captureParticle(
+                effect, x, y, z, velocityX, velocityY, velocityZ);
         if (effect instanceof DustParticleEffect dust) {
             LeverParticleFrozenAnchorClientGameTest.captureDustParticle(
                     dust, x, y, z, velocityX, velocityY, velocityZ);

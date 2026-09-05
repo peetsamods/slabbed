@@ -3,10 +3,12 @@ package com.slabbed.mixin;
 import com.slabbed.util.SlabSupport;
 import net.minecraft.block.AbstractCandleBlock;
 import net.minecraft.block.BlockState;
+import net.minecraft.particle.ParticleEffect;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Vec3d;
 import net.minecraft.util.math.random.Random;
 import net.minecraft.world.World;
+import net.minecraft.world.WorldAccess;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
@@ -50,5 +52,23 @@ public abstract class CandleParticleMixin {
         BlockState state = capturedWorld.getBlockState(blockPos);
         double dy = SlabSupport.getVisualYOffset(capturedWorld, blockPos, state);
         spawnCandleParticles(world, dy == 0.0 ? pos : pos.add(0.0, dy, 0.0), random);
+    }
+
+    @Redirect(
+            method = "method_35244",
+            at = @At(
+                    value = "INVOKE",
+                    target = "Lnet/minecraft/world/WorldAccess;addParticleClient(Lnet/minecraft/particle/ParticleEffect;DDDDDD)V"
+            )
+    )
+    private static void slabbed$offsetExtinguishSmoke(
+            WorldAccess redirectWorld, ParticleEffect effect,
+            double x, double y, double z,
+            double velocityX, double velocityY, double velocityZ,
+            WorldAccess world, BlockPos blockPos, Vec3d offset) {
+        BlockState state = world.getBlockState(blockPos);
+        double dy = SlabSupport.getVisualYOffset(world, blockPos, state);
+        redirectWorld.addParticleClient(
+                effect, x, y + dy, z, velocityX, velocityY, velocityZ);
     }
 }

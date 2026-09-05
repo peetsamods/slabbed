@@ -61,6 +61,7 @@
       "com.slabbed.client.BetaNoticeSuite"
     ],
     "fabric-client-gametest": [
+      "com.slabbed.test.CandleExtinguishParticleClientGameTest",
       "com.slabbed.test.OffsetRaycastClientGameTest",
       "com.slabbed.test.BsFbUpperFacePerpendicularPlacementClientGameTest",
       "com.slabbed.test.AuthoredTerrainPlacementClientGameTest",
