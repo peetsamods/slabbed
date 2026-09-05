@@ -567,10 +567,12 @@ public final class ExtendedDepthClientProbe implements ClientModInitializer {
                 world.setBlockState(slope.down(), Blocks.STONE.getDefaultState(), Block.NOTIFY_ALL);
                 world.setBlockState(slope.east(), Blocks.STONE.getDefaultState(), Block.NOTIFY_ALL);
                 world.setBlockState(rail, Blocks.RAIL.getDefaultState(), Block.NOTIFY_ALL);
-                world.setBlockState(slope, Blocks.RAIL.getDefaultState().with(RailBlock.SHAPE,
+                world.setBlockState(slope, Blocks.POWERED_RAIL.getDefaultState().with(PoweredRailBlock.SHAPE,
                         net.minecraft.block.enums.RailShape.ASCENDING_EAST), Block.NOTIFY_ALL);
                 SlabAnchorAttachment.writePlacementDyBatch(world, Map.of(frame, Double.doubleToRawLongBits(dy),
                         rail, Double.doubleToRawLongBits(dy), slope, Double.doubleToRawLongBits(dy)));
+                AttachedEntityDepthProbe.prepareFrames(world, frame, dy);
+                AttachedEntityDepthProbe.prepareCarts(world, rail, slope);
                 for (int index = 0; index < 4; index++) {
                     Direction direction = index < 2 ? Direction.EAST : Direction.UP;
                     BlockPos source = frame.south(6 + index * 6), destination = source.offset(direction);
@@ -588,9 +590,11 @@ public final class ExtendedDepthClientProbe implements ClientModInitializer {
         }
         double expected = attachedStage == 1 ? 0.0d : -3.0d;
         if (!attachedReady) return;
+        if (!AttachedEntityDepthProbe.framesReady(client, expected)) return;
+        if (!AttachedEntityDepthProbe.cartsReady(client, rail, slope, expected)) return;
         if (!client.world.getBlockState(frame).isOf(Blocks.STONE)
                 || !client.world.getBlockState(rail).isOf(Blocks.RAIL)
-                || !client.world.getBlockState(slope).isOf(Blocks.RAIL)) return;
+                || !client.world.getBlockState(slope).isOf(Blocks.POWERED_RAIL)) return;
         for (BlockPos pos : List.of(frame, rail, slope)) {
             var fact = SlabAnchorAttachment.rawPlacementDyFact(client.world, pos);
             if (!fact.present() || !same(fact.valueOrNaN(), expected)) return;

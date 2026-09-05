@@ -133,6 +133,8 @@ before this line's behaviour work closes — see the note beneath the table.
 | `com/slabbed/mixin/SlabSupportBlockMixin` | Slab support surface. |
 | `com/slabbed/mixin/SlabSupportStateMixin` | Slab support state. |
 | `com/slabbed/mixin/BlockCollisionDepthWindowMixin` | Discovers stored collision owners through the supported depth. |
+| `com/slabbed/mixin/ItemFramePhysicalOffsetMixin` | Saves and synchronizes frame height so the physical body and rendered position agree. |
+| `com/slabbed/mixin/MinecartPhysicalOffsetMixin` | Keeps rail coordinates distinct from physical minecart movement, passengers and targeting. |
 | `com/slabbed/mixin/PistonPlacementDyTransferMixin` | Carries stored heights through vanilla piston movement. |
 | `com/slabbed/mixin/PistonMovingBlockDyMixin` | Preserves moving-cell heights when their final block state is installed. |
 | `com/slabbed/mixin/SnowBlockStoredSupportMixin` | Preserves snow support-face checks on translated collision shapes. |
