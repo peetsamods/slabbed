@@ -28,6 +28,9 @@ public abstract class MinecartRenderOffsetMixin {
                                               VertexConsumerProvider vertexConsumers,
                                               int light,
                                               CallbackInfo ci) {
+        if (SlabAnchorAttachment.FROZEN_DY_ENABLED) {
+            return;
+        }
         World world = entity.getEntityWorld();
         if (world == null) {
             return;
@@ -35,23 +38,6 @@ public abstract class MinecartRenderOffsetMixin {
 
         BlockPos pos = entity.getBlockPos();
         BlockState blockState = world.getBlockState(pos);
-
-        if (SlabAnchorAttachment.FROZEN_DY_ENABLED) {
-            if (!AbstractRailBlock.isRail(blockState)) {
-                BlockPos below = pos.down();
-                BlockState belowState = world.getBlockState(below);
-                if (!AbstractRailBlock.isRail(belowState)) {
-                    return;
-                }
-                pos = below;
-                blockState = belowState;
-            }
-            double dy = SlabSupport.getYOffset(world, pos, blockState);
-            if (Double.isFinite(dy) && dy != 0.0d) {
-                matrices.translate(0.0d, dy, 0.0d);
-            }
-            return;
-        }
 
         if (!(blockState.getBlock() instanceof AbstractRailBlock)) {
             return;

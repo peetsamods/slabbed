@@ -22,6 +22,7 @@
       "com.slabbed.test.SlabbedLabFixtureTest",
       "com.slabbed.test.ChainSurvivalReproTest",
       "com.slabbed.test.OffsetRaycastTargetingTest",
+      "com.slabbed.test.ExtendedDepthEntityBehaviorTest",
       "com.slabbed.test.ExtendedDepthShapeTest",
       "com.slabbed.test.ExtendedDepthPlacementTest",
       "com.slabbed.test.ExtendedDepthChainContactTest",

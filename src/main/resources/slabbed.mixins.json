@@ -9,6 +9,8 @@
     "SlabSupportBlockMixin",
     "SlabSupportStateMixin",
     "BlockCollisionDepthWindowMixin",
+    "ItemFramePhysicalOffsetMixin",
+    "MinecartPhysicalOffsetMixin",
     "PistonPlacementDyTransferMixin",
     "PistonMovingBlockDyMixin",
     "SnowBlockStoredSupportMixin",
