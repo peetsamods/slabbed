@@ -5,6 +5,7 @@ import com.slabbed.client.model.OffsetBlockStateModel;
 import com.slabbed.util.SlabSupport;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
+import net.fabricmc.fabric.api.client.rendering.v1.WorldRenderEvents;
 import net.minecraft.block.*;
 import net.minecraft.block.enums.SlabType;
 import net.minecraft.client.MinecraftClient;
@@ -77,7 +78,7 @@ public final class ExtendedDepthClientProbe implements ClientModInitializer {
             ceiling("ceiling_bell", Items.BELL), ceiling("top_trapdoor", Items.OAK_TRAPDOOR));
     private static final List<ProbeRow> ROWS = buildRows();
     private static final int MAX_ROWS = readMaxRows();
-    private enum Phase { BOOTSTRAP, PREPARE, SUPPORT_SYNC, AIM, PLACE, OBSERVE, NEXT, ATTACHED, PISTON_LIVE, FINISH }
+    private enum Phase { BOOTSTRAP, PREPARE, SUPPORT_SYNC, AIM, PLACE, OBSERVE, NEXT, ATTACHED, SURFACE_ENTITIES, PISTON_LIVE, FINISH }
     private static int attachedStage;
     private static volatile boolean attachedReady;
     private static final List<AttachedEntityDepthProbe.Capture> attachedFlat = new ArrayList<>();
@@ -107,6 +108,7 @@ public final class ExtendedDepthClientProbe implements ClientModInitializer {
         if (initialized) return;
         initialized = true;
         ClientTickEvents.END_CLIENT_TICK.register(ExtendedDepthClientProbe::tick);
+        WorldRenderEvents.END.register(context -> SurfaceEntityClientProbe.onWorldRendered(context.camera()));
     }
     private static void tick(MinecraftClient client) {
         if (!Boolean.getBoolean(ENABLE_PROPERTY) || phase == Phase.FINISH) return;
@@ -134,6 +136,7 @@ public final class ExtendedDepthClientProbe implements ClientModInitializer {
                 case OBSERVE -> observe(client);
                 case NEXT -> next();
                 case ATTACHED -> attached(client);
+                case SURFACE_ENTITIES -> surfaceEntities(client);
                 case PISTON_LIVE -> {
                     var result = PistonLiveCycleProbe.tick(client);
                     if (result.status() != PistonLiveCycleProbe.Status.PENDING) {
@@ -198,7 +201,8 @@ public final class ExtendedDepthClientProbe implements ClientModInitializer {
             client.options.pauseOnLostFocus = false;
             if (client.currentScreen != null) client.setScreen(null);
             baseOrigin = client.player.getBlockPos().add(10, 20, 10).toImmutable();
-            phase = Phase.PREPARE;
+            phase = Boolean.getBoolean("slabbed.depthProbe.surfaceEntitiesOnly")
+                    ? Phase.SURFACE_ENTITIES : Phase.PREPARE;
             phaseTick = ticks;
         } else if (ticks >= BOOTSTRAP_TIMEOUT) {
             redRows++;
@@ -655,6 +659,15 @@ public final class ExtendedDepthClientProbe implements ClientModInitializer {
             phaseTick = ticks;
         } else finish(client, redRows > 0 ? "RED" : "TECHNICAL_GREEN_SCREENSHOTS_UNREVIEWED");
     }
+    private static void surfaceEntities(MinecraftClient client) {
+        var result = SurfaceEntityClientProbe.tick(client, baseOrigin.add(40, 8, 40), evidenceDir);
+        if (result.status() == SurfaceEntityClientProbe.Status.PENDING) return;
+        append("SURFACE_ENTITY_SUMMARY\t" + result.status() + "\t" + result.detail());
+        if (result.status() == SurfaceEntityClientProbe.Status.GREEN) greenRows += result.cases();
+        else redRows++;
+        finish(client, result.status() == SurfaceEntityClientProbe.Status.GREEN
+                ? "TECHNICAL_GREEN_SCREENSHOTS_UNREVIEWED" : "RED_SURFACE_ENTITY_CLIENT_PROOF");
+    }
     private static PistonMovingRenderAudit.Snapshot sampleMovingPiston(MinecraftClient client,
             net.minecraft.block.entity.PistonBlockEntity moving) {
         Vec3d old = client.player.getPos();
@@ -751,7 +764,7 @@ public final class ExtendedDepthClientProbe implements ClientModInitializer {
         return !same(mesh.minAfterY() - mesh.minBeforeY(), dy)
                 || !same(mesh.maxAfterY() - mesh.maxBeforeY(), dy);
     }
-    private static String screenshot(MinecraftClient client, String label) {
+    static String screenshot(MinecraftClient client, String label) {
         if (client == null) return "ERROR_CLIENT_NOT_READY";
         Framebuffer framebuffer = client.getFramebuffer();
         if (framebuffer == null) return "ERROR_FRAMEBUFFER_NOT_READY";
