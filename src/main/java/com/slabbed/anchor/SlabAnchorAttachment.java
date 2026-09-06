@@ -574,6 +574,20 @@ public final class SlabAnchorAttachment {
         return writes;
     }
 
+    /** Restores modern provenance captured before an existing block entered piston movement. */
+    public static int restoreTransferredModernPlacements(World world, Iterable<BlockPos> positions) {
+        if (world == null || world.isClient() || positions == null) {
+            return 0;
+        }
+        int writes = 0;
+        for (BlockPos pos : positions) {
+            if (pos != null && addToAttachment(world, pos, MODERN_PLACEMENT_TYPE, "modern_placement")) {
+                writes++;
+            }
+        }
+        return writes;
+    }
+
     /**
      * Direct authoritative backing read. A non-{@link World} view (a client render region) has no
      * chunk handle, so it resolves through {@link #clientPlacementDyLookup} — the same client-world

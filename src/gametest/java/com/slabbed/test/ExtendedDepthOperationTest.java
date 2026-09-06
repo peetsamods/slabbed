@@ -2,6 +2,8 @@ package com.slabbed.test;
 
 import com.slabbed.Slabbed;
 import com.slabbed.anchor.SlabAnchorAttachment;
+import com.slabbed.upgrade.WorldUpgradeDecision;
+import com.slabbed.upgrade.WorldUpgradeRuntimePolicy;
 import com.slabbed.util.SlabSupport;
 import com.slabbed.util.SlabbedOffsetRaycast;
 import net.minecraft.block.Block;
@@ -36,9 +38,19 @@ import java.util.Map;
 public final class ExtendedDepthOperationTest {
     private static final double DEEP_DY = -3.0d;
     private static final String BATCH = "slabbed_extended_depth_operations";
+    private static final String KEEP_BATCH = "slabbed_keep_piston_transfer";
     private static boolean frozenBeforeBatch;
+    private static boolean keepFrozenBeforeBatch;
 
     private record ToggleCase(String id, Item item, Block expected, boolean openProperty) {
+    }
+
+    private record PistonTransferCase(
+            String id,
+            BlockPos piston,
+            boolean modern,
+            boolean authoredDeepFact
+    ) {
     }
 
     private static final ToggleCase[] TOGGLES = {
@@ -57,6 +69,19 @@ public final class ExtendedDepthOperationTest {
     @AfterBatch(batchId = BATCH)
     public static void restoreFrozenDyAfterBatch(ServerWorld world) {
         SlabAnchorAttachment.FROZEN_DY_ENABLED = frozenBeforeBatch;
+    }
+
+    @BeforeBatch(batchId = KEEP_BATCH)
+    public static void enableKeepPolicyForBatch(ServerWorld world) {
+        keepFrozenBeforeBatch = SlabAnchorAttachment.FROZEN_DY_ENABLED;
+        SlabAnchorAttachment.FROZEN_DY_ENABLED = false;
+        WorldUpgradeRuntimePolicy.activate(world, WorldUpgradeDecision.Mode.KEEP_EXISTING);
+    }
+
+    @AfterBatch(batchId = KEEP_BATCH)
+    public static void restorePolicyAfterKeepBatch(ServerWorld world) {
+        WorldUpgradeRuntimePolicy.deactivate(world);
+        SlabAnchorAttachment.FROZEN_DY_ENABLED = keepFrozenBeforeBatch;
     }
 
     @GameTest(templateName = "fabric-gametest-api-v1:empty", batchId = BATCH)
@@ -255,6 +280,216 @@ public final class ExtendedDepthOperationTest {
                     "vertical old destination retained a stale fact");
             finish(h, "deep vertical sticky piston operation", failures);
         });
+    }
+
+    @GameTest(templateName = "fabric-gametest-api-v1:empty", batchId = KEEP_BATCH)
+    public void keepPistonsTransferModernIdentityWithoutPromotingLegacyCells(TestContext h) {
+        ServerWorld world = h.getWorld();
+        List<String> failures = new ArrayList<>();
+        List<PistonTransferCase> cases = List.of(
+                new PistonTransferCase("modern_deep", relative(h, 2, 3, 1), true, true),
+                new PistonTransferCase("modern_flat", relative(h, 2, 3, 3), true, false),
+                new PistonTransferCase("legacy_latent", relative(h, 2, 3, 5), false, true));
+        boolean[] sawExtensionMoving = new boolean[cases.size()];
+        boolean[] sawRetractionMoving = new boolean[cases.size()];
+
+        for (PistonTransferCase pistonCase : cases) {
+            prepareKeepPiston(world, pistonCase);
+            assertIdentity(
+                    world, pistonCase.piston(), pistonCase.id() + " starting base",
+                    pistonCase.modern(), pistonCase.authoredDeepFact(), pistonCase.modern(),
+                    pistonCase.modern() && pistonCase.authoredDeepFact() ? DEEP_DY : 0.0d,
+                    failures);
+            assertIdentity(
+                    world, pistonCase.piston().east(), pistonCase.id() + " starting payload",
+                    pistonCase.modern(), pistonCase.authoredDeepFact(), pistonCase.modern(),
+                    pistonCase.modern() && pistonCase.authoredDeepFact() ? DEEP_DY : 0.0d,
+                    failures);
+        }
+
+        h.runAtTick(1, () -> cases.forEach(pistonCase ->
+                world.setBlockState(
+                        pistonCase.piston().west(),
+                        Blocks.REDSTONE_BLOCK.getDefaultState(),
+                        Block.NOTIFY_ALL)));
+        h.runAtTick(2, () -> observeMoving(
+                world, cases, true, sawExtensionMoving, failures));
+        h.runAtTick(3, () -> observeMoving(
+                world, cases, true, sawExtensionMoving, failures));
+
+        h.runAtTick(6, () -> {
+            for (int index = 0; index < cases.size(); index++) {
+                PistonTransferCase pistonCase = cases.get(index);
+                check(failures, sawExtensionMoving[index],
+                        pistonCase.id() + " never exposed the vanilla extension moving state");
+                check(failures,
+                        world.getBlockState(pistonCase.piston()).isOf(Blocks.STICKY_PISTON)
+                                && world.getBlockState(pistonCase.piston()).get(PistonBlock.EXTENDED),
+                        pistonCase.id() + " did not settle extended");
+                check(failures, world.getBlockState(pistonCase.piston().east()).isOf(Blocks.PISTON_HEAD),
+                        pistonCase.id() + " generated head missing");
+                check(failures, world.getBlockState(pistonCase.piston().east(2)).isOf(Blocks.STONE),
+                        pistonCase.id() + " payload did not settle at its destination");
+                assertSettledBase(
+                        world,
+                        pistonCase,
+                        failures,
+                        "extended base",
+                        pistonCase.authoredDeepFact());
+                assertTransferredIdentity(
+                        world, pistonCase, pistonCase.piston().east(), "settled head", failures);
+                assertTransferredIdentity(
+                        world, pistonCase, pistonCase.piston().east(2), "settled payload", failures);
+                world.setBlockState(
+                        pistonCase.piston().west(), Blocks.AIR.getDefaultState(), Block.NOTIFY_ALL);
+            }
+        });
+
+        h.runAtTick(7, () -> observeMoving(
+                world, cases, false, sawRetractionMoving, failures));
+        h.runAtTick(8, () -> observeMoving(
+                world, cases, false, sawRetractionMoving, failures));
+
+        h.runAtTick(12, () -> {
+            for (int index = 0; index < cases.size(); index++) {
+                PistonTransferCase pistonCase = cases.get(index);
+                check(failures, sawRetractionMoving[index],
+                        pistonCase.id() + " never exposed the vanilla retraction moving state");
+                check(failures,
+                        world.getBlockState(pistonCase.piston()).isOf(Blocks.STICKY_PISTON)
+                                && !world.getBlockState(pistonCase.piston()).get(PistonBlock.EXTENDED),
+                        pistonCase.id() + " did not settle retracted");
+                check(failures, world.getBlockState(pistonCase.piston().east()).isOf(Blocks.STONE),
+                        pistonCase.id() + " payload did not return");
+                check(failures, world.getBlockState(pistonCase.piston().east(2)).isAir(),
+                        pistonCase.id() + " old destination did not clear");
+                assertSettledBase(
+                        world,
+                        pistonCase,
+                        failures,
+                        "retracted base",
+                        pistonCase.modern() && pistonCase.authoredDeepFact());
+                assertTransferredIdentity(
+                        world, pistonCase, pistonCase.piston().east(), "returned payload", failures);
+                assertIdentity(
+                        world, pistonCase.piston().east(2), pistonCase.id() + " cleared destination",
+                        false, false, false, 0.0d, failures);
+            }
+            finish(h, "KEEP piston transfer", failures);
+        });
+    }
+
+    private static BlockPos relative(TestContext h, int x, int y, int z) {
+        return h.getAbsolutePos(new BlockPos(x, y, z));
+    }
+
+    private static void prepareKeepPiston(ServerWorld world, PistonTransferCase pistonCase) {
+        for (int offset = -1; offset <= 2; offset++) {
+            BlockPos pos = pistonCase.piston().east(offset);
+            if (!world.getBlockState(pos).isAir()) {
+                world.setBlockState(pos, Blocks.AIR.getDefaultState(), Block.NOTIFY_LISTENERS);
+            }
+            SlabAnchorAttachment.removeAnchor(world, pos);
+            require(world.getBlockState(pos).isAir(),
+                    pistonCase.id() + " fixture cell is obstructed at offset " + offset);
+        }
+        world.setBlockState(
+                pistonCase.piston(),
+                Blocks.STICKY_PISTON.getDefaultState().with(PistonBlock.FACING, Direction.EAST),
+                Block.NOTIFY_LISTENERS);
+        world.setBlockState(
+                pistonCase.piston().east(), Blocks.STONE.getDefaultState(), Block.NOTIFY_LISTENERS);
+        if (pistonCase.authoredDeepFact()) {
+            int writes = SlabAnchorAttachment.writePlacementDyBatch(world, Map.of(
+                    pistonCase.piston(), Double.doubleToRawLongBits(DEEP_DY),
+                    pistonCase.piston().east(), Double.doubleToRawLongBits(DEEP_DY)));
+            require(writes == 2, pistonCase.id() + " did not seed both deep facts");
+        }
+        if (pistonCase.modern()) {
+            int writes = SlabAnchorAttachment.markPostPolicyPlacements(
+                    world, List.of(pistonCase.piston(), pistonCase.piston().east()));
+            require(writes == 2, pistonCase.id() + " did not seed both modern markers");
+        }
+    }
+
+    private static void observeMoving(
+            ServerWorld world,
+            List<PistonTransferCase> cases,
+            boolean extending,
+            boolean[] observed,
+            List<String> failures
+    ) {
+        for (int index = 0; index < cases.size(); index++) {
+            if (observed[index]) {
+                continue;
+            }
+            PistonTransferCase pistonCase = cases.get(index);
+            BlockPos first = extending ? pistonCase.piston().east() : pistonCase.piston();
+            BlockPos second = extending ? pistonCase.piston().east(2) : pistonCase.piston().east();
+            if (!world.getBlockState(first).isOf(Blocks.MOVING_PISTON)
+                    || !world.getBlockState(second).isOf(Blocks.MOVING_PISTON)) {
+                continue;
+            }
+            observed[index] = true;
+            assertTransferredIdentity(
+                    world, pistonCase, first, extending ? "moving head" : "moving base", failures);
+            assertTransferredIdentity(
+                    world, pistonCase, second, "moving payload", failures);
+        }
+    }
+
+    private static void assertSettledBase(
+            ServerWorld world,
+            PistonTransferCase pistonCase,
+            List<String> failures,
+            String stage,
+            boolean rawDeepFact
+    ) {
+        assertIdentity(
+                world, pistonCase.piston(), pistonCase.id() + " " + stage,
+                pistonCase.modern(), rawDeepFact, pistonCase.modern(),
+                pistonCase.modern() && pistonCase.authoredDeepFact() ? DEEP_DY : 0.0d,
+                failures);
+    }
+
+    private static void assertTransferredIdentity(
+            ServerWorld world,
+            PistonTransferCase pistonCase,
+            BlockPos pos,
+            String stage,
+            List<String> failures
+    ) {
+        boolean transferredDeepFact = pistonCase.modern() && pistonCase.authoredDeepFact();
+        assertIdentity(
+                world, pos, pistonCase.id() + " " + stage,
+                pistonCase.modern(), transferredDeepFact, pistonCase.modern(),
+                transferredDeepFact ? DEEP_DY : 0.0d,
+                failures);
+    }
+
+    private static void assertIdentity(
+            ServerWorld world,
+            BlockPos pos,
+            String label,
+            boolean modern,
+            boolean rawDeepFact,
+            boolean frozenReader,
+            double effectiveDy,
+            List<String> failures
+    ) {
+        SlabAnchorAttachment.PlacementDyFact fact =
+                SlabAnchorAttachment.rawPlacementDyFact(world, pos);
+        check(failures, SlabAnchorAttachment.isModernPlacement(world, pos) == modern,
+                label + " modern marker mismatch");
+        check(failures, fact.present() == rawDeepFact
+                        && (!rawDeepFact || sameBits(fact.valueOrNaN(), DEEP_DY)),
+                label + " raw fact mismatch: " + fact.valueOrNaN());
+        check(failures, SlabAnchorAttachment.usesFrozenPlacementHeight(world, pos) == frozenReader,
+                label + " reader selection mismatch");
+        check(failures,
+                sameBits(SlabSupport.getYOffset(world, pos, world.getBlockState(pos)), effectiveDy),
+                label + " effective dy mismatch: "
+                        + SlabSupport.getYOffset(world, pos, world.getBlockState(pos)));
     }
 
     private static ActionResult useItem(PlayerEntity player, Item item, BlockHitResult hit) {
