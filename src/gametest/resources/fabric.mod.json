@@ -4,7 +4,9 @@
   "version": "1.0.0",
   "name": "Slabbed GameTest",
   "environment": "*",
-  "mixins": ["slabbed-gametest.mixins.json"],
+  "mixins": [
+    "slabbed-gametest.mixins.json"
+  ],
   "provides": [
     "terrain_slabs",
     "terrainslabs"
@@ -15,7 +17,8 @@
     ],
     "client": [
       "com.slabbed.test.ExtendedDepthClientProbe",
-      "com.slabbed.test.Mc1211GoblinRouteClientEntrypoint"
+      "com.slabbed.test.Mc1211GoblinRouteClientEntrypoint",
+      "com.slabbed.test.KeepOnlyReopenProbe"
     ],
     "fabric-gametest": [
       "com.slabbed.test.Mc1211GoblinRouteCanaryGameTest",
