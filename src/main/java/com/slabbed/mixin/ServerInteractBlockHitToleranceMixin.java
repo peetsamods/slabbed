@@ -5,6 +5,7 @@ import com.slabbed.anchor.SlabAnchorAttachment;
 import com.slabbed.placement.LandingHitValidationPolicy;
 import com.slabbed.util.RuntimeDiagnostics;
 import com.slabbed.util.SlabSupport;
+import com.slabbed.upgrade.WorldUpgradeRuntimePolicy;
 import net.minecraft.block.Block;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.SlabBlock;
@@ -344,9 +345,11 @@ public abstract class ServerInteractBlockHitToleranceMixin {
 
     /** Owner's visible lowering depth: the frozen store first (any depth), else the live lane. */
     private static double slabbed$ownerVisibleDy(World world, BlockPos pos, BlockState state) {
-        double stored = SlabAnchorAttachment.storedPlacementDy(world, pos);
-        if (!Double.isNaN(stored)) {
-            return stored;
+        if (!WorldUpgradeRuntimePolicy.authorsModernPlacements(world)) {
+            double stored = SlabAnchorAttachment.storedPlacementDy(world, pos);
+            if (!Double.isNaN(stored)) {
+                return stored;
+            }
         }
         return SlabSupport.getYOffset(world, pos, state);
     }

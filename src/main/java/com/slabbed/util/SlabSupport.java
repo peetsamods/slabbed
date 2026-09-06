@@ -1193,7 +1193,7 @@ public final class SlabSupport {
         // placement-time height is taken explicitly through getUnstoredYOffset instead of this public
         // read path. Deliberately unconditional: falling through to the live lanes when a fact is
         // absent is exactly the law violation this store exists to end.
-        if (SlabAnchorAttachment.FROZEN_DY_ENABLED) {
+        if (SlabAnchorAttachment.usesFrozenPlacementHeight(world, pos)) {
             double frozen = SlabAnchorAttachment.storedPlacementDy(world, pos);
             return Double.isFinite(frozen) ? frozen : 0.0d;
         }

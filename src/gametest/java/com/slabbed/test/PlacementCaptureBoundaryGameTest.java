@@ -5,11 +5,16 @@ import com.slabbed.anchor.C3TestPhaseTrace;
 import com.slabbed.anchor.SlabAnchorAttachment;
 import com.slabbed.compat.CompatHooks;
 import com.slabbed.util.SlabSupport;
+import com.slabbed.util.SlabbedOffsetRaycast;
+import com.slabbed.upgrade.WorldUpgradeDecision;
+import com.slabbed.upgrade.WorldUpgradeRuntimePolicy;
 import it.unimi.dsi.fastutil.longs.Long2ByteOpenHashMap;
+import net.fabricmc.fabric.api.attachment.v1.AttachmentTarget;
 import net.minecraft.block.Block;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.Blocks;
 import net.minecraft.block.SlabBlock;
+import net.minecraft.block.ShapeContext;
 import net.minecraft.block.enums.SlabType;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.item.BlockItem;
@@ -17,22 +22,34 @@ import net.minecraft.item.ItemPlacementContext;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.ItemUsageContext;
 import net.minecraft.item.Items;
+import net.minecraft.nbt.NbtCompound;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.test.GameTest;
 import net.minecraft.test.TestContext;
 import net.minecraft.util.ActionResult;
 import net.minecraft.util.Hand;
 import net.minecraft.util.hit.BlockHitResult;
+import net.minecraft.util.hit.HitResult;
+import net.minecraft.util.math.Box;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Direction;
 import net.minecraft.util.math.Vec3d;
+import net.minecraft.util.function.BooleanBiFunction;
+import net.minecraft.util.shape.VoxelShape;
+import net.minecraft.util.shape.VoxelShapes;
 import net.minecraft.world.GameMode;
+import net.minecraft.world.ChunkSerializer;
+import net.minecraft.world.BlockView;
+import net.minecraft.world.EmptyBlockView;
 import net.minecraft.world.chunk.WorldChunk;
 
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.function.Predicate;
 
 /**
@@ -250,11 +267,375 @@ public final class PlacementCaptureBoundaryGameTest {
         pass(h, "single_initial_writer");
     }
 
+    @GameTest(templateName = "fabric-gametest-api-v1:empty", batchId = "slabbed_keep_async_guard_isolated")
+    public void keepExistingCollisionGuardSkipsPolicyLookupsOnUnsafeWorkers(TestContext h) {
+        boolean previousFrozen = SlabAnchorAttachment.FROZEN_DY_ENABLED;
+        var previousModernLookup = SlabAnchorAttachment.clientModernPlacementLookup;
+        var previousPolicyLookup = SlabAnchorAttachment.clientRuntimePolicyActiveLookup;
+        Thread currentThread = Thread.currentThread();
+        String previousThreadName = currentThread.getName();
+        java.util.concurrent.atomic.AtomicInteger modernLookups =
+                new java.util.concurrent.atomic.AtomicInteger();
+        SlabAnchorAttachment.FROZEN_DY_ENABLED = false;
+        SlabAnchorAttachment.clientRuntimePolicyActiveLookup = pos -> true;
+        SlabAnchorAttachment.clientModernPlacementLookup = pos -> {
+            modernLookups.incrementAndGet();
+            return false;
+        };
+        try {
+            BlockView view = EmptyBlockView.INSTANCE;
+            BlockPos pos = BlockPos.ORIGIN;
+
+            currentThread.setName("Worker-Main-slabbed-keep-guard");
+            Blocks.STONE.getDefaultState().getCollisionShape(view, pos, ShapeContext.absent());
+            int unsafeIneligibleLookups = modernLookups.get();
+            Blocks.GRINDSTONE.getDefaultState().getCollisionShape(view, pos, ShapeContext.absent());
+            int unsafeEligibleLookups = modernLookups.get() - unsafeIneligibleLookups;
+
+            currentThread.setName(previousThreadName);
+            int normalBefore = modernLookups.get();
+            Blocks.GRINDSTONE.getDefaultState().getCollisionShape(view, pos, ShapeContext.absent());
+            int normalEligibleLookups = modernLookups.get() - normalBefore;
+
+            h.assertTrue(unsafeIneligibleLookups == 0
+                            && unsafeEligibleLookups == 0
+                            && normalEligibleLookups > 0,
+                    "collision guard routing regressed: unsafeIneligible=" + unsafeIneligibleLookups
+                            + " unsafeEligible=" + unsafeEligibleLookups
+                            + " normalEligible=" + normalEligibleLookups);
+        } finally {
+            currentThread.setName(previousThreadName);
+            SlabAnchorAttachment.FROZEN_DY_ENABLED = previousFrozen;
+            SlabAnchorAttachment.clientModernPlacementLookup = previousModernLookup;
+            SlabAnchorAttachment.clientRuntimePolicyActiveLookup = previousPolicyLookup;
+        }
+        pass(h, "keep_existing_collision_guard_skips_policy_lookups_on_unsafe_workers");
+    }
+
+    @GameTest(templateName = "fabric-gametest-api-v1:empty")
+    public void keepExistingRoutesOnlyPostDecisionPlacementsToFrozenHeight(TestContext h) {
+        ServerWorld world = h.getWorld();
+        boolean previousFrozen = SlabAnchorAttachment.FROZEN_DY_ENABLED;
+        var previousModernLookup = SlabAnchorAttachment.clientModernPlacementLookup;
+        var previousPolicyLookup = SlabAnchorAttachment.clientRuntimePolicyActiveLookup;
+        var previousPredictionLookup = SlabAnchorAttachment.clientPostPolicyPredictionLookup;
+        var previousEffectiveLookup = SlabAnchorAttachment.clientEffectivePlacementDyLookup;
+        SlabAnchorAttachment.FROZEN_DY_ENABLED = false;
+        try {
+            BlockPos legacy = h.getAbsolutePos(new BlockPos(2, 3, 2));
+            BlockPos modernOwner = legacy;
+            BlockPos modern = modernOwner.up();
+            BlockPos missingFact = h.getAbsolutePos(new BlockPos(10, 3, 10));
+            BlockPos predicted = h.getAbsolutePos(new BlockPos(12, 3, 12));
+
+            world.setBlockState(legacy.down(),
+                    Blocks.STONE_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.BOTTOM),
+                    Block.NOTIFY_LISTENERS);
+            world.setBlockState(legacy, Blocks.STONE.getDefaultState(), Block.NOTIFY_LISTENERS);
+            SlabAnchorAttachment.addAnchor(world, legacy, world.getBlockState(legacy));
+            SlabAnchorAttachment.writePlacementDyBatch(world,
+                    java.util.Map.of(legacy, Double.doubleToRawLongBits(-1.5d)));
+
+            WorldUpgradeRuntimePolicy.activate(world, WorldUpgradeDecision.Mode.KEEP_EXISTING);
+            ActionResult placed = useOn(h.createMockPlayer(GameMode.SURVIVAL),
+                    new ItemStack(Items.STONE), modernOwner, Direction.UP);
+
+            world.setBlockState(missingFact, Blocks.STONE.getDefaultState(), Block.NOTIFY_LISTENERS);
+            SlabAnchorAttachment.markPostPolicyPlacements(world, List.of(missingFact));
+            double missingBefore = SlabSupport.getYOffset(world, missingFact, world.getBlockState(missingFact));
+            world.setBlockState(missingFact.down(),
+                    Blocks.STONE_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.BOTTOM),
+                    Block.NOTIFY_LISTENERS);
+            double missingAfter = SlabSupport.getYOffset(world, missingFact, world.getBlockState(missingFact));
+
+            h.assertTrue(placed.isAccepted()
+                            && !SlabAnchorAttachment.isModernPlacement(world, legacy)
+                            && sameHeight(SlabAnchorAttachment.storedPlacementDy(world, legacy), -1.5d)
+                            && sameHeight(SlabSupport.getYOffset(world, legacy, world.getBlockState(legacy)), -0.5d)
+                            && SlabAnchorAttachment.isModernPlacement(world, modern)
+                            && SlabAnchorAttachment.rawPlacementDyFact(world, modern).present()
+                            && sameHeight(SlabSupport.getYOffset(world, modern, world.getBlockState(modern)), -0.5d)
+                            && SlabAnchorAttachment.isModernPlacement(world, missingFact)
+                            && !SlabAnchorAttachment.rawPlacementDyFact(world, missingFact).present()
+                            && sameHeight(missingBefore, 0.0d) && sameHeight(missingAfter, 0.0d),
+                    "KEEP routing failed: legacyVisible="
+                            + SlabSupport.getYOffset(world, legacy, world.getBlockState(legacy))
+                            + " modernVisible=" + SlabSupport.getYOffset(world, modern, world.getBlockState(modern))
+                            + " missing=" + missingBefore + " -> " + missingAfter);
+
+            WorldChunk chunk = world.getChunk(modern.getX() >> 4, modern.getZ() >> 4);
+            NbtCompound attachments = ChunkSerializer.serialize(world, chunk)
+                    .getCompound(AttachmentTarget.NBT_ATTACHMENT_KEY);
+            h.assertTrue(attachments.contains("slabbed:modern_placements"),
+                    "modern placement provenance was not persisted by the chunk serializer");
+
+            SlabAnchorAttachment.clientRuntimePolicyActiveLookup = pos -> true;
+            SlabAnchorAttachment.clientModernPlacementLookup = pos -> pos.equals(modern);
+            SlabAnchorAttachment.clientPostPolicyPredictionLookup = pos -> pos.equals(predicted);
+            SlabAnchorAttachment.clientEffectivePlacementDyLookup = pos -> pos.equals(predicted)
+                    ? new SlabAnchorAttachment.PlacementDyFact(true, Double.doubleToRawLongBits(-0.5d))
+                    : null;
+            h.assertTrue(SlabAnchorAttachment.usesFrozenPlacementHeight(null, modern)
+                            && SlabAnchorAttachment.usesFrozenPlacementHeight(null, predicted)
+                            && !SlabAnchorAttachment.usesFrozenPlacementHeight(null, legacy)
+                            && !SlabAnchorAttachment.usesFrozenPlacementHeight(world, predicted),
+                    "client bridge or server/client prediction separation selected the wrong route");
+        } finally {
+            WorldUpgradeRuntimePolicy.deactivate(world);
+            SlabAnchorAttachment.FROZEN_DY_ENABLED = previousFrozen;
+            SlabAnchorAttachment.clientModernPlacementLookup = previousModernLookup;
+            SlabAnchorAttachment.clientRuntimePolicyActiveLookup = previousPolicyLookup;
+            SlabAnchorAttachment.clientPostPolicyPredictionLookup = previousPredictionLookup;
+            SlabAnchorAttachment.clientEffectivePlacementDyLookup = previousEffectiveLookup;
+        }
+        pass(h, "keep_existing_routes_only_post_decision_placements");
+    }
+
+    @GameTest(templateName = "fabric-gametest-api-v1:empty", batchId = "slabbed_keep_physical_isolated")
+    public void keepExistingModernBlocksUseFrozenPhysicalShapes(TestContext h) {
+        ServerWorld world = h.getWorld();
+        boolean previousFrozen = SlabAnchorAttachment.FROZEN_DY_ENABLED;
+        SlabAnchorAttachment.FROZEN_DY_ENABLED = false;
+        try {
+            BlockPos legacyOwner = h.getAbsolutePos(new BlockPos(1, 1, 1));
+            assertAir(world, List.of(legacyOwner, legacyOwner.up()), "legacy fixture");
+            world.setBlockState(legacyOwner,
+                    Blocks.STONE_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.BOTTOM),
+                    Block.NOTIFY_ALL);
+            PlayerEntity player = h.createMockPlayer(GameMode.SURVIVAL);
+            player.setPosition(legacyOwner.getX() + 3.5d, legacyOwner.getY(), legacyOwner.getZ() + 0.5d);
+            ActionResult legacyResult = useOn(player, new ItemStack(Items.STONE), legacyOwner, Direction.UP);
+            BlockPos legacy = legacyOwner.up();
+            VoxelShape legacyCollisionBefore = world.getBlockState(legacy)
+                    .getCollisionShape(world, legacy, ShapeContext.absent());
+            VoxelShape legacyOutlineBefore = world.getBlockState(legacy)
+                    .getOutlineShape(world, legacy, ShapeContext.absent());
+
+            WorldUpgradeRuntimePolicy.activate(world, WorldUpgradeDecision.Mode.KEEP_EXISTING);
+
+            BlockPos deepOwner = h.getAbsolutePos(new BlockPos(3, 5, 3));
+            assertAirBox(world, deepOwner.add(-1, -3, -1), deepOwner.add(1, 1, 1),
+                    "deep placement and ray envelope");
+            world.setBlockState(deepOwner, Blocks.STONE.getDefaultState(), Block.NOTIFY_ALL);
+            SlabAnchorAttachment.writePlacementDyBatch(world,
+                    java.util.Map.of(deepOwner, Double.doubleToRawLongBits(-3.0d)));
+            SlabAnchorAttachment.markPostPolicyPlacements(world, List.of(deepOwner));
+            assertPhysicalShape(world, deepOwner, -3.0d, "modern deep owner");
+
+            double ownerVisibleTop = deepOwner.getY() - 2.0d;
+            Vec3d ownerRayStart = new Vec3d(
+                    deepOwner.getX() + 0.5d, ownerVisibleTop + 1.0d, deepOwner.getZ() + 0.5d);
+            Vec3d ownerRayEnd = new Vec3d(
+                    deepOwner.getX() + 0.5d, ownerVisibleTop - 0.5d, deepOwner.getZ() + 0.5d);
+            BlockHitResult ownerHit = SlabbedOffsetRaycast.raycast(
+                    world, ownerRayStart, ownerRayEnd, ShapeContext.absent());
+            BlockState hitState = world.getBlockState(ownerHit.getBlockPos());
+            h.assertTrue(ownerHit.getType() == HitResult.Type.BLOCK
+                            && ownerHit.getBlockPos().equals(deepOwner)
+                            && ownerHit.getSide() == Direction.UP,
+                    "deep owner visible-face ray failed: expectedOwner=" + deepOwner
+                            + " hitOwner=" + ownerHit.getBlockPos() + " hitFace=" + ownerHit.getSide()
+                            + " hitPos=" + ownerHit.getPos() + " hitState=" + hitState
+                            + " hitStored=" + stored(world, ownerHit.getBlockPos())
+                            + " hitModern=" + SlabAnchorAttachment.isModernPlacement(world, ownerHit.getBlockPos()));
+
+            BlockPos deep = deepOwner.up();
+            List<BlockPos> deepPlacementCells = placementObservationCells(deepOwner);
+            Map<BlockPos, PlacementObservation> deepBefore = observe(world, deepPlacementCells);
+            player.setPosition(deepOwner.getX() + 3.5d, deepOwner.getY() - 2.0d,
+                    deepOwner.getZ() + 0.5d);
+            ActionResult deepResult = useOn(player, new ItemStack(Items.STONE), ownerHit);
+            Map<BlockPos, PlacementObservation> deepAfter = observe(world, deepPlacementCells);
+            String deepDelta = describeChanges(deepBefore, deepAfter);
+            h.assertTrue(deepResult.isAccepted()
+                            && world.getBlockState(deep).isOf(Blocks.STONE)
+                            && SlabAnchorAttachment.isModernPlacement(world, deep)
+                            && SlabAnchorAttachment.rawPlacementDyFact(world, deep).present()
+                            && sameHeight(stored(world, deep), -3.0d)
+                            && onlyExpectedCellChanged(deepBefore, deepAfter, deep),
+                    "real deep placement failed: result=" + deepResult + " ownerHit=" + ownerHit.getBlockPos()
+                            + "/" + ownerHit.getSide() + " hitPos=" + ownerHit.getPos()
+                            + " expectedState=" + world.getBlockState(deep)
+                            + " expectedStored=" + stored(world, deep)
+                            + " expectedModern=" + SlabAnchorAttachment.isModernPlacement(world, deep)
+                            + " changes=" + deepDelta);
+
+            BlockPos flatOwner = h.getAbsolutePos(new BlockPos(5, 1, 5));
+            assertAir(world, List.of(flatOwner, flatOwner.up()), "flat control fixture");
+            world.setBlockState(flatOwner, Blocks.STONE.getDefaultState(), Block.NOTIFY_ALL);
+            player.setPosition(flatOwner.getX() - 2.5d,
+                    flatOwner.getY(),
+                    flatOwner.getZ() + 0.5d);
+            ActionResult flatResult = useOn(player, new ItemStack(Items.STONE), flatOwner, Direction.UP);
+            BlockPos flat = flatOwner.up();
+
+            h.assertTrue(legacyResult.isAccepted() && flatResult.isAccepted()
+                            && world.getBlockState(flat).isOf(Blocks.STONE)
+                            && SlabAnchorAttachment.isModernPlacement(world, flat),
+                    "real BlockItem control did not author the post-policy flat cell: legacy="
+                            + legacyResult + " flat=" + flatResult + " state=" + world.getBlockState(flat));
+
+            assertPhysicalShape(world, deep, -3.0d, "modern deep placement");
+            assertPhysicalShape(world, flat, 0.0d, "modern flat");
+            Vec3d placedRayStart = new Vec3d(
+                    deep.getX() - 1.0d, deep.getY() - 2.5d, deep.getZ() + 0.5d);
+            Vec3d placedRayEnd = new Vec3d(
+                    deep.getX() + 0.5d, deep.getY() - 2.5d, deep.getZ() + 0.5d);
+            BlockHitResult placedHit = SlabbedOffsetRaycast.raycast(
+                    world, placedRayStart, placedRayEnd, ShapeContext.absent());
+            h.assertTrue(placedHit.getType() == HitResult.Type.BLOCK
+                            && placedHit.getBlockPos().equals(deep)
+                            && placedHit.getSide() == Direction.WEST,
+                    "new deep placement visible-side ray failed: expectedOwner=" + deep
+                            + " hitOwner=" + placedHit.getBlockPos() + " hitFace=" + placedHit.getSide()
+                            + " hitPos=" + placedHit.getPos()
+                            + " hitState=" + world.getBlockState(placedHit.getBlockPos())
+                            + " hitStored=" + stored(world, placedHit.getBlockPos())
+                            + " hitModern=" + SlabAnchorAttachment.isModernPlacement(
+                                    world, placedHit.getBlockPos()));
+            VoxelShape expectedDeepWorldCollision = world.getBlockState(deep)
+                    .getCollisionShape(world, deep, ShapeContext.absent())
+                    .offset(deep.getX(), deep.getY(), deep.getZ());
+            Box deepQuery = new Box(deep.getX() + 0.1d, deep.getY() - 2.9d, deep.getZ() + 0.1d,
+                    deep.getX() + 0.9d, deep.getY() - 2.1d, deep.getZ() + 0.9d);
+            boolean foundDeepBody = false;
+            for (VoxelShape collision : world.getBlockCollisions(null, deepQuery)) {
+                if (!collision.isEmpty()
+                        && sameShape(collision, expectedDeepWorldCollision)
+                        && collision.getBoundingBox().intersects(deepQuery)) {
+                    foundDeepBody = true;
+                    break;
+                }
+            }
+            h.assertTrue(foundDeepBody,
+                    "modern deep placement's exact body was absent from the world collision query: expected="
+                            + expectedDeepWorldCollision.getBoundingBox() + " query=" + deepQuery);
+
+            VoxelShape legacyCollisionAfter = world.getBlockState(legacy)
+                    .getCollisionShape(world, legacy, ShapeContext.absent());
+            VoxelShape legacyOutlineAfter = world.getBlockState(legacy)
+                    .getOutlineShape(world, legacy, ShapeContext.absent());
+            h.assertTrue(legacyResult.isAccepted() && flatResult.isAccepted()
+                            && !SlabAnchorAttachment.isModernPlacement(world, legacy)
+                            && SlabAnchorAttachment.isModernPlacement(world, deep)
+                            && SlabAnchorAttachment.isModernPlacement(world, flat)
+                            && sameShape(legacyCollisionBefore, legacyCollisionAfter)
+                            && sameShape(legacyOutlineBefore, legacyOutlineAfter),
+                    "KEEP changed a pre-policy block or failed to mark real post-policy placements");
+            Slabbed.LOGGER.info(
+                    "KEEP_PHYSICAL_COMPONENTS | PLACED=PASS ANCHOR=PASS MODEL=NOT_RUN COLLISION=PASS "
+                            + "RAYCAST=PASS OUTLINE=PASS STABILITY=NOT_RUN LEGACY_PRESERVED=PASS "
+                            + "| deepChanges={}",
+                    deepDelta);
+        } finally {
+            WorldUpgradeRuntimePolicy.deactivate(world);
+            SlabAnchorAttachment.FROZEN_DY_ENABLED = previousFrozen;
+        }
+        pass(h, "keep_existing_modern_blocks_use_frozen_physical_shapes");
+    }
+
+    private static void assertPhysicalShape(ServerWorld world, BlockPos pos, double expectedDy, String label) {
+        BlockState state = world.getBlockState(pos);
+        VoxelShape collision = state.getCollisionShape(world, pos, ShapeContext.absent());
+        VoxelShape outline = state.getOutlineShape(world, pos, ShapeContext.absent());
+        if (collision.isEmpty() || outline.isEmpty()
+                || !sameHeight(collision.getBoundingBox().minY, expectedDy)
+                || !sameHeight(outline.getBoundingBox().minY, expectedDy)
+                || !sameShape(collision, outline)) {
+            throw new AssertionError(label + " shape mismatch: collision="
+                    + (collision.isEmpty() ? "empty" : collision.getBoundingBox())
+                    + " outline=" + (outline.isEmpty() ? "empty" : outline.getBoundingBox())
+                    + " stored=" + SlabAnchorAttachment.storedPlacementDy(world, pos)
+                    + " modern=" + SlabAnchorAttachment.isModernPlacement(world, pos));
+        }
+    }
+
+    private static boolean sameShape(VoxelShape left, VoxelShape right) {
+        return !VoxelShapes.matchesAnywhere(left, right, BooleanBiFunction.NOT_SAME);
+    }
+
     // ── helpers ─────────────────────────────────────────────────────────────────────────────
 
     static ActionResult useOn(PlayerEntity player, ItemStack stack, BlockPos clicked, Direction face) {
         player.setStackInHand(Hand.MAIN_HAND, stack);
         return stack.useOnBlock(new ItemUsageContext(player, Hand.MAIN_HAND, hit(clicked, face)));
+    }
+
+    static ActionResult useOn(PlayerEntity player, ItemStack stack, BlockHitResult hit) {
+        player.setStackInHand(Hand.MAIN_HAND, stack);
+        return stack.useOnBlock(new ItemUsageContext(player, Hand.MAIN_HAND, hit));
+    }
+
+    private record PlacementObservation(
+            BlockState state,
+            SlabAnchorAttachment.PlacementDyFact placementDy,
+            boolean modern
+    ) {
+    }
+
+    private static List<BlockPos> placementObservationCells(BlockPos owner) {
+        LinkedHashMap<BlockPos, Boolean> cells = new LinkedHashMap<>();
+        for (BlockPos center : List.of(owner, owner.up())) {
+            cells.put(center.toImmutable(), true);
+            for (Direction direction : Direction.values()) {
+                cells.put(center.offset(direction).toImmutable(), true);
+            }
+        }
+        return List.copyOf(cells.keySet());
+    }
+
+    private static Map<BlockPos, PlacementObservation> observe(ServerWorld world, List<BlockPos> cells) {
+        LinkedHashMap<BlockPos, PlacementObservation> observations = new LinkedHashMap<>();
+        for (BlockPos pos : cells) {
+            observations.put(pos, new PlacementObservation(
+                    world.getBlockState(pos), SlabAnchorAttachment.rawPlacementDyFact(world, pos),
+                    SlabAnchorAttachment.isModernPlacement(world, pos)));
+        }
+        return Map.copyOf(observations);
+    }
+
+    private static boolean onlyExpectedCellChanged(
+            Map<BlockPos, PlacementObservation> before,
+            Map<BlockPos, PlacementObservation> after,
+            BlockPos expected
+    ) {
+        for (BlockPos pos : before.keySet()) {
+            if (pos.equals(expected) == before.get(pos).equals(after.get(pos))) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private static String describeChanges(
+            Map<BlockPos, PlacementObservation> before,
+            Map<BlockPos, PlacementObservation> after
+    ) {
+        List<String> changes = new ArrayList<>();
+        for (BlockPos pos : before.keySet()) {
+            if (!before.get(pos).equals(after.get(pos))) {
+                changes.add(pos.toShortString() + ":" + before.get(pos) + "->" + after.get(pos));
+            }
+        }
+        return changes.toString();
+    }
+
+    private static void assertAir(ServerWorld world, List<BlockPos> cells, String label) {
+        for (BlockPos pos : cells) {
+            BlockState state = world.getBlockState(pos);
+            if (!state.isAir()) {
+                throw new AssertionError(label + " expected AIR at " + pos + " but found " + state);
+            }
+        }
+    }
+
+    private static void assertAirBox(ServerWorld world, BlockPos min, BlockPos max, String label) {
+        for (BlockPos pos : BlockPos.iterate(min, max)) {
+            BlockState state = world.getBlockState(pos);
+            if (!state.isAir()) {
+                throw new AssertionError(label + " expected AIR at " + pos + " but found " + state);
+            }
+        }
     }
 
     /** Test-only fixture: plant an exact raw value in the store without going through a placement. */
@@ -307,6 +688,11 @@ public final class PlacementCaptureBoundaryGameTest {
             count++;
         }
         return count;
+    }
+
+    private static boolean sameHeight(double actual, double expected) {
+        return Double.doubleToRawLongBits(actual == 0.0d ? 0.0d : actual)
+                == Double.doubleToRawLongBits(expected == 0.0d ? 0.0d : expected);
     }
 
     private static Path locateProjectRoot() throws IOException {

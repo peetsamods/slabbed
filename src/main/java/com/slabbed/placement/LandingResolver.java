@@ -3,6 +3,7 @@ package com.slabbed.placement;
 import com.slabbed.anchor.SlabAnchorAttachment;
 import com.slabbed.compat.CompatHooks;
 import com.slabbed.util.SlabSupport;
+import com.slabbed.upgrade.WorldUpgradeRuntimePolicy;
 import net.minecraft.block.BedBlock;
 import net.minecraft.block.BlockEntityProvider;
 import net.minecraft.block.BlockState;
@@ -268,9 +269,11 @@ public final class LandingResolver {
         if (ownerState == null || ownerState.isAir() || CompatHooks.shouldSkipOffset(ownerState)) {
             return 0.0;
         }
-        double stored = SlabAnchorAttachment.storedPlacementDy(world, ownerPos);
-        if (Double.isFinite(stored)) {
-            return stored;
+        if (!(world instanceof World w) || !WorldUpgradeRuntimePolicy.authorsModernPlacements(w)) {
+            double stored = SlabAnchorAttachment.storedPlacementDy(world, ownerPos);
+            if (Double.isFinite(stored)) {
+                return stored;
+            }
         }
         double live = SlabSupport.getYOffset(world, ownerPos, ownerState);
         return Double.isFinite(live) ? live : 0.0;

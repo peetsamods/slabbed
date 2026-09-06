@@ -3,6 +3,7 @@ package com.slabbed.client;
 import com.slabbed.Slabbed;
 import com.slabbed.anchor.SlabAnchorAttachment;
 import com.slabbed.util.SlabSupport;
+import com.slabbed.upgrade.WorldUpgradeRuntimePolicy;
 import it.unimi.dsi.fastutil.longs.Long2ByteOpenHashMap;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 import net.fabricmc.api.EnvType;
@@ -104,6 +105,20 @@ public final class SlabAnchorClientSync {
             LongOpenHashSet set = clientAttachmentSet(pos, SlabAnchorAttachment.COMPOUND_VISIBLE_OWNER_TOP_SLAB_TYPE);
             return set != null && set.contains(pos.asLong());
         };
+        SlabAnchorAttachment.clientModernPlacementLookup = pos -> {
+            LongOpenHashSet set = clientAttachmentSet(pos, SlabAnchorAttachment.MODERN_PLACEMENT_TYPE);
+            return set != null && set.contains(pos.asLong());
+        };
+        SlabAnchorAttachment.clientRuntimePolicyActiveLookup = pos -> {
+            MinecraftClient mc = MinecraftClient.getInstance();
+            return mc != null && WorldUpgradeRuntimePolicy.authorsModernPlacements(mc.world);
+        };
+        SlabAnchorAttachment.clientPostPolicyPredictionLookup = pos -> {
+            MinecraftClient mc = MinecraftClient.getInstance();
+            return mc != null && WorldUpgradeRuntimePolicy.authorsModernPlacements(mc.world)
+                    && SlabAnchorAttachment.clientEffectivePlacementDyLookup != null
+                    && SlabAnchorAttachment.clientEffectivePlacementDyLookup.lookup(pos) != null;
+        };
         // FROZEN-DY: same bridge for the placement-dy store — mesh threads read heights through
         // ChunkRendererRegion, which has no chunk-attachment handle. Without this, frozen-ON would
         // render every stored height flat while outline/raycast honour the store (triad split).
@@ -145,6 +160,8 @@ public final class SlabAnchorClientSync {
                 chunk.getAttached(SlabAnchorAttachment.COMPOUND_VISIBLE_SIDE_DOUBLE_SLAB_TYPE));
         logReloadJumpSync("chunkLoad", chunk, SlabAnchorAttachment.COMPOUND_VISIBLE_OWNER_TOP_SLAB_TYPE, null,
                 chunk.getAttached(SlabAnchorAttachment.COMPOUND_VISIBLE_OWNER_TOP_SLAB_TYPE));
+        logReloadJumpSync("chunkLoad", chunk, SlabAnchorAttachment.MODERN_PLACEMENT_TYPE, null,
+                chunk.getAttached(SlabAnchorAttachment.MODERN_PLACEMENT_TYPE));
 
         // Also handle any attachment value already present at chunk-load time.
         // This covers the case where the chunk attachment sync packet arrived before
@@ -158,6 +175,7 @@ public final class SlabAnchorClientSync {
         scheduleInitialRerenders(chunk, SlabAnchorAttachment.COMPOUND_VISIBLE_SIDE_UPPER_SLAB_TYPE);
         scheduleInitialRerenders(chunk, SlabAnchorAttachment.COMPOUND_VISIBLE_SIDE_DOUBLE_SLAB_TYPE);
         scheduleInitialRerenders(chunk, SlabAnchorAttachment.COMPOUND_VISIBLE_OWNER_TOP_SLAB_TYPE);
+        scheduleInitialRerenders(chunk, SlabAnchorAttachment.MODERN_PLACEMENT_TYPE);
 
         snapshotAttachment(chunk, SlabAnchorAttachment.ANCHOR_TYPE);
         snapshotAttachment(chunk, SlabAnchorAttachment.FROZEN_FLAT_TYPE);
@@ -167,6 +185,7 @@ public final class SlabAnchorClientSync {
         snapshotAttachment(chunk, SlabAnchorAttachment.COMPOUND_VISIBLE_SIDE_UPPER_SLAB_TYPE);
         snapshotAttachment(chunk, SlabAnchorAttachment.COMPOUND_VISIBLE_SIDE_DOUBLE_SLAB_TYPE);
         snapshotAttachment(chunk, SlabAnchorAttachment.COMPOUND_VISIBLE_OWNER_TOP_SLAB_TYPE);
+        snapshotAttachment(chunk, SlabAnchorAttachment.MODERN_PLACEMENT_TYPE);
 
         // FROZEN-DY: rerender stored-height cells already synced at chunk-load time, then
         // snapshot the dy map so the poll can catch later attachment syncs.
@@ -219,6 +238,7 @@ public final class SlabAnchorClientSync {
             pollAttachmentChange(mc, chunk, SlabAnchorAttachment.COMPOUND_VISIBLE_SIDE_UPPER_SLAB_TYPE);
             pollAttachmentChange(mc, chunk, SlabAnchorAttachment.COMPOUND_VISIBLE_SIDE_DOUBLE_SLAB_TYPE);
             pollAttachmentChange(mc, chunk, SlabAnchorAttachment.COMPOUND_VISIBLE_OWNER_TOP_SLAB_TYPE);
+            pollAttachmentChange(mc, chunk, SlabAnchorAttachment.MODERN_PLACEMENT_TYPE);
         }
     }
 
@@ -380,6 +400,9 @@ public final class SlabAnchorClientSync {
         }
         if (attachmentType == SlabAnchorAttachment.COMPOUND_VISIBLE_OWNER_TOP_SLAB_TYPE) {
             return "compoundVisibleOwnerTopSlab";
+        }
+        if (attachmentType == SlabAnchorAttachment.MODERN_PLACEMENT_TYPE) {
+            return "modernPlacement";
         }
         return "unknownAttachment";
     }

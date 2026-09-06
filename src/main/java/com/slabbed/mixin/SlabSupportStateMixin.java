@@ -74,8 +74,8 @@ public abstract class SlabSupportStateMixin {
 
     private VoxelShape slabbed$translateCollision(BlockView world, BlockPos pos,
                                                    java.util.function.Supplier<VoxelShape> original) {
-        if (!SlabAnchorAttachment.FROZEN_DY_ENABLED || slabbed$readingBaseCollision.get()
-                || slabbed$isUnsafeAsyncShapeContext()) {
+        if (slabbed$readingBaseCollision.get() || slabbed$isUnsafeAsyncShapeContext()
+                || !SlabAnchorAttachment.usesFrozenPlacementHeight(world, pos)) {
             return original.get();
         }
         double dy = SlabSupport.getYOffset(world, pos, (BlockState) (Object) this);
@@ -145,11 +145,12 @@ public abstract class SlabSupportStateMixin {
      * offset either, or the authoritative nearest-hit raycast (the activated
      * {@link com.slabbed.util.SlabbedOffsetRaycast}) would target a phantom outline
      * 0.5–1.0 below the rendered block. Mirrors the render zeroing exactly by reusing
-     * the same predicate, so outline and model can never disagree. State-only (pure
-     * {@code instanceof}); safe to call on async outline workers (no world/chunk read).
+     * the same predicate, so outline and model can never disagree. Callers must return from unsafe
+     * async shape workers first because the frozen-height selector reads world/chunk provenance.
      */
-    private static boolean slabbed$isRenderZeroedConnectionBlock(BlockState state) {
-        if (SlabAnchorAttachment.FROZEN_DY_ENABLED) {
+    private static boolean slabbed$isRenderZeroedConnectionBlock(
+            BlockView world, BlockPos pos, BlockState state) {
+        if (SlabAnchorAttachment.usesFrozenPlacementHeight(world, pos)) {
             return false;
         }
         Block block = state.getBlock();
@@ -359,7 +360,7 @@ public abstract class SlabSupportStateMixin {
 
         // Fence/wall/pane render un-lowered (see OffsetBlockStateModel.emitBlockQuads);
         // their raycast shape must match, so do not offset it. Mirrors the render path.
-        if (slabbed$isRenderZeroedConnectionBlock(self)) {
+        if (slabbed$isRenderZeroedConnectionBlock(world, pos, self)) {
             return;
         }
 
@@ -415,13 +416,16 @@ public abstract class SlabSupportStateMixin {
             at = @At("RETURN"), cancellable = true)
     private void slabbed$offsetOakFenceAndGrindstoneCollision(BlockView world, BlockPos pos, ShapeContext ctx,
                                                               CallbackInfoReturnable<VoxelShape> cir) {
-        if (SlabAnchorAttachment.FROZEN_DY_ENABLED) {
+        if (slabbed$isUnsafeAsyncShapeContext()) {
             return;
         }
         BlockState self = (BlockState) (Object) this;
         if (!SlabSupport.isBeta35FenceWallVariantContactObject(self)
                 && !SlabSupport.isBeta35FenceGateContactObject(self)
                 && !self.isOf(Blocks.GRINDSTONE)) {
+            return;
+        }
+        if (SlabAnchorAttachment.usesFrozenPlacementHeight(world, pos)) {
             return;
         }
         double yOff = SlabSupport.getYOffset(world, pos, self);
@@ -450,14 +454,14 @@ public abstract class SlabSupportStateMixin {
 
         // Avoid carpet recursion: carpets have their own outline mixin and should not be offset here.
         Block block = self.getBlock();
-        if (!SlabAnchorAttachment.FROZEN_DY_ENABLED
+        if (!SlabAnchorAttachment.usesFrozenPlacementHeight(world, pos)
                 && (block instanceof net.minecraft.block.CarpetBlock || isPaleMossCarpet(block))) {
             return;
         }
 
         // Fence/wall/pane render un-lowered; keep their outline un-offset to match
         // (else the authoritative nearest-hit raycast targets a phantom shape below).
-        if (slabbed$isRenderZeroedConnectionBlock(self)) {
+        if (slabbed$isRenderZeroedConnectionBlock(world, pos, self)) {
             return;
         }
 

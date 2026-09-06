@@ -19,7 +19,7 @@ public class CarpetDyShapeMixin {
     private void slabbed$offsetCarpetOutline(BlockState state, BlockView world, BlockPos pos, ShapeContext ctx,
                                              CallbackInfoReturnable<VoxelShape> cir) {
         // Stored outlines have one common owner on client and server (LAW.md).
-        if (com.slabbed.anchor.SlabAnchorAttachment.FROZEN_DY_ENABLED) {
+        if (com.slabbed.anchor.SlabAnchorAttachment.usesFrozenPlacementHeight(world, pos)) {
             return;
         }
         double dy = ClientDy.dyFor(world, pos, state);

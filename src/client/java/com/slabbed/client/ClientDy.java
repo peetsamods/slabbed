@@ -19,7 +19,7 @@ public final class ClientDy {
             return 0.0;
         }
 
-        if (com.slabbed.anchor.SlabAnchorAttachment.FROZEN_DY_ENABLED) {
+        if (com.slabbed.anchor.SlabAnchorAttachment.usesFrozenPlacementHeight(world, pos)) {
             return SlabSupport.getYOffset(world, pos, state);
         }
 
