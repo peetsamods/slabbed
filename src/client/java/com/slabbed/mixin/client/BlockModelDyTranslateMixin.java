@@ -4,6 +4,7 @@ import com.slabbed.client.ClientDy;
 import com.slabbed.client.model.ChainCeilingGeometry;
 import com.slabbed.client.runtime.PistonMovingRenderScope;
 import com.slabbed.util.RuntimeDiagnostics;
+import net.fabricmc.fabric.api.renderer.v1.model.FabricBakedModel;
 import net.minecraft.block.BlockState;
 import net.minecraft.client.render.VertexConsumer;
 import net.minecraft.client.render.block.BlockModelRenderer;
@@ -22,6 +23,10 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
  */
 @Mixin(BlockModelRenderer.class)
 public class BlockModelDyTranslateMixin {
+    private static boolean slabbed$fabricModelOwnsDy(BakedModel model) {
+        return model instanceof FabricBakedModel fabricModel && !fabricModel.isVanillaAdapter();
+    }
+
     private static void slabbed$recordTrace(
             String method,
             BlockRenderView world,
@@ -63,7 +68,7 @@ public class BlockModelDyTranslateMixin {
                                 CallbackInfo ci) {
         double dy = slabbed$modelDy(world, pos, state);
         slabbed$recordTrace("render", world, pos, state, dy);
-        if (dy == 0.0) {
+        if (slabbed$fabricModelOwnsDy(model) || dy == 0.0) {
             return;
         }
         matrices.push();
@@ -83,6 +88,9 @@ public class BlockModelDyTranslateMixin {
                                long seed,
                                int overlay,
                                CallbackInfo ci) {
+        if (slabbed$fabricModelOwnsDy(model)) {
+            return;
+        }
         double dy = slabbed$modelDy(world, pos, state);
         if (dy == 0.0) {
             return;

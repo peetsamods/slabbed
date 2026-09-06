@@ -85,6 +85,7 @@ public final class ExtendedDepthClientProbe implements ClientModInitializer {
     private static volatile boolean attachedReady;
     private static final List<AttachedEntityDepthProbe.Capture> attachedFlat = new ArrayList<>();
     private static final List<PistonMovingRenderAudit.Snapshot> movingFlat = new ArrayList<>();
+    private static PistonMovingRenderAudit.ModelSnapshot directModelFlat;
     private static boolean breakStarted;
     private static int breakTick;
     private static Phase phase = Phase.BOOTSTRAP;
@@ -635,6 +636,40 @@ public final class ExtendedDepthClientProbe implements ClientModInitializer {
                 if (!fact.present() || !same(fact.valueOrNaN(), expected)) return;
                 if (pistonsOnly()
                         && SlabAnchorAttachment.isModernPlacement(client.world, pos) != (index < 4)) return;
+            }
+        }
+        BlockPos directPos = frame.south(6);
+        BlockState directState = client.world.getBlockState(directPos);
+        var directModel = PistonMovingRenderAudit.renderModelAndSnapshot(client, directPos, directState);
+        append("DIRECT_BLOCK_MODEL\tdy=" + expected
+                + "\tselectedDyBefore=" + directModel.selectedDyBefore()
+                + "\tselectedDyAfter=" + directModel.selectedDyAfter()
+                + "\tsuppressedBefore=" + directModel.suppressedBefore()
+                + "\tsuppressedAfter=" + directModel.suppressedAfter()
+                + "\tfabricModel=" + directModel.fabricModel()
+                + "\tvanillaAdapter=" + directModel.vanillaAdapter()
+                + "\trenderBalanced=" + directModel.renderBalanced()
+                + "\tsmoothBalanced=" + directModel.smoothBalanced()
+                + "\tflatBalanced=" + directModel.flatBalanced()
+                + "\tearlyHookBalanced=" + directModel.earlyHookBalanced()
+                + "\tearlyRenderBalanced=" + directModel.earlyRenderBalanced()
+                + "\trenderVertices=" + directModel.vertexCount()
+                + "\trenderY=" + directModel.minY() + ".." + directModel.maxY()
+                + "\tsmoothVertices=" + directModel.smoothVertexCount()
+                + "\tsmoothY=" + directModel.smoothMinY() + ".." + directModel.smoothMaxY()
+                + "\tflatVertices=" + directModel.flatVertexCount()
+                + "\tflatY=" + directModel.flatMinY() + ".." + directModel.flatMaxY()
+                + "\tearlyVertices=" + directModel.earlyVertexCount()
+                + "\tearlyY=" + directModel.earlyMinY() + ".." + directModel.earlyMaxY());
+        if (attachedStage == 1) {
+            directModelFlat = directModel;
+        } else {
+            try {
+                PistonMovingRenderAudit.assertDirectModelDepthDelta(directModelFlat, directModel, -3.0d);
+                greenRows++;
+            } catch (AssertionError failure) {
+                redRows++;
+                append("DIRECT_BLOCK_MODEL_RED\t" + failure.getMessage());
             }
         }
         if (!pistonsOnly()) {
