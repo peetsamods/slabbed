@@ -22,6 +22,7 @@ import net.minecraft.item.ItemStack;
 import net.minecraft.item.ItemUsageContext;
 import net.minecraft.item.Items;
 import net.minecraft.nbt.NbtCompound;
+import net.minecraft.server.world.ChunkTicketType;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.test.AfterBatch;
 import net.minecraft.test.BeforeBatch;
@@ -43,6 +44,7 @@ import net.minecraft.world.RaycastContext;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicLong;
 
 /** Physical-behavior proof for the attached entity consumers already supported by Slabbed. */
 public final class ExtendedDepthEntityBehaviorTest {
@@ -52,6 +54,9 @@ public final class ExtendedDepthEntityBehaviorTest {
     private static final String BOAT_BATCH = "slabbed_extended_depth_boats";
     private static final String ARMOR_STAND_BATCH = "slabbed_extended_depth_armor_stands";
     private static final String RAIL_BATCH = "slabbed_rail_coordinates";
+    private static final ChunkTicketType<Long> ENTITY_TEST_TICKET =
+            ChunkTicketType.create("slabbed_gametest_entity_ticking", Long::compareTo);
+    private static final AtomicLong ENTITY_TICKET_IDS = new AtomicLong();
     private static boolean frozenBeforeBatch;
     private static boolean frozenBeforeBoatBatch;
     private static boolean frozenBeforeArmorStandBatch;
@@ -147,7 +152,7 @@ public final class ExtendedDepthEntityBehaviorTest {
         AbstractMinecartEntity deep = placeMinecart(world, player, deepRail, "deep minecart");
         ArmorStandEntity flatPassenger = passenger(world, flat);
         ArmorStandEntity deepPassenger = passenger(world, deep);
-        List<ChunkPos> taskForcedChunks = forceEntityTickingChunks(
+        List<EntityTickingTicket> taskForcedChunks = forceEntityTickingChunks(
                 world, flatRail, flatRail.east(6), deepRail, deepRail.east(6));
         double[] flatStartX = {Double.NaN};
         double[] deepStartX = {Double.NaN};
@@ -256,7 +261,7 @@ public final class ExtendedDepthEntityBehaviorTest {
         BoatPair chest = placeBoatPair(
                 context, world, player, origin.east(8), Items.OAK_CHEST_BOAT, true, "oak chest boat");
         if (chest == null) return;
-        List<ChunkPos> taskForcedChunks = forceEntityTickingChunks(
+        List<EntityTickingTicket> taskForcedChunks = forceEntityTickingChunks(
                 world, regular.flatSupport(), regular.deepSupport(), chest.flatSupport(), chest.deepSupport());
 
         inspectSurfaceEntityPair(regular.flatSupport(), regular.deepSupport(),
@@ -378,7 +383,7 @@ public final class ExtendedDepthEntityBehaviorTest {
                 context, world, player, deepSlabSupport, DEEP_DY,
                 Blocks.STONE_SLAB.getDefaultState(), "deep slab armor stand");
         if (deepSlab == null) return;
-        List<ChunkPos> taskForcedChunks = forceEntityTickingChunks(
+        List<EntityTickingTicket> taskForcedChunks = forceEntityTickingChunks(
                 world, flatSupport, deepSupport, flatSlabSupport, deepSlabSupport);
 
         inspectSurfaceEntityPair(flatSupport, deepSupport, flat, deep, "armor stand initial", failures);
@@ -473,7 +478,7 @@ public final class ExtendedDepthEntityBehaviorTest {
             context.throwGameTestException(failures.getFirst());
         }
         railShape(world, deepRail, RailShape.EAST_WEST, DEEP_DY);
-        List<ChunkPos> taskForcedChunks = forceEntityTickingChunks(world, deepRail, deepRail.south(4));
+        List<EntityTickingTicket> taskForcedChunks = forceEntityTickingChunks(world, deepRail, deepRail.south(4));
         MinecartEntity cart = new MinecartEntity(world, deepRail.getX() + 0.5d,
                 deepRail.getY() + DEEP_DY + 0.0625d, deepRail.getZ() + 4.5d);
         cart.setNoGravity(true);
@@ -544,26 +549,31 @@ public final class ExtendedDepthEntityBehaviorTest {
         });
     }
 
-    private static List<ChunkPos> forceEntityTickingChunks(ServerWorld world, BlockPos... positions) {
-        List<ChunkPos> added = new ArrayList<>();
+    private static List<EntityTickingTicket> forceEntityTickingChunks(ServerWorld world, BlockPos... positions) {
+        List<EntityTickingTicket> added = new ArrayList<>();
         for (BlockPos position : positions) {
             ChunkPos chunk = new ChunkPos(position);
-            if (world.getForcedChunks().contains(chunk.toLong()) || added.contains(chunk)) continue;
-            if (world.setChunkForced(chunk.x, chunk.z, true)) added.add(chunk);
+            if (added.stream().anyMatch(ticket -> ticket.chunk().equals(chunk))) continue;
+            long id = ENTITY_TICKET_IDS.incrementAndGet();
+            world.getChunkManager().addTicket(ENTITY_TEST_TICKET, chunk, 2, id);
+            added.add(new EntityTickingTicket(chunk, id));
         }
         return added;
     }
 
-    private static void releaseEntityTickingChunks(ServerWorld world, List<ChunkPos> chunks) {
-        for (ChunkPos chunk : chunks) {
-            world.setChunkForced(chunk.x, chunk.z, false);
+    private static void releaseEntityTickingChunks(ServerWorld world, List<EntityTickingTicket> chunks) {
+        for (EntityTickingTicket ticket : chunks) {
+            world.getChunkManager().removeTicket(ENTITY_TEST_TICKET, ticket.chunk(), 2, ticket.id());
         }
+    }
+
+    private record EntityTickingTicket(ChunkPos chunk, long id) {
     }
 
     private static void runAfterEntityTicking(
             TestContext context,
             ServerWorld world,
-            List<ChunkPos> taskForcedChunks,
+            List<EntityTickingTicket> taskForcedChunks,
             String label,
             int activeTicks,
             Runnable action,
