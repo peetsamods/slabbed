@@ -1,7 +1,5 @@
 package com.slabbed.client.runtime;
 
-import com.slabbed.anchor.SlabAnchorAttachment;
-
 /** Marks nested pushed-block rendering whose destination dy is already owned by the dispatcher. */
 public final class PistonMovingRenderScope {
     private static final ThreadLocal<Integer> DEPTH = ThreadLocal.withInitial(() -> 0);
@@ -23,6 +21,6 @@ public final class PistonMovingRenderScope {
     }
 
     public static boolean suppressNestedDy() {
-        return SlabAnchorAttachment.FROZEN_DY_ENABLED && DEPTH.get() > 0;
+        return DEPTH.get() > 0;
     }
 }
