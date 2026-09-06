@@ -221,7 +221,7 @@ public final class OffsetBlockStateModel extends ForwardingBakedModel {
             sourceDy = (float) SlabSupport.getYOffset(view, pos, state);
             dySourcePath = "fabricEmitBlockQuads:SlabSupport";
             dy = sourceDy;
-            if (dy != 0.0f && !com.slabbed.anchor.SlabAnchorAttachment.FROZEN_DY_ENABLED) {
+            if (dy != 0.0f && !com.slabbed.anchor.SlabAnchorAttachment.usesFrozenPlacementHeight(view, pos)) {
                 // Prevent visual connection offsets for fences/walls/panes,
                 // except for the explicitly proven Beta 3.5 fence/wall variants.
                 if (state.getBlock() instanceof FenceBlock || state.getBlock() instanceof WallBlock || state.getBlock() instanceof PaneBlock) {

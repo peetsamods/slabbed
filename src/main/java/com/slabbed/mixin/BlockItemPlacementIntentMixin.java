@@ -12,6 +12,7 @@ import com.slabbed.placement.ConnectorPlacementSettle;
 import com.slabbed.placement.LandingResolver;
 import com.slabbed.util.SlabSupport;
 import com.slabbed.util.RuntimeDiagnostics;
+import com.slabbed.upgrade.WorldUpgradeRuntimePolicy;
 import net.minecraft.block.BedBlock;
 import net.minecraft.block.BlockEntityProvider;
 import net.minecraft.block.Blocks;
@@ -429,6 +430,11 @@ public abstract class BlockItemPlacementIntentMixin {
             return;
         }
         SlabAnchorAttachment.writePlacementDyBatch(world, frame.pending.rawBitsByPos());
+        if (WorldUpgradeRuntimePolicy.authorsModernPlacements(world)) {
+            // Ordered, not atomic: the value is published first, then provenance. Client prediction
+            // remains authoritative until both synchronized attachments agree.
+            SlabAnchorAttachment.markPostPolicyPlacements(world, frame.pending.rawBitsByPos().keySet());
+        }
         // The published fact is only now visible to reads. Connector arms (fence/wall/pane) were
         // already decided earlier in this same place() call — at getPlacementState and at the
         // setBlockState-driven neighbour shape update — while this cell still had no fact and read the

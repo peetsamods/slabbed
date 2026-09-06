@@ -9,6 +9,7 @@ import com.mojang.serialization.codecs.RecordCodecBuilder;
 import com.slabbed.Slabbed;
 import com.slabbed.util.SlabSupport;
 import com.slabbed.util.RuntimeDiagnostics;
+import com.slabbed.upgrade.WorldUpgradeRuntimePolicy;
 import it.unimi.dsi.fastutil.longs.Long2ByteOpenHashMap;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 import net.fabricmc.fabric.api.attachment.v1.AttachmentRegistry;
@@ -76,6 +77,9 @@ public final class SlabAnchorAttachment {
     public static Predicate<BlockPos> clientCompoundVisibleSideUpperSlabLookup = null;
     public static Predicate<BlockPos> clientCompoundVisibleSideDoubleSlabLookup = null;
     public static Predicate<BlockPos> clientCompoundVisibleOwnerTopSlabLookup = null;
+    public static Predicate<BlockPos> clientModernPlacementLookup = null;
+    public static Predicate<BlockPos> clientRuntimePolicyActiveLookup = null;
+    public static Predicate<BlockPos> clientPostPolicyPredictionLookup = null;
 
     /**
      * Client-side fallback for placement-dy reads issued by chunk render paths that receive a
@@ -118,6 +122,7 @@ public final class SlabAnchorAttachment {
     private static final Identifier COMPOUND_VISIBLE_OWNER_TOP_SLAB_ID =
             Identifier.of(Slabbed.MOD_ID, "compound_visible_owner_top_slabs");
     private static final Identifier PLACEMENT_DY_ID = Identifier.of(Slabbed.MOD_ID, "placement_dy");
+    private static final Identifier MODERN_PLACEMENT_ID = Identifier.of(Slabbed.MOD_ID, "modern_placements");
 
     /**
      * Codec for the anchor set.  Backed by {@code long[]} so the NBT representation is
@@ -213,6 +218,11 @@ public final class SlabAnchorAttachment {
             );
     public static final AttachmentType<LongOpenHashSet> COMPOUND_VISIBLE_OWNER_TOP_SLAB_TYPE =
             AttachmentRegistry.<LongOpenHashSet>create(COMPOUND_VISIBLE_OWNER_TOP_SLAB_ID, builder -> builder
+                    .persistent(SET_CODEC)
+                    .syncWith(PACKET_CODEC, AttachmentSyncPredicate.all())
+            );
+    public static final AttachmentType<LongOpenHashSet> MODERN_PLACEMENT_TYPE =
+            AttachmentRegistry.<LongOpenHashSet>create(MODERN_PLACEMENT_ID, builder -> builder
                     .persistent(SET_CODEC)
                     .syncWith(PACKET_CODEC, AttachmentSyncPredicate.all())
             );
@@ -515,6 +525,55 @@ public final class SlabAnchorAttachment {
         return rawPlacementDyFact(world, pos).valueOrNaN();
     }
 
+    /** True only for a cell placed after an explicit upgrade policy became active. */
+    public static boolean isModernPlacement(BlockView world, BlockPos pos) {
+        if (pos == null) {
+            return false;
+        }
+        if (!(world instanceof World w)) {
+            return clientModernPlacementLookup != null && clientModernPlacementLookup.test(pos);
+        }
+        WorldChunk chunk = w.getChunk(pos.getX() >> 4, pos.getZ() >> 4);
+        LongOpenHashSet set = chunk == null ? null : chunk.getAttached(MODERN_PLACEMENT_TYPE);
+        return set != null && set.contains(pos.asLong());
+    }
+
+    /** Selects the frozen reader for a proven modern cell, including a policy-gated prediction. */
+    public static boolean usesFrozenPlacementHeight(BlockView world, BlockPos pos) {
+        boolean policyActive = world instanceof World w
+                ? WorldUpgradeRuntimePolicy.authorsModernPlacements(w)
+                : clientRuntimePolicyActiveLookup != null && clientRuntimePolicyActiveLookup.test(pos);
+        if (!policyActive) {
+            return FROZEN_DY_ENABLED;
+        }
+        if (isModernPlacement(world, pos)) {
+            return true;
+        }
+        // A server never consults the integrated client's prediction overlay. Only the client World
+        // or its render-region bridge may select the modern path before provenance sync arrives.
+        if (world instanceof World w && !w.isClient()) {
+            return false;
+        }
+        return clientPostPolicyPredictionLookup != null && clientPostPolicyPredictionLookup.test(pos)
+                && clientEffectivePlacementDyLookup != null
+                && clientEffectivePlacementDyLookup.lookup(pos) != null;
+    }
+
+    /** Marks accepted placement cells after the world's explicit upgrade policy is active. */
+    public static int markPostPolicyPlacements(World world, Iterable<BlockPos> positions) {
+        if (world == null || world.isClient() || positions == null
+                || !WorldUpgradeRuntimePolicy.authorsModernPlacements(world)) {
+            return 0;
+        }
+        int writes = 0;
+        for (BlockPos pos : positions) {
+            if (pos != null && addToAttachment(world, pos, MODERN_PLACEMENT_TYPE, "modern_placement")) {
+                writes++;
+            }
+        }
+        return writes;
+    }
+
     /**
      * Direct authoritative backing read. A non-{@link World} view (a client render region) has no
      * chunk handle, so it resolves through {@link #clientPlacementDyLookup} — the same client-world
@@ -560,6 +619,7 @@ public final class SlabAnchorAttachment {
                 || COMPOUND_VISIBLE_SIDE_UPPER_SLAB_TYPE == null
                 || COMPOUND_VISIBLE_SIDE_DOUBLE_SLAB_TYPE == null
                 || COMPOUND_VISIBLE_OWNER_TOP_SLAB_TYPE == null
+                || MODERN_PLACEMENT_TYPE == null
                 || PLACEMENT_DY_TYPE == null) {
             throw new IllegalStateException("SlabAnchorAttachment failed to register");
         }
@@ -894,6 +954,7 @@ public final class SlabAnchorAttachment {
                 "compound_visible_side_double_slab");
         removeFromAttachment(world, pos, COMPOUND_VISIBLE_OWNER_TOP_SLAB_TYPE,
                 "compound_visible_owner_top_slab");
+        removeFromAttachment(world, pos, MODERN_PLACEMENT_TYPE, "modern_placement");
         // FROZEN-DY: the stored placement height dies with the block, so a fresh placement in the same
         // cell captures its own aim from scratch. Copy-on-write, exactly like the writer.
         if (world != null && !world.isClient()) {

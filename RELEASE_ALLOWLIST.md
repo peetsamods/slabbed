@@ -118,6 +118,7 @@ exclusion can leave a manifest advertising a class the archive no longer has. Th
 | Entry | Reason |
 | --- | --- |
 | `com/slabbed/upgrade/WorldUpgradeDecision` | Immutable, versioned representation of one saved world's mode and backup disposition. On this line only its `Mode` enum is consumed by the placement provenance policy; it performs no file, world or network access and nothing here reads or writes a decision record. |
+| `com/slabbed/upgrade/WorldUpgradeRuntimePolicy` | Loader-owned activation seam for an already-recorded world-upgrade mode. It only controls whether accepted placements receive modern provenance; it does not load worlds or import existing cells. |
 
 ### Main mixins (class-level; `com/slabbed/mixin/` is a mixed package)
 

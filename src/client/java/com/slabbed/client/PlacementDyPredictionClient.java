@@ -2,6 +2,7 @@ package com.slabbed.client;
 
 import com.slabbed.anchor.PlacementDyOverlay;
 import com.slabbed.anchor.SlabAnchorAttachment;
+import com.slabbed.upgrade.WorldUpgradeRuntimePolicy;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientChunkEvents;
@@ -76,7 +77,13 @@ public final class PlacementDyPredictionClient {
         if (mc == null || mc.world == null) {
             return SlabAnchorAttachment.PlacementDyFact.absent();
         }
-        return SlabAnchorAttachment.rawPlacementDyFact(mc.world, BlockPos.fromLong(packedPos));
+        BlockPos pos = BlockPos.fromLong(packedPos);
+        SlabAnchorAttachment.PlacementDyFact fact = SlabAnchorAttachment.rawPlacementDyFact(mc.world, pos);
+        if (!WorldUpgradeRuntimePolicy.authorsModernPlacements(mc.world)) {
+            return fact;
+        }
+        return SlabAnchorAttachment.isModernPlacement(mc.world, pos) && fact.present()
+                ? fact : SlabAnchorAttachment.PlacementDyFact.absent();
     }
 
     /**
