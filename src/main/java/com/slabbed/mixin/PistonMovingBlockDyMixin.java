@@ -23,8 +23,16 @@ public abstract class PistonMovingBlockDyMixin {
             SLABBED$TICK_FACTS = ThreadLocal.withInitial(ArrayDeque::new);
 
     @Unique
+    private static final ThreadLocal<ArrayDeque<Boolean>> SLABBED$TICK_MODERN =
+            ThreadLocal.withInitial(ArrayDeque::new);
+
+    @Unique
     private static final ThreadLocal<ArrayDeque<SlabAnchorAttachment.PlacementDyFact>>
             SLABBED$FINISH_FACTS = ThreadLocal.withInitial(ArrayDeque::new);
+
+    @Unique
+    private static final ThreadLocal<ArrayDeque<Boolean>> SLABBED$FINISH_MODERN =
+            ThreadLocal.withInitial(ArrayDeque::new);
 
     @Inject(method = "tick", at = @At("HEAD"))
     private static void slabbed$captureTickFact(
@@ -34,7 +42,7 @@ public abstract class PistonMovingBlockDyMixin {
             PistonBlockEntity blockEntity,
             CallbackInfo ci
     ) {
-        SLABBED$TICK_FACTS.get().push(slabbed$fact(world, pos));
+        slabbed$capture(world, pos, SLABBED$TICK_FACTS, SLABBED$TICK_MODERN);
     }
 
     @Inject(method = "tick", at = @At("RETURN"))
@@ -45,33 +53,46 @@ public abstract class PistonMovingBlockDyMixin {
             PistonBlockEntity blockEntity,
             CallbackInfo ci
     ) {
-        slabbed$restore(world, pos, SLABBED$TICK_FACTS);
+        slabbed$restore(world, pos, SLABBED$TICK_FACTS, SLABBED$TICK_MODERN);
     }
 
     @Inject(method = "finish", at = @At("HEAD"))
     private void slabbed$captureFinishFact(CallbackInfo ci) {
         PistonBlockEntity self = (PistonBlockEntity) (Object) this;
-        SLABBED$FINISH_FACTS.get().push(slabbed$fact(self.getWorld(), self.getPos()));
+        slabbed$capture(
+                self.getWorld(), self.getPos(), SLABBED$FINISH_FACTS, SLABBED$FINISH_MODERN);
     }
 
     @Inject(method = "finish", at = @At("RETURN"))
     private void slabbed$restoreFinishFact(CallbackInfo ci) {
         PistonBlockEntity self = (PistonBlockEntity) (Object) this;
-        slabbed$restore(self.getWorld(), self.getPos(), SLABBED$FINISH_FACTS);
+        slabbed$restore(
+                self.getWorld(), self.getPos(), SLABBED$FINISH_FACTS, SLABBED$FINISH_MODERN);
     }
 
     @Unique
-    private static SlabAnchorAttachment.PlacementDyFact slabbed$fact(World world, BlockPos pos) {
-        return world != null && !world.isClient() && SlabAnchorAttachment.FROZEN_DY_ENABLED
+    private static void slabbed$capture(
+            World world,
+            BlockPos pos,
+            ThreadLocal<ArrayDeque<SlabAnchorAttachment.PlacementDyFact>> facts,
+            ThreadLocal<ArrayDeque<Boolean>> modernMarkers
+    ) {
+        boolean carriesPlacement = world != null
+                && !world.isClient()
+                && SlabAnchorAttachment.usesFrozenPlacementHeight(world, pos);
+        facts.get().push(carriesPlacement
                 ? SlabAnchorAttachment.rawPlacementDyFact(world, pos)
-                : SlabAnchorAttachment.PlacementDyFact.absent();
+                : SlabAnchorAttachment.PlacementDyFact.absent());
+        modernMarkers.get().push(
+                carriesPlacement && SlabAnchorAttachment.isModernPlacement(world, pos));
     }
 
     @Unique
     private static void slabbed$restore(
             World world,
             BlockPos pos,
-            ThreadLocal<ArrayDeque<SlabAnchorAttachment.PlacementDyFact>> facts
+            ThreadLocal<ArrayDeque<SlabAnchorAttachment.PlacementDyFact>> facts,
+            ThreadLocal<ArrayDeque<Boolean>> modernMarkers
     ) {
         ArrayDeque<SlabAnchorAttachment.PlacementDyFact> stack = facts.get();
         SlabAnchorAttachment.PlacementDyFact fact = stack.isEmpty()
@@ -80,9 +101,20 @@ public abstract class PistonMovingBlockDyMixin {
         if (stack.isEmpty()) {
             facts.remove();
         }
-        if (world != null && fact.present() && !world.getBlockState(pos).isAir()) {
-            SlabAnchorAttachment.writePlacementDyBatch(
-                    world, Map.of(pos.toImmutable(), fact.rawBits()));
+        ArrayDeque<Boolean> modernStack = modernMarkers.get();
+        boolean modern = !modernStack.isEmpty() && modernStack.pop();
+        if (modernStack.isEmpty()) {
+            modernMarkers.remove();
+        }
+        if (world != null && !world.getBlockState(pos).isAir()) {
+            if (fact.present()) {
+                SlabAnchorAttachment.writePlacementDyBatch(
+                        world, Map.of(pos.toImmutable(), fact.rawBits()));
+            }
+            if (modern) {
+                SlabAnchorAttachment.restoreTransferredModernPlacements(
+                        world, java.util.Set.of(pos.toImmutable()));
+            }
         }
     }
 }
