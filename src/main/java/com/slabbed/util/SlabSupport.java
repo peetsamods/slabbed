@@ -225,17 +225,17 @@ public final class SlabSupport {
 
     /**
      * Selects the elongated 0..24 chain geometry that bridges the half-block underside of a flat
-     * TOP slab. With frozen placement heights, both the TOP support's visible dy and the chain's
-     * stored dy must be exactly zero; lowered TOP slabs and DOUBLE slabs already meet a normal
-     * translated chain at their underside and must keep the standard model. The legacy live-height
-     * mode retains its existing top/double support rule.
+     * TOP slab. For a chain cell with a stored placement height, both the TOP support's visible dy
+     * and the chain's stored dy must be exactly zero; lowered TOP slabs and DOUBLE slabs already meet
+     * a normal translated chain at their underside and must keep the standard model. A legacy chain
+     * cell retains the existing top/double support rule.
      */
     public static boolean isVerticalChainDirectlyUnderCeilingSupport(
             BlockView world, BlockPos pos, BlockState state) {
         if (world == null || pos == null || !isBeta35VerticalChainVisibleOwnerObject(state)) {
             return false;
         }
-        if (!SlabAnchorAttachment.FROZEN_DY_ENABLED) {
+        if (!SlabAnchorAttachment.usesFrozenPlacementHeight(world, pos)) {
             return isCeilingSupportBottomSurface(world, pos.up());
         }
 

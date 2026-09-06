@@ -15,7 +15,7 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
-/** Keeps minecart rendering at the frozen height of its direct or one-cell-below rail owner. */
+/** Retains the legacy minecart render offset; a cart on a modern rail is positioned physically. */
 @Mixin(MinecartEntityRenderer.class)
 public abstract class MinecartRenderOffsetMixin {
 
@@ -28,9 +28,6 @@ public abstract class MinecartRenderOffsetMixin {
                                               VertexConsumerProvider vertexConsumers,
                                               int light,
                                               CallbackInfo ci) {
-        if (SlabAnchorAttachment.FROZEN_DY_ENABLED) {
-            return;
-        }
         World world = entity.getEntityWorld();
         if (world == null) {
             return;
@@ -40,6 +37,10 @@ public abstract class MinecartRenderOffsetMixin {
         BlockState blockState = world.getBlockState(pos);
 
         if (!(blockState.getBlock() instanceof AbstractRailBlock)) {
+            return;
+        }
+        // A cart on a rail with modern provenance is positioned physically (MinecartPhysicalOffsetMixin).
+        if (SlabAnchorAttachment.usesFrozenPlacementHeight(world, pos)) {
             return;
         }
 

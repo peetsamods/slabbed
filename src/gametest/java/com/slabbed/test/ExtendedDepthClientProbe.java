@@ -299,6 +299,9 @@ public final class ExtendedDepthClientProbe implements ClientModInitializer {
                 }
             }
             SlabAnchorAttachment.writePlacementDyBatch(world, facts);
+            // Fixture cells carry the provenance an item placement would have written, so the probe
+            // exercises the shipped per-cell mode rather than the whole-world override.
+            SlabAnchorAttachment.markPostPolicyPlacements(world, facts.keySet());
             world.getChunkManager().markForUpdate(support);
             fixtureReady = true;
         });
@@ -592,6 +595,7 @@ public final class ExtendedDepthClientProbe implements ClientModInitializer {
                             net.minecraft.block.enums.RailShape.ASCENDING_EAST), Block.NOTIFY_ALL);
                     SlabAnchorAttachment.writePlacementDyBatch(world, Map.of(frame, Double.doubleToRawLongBits(dy),
                             rail, Double.doubleToRawLongBits(dy), slope, Double.doubleToRawLongBits(dy)));
+                    SlabAnchorAttachment.markPostPolicyPlacements(world, java.util.List.of(frame, rail, slope));
                     AttachedEntityDepthProbe.prepareFrames(world, frame, dy);
                     AttachedEntityDepthProbe.prepareCarts(world, rail, slope);
                 }
@@ -604,7 +608,9 @@ public final class ExtendedDepthClientProbe implements ClientModInitializer {
                             .with(PistonExtensionBlock.FACING, direction), Block.NOTIFY_ALL);
                     SlabAnchorAttachment.writePlacementDyBatch(world, Map.of(source, Double.doubleToRawLongBits(dy),
                             destination, Double.doubleToRawLongBits(dy)));
-                    if (pistonsOnly() && index < 4) {
+                    // The first four moving cases carry the provenance an item placement would have
+                    // written; the pistons-only fifth case stays unmarked as the legacy control.
+                    if (index < 4) {
                         SlabAnchorAttachment.markPostPolicyPlacements(world, List.of(source, destination));
                     }
                 }
@@ -637,8 +643,7 @@ public final class ExtendedDepthClientProbe implements ClientModInitializer {
             for (BlockPos pos : List.of(source, destination)) {
                 var fact = SlabAnchorAttachment.rawPlacementDyFact(client.world, pos);
                 if (!fact.present() || !same(fact.valueOrNaN(), expected)) return;
-                if (pistonsOnly()
-                        && SlabAnchorAttachment.isModernPlacement(client.world, pos) != (index < 4)) return;
+                if (SlabAnchorAttachment.isModernPlacement(client.world, pos) != (index < 4)) return;
             }
         }
         BlockPos directPos = frame.south(6);

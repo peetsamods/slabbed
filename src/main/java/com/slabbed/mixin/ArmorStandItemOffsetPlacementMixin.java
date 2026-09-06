@@ -81,11 +81,14 @@ public abstract class ArmorStandItemOffsetPlacementMixin {
 
     @Unique
     private static double slabbed$visiblePlacementY(ItemUsageContext context) {
-        if (!SlabAnchorAttachment.FROZEN_DY_ENABLED || context.getSide() != Direction.UP) {
+        if (context.getSide() != Direction.UP) {
             return Double.NaN;
         }
         World world = context.getWorld();
         BlockPos support = context.getBlockPos();
+        if (!SlabAnchorAttachment.usesFrozenPlacementHeight(world, support)) {
+            return Double.NaN;
+        }
         double dy = SlabAnchorAttachment.storedPlacementDy(world, support);
         if (!Double.isFinite(dy) || dy == 0.0d) {
             return Double.NaN;

@@ -9,6 +9,8 @@ import com.slabbed.util.SlabbedOffsetRaycast;
 import com.slabbed.upgrade.WorldUpgradeDecision;
 import com.slabbed.upgrade.WorldUpgradeRuntimePolicy;
 import it.unimi.dsi.fastutil.longs.Long2ByteOpenHashMap;
+import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
+import net.fabricmc.fabric.impl.attachment.AttachmentTargetImpl;
 import net.fabricmc.fabric.api.attachment.v1.AttachmentTarget;
 import net.minecraft.block.Block;
 import net.minecraft.block.BlockState;
@@ -23,6 +25,8 @@ import net.minecraft.item.ItemStack;
 import net.minecraft.item.ItemUsageContext;
 import net.minecraft.item.Items;
 import net.minecraft.nbt.NbtCompound;
+import net.minecraft.nbt.NbtIo;
+import net.minecraft.nbt.NbtSizeTracker;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.test.GameTest;
 import net.minecraft.test.TestContext;
@@ -271,13 +275,11 @@ public final class PlacementCaptureBoundaryGameTest {
     public void keepExistingCollisionGuardSkipsPolicyLookupsOnUnsafeWorkers(TestContext h) {
         boolean previousFrozen = SlabAnchorAttachment.FROZEN_DY_ENABLED;
         var previousModernLookup = SlabAnchorAttachment.clientModernPlacementLookup;
-        var previousPolicyLookup = SlabAnchorAttachment.clientRuntimePolicyActiveLookup;
         Thread currentThread = Thread.currentThread();
         String previousThreadName = currentThread.getName();
         java.util.concurrent.atomic.AtomicInteger modernLookups =
                 new java.util.concurrent.atomic.AtomicInteger();
         SlabAnchorAttachment.FROZEN_DY_ENABLED = false;
-        SlabAnchorAttachment.clientRuntimePolicyActiveLookup = pos -> true;
         SlabAnchorAttachment.clientModernPlacementLookup = pos -> {
             modernLookups.incrementAndGet();
             return false;
@@ -307,7 +309,6 @@ public final class PlacementCaptureBoundaryGameTest {
             currentThread.setName(previousThreadName);
             SlabAnchorAttachment.FROZEN_DY_ENABLED = previousFrozen;
             SlabAnchorAttachment.clientModernPlacementLookup = previousModernLookup;
-            SlabAnchorAttachment.clientRuntimePolicyActiveLookup = previousPolicyLookup;
         }
         pass(h, "keep_existing_collision_guard_skips_policy_lookups_on_unsafe_workers");
     }
@@ -317,7 +318,6 @@ public final class PlacementCaptureBoundaryGameTest {
         ServerWorld world = h.getWorld();
         boolean previousFrozen = SlabAnchorAttachment.FROZEN_DY_ENABLED;
         var previousModernLookup = SlabAnchorAttachment.clientModernPlacementLookup;
-        var previousPolicyLookup = SlabAnchorAttachment.clientRuntimePolicyActiveLookup;
         var previousPredictionLookup = SlabAnchorAttachment.clientPostPolicyPredictionLookup;
         var previousEffectiveLookup = SlabAnchorAttachment.clientEffectivePlacementDyLookup;
         SlabAnchorAttachment.FROZEN_DY_ENABLED = false;
@@ -369,7 +369,6 @@ public final class PlacementCaptureBoundaryGameTest {
             h.assertTrue(attachments.contains("slabbed:modern_placements"),
                     "modern placement provenance was not persisted by the chunk serializer");
 
-            SlabAnchorAttachment.clientRuntimePolicyActiveLookup = pos -> true;
             SlabAnchorAttachment.clientModernPlacementLookup = pos -> pos.equals(modern);
             SlabAnchorAttachment.clientPostPolicyPredictionLookup = pos -> pos.equals(predicted);
             SlabAnchorAttachment.clientEffectivePlacementDyLookup = pos -> pos.equals(predicted)
@@ -384,7 +383,6 @@ public final class PlacementCaptureBoundaryGameTest {
             WorldUpgradeRuntimePolicy.deactivate(world);
             SlabAnchorAttachment.FROZEN_DY_ENABLED = previousFrozen;
             SlabAnchorAttachment.clientModernPlacementLookup = previousModernLookup;
-            SlabAnchorAttachment.clientRuntimePolicyActiveLookup = previousPolicyLookup;
             SlabAnchorAttachment.clientPostPolicyPredictionLookup = previousPredictionLookup;
             SlabAnchorAttachment.clientEffectivePlacementDyLookup = previousEffectiveLookup;
         }
@@ -404,8 +402,11 @@ public final class PlacementCaptureBoundaryGameTest {
                     Block.NOTIFY_ALL);
             PlayerEntity player = h.createMockPlayer(GameMode.SURVIVAL);
             player.setPosition(legacyOwner.getX() + 3.5d, legacyOwner.getY(), legacyOwner.getZ() + 0.5d);
-            ActionResult legacyResult = useOn(player, new ItemStack(Items.STONE), legacyOwner, Direction.UP);
+            // A pre-policy block as a legacy world carries it: set directly and anchored, with no
+            // provenance. An item placement would receive provenance — the policy is unconditional.
             BlockPos legacy = legacyOwner.up();
+            world.setBlockState(legacy, Blocks.STONE.getDefaultState(), Block.NOTIFY_ALL);
+            SlabAnchorAttachment.addAnchor(world, legacy, world.getBlockState(legacy));
             VoxelShape legacyCollisionBefore = world.getBlockState(legacy)
                     .getCollisionShape(world, legacy, ShapeContext.absent());
             VoxelShape legacyOutlineBefore = world.getBlockState(legacy)
@@ -469,11 +470,11 @@ public final class PlacementCaptureBoundaryGameTest {
             ActionResult flatResult = useOn(player, new ItemStack(Items.STONE), flatOwner, Direction.UP);
             BlockPos flat = flatOwner.up();
 
-            h.assertTrue(legacyResult.isAccepted() && flatResult.isAccepted()
+            h.assertTrue(flatResult.isAccepted()
                             && world.getBlockState(flat).isOf(Blocks.STONE)
                             && SlabAnchorAttachment.isModernPlacement(world, flat),
-                    "real BlockItem control did not author the post-policy flat cell: legacy="
-                            + legacyResult + " flat=" + flatResult + " state=" + world.getBlockState(flat));
+                    "real BlockItem control did not author the post-policy flat cell: flat="
+                            + flatResult + " state=" + world.getBlockState(flat));
 
             assertPhysicalShape(world, deep, -3.0d, "modern deep placement");
             assertPhysicalShape(world, flat, 0.0d, "modern flat");
@@ -515,7 +516,7 @@ public final class PlacementCaptureBoundaryGameTest {
                     .getCollisionShape(world, legacy, ShapeContext.absent());
             VoxelShape legacyOutlineAfter = world.getBlockState(legacy)
                     .getOutlineShape(world, legacy, ShapeContext.absent());
-            h.assertTrue(legacyResult.isAccepted() && flatResult.isAccepted()
+            h.assertTrue(flatResult.isAccepted()
                             && !SlabAnchorAttachment.isModernPlacement(world, legacy)
                             && SlabAnchorAttachment.isModernPlacement(world, deep)
                             && SlabAnchorAttachment.isModernPlacement(world, flat)
@@ -555,6 +556,160 @@ public final class PlacementCaptureBoundaryGameTest {
     }
 
     // ── helpers ─────────────────────────────────────────────────────────────────────────────
+
+    /**
+     * Existing-world discriminator for the shipped mode. Runs the real chunk serializer and Fabric's
+     * attachment loader through an actual compressed-NBT file with no whole-world override and no
+     * explicit activation, and requires that legacy anchor-only placements keep their live heights,
+     * that a latent height fact without provenance stays inert, and that a real item placement made
+     * under the policy keeps its stored height — before the save and again after the reload.
+     *
+     * <p>This must not be weakened into a read-time live-geometry fallback for modern cells: a modern
+     * cell with a missing fact stays stable-flat, as the KEEP routing row pins.
+     */
+    @GameTest(templateName = "fabric-gametest-api-v1:empty", batchId = "slabbed_keep_disk_isolated")
+    public void shippedModeDiskRoundTripKeepsLegacyHeightsAndModernPlacements(TestContext h) {
+        ServerWorld world = h.getWorld();
+        boolean previousFrozen = SlabAnchorAttachment.FROZEN_DY_ENABLED;
+        SlabAnchorAttachment.FROZEN_DY_ENABLED = false;
+        try {
+            h.assertTrue(WorldUpgradeRuntimePolicy.authorsModernPlacements(world),
+                    "the placement policy must be unconditional on this line");
+            BlockPos seed = h.getAbsolutePos(new BlockPos(2, 24, 2));
+            int chunkX = seed.getX() >> 4;
+            int chunkZ = seed.getZ() >> 4;
+            int baseX = chunkX << 4;
+            int baseZ = chunkZ << 4;
+            int y = seed.getY();
+            BlockPos legacyHalf = new BlockPos(baseX + 2, y, baseZ + 2);
+            BlockPos legacyCompound = new BlockPos(baseX + 5, y, baseZ + 5);
+            BlockPos alphaOwner = new BlockPos(baseX + 8, y, baseZ + 8);
+            BlockPos alphaPlaced = alphaOwner.up();
+            BlockPos flatControl = new BlockPos(baseX + 11, y, baseZ + 11);
+            BlockPos conflictingLegacy = new BlockPos(baseX + 13, y, baseZ + 13);
+            WorldChunk chunk = world.getChunk(chunkX, chunkZ);
+
+            assertAir(world, List.of(
+                    legacyHalf, legacyCompound, alphaOwner.down(), alphaOwner, alphaPlaced,
+                    flatControl.down(), flatControl, conflictingLegacy.down(), conflictingLegacy),
+                    "isolated saved-chunk fixtures");
+
+            world.setBlockState(legacyHalf, Blocks.STONE.getDefaultState(), Block.NOTIFY_LISTENERS);
+            world.setBlockState(legacyCompound, Blocks.STONE.getDefaultState(), Block.NOTIFY_LISTENERS);
+            world.setBlockState(alphaOwner.down(), Blocks.STONE.getDefaultState(), Block.NOTIFY_LISTENERS);
+            world.setBlockState(alphaOwner,
+                    Blocks.STONE_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.BOTTOM),
+                    Block.NOTIFY_LISTENERS);
+            world.setBlockState(flatControl.down(), Blocks.STONE.getDefaultState(), Block.NOTIFY_LISTENERS);
+            world.setBlockState(flatControl, Blocks.STONE.getDefaultState(), Block.NOTIFY_LISTENERS);
+            world.setBlockState(conflictingLegacy.down(), Blocks.STONE.getDefaultState(), Block.NOTIFY_LISTENERS);
+            world.setBlockState(conflictingLegacy, Blocks.STONE.getDefaultState(), Block.NOTIFY_LISTENERS);
+
+            // Legacy anchors as a pre-policy world carries them: anchor-only, no height fact, no marker.
+            LongOpenHashSet anchors = chunk.getAttached(SlabAnchorAttachment.ANCHOR_TYPE) == null
+                    ? new LongOpenHashSet()
+                    : new LongOpenHashSet(chunk.getAttached(SlabAnchorAttachment.ANCHOR_TYPE));
+            anchors.add(legacyHalf.asLong());
+            anchors.add(legacyCompound.asLong());
+            chunk.setAttached(SlabAnchorAttachment.ANCHOR_TYPE, anchors);
+            LongOpenHashSet compounds = chunk.getAttached(SlabAnchorAttachment.COMPOUND_FULL_BLOCK_ANCHOR_TYPE) == null
+                    ? new LongOpenHashSet()
+                    : new LongOpenHashSet(chunk.getAttached(SlabAnchorAttachment.COMPOUND_FULL_BLOCK_ANCHOR_TYPE));
+            compounds.add(legacyCompound.asLong());
+            chunk.setAttached(SlabAnchorAttachment.COMPOUND_FULL_BLOCK_ANCHOR_TYPE, compounds);
+            Long2ByteOpenHashMap placementDy = chunk.getAttached(SlabAnchorAttachment.PLACEMENT_DY_TYPE) == null
+                    ? new Long2ByteOpenHashMap()
+                    : new Long2ByteOpenHashMap(chunk.getAttached(SlabAnchorAttachment.PLACEMENT_DY_TYPE));
+            placementDy.remove(legacyHalf.asLong());
+            placementDy.remove(legacyCompound.asLong());
+            placementDy.remove(flatControl.asLong());
+            placementDy.put(conflictingLegacy.asLong(), (byte) SlabAnchorAttachment.quantiseDy(-2.0d));
+            chunk.setAttached(SlabAnchorAttachment.PLACEMENT_DY_TYPE, placementDy);
+            LongOpenHashSet modern = chunk.getAttached(SlabAnchorAttachment.MODERN_PLACEMENT_TYPE);
+            h.assertTrue(modern == null || !modern.contains(conflictingLegacy.asLong()),
+                    "fixture premise: the conflicting legacy cell must carry no provenance");
+
+            PlayerEntity player = h.createMockPlayer(GameMode.SURVIVAL);
+            player.setPosition(alphaOwner.getX() + 3.5d, alphaOwner.getY(), alphaOwner.getZ() + 0.5d);
+            ActionResult placed = useOn(player, new ItemStack(Items.STONE), alphaOwner, Direction.UP);
+            double legacyHalfBefore = SlabSupport.getYOffset(world, legacyHalf, world.getBlockState(legacyHalf));
+            double legacyCompoundBefore = SlabSupport.getYOffset(world, legacyCompound,
+                    world.getBlockState(legacyCompound));
+            double alphaBefore = SlabSupport.getYOffset(world, alphaPlaced, world.getBlockState(alphaPlaced));
+            double flatBefore = SlabSupport.getYOffset(world, flatControl, world.getBlockState(flatControl));
+            double conflictingBefore = SlabSupport.getYOffset(world, conflictingLegacy,
+                    world.getBlockState(conflictingLegacy));
+            h.assertTrue(placed.isAccepted()
+                            && sameHeight(legacyHalfBefore, -0.5d)
+                            && sameHeight(legacyCompoundBefore, -1.0d)
+                            && sameHeight(alphaBefore, -0.5d)
+                            && sameHeight(flatBefore, 0.0d)
+                            && sameHeight(conflictingBefore, 0.0d)
+                            && !SlabAnchorAttachment.rawPlacementDyFact(world, legacyHalf).present()
+                            && !SlabAnchorAttachment.rawPlacementDyFact(world, legacyCompound).present()
+                            && SlabAnchorAttachment.rawPlacementDyFact(world, alphaPlaced).present()
+                            && SlabAnchorAttachment.isModernPlacement(world, alphaPlaced)
+                            && !SlabAnchorAttachment.isModernPlacement(world, conflictingLegacy)
+                            && sameHeight(stored(world, conflictingLegacy), -2.0d)
+                            && sameHeight(stored(world, alphaPlaced), -0.5d),
+                    "shipped-mode fixture premise failed before save: result=" + placed
+                            + " legacyHalf=" + legacyHalfBefore + " legacyCompound=" + legacyCompoundBefore
+                            + " alpha=" + alphaBefore + " alphaStored=" + stored(world, alphaPlaced)
+                            + " flat=" + flatBefore + " conflicting=" + conflictingBefore
+                            + " conflictingStored=" + stored(world, conflictingLegacy));
+
+            Path evidenceRoot = Path.of(System.getProperty(
+                    "slabbed.upgradeEvidenceDir", System.getProperty("java.io.tmpdir")));
+            Path evidenceDir = Files.createTempDirectory(evidenceRoot, "slabbed-keep-disk-");
+            Path chunkFile = evidenceDir.resolve("chunk.nbt.gz");
+            NbtCompound serialized = ChunkSerializer.serialize(world, chunk);
+            NbtCompound serializedAttachments = serialized.getCompound(AttachmentTarget.NBT_ATTACHMENT_KEY);
+            h.assertTrue(serializedAttachments.contains("slabbed:slab_anchors")
+                            && serializedAttachments.contains("slabbed:compound_full_block_anchors")
+                            && serializedAttachments.contains("slabbed:placement_dy")
+                            && serializedAttachments.contains("slabbed:modern_placements"),
+                    "production chunk serializer omitted required attachment payloads: keys="
+                            + serializedAttachments.getKeys());
+            NbtIo.writeCompressed(serialized, chunkFile);
+            NbtCompound reloadedNbt = NbtIo.readCompressed(chunkFile, NbtSizeTracker.ofUnlimitedBytes());
+
+            // Exact attachment reload seam used by Fabric's ChunkSerializer mixin. Reading an empty
+            // payload first proves the observations below come from the bytes just read from disk.
+            AttachmentTargetImpl target = (AttachmentTargetImpl) chunk;
+            target.fabric_readAttachmentsFromNbt(new NbtCompound(), world.getRegistryManager());
+            h.assertTrue(chunk.getAttached(SlabAnchorAttachment.ANCHOR_TYPE) == null
+                            && chunk.getAttached(SlabAnchorAttachment.COMPOUND_FULL_BLOCK_ANCHOR_TYPE) == null
+                            && chunk.getAttached(SlabAnchorAttachment.PLACEMENT_DY_TYPE) == null
+                            && chunk.getAttached(SlabAnchorAttachment.MODERN_PLACEMENT_TYPE) == null,
+                    "fixture failed to clear in-memory attachments before disk reload");
+            target.fabric_readAttachmentsFromNbt(reloadedNbt, world.getRegistryManager());
+
+            double legacyHalfAfter = SlabSupport.getYOffset(world, legacyHalf, world.getBlockState(legacyHalf));
+            double legacyCompoundAfter = SlabSupport.getYOffset(world, legacyCompound,
+                    world.getBlockState(legacyCompound));
+            double alphaAfter = SlabSupport.getYOffset(world, alphaPlaced, world.getBlockState(alphaPlaced));
+            double flatAfter = SlabSupport.getYOffset(world, flatControl, world.getBlockState(flatControl));
+            double conflictingAfter = SlabSupport.getYOffset(world, conflictingLegacy,
+                    world.getBlockState(conflictingLegacy));
+            h.assertTrue(sameHeight(legacyHalfAfter, -0.5d)
+                            && sameHeight(legacyCompoundAfter, -1.0d)
+                            && sameHeight(alphaAfter, -0.5d)
+                            && sameHeight(flatAfter, 0.0d)
+                            && sameHeight(conflictingAfter, 0.0d)
+                            && SlabAnchorAttachment.isModernPlacement(world, alphaPlaced)
+                            && !SlabAnchorAttachment.isModernPlacement(world, conflictingLegacy)
+                            && !SlabAnchorAttachment.isModernPlacement(world, legacyHalf),
+                    "shipped mode moved an existing block or lost a modern placement across disk reload:"
+                            + " legacyHalf=" + legacyHalfAfter + " legacyCompound=" + legacyCompoundAfter
+                            + " alpha=" + alphaAfter + " flat=" + flatAfter
+                            + " conflicting=" + conflictingAfter);
+        } catch (IOException exception) {
+            throw new IllegalStateException("disk round-trip failed", exception);
+        } finally {
+            SlabAnchorAttachment.FROZEN_DY_ENABLED = previousFrozen;
+        }
+        pass(h, "shipped_mode_disk_round_trip_keeps_legacy_heights_and_modern_placements");
+    }
 
     static ActionResult useOn(PlayerEntity player, ItemStack stack, BlockPos clicked, Direction face) {
         player.setStackInHand(Hand.MAIN_HAND, stack);
