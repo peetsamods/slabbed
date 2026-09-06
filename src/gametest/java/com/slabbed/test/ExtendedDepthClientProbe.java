@@ -111,7 +111,10 @@ public final class ExtendedDepthClientProbe implements ClientModInitializer {
         if (initialized) return;
         initialized = true;
         ClientTickEvents.END_CLIENT_TICK.register(ExtendedDepthClientProbe::tick);
-        WorldRenderEvents.END.register(context -> SurfaceEntityClientProbe.onWorldRendered(context.camera()));
+        WorldRenderEvents.END.register(context -> {
+            SurfaceEntityClientProbe.onWorldRendered(context.camera());
+            PistonLiveCycleProbe.onWorldRendered(context.camera());
+        });
     }
     private static void tick(MinecraftClient client) {
         if (!Boolean.getBoolean(ENABLE_PROPERTY) || phase == Phase.FINISH) return;
@@ -846,7 +849,10 @@ public final class ExtendedDepthClientProbe implements ClientModInitializer {
         String summary = "[DEPTH_CLIENT_PROBE_SUMMARY] verdict=" + verdict + " rows="
                 + (greenRows + redRows + unknownRows) + " green=" + greenRows + " red=" + redRows
                 + " modelUnknown=" + unknownRows + " evidenceWriteFailed=" + evidenceFailed
-                + " screenshots=" + (pistonsOnly() ? "NOT_RUN" : "CAPTURED_UNREVIEWED")
+                + " screenshots=" + (pistonsOnly()
+                ? Boolean.getBoolean("slabbed.depthProbe.pistonLive")
+                ? PistonLiveCycleProbe.screenshotsCaptured() ? "BOTH_CAPTURED_UNREVIEWED" : "INCOMPLETE"
+                : "NOT_RUN" : "CAPTURED_UNREVIEWED")
                 + " evidenceDir=" + evidenceDir;
         System.out.println(summary);
         append("SUMMARY\tall\t" + ticks + "\t" + verdict + "\tgreen=" + greenRows
