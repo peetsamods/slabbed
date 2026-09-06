@@ -2,6 +2,8 @@ package com.slabbed.test;
 import com.slabbed.anchor.SlabAnchorAttachment;
 import com.slabbed.client.ClientDy;
 import com.slabbed.client.model.OffsetBlockStateModel;
+import com.slabbed.upgrade.WorldUpgradeDecision;
+import com.slabbed.upgrade.WorldUpgradeRuntimePolicy;
 import com.slabbed.util.SlabSupport;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
@@ -200,8 +202,14 @@ public final class ExtendedDepthClientProbe implements ClientModInitializer {
         if (ready(client)) {
             client.options.pauseOnLostFocus = false;
             if (client.currentScreen != null) client.setScreen(null);
+            if (pistonsOnly()) {
+                SlabAnchorAttachment.FROZEN_DY_ENABLED = false;
+                WorldUpgradeRuntimePolicy.activate(client.world, WorldUpgradeDecision.Mode.KEEP_EXISTING);
+                append("PISTON_MODE\tpolicy=KEEP_EXISTING\tglobalFrozen=false");
+            }
             baseOrigin = client.player.getBlockPos().add(10, 20, 10).toImmutable();
-            phase = Boolean.getBoolean("slabbed.depthProbe.surfaceEntitiesOnly")
+            phase = pistonsOnly() ? Phase.ATTACHED
+                    : Boolean.getBoolean("slabbed.depthProbe.surfaceEntitiesOnly")
                     ? Phase.SURFACE_ENTITIES : Phase.PREPARE;
             phaseTick = ticks;
         } else if (ticks >= BOOTSTRAP_TIMEOUT) {
@@ -560,25 +568,31 @@ public final class ExtendedDepthClientProbe implements ClientModInitializer {
     }
     private static void attached(MinecraftClient client) {
         BlockPos frame = baseOrigin.add(100, 6, 0), rail = frame.east(5), slope = frame.east(10);
+        int movingCases = pistonsOnly() ? 5 : 4;
         if (attachedStage == 0 || attachedStage == 2) {
             double dy = attachedStage == 0 ? 0.0d : -3.0d;
             attachedReady = false;
             RegistryKey<World> dimension = client.world.getRegistryKey();
             client.getServer().execute(() -> {
                 ServerWorld world = client.getServer().getWorld(dimension);
-                world.setBlockState(frame, Blocks.STONE.getDefaultState(), Block.NOTIFY_ALL);
-                world.setBlockState(rail.down(), Blocks.STONE.getDefaultState(), Block.NOTIFY_ALL);
-                world.setBlockState(slope.down(), Blocks.STONE.getDefaultState(), Block.NOTIFY_ALL);
-                world.setBlockState(slope.east(), Blocks.STONE.getDefaultState(), Block.NOTIFY_ALL);
-                world.setBlockState(rail, Blocks.RAIL.getDefaultState(), Block.NOTIFY_ALL);
-                world.setBlockState(slope, Blocks.POWERED_RAIL.getDefaultState().with(PoweredRailBlock.SHAPE,
-                        net.minecraft.block.enums.RailShape.ASCENDING_EAST), Block.NOTIFY_ALL);
-                SlabAnchorAttachment.writePlacementDyBatch(world, Map.of(frame, Double.doubleToRawLongBits(dy),
-                        rail, Double.doubleToRawLongBits(dy), slope, Double.doubleToRawLongBits(dy)));
-                AttachedEntityDepthProbe.prepareFrames(world, frame, dy);
-                AttachedEntityDepthProbe.prepareCarts(world, rail, slope);
-                for (int index = 0; index < 4; index++) {
-                    Direction direction = index < 2 ? Direction.EAST : Direction.UP;
+                if (pistonsOnly()) {
+                    WorldUpgradeRuntimePolicy.activate(world, WorldUpgradeDecision.Mode.KEEP_EXISTING);
+                }
+                if (!pistonsOnly()) {
+                    world.setBlockState(frame, Blocks.STONE.getDefaultState(), Block.NOTIFY_ALL);
+                    world.setBlockState(rail.down(), Blocks.STONE.getDefaultState(), Block.NOTIFY_ALL);
+                    world.setBlockState(slope.down(), Blocks.STONE.getDefaultState(), Block.NOTIFY_ALL);
+                    world.setBlockState(slope.east(), Blocks.STONE.getDefaultState(), Block.NOTIFY_ALL);
+                    world.setBlockState(rail, Blocks.RAIL.getDefaultState(), Block.NOTIFY_ALL);
+                    world.setBlockState(slope, Blocks.POWERED_RAIL.getDefaultState().with(PoweredRailBlock.SHAPE,
+                            net.minecraft.block.enums.RailShape.ASCENDING_EAST), Block.NOTIFY_ALL);
+                    SlabAnchorAttachment.writePlacementDyBatch(world, Map.of(frame, Double.doubleToRawLongBits(dy),
+                            rail, Double.doubleToRawLongBits(dy), slope, Double.doubleToRawLongBits(dy)));
+                    AttachedEntityDepthProbe.prepareFrames(world, frame, dy);
+                    AttachedEntityDepthProbe.prepareCarts(world, rail, slope);
+                }
+                for (int index = 0; index < movingCases; index++) {
+                    Direction direction = index < 2 ? Direction.EAST : index < 4 ? Direction.UP : Direction.NORTH;
                     BlockPos source = frame.south(6 + index * 6), destination = source.offset(direction);
                     world.setBlockState(source, Blocks.STICKY_PISTON.getDefaultState()
                             .with(PistonBlock.FACING, direction), Block.NOTIFY_ALL);
@@ -586,6 +600,9 @@ public final class ExtendedDepthClientProbe implements ClientModInitializer {
                             .with(PistonExtensionBlock.FACING, direction), Block.NOTIFY_ALL);
                     SlabAnchorAttachment.writePlacementDyBatch(world, Map.of(source, Double.doubleToRawLongBits(dy),
                             destination, Double.doubleToRawLongBits(dy)));
+                    if (pistonsOnly() && index < 4) {
+                        SlabAnchorAttachment.markPostPolicyPlacements(world, List.of(source, destination));
+                    }
                 }
                 attachedReady = true;
             });
@@ -594,17 +611,19 @@ public final class ExtendedDepthClientProbe implements ClientModInitializer {
         }
         double expected = attachedStage == 1 ? 0.0d : -3.0d;
         if (!attachedReady) return;
-        if (!AttachedEntityDepthProbe.framesReady(client, expected)) return;
-        if (!AttachedEntityDepthProbe.cartsReady(client, rail, slope, expected)) return;
-        if (!client.world.getBlockState(frame).isOf(Blocks.STONE)
-                || !client.world.getBlockState(rail).isOf(Blocks.RAIL)
-                || !client.world.getBlockState(slope).isOf(Blocks.POWERED_RAIL)) return;
-        for (BlockPos pos : List.of(frame, rail, slope)) {
-            var fact = SlabAnchorAttachment.rawPlacementDyFact(client.world, pos);
-            if (!fact.present() || !same(fact.valueOrNaN(), expected)) return;
+        if (!pistonsOnly()) {
+            if (!AttachedEntityDepthProbe.framesReady(client, expected)) return;
+            if (!AttachedEntityDepthProbe.cartsReady(client, rail, slope, expected)) return;
+            if (!client.world.getBlockState(frame).isOf(Blocks.STONE)
+                    || !client.world.getBlockState(rail).isOf(Blocks.RAIL)
+                    || !client.world.getBlockState(slope).isOf(Blocks.POWERED_RAIL)) return;
+            for (BlockPos pos : List.of(frame, rail, slope)) {
+                var fact = SlabAnchorAttachment.rawPlacementDyFact(client.world, pos);
+                if (!fact.present() || !same(fact.valueOrNaN(), expected)) return;
+            }
         }
-        for (int index = 0; index < 4; index++) {
-            Direction direction = index < 2 ? Direction.EAST : Direction.UP;
+        for (int index = 0; index < movingCases; index++) {
+            Direction direction = index < 2 ? Direction.EAST : index < 4 ? Direction.UP : Direction.NORTH;
             BlockPos source = frame.south(6 + index * 6), destination = source.offset(direction);
             if (!client.world.getBlockState(destination).isOf(Blocks.MOVING_PISTON)) {
                 if (ticks % 20 == 0) append("MOVING_FIXTURE_WAIT\t" + destination
@@ -614,24 +633,28 @@ public final class ExtendedDepthClientProbe implements ClientModInitializer {
             for (BlockPos pos : List.of(source, destination)) {
                 var fact = SlabAnchorAttachment.rawPlacementDyFact(client.world, pos);
                 if (!fact.present() || !same(fact.valueOrNaN(), expected)) return;
+                if (pistonsOnly()
+                        && SlabAnchorAttachment.isModernPlacement(client.world, pos) != (index < 4)) return;
             }
         }
-        for (Direction facing : Direction.values()) {
-            var capture = AttachedEntityDepthProbe.capture(client, frame, facing, rail, slope);
-            append("ATTACHED_ENTITY_MATRIX\t" + facing + "\tdy=" + expected + "\t" + capture);
-            if (attachedStage == 1) attachedFlat.add(capture);
-            else {
-                try {
-                    AttachedEntityDepthProbe.assertStoredDepthDelta(attachedFlat.get(facing.ordinal()), capture, -3.0d);
-                    greenRows++;
-                } catch (AssertionError failure) {
-                    redRows++;
-                    append("ATTACHED_ENTITY_RED\t" + facing + "\t" + failure.getMessage());
+        if (!pistonsOnly()) {
+            for (Direction facing : Direction.values()) {
+                var capture = AttachedEntityDepthProbe.capture(client, frame, facing, rail, slope);
+                append("ATTACHED_ENTITY_MATRIX\t" + facing + "\tdy=" + expected + "\t" + capture);
+                if (attachedStage == 1) attachedFlat.add(capture);
+                else {
+                    try {
+                        AttachedEntityDepthProbe.assertStoredDepthDelta(attachedFlat.get(facing.ordinal()), capture, -3.0d);
+                        greenRows++;
+                    } catch (AssertionError failure) {
+                        redRows++;
+                        append("ATTACHED_ENTITY_RED\t" + facing + "\t" + failure.getMessage());
+                    }
                 }
             }
         }
-        for (int index = 0; index < 4; index++) {
-            Direction direction = index < 2 ? Direction.EAST : Direction.UP;
+        for (int index = 0; index < movingCases; index++) {
+            Direction direction = index < 2 ? Direction.EAST : index < 4 ? Direction.UP : Direction.NORTH;
             BlockPos destination = frame.south(6 + index * 6).offset(direction);
             boolean head = index % 2 == 0;
             BlockState pushed = head ? Blocks.PISTON_HEAD.getDefaultState()
@@ -640,11 +663,14 @@ public final class ExtendedDepthClientProbe implements ClientModInitializer {
                     client.world.getBlockState(destination), pushed, direction, true, head);
             moving.setWorld(client.world);
             var sample = sampleMovingPiston(client, moving);
-            append("MOVING_PISTON_MATRIX\t" + index + "\t" + sample);
+            append("MOVING_PISTON_MATRIX\t" + index + "\tmodern=" + (index < 4)
+                    + "\tdy=" + expected + "\tvertices=" + sample.vertexCount()
+                    + "\tyBounds=" + sample.minY() + ".." + sample.maxY());
             if (attachedStage == 1) movingFlat.add(sample);
             else {
                 try {
-                    PistonMovingRenderAudit.assertStoredDepthDelta(movingFlat.get(index), sample, -3.0d);
+                    PistonMovingRenderAudit.assertStoredDepthDelta(
+                            movingFlat.get(index), sample, index < 4 ? -3.0d : 0.0d);
                     greenRows++;
                 } catch (AssertionError failure) {
                     redRows++;
@@ -657,7 +683,8 @@ public final class ExtendedDepthClientProbe implements ClientModInitializer {
             PistonLiveCycleProbe.start(client, baseOrigin.add(20, 15, 100));
             phase = Phase.PISTON_LIVE;
             phaseTick = ticks;
-        } else finish(client, redRows > 0 ? "RED" : "TECHNICAL_GREEN_SCREENSHOTS_UNREVIEWED");
+        } else finish(client, redRows > 0 ? "RED" : pistonsOnly()
+                ? "TECHNICAL_GREEN_VISUAL_NOT_RUN" : "TECHNICAL_GREEN_SCREENSHOTS_UNREVIEWED");
     }
     private static void surfaceEntities(MinecraftClient client) {
         var result = SurfaceEntityClientProbe.tick(client, baseOrigin.add(40, 8, 40), evidenceDir);
@@ -784,7 +811,8 @@ public final class ExtendedDepthClientProbe implements ClientModInitializer {
         String summary = "[DEPTH_CLIENT_PROBE_SUMMARY] verdict=" + verdict + " rows="
                 + (greenRows + redRows + unknownRows) + " green=" + greenRows + " red=" + redRows
                 + " modelUnknown=" + unknownRows + " evidenceWriteFailed=" + evidenceFailed
-                + " screenshots=CAPTURED_UNREVIEWED evidenceDir=" + evidenceDir;
+                + " screenshots=" + (pistonsOnly() ? "NOT_RUN" : "CAPTURED_UNREVIEWED")
+                + " evidenceDir=" + evidenceDir;
         System.out.println(summary);
         append("SUMMARY\tall\t" + ticks + "\t" + verdict + "\tgreen=" + greenRows
                 + "\tred=" + redRows + "\tunknown=" + unknownRows);
@@ -896,6 +924,9 @@ public final class ExtendedDepthClientProbe implements ClientModInitializer {
             return Math.max(1, Math.min(total, Integer.parseInt(System.getProperty(
                     "slabbed.depthProbe.maxRows", Integer.toString(total)))));
         } catch (NumberFormatException ignored) { return total; }
+    }
+    private static boolean pistonsOnly() {
+        return Boolean.getBoolean("slabbed.depthProbe.pistonsOnly");
     }
     private static ProbeCase floor(String id, Item item) { return floor(id, item, ((BlockItem) item).getBlock()); }
     private static ProbeCase floor(String id, Item item, Block expected) {

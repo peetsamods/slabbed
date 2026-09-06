@@ -2,6 +2,7 @@ package com.slabbed.mixin.client;
 
 import com.llamalad7.mixinextras.injector.wrapmethod.WrapMethod;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
+import com.slabbed.anchor.SlabAnchorAttachment;
 import com.slabbed.client.runtime.PistonMovingRenderScope;
 import net.minecraft.block.entity.PistonBlockEntity;
 import net.minecraft.client.render.VertexConsumerProvider;
@@ -25,11 +26,18 @@ public abstract class PistonBlockEntityRenderScopeMixin {
             int overlay,
             Operation<Void> original
     ) {
-        PistonMovingRenderScope.enter();
+        boolean suppressNestedDy = blockEntity != null
+                && SlabAnchorAttachment.usesFrozenPlacementHeight(
+                        blockEntity.getWorld(), blockEntity.getPos());
+        if (suppressNestedDy) {
+            PistonMovingRenderScope.enter();
+        }
         try {
             original.call(blockEntity, tickDelta, matrices, vertexConsumers, light, overlay);
         } finally {
-            PistonMovingRenderScope.exit();
+            if (suppressNestedDy) {
+                PistonMovingRenderScope.exit();
+            }
         }
     }
 }
