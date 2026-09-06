@@ -113,6 +113,12 @@ exclusion can leave a manifest advertising a class the archive no longer has. Th
 | `com/slabbed/anchor/PlacementDyOverlay` | The client-prediction overlay that sits above the authoritative store without writing it — the shared decision logic `PlacementDyPredictionClient` (client) supplies platform wiring for. No file or network access beyond the ordinary sync path. |
 | `com/slabbed/anchor/C3TestPhaseTrace` | Inert-by-default ordering sink for the placement-capture path, called from `BlockItemPlacementIntentMixin` at its two ordering-critical points. While no trace span is open — the shipped case — every call is a single boolean read and an immediate return. Production plumbing, not debug tooling, and lives in `src/main` because a `src/gametest` class is not visible to it. |
 
+### Placement provenance policy (class-level)
+
+| Entry | Reason |
+| --- | --- |
+| `com/slabbed/upgrade/WorldUpgradeDecision` | Immutable, versioned representation of one saved world's mode and backup disposition. On this line only its `Mode` enum is consumed by the placement provenance policy; it performs no file, world or network access and nothing here reads or writes a decision record. |
+
 ### Main mixins (class-level; `com/slabbed/mixin/` is a mixed package)
 
 Every row below is declared in `slabbed.mixins.json` **except the two marked ORPHANED**, which
