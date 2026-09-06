@@ -41,12 +41,17 @@ public abstract class ItemFramePhysicalOffsetMixin extends AbstractDecorationEnt
     @Inject(method = "calculateBoundingBox", at = @At("RETURN"), cancellable = true)
     private void slabbed$physicalFrameBox(BlockPos attached, Direction facing,
                                          CallbackInfoReturnable<Box> cir) {
-        if (!SlabAnchorAttachment.FROZEN_DY_ENABLED) {
-            return;
-        }
         double dy = Double.longBitsToDouble(dataTracker.get(SLABBED_FRAME_DY));
-        if (!Double.isFinite(dy) && !getWorld().isClient) {
+        if (!Double.isFinite(dy)) {
+            // The server decides once, from the backing cell's provenance; the client only applies the
+            // synced value, so a frame on a legacy cell keeps the vanilla box on both sides.
+            if (getWorld().isClient) {
+                return;
+            }
             BlockPos backing = attached.offset(facing.getOpposite());
+            if (!SlabAnchorAttachment.usesFrozenPlacementHeight(getWorld(), backing)) {
+                return;
+            }
             dy = SlabSupport.getYOffset(getWorld(), backing, getWorld().getBlockState(backing));
             if (!Double.isFinite(dy)) {
                 dy = 0.0d;
@@ -60,8 +65,7 @@ public abstract class ItemFramePhysicalOffsetMixin extends AbstractDecorationEnt
 
     @Inject(method = "onTrackedDataSet", at = @At("TAIL"))
     private void slabbed$applySyncedFrameDy(TrackedData<?> data, CallbackInfo ci) {
-        if (SLABBED_FRAME_DY.equals(data) && SlabAnchorAttachment.FROZEN_DY_ENABLED
-                && getWorld().isClient) {
+        if (SLABBED_FRAME_DY.equals(data) && getWorld().isClient) {
             updateAttachmentPosition();
         }
     }

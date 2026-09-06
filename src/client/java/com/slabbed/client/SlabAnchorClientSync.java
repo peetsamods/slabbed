@@ -3,7 +3,6 @@ package com.slabbed.client;
 import com.slabbed.Slabbed;
 import com.slabbed.anchor.SlabAnchorAttachment;
 import com.slabbed.util.SlabSupport;
-import com.slabbed.upgrade.WorldUpgradeRuntimePolicy;
 import it.unimi.dsi.fastutil.longs.Long2ByteOpenHashMap;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 import net.fabricmc.api.EnvType;
@@ -109,13 +108,9 @@ public final class SlabAnchorClientSync {
             LongOpenHashSet set = clientAttachmentSet(pos, SlabAnchorAttachment.MODERN_PLACEMENT_TYPE);
             return set != null && set.contains(pos.asLong());
         };
-        SlabAnchorAttachment.clientRuntimePolicyActiveLookup = pos -> {
-            MinecraftClient mc = MinecraftClient.getInstance();
-            return mc != null && WorldUpgradeRuntimePolicy.authorsModernPlacements(mc.world);
-        };
         SlabAnchorAttachment.clientPostPolicyPredictionLookup = pos -> {
             MinecraftClient mc = MinecraftClient.getInstance();
-            return mc != null && WorldUpgradeRuntimePolicy.authorsModernPlacements(mc.world)
+            return mc != null && mc.world != null
                     && SlabAnchorAttachment.clientEffectivePlacementDyLookup != null
                     && SlabAnchorAttachment.clientEffectivePlacementDyLookup.lookup(pos) != null;
         };

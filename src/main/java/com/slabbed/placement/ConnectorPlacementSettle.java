@@ -27,9 +27,10 @@ import java.util.Collection;
  *
  * <p><b>Why the height read was left alone.</b> Teaching the connector read to fall back to an
  * unstored placement-time height would also change the answer for cells that legitimately have no
- * fact — legacy worlds (there is no retro-migration; see
+ * fact — legacy cells (there is no retro-migration; see
  * {@code SlabAnchorAttachment#FROZEN_DY_ENABLED}), worldgen, structures, {@code /setblock}. Those
- * cells DRAW at {@code 0.0}, because the model reads the same stored authority. A connector reading
+ * cells DRAW at the height the model reads for them — stable-flat under the whole-world override,
+ * their live lane otherwise — and the connector reads that same authority. A connector reading
  * anything else would cut arms between posts that visibly sit at the same height. Changing WHEN the
  * decision runs keeps the connector and the model in exact agreement for every cell, and corrects
  * only real player placements — the ones that do get a fact.

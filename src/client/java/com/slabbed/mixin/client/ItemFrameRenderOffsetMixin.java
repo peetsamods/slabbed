@@ -13,7 +13,7 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
-/** Retains the legacy frame rendering path; frozen frames use their physical entity position. */
+/** Retains the legacy frame rendering path; a frame on a modern cell uses its physical entity position. */
 @Mixin(ItemFrameEntityRenderer.class)
 public abstract class ItemFrameRenderOffsetMixin {
 
@@ -22,9 +22,6 @@ public abstract class ItemFrameRenderOffsetMixin {
     private void slabbed$adjustItemFrameOffset(ItemFrameEntity entity,
                                                float tickDelta,
                                                CallbackInfoReturnable<Vec3d> cir) {
-        if (SlabAnchorAttachment.FROZEN_DY_ENABLED) {
-            return;
-        }
         World world = entity.getEntityWorld();
         if (world == null) {
             return;
@@ -32,6 +29,13 @@ public abstract class ItemFrameRenderOffsetMixin {
 
         BlockPos attachedPos = entity.getAttachedBlockPos();
         if (attachedPos == null) {
+            return;
+        }
+
+        // A frame whose backing cell has modern provenance is positioned physically
+        // (ItemFramePhysicalOffsetMixin); the render-only offset below is for legacy cells.
+        BlockPos backing = attachedPos.offset(entity.getHorizontalFacing().getOpposite());
+        if (SlabAnchorAttachment.usesFrozenPlacementHeight(world, backing)) {
             return;
         }
 

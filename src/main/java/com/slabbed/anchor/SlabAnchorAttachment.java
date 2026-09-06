@@ -78,7 +78,6 @@ public final class SlabAnchorAttachment {
     public static Predicate<BlockPos> clientCompoundVisibleSideDoubleSlabLookup = null;
     public static Predicate<BlockPos> clientCompoundVisibleOwnerTopSlabLookup = null;
     public static Predicate<BlockPos> clientModernPlacementLookup = null;
-    public static Predicate<BlockPos> clientRuntimePolicyActiveLookup = null;
     public static Predicate<BlockPos> clientPostPolicyPredictionLookup = null;
 
     /**
@@ -383,20 +382,19 @@ public final class SlabAnchorAttachment {
             );
 
     /**
-     * Master switch for the FROZEN-DY value store (LAW.md restoration): when true, height reads route
-     * through the stored placement height instead of the live read-lanes.
+     * Whole-world override for the stored-height reader (LAW.md restoration): when true, EVERY cell
+     * reads its stored placement height and a missing fact resolves stable-flat, regardless of
+     * provenance. Shipped default false.
      *
-     * <p>Default OFF on this line for now ({@code -Dslabbed.frozenDy=true} is the opt-in): the donor
-     * ships default-ON only alongside its client prediction journal and landing resolver. Running the
-     * store alone was live-RED on 2026-08-05 (see the internal notes) — without
-     * prediction every placement renders flat then pops when the attachment sync lands, and a world
-     * with no stored facts renders stable-flat everywhere. Flip the default back to ON only when
-     * Slices 2d (resolver) and 2i (prediction) are complete and live-passed. Legacy worlds carry no
-     * stored value for blocks placed before the flip; those cells resolve to stable flat {@code 0.0}
-     * with no recovery from live neighbour geometry — there is no retro-migration.
+     * <p>The shipped mode is per-cell provenance — see {@link #usesFrozenPlacementHeight}: a cell
+     * placed by an item under this line's placement policy carries a modern marker and reads its
+     * stored height; a cell without one (blocks from before this version, worldgen, structures,
+     * {@code /setblock}) keeps the live read lanes, so upgrading a world moves nothing. There is no
+     * retro-migration on this line: a legacy cell never acquires a stored value from its live geometry.
      *
-     * <p>Deliberately MUTABLE: fixtures and law rows flip it in-process to run a single scenario under
-     * the shipped mode while the rest of the suite stays on the legacy configuration.
+     * <p>{@code -Dslabbed.frozenDy=true} remains the opt-in for whole-world frozen reads. Deliberately
+     * MUTABLE: fixtures and law rows flip it in-process to run a single scenario under whole-world
+     * frozen reads while the rest of the suite stays on the shipped configuration.
      */
     public static boolean FROZEN_DY_ENABLED =
             Boolean.parseBoolean(System.getProperty("slabbed.frozenDy", "false"));
@@ -525,7 +523,7 @@ public final class SlabAnchorAttachment {
         return rawPlacementDyFact(world, pos).valueOrNaN();
     }
 
-    /** True only for a cell placed after an explicit upgrade policy became active. */
+    /** True only for a cell placed by an item under the placement policy (modern provenance). */
     public static boolean isModernPlacement(BlockView world, BlockPos pos) {
         if (pos == null) {
             return false;
@@ -538,13 +536,13 @@ public final class SlabAnchorAttachment {
         return set != null && set.contains(pos.asLong());
     }
 
-    /** Selects the frozen reader for a proven modern cell, including a policy-gated prediction. */
+    /**
+     * Selects the frozen reader for a cell: every cell under the whole-world override; otherwise a
+     * cell with modern provenance, or — on the client only — a cell the prediction overlay owns.
+     */
     public static boolean usesFrozenPlacementHeight(BlockView world, BlockPos pos) {
-        boolean policyActive = world instanceof World w
-                ? WorldUpgradeRuntimePolicy.authorsModernPlacements(w)
-                : clientRuntimePolicyActiveLookup != null && clientRuntimePolicyActiveLookup.test(pos);
-        if (!policyActive) {
-            return FROZEN_DY_ENABLED;
+        if (FROZEN_DY_ENABLED) {
+            return true;
         }
         if (isModernPlacement(world, pos)) {
             return true;
@@ -559,7 +557,7 @@ public final class SlabAnchorAttachment {
                 && clientEffectivePlacementDyLookup.lookup(pos) != null;
     }
 
-    /** Marks accepted placement cells after the world's explicit upgrade policy is active. */
+    /** Marks accepted item-placement cells with modern provenance (the policy is unconditional here). */
     public static int markPostPolicyPlacements(World world, Iterable<BlockPos> positions) {
         if (world == null || world.isClient() || positions == null
                 || !WorldUpgradeRuntimePolicy.authorsModernPlacements(world)) {

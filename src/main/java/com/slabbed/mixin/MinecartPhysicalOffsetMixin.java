@@ -47,9 +47,9 @@ public abstract class MinecartPhysicalOffsetMixin extends VehicleEntity {
     @Inject(method = "<init>(Lnet/minecraft/entity/EntityType;Lnet/minecraft/world/World;DDD)V", at = @At("TAIL"))
     private void slabbed$placeAtRailHeight(EntityType<?> type, World world,
                                           double x, double y, double z, CallbackInfo ci) {
-        if (!SlabAnchorAttachment.FROZEN_DY_ENABLED || world.isClient) return;
+        if (world.isClient) return;
         BlockPos rail = slabbed$railAt(x, y, z);
-        if (rail != null) {
+        if (rail != null && SlabAnchorAttachment.usesFrozenPlacementHeight(world, rail)) {
             double dy = SlabSupport.getYOffset(world, rail, world.getBlockState(rail));
             if (Double.isFinite(dy)) {
                 dataTracker.set(SLABBED_RAIL_DY, Double.doubleToRawLongBits(dy));
@@ -61,7 +61,6 @@ public abstract class MinecartPhysicalOffsetMixin extends VehicleEntity {
 
     @Unique
     private double slabbed$railDy() {
-        if (!SlabAnchorAttachment.FROZEN_DY_ENABLED) return 0.0d;
         double dy = Double.longBitsToDouble(dataTracker.get(SLABBED_RAIL_DY));
         return Double.isFinite(dy) ? dy : 0.0d;
     }
@@ -75,11 +74,13 @@ public abstract class MinecartPhysicalOffsetMixin extends VehicleEntity {
 
     @Inject(method = "tick", at = @At("HEAD"))
     private void slabbed$bindCurrentRail(CallbackInfo ci) {
-        if (!SlabAnchorAttachment.FROZEN_DY_ENABLED || getWorld().isClient) return;
+        if (getWorld().isClient) return;
         double previousDy = slabbed$railDy();
         BlockPos rail = slabbed$railAt(getX(), getY() - previousDy, getZ());
         if (rail != null) {
-            double dy = SlabSupport.getYOffset(getWorld(), rail, getWorld().getBlockState(rail));
+            // A legacy rail (no modern provenance) keeps the cart at its vanilla physical height.
+            double dy = SlabAnchorAttachment.usesFrozenPlacementHeight(getWorld(), rail)
+                    ? SlabSupport.getYOffset(getWorld(), rail, getWorld().getBlockState(rail)) : 0.0d;
             if (Double.isFinite(dy) && dy != previousDy) {
                 dataTracker.set(SLABBED_RAIL_DY, Double.doubleToRawLongBits(dy));
                 setPosition(getX(), getY() + dy - previousDy, getZ());
@@ -93,7 +94,8 @@ public abstract class MinecartPhysicalOffsetMixin extends VehicleEntity {
             BlockPos candidate = physicalCell.up(above);
             BlockState state = getWorld().getBlockState(candidate);
             if (!AbstractRailBlock.isRail(state)) continue;
-            double dy = SlabSupport.getYOffset(getWorld(), candidate, state);
+            double dy = SlabAnchorAttachment.usesFrozenPlacementHeight(getWorld(), candidate)
+                    ? SlabSupport.getYOffset(getWorld(), candidate, state) : 0.0d;
             if (Double.isFinite(dy) && candidate.equals(slabbed$railAt(getX(), getY() - dy, getZ()))) {
                 dataTracker.set(SLABBED_RAIL_DY, Double.doubleToRawLongBits(dy));
                 return;

@@ -27,12 +27,11 @@ public abstract class BoatItemOffsetRaycastMixin {
                 .multiply(player.getBlockInteractionRange()));
         BlockHitResult vanilla = world.raycast(new RaycastContext(
                 start, end, RaycastContext.ShapeType.OUTLINE, fluidHandling, player));
-        if (!SlabAnchorAttachment.FROZEN_DY_ENABLED) {
-            return vanilla;
-        }
-
         BlockHitResult offset = SlabbedOffsetRaycast.raycast(world, start, end, ShapeContext.of(player));
-        if (offset.getType() == HitResult.Type.MISS) {
+        // Only a hit on a cell with modern provenance owns a stored visible surface; a legacy cell
+        // keeps the vanilla hit.
+        if (offset.getType() == HitResult.Type.MISS
+                || !SlabAnchorAttachment.usesFrozenPlacementHeight(world, offset.getBlockPos())) {
             return vanilla;
         }
         if (vanilla.getType() != HitResult.Type.MISS

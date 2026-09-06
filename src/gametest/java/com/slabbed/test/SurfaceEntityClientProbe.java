@@ -141,6 +141,8 @@ public final class SurfaceEntityClientProbe {
             world.setBlockState(support, probe.support(), Block.NOTIFY_ALL);
             SlabAnchorAttachment.writePlacementDyBatch(world,
                     Map.of(support.toImmutable(), Double.doubleToRawLongBits(probe.dy())));
+            // Fixture cells carry the provenance an item placement would have written.
+            SlabAnchorAttachment.markPostPolicyPlacements(world, java.util.List.of(support.toImmutable()));
             world.getChunkManager().markForUpdate(support);
             fixtureReady = true;
         });

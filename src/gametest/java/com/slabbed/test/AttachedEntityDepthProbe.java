@@ -44,6 +44,8 @@ public final class AttachedEntityDepthProbe {
                 world.setBlockState(backing, Blocks.STONE.getDefaultState(), Block.NOTIFY_ALL);
                 SlabAnchorAttachment.writePlacementDyBatch(world,
                         Map.of(backing, Double.doubleToRawLongBits(dy)));
+                // Fixture cells carry the provenance an item placement would have written.
+                SlabAnchorAttachment.markPostPolicyPlacements(world, java.util.List.of(backing));
                 ItemFrameEntity frame = kind == 0
                         ? new ItemFrameEntity(world, backing.offset(facing), facing)
                         : new GlowItemFrameEntity(world, backing.offset(facing), facing);

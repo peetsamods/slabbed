@@ -20,7 +20,7 @@ public abstract class SnowBlockStoredSupportMixin {
     private VoxelShape slabbed$localSupportShape(BlockState state, BlockView world, BlockPos pos,
                                                 Operation<VoxelShape> original) {
         VoxelShape shape = original.call(state, world, pos);
-        double dy = SlabAnchorAttachment.FROZEN_DY_ENABLED
+        double dy = SlabAnchorAttachment.usesFrozenPlacementHeight(world, pos)
                 ? SlabSupport.getYOffset(world, pos, state) : 0.0d;
         return dy == 0.0d ? shape : shape.offset(0.0d, -dy, 0.0d);
     }
