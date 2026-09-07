@@ -228,6 +228,11 @@ public final class LandingResolver {
         // its transformed-target test asserts only finiteness, so the value was never pinned there.
         boolean insideOwnerColumn = actualTarget.getX() == aim.ownerPos().getX()
                 && actualTarget.getZ() == aim.ownerPos().getZ();
+        // A self-transforming item (scaffolding) climbs its column off a SIDE-face click and puts the
+        // block one or more cells ABOVE the owner, still inside its column. That block is stacked in
+        // the owner's frame — it rests on the column the owner belongs to — so it takes the owner's
+        // top-plane landing, not the side formula (which would sink it by the climbed distance).
+        boolean stackedAboveOwner = insideOwnerColumn && actualTarget.getY() > aim.ownerPos().getY();
 
         double landingDy;
         if (aim.clickedFace() == Direction.UP && insideOwnerColumn) {
@@ -235,6 +240,10 @@ public final class LandingResolver {
             // placement flush on its visible top; only a BOTTOM-type owner takes the upgrade above.
             landingDy = aim.ownerPos().getY() + aim.ownerVisibleDy() + topPlaneOffset(aim.ownerState())
                     - actualTarget.getY();
+        } else if (stackedAboveOwner) {
+            // Same plane formula as the UP face for the cell directly above; a taller climb keeps the
+            // same frame instead of subtracting each climbed cell.
+            landingDy = aim.ownerVisibleDy() + topPlaneOffset(aim.ownerState()) - 1.0d;
         } else if (aim.clickedFace() == Direction.DOWN && insideOwnerColumn) {
             boolean flushTopVerticalChainBridge =
                     finalState.getBlock() instanceof ChainBlock
