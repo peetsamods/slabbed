@@ -28,6 +28,7 @@
     "ProjectileBlockClipOffsetMixin",
     "RedstoneTorchParticleMixin",
     "RedstoneWireBlockMixin",
+    "ScaffoldingLoweredStandMixin",
     "ServerExplosionOcclusionOffsetClipMixin",
     "ServerInteractBlockHitToleranceMixin",
     "SlabSupportBlockMixin",
