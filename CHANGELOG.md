@@ -194,6 +194,8 @@ re-verified in live play on 26.3** and should be treated as "being verified", no
   furnaces, ender chests) at a lowered block's drawn height.
 - Placing onto lowered farmland at every depth.
 - The yellow chat warning when your game and the server disagree about the height flag.
+- Breaking a lowered chest, lever or rail leaving no height behind in the empty cell, and a block a
+  piston later pushes into that cell arriving flush.
 
 Known open issues, carried from the 26.2 line and unchanged here:
 
