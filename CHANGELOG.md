@@ -1,4 +1,75 @@
-## [Unreleased]
+# Changelog
+
+Player-facing changes for the Fabric 1.21.1 line. See LAW.md — this doc does not redefine the law.
+
+## [0.5.2-alpha.9] — Minecraft 1.21.1 (Fabric) — unreleased candidate
+
+Brings the Fabric 1.21.1 line forward from `0.4.2-beta.1`. The headline: **where you place a block is
+where it stays.** Alpha status reflects the size of the rebuild, not its test coverage: 152 server
+GameTests plus a 315-case native client proof run green on every build.
+
+### New placements are permanent; existing blocks are untouched
+
+- **Every block you place from now on records its exact height at placement time and keeps it.**
+  Breaking its support, building next to it, reloading the world, or restarting the game changes
+  nothing. This closes the long-standing family of "block pops up / snaps down later" bugs at the
+  root instead of case by case.
+- **Blocks that already exist in your world keep behaving exactly as they do today.** Nothing moves
+  when you load an older world into this version, and there is no conversion step, prompt, or
+  backup requirement. Older blocks keep the old rules, including the old rules' quirks, until you
+  break and re-place them.
+- Placing a new block on top of an older lowered block lands it flush on that block's visible top.
+- A new placement appears at its final height immediately instead of rendering flat and snapping
+  after the server confirms it.
+- Heights are stored on a sixteenth-of-a-block grid and synchronized compactly, so dense
+  slab-supported builds no longer risk oversized chunk packets.
+
+### Deeper placement
+
+- Side aiming and cantilever placement now work through three blocks of depth, at every
+  sixteenth-grid height, while shallow and ordinary vanilla placement stays as it was.
+- Models, selection outlines, targeting, and collision agree at stored depths, including snow,
+  farmland and crops, beds, carpets, powder snow, turtle eggs, panes, and slab-attached blocks.
+- Ambient and event particles stay attached to lowered blocks: torches, wall torches, campfires,
+  candles, levers, decorated pots, redstone burnout, and block-display particles.
+- Pistons carry a moved block's stored height with it, and a moving piston's block is no longer
+  drawn shifted twice.
+
+### Entities on lowered blocks
+
+- Item frames and glow item frames placed on a lowered block sit at its real height, physically
+  and visually, so they can be targeted where you see them.
+- Minecarts follow rails on lowered blocks physically; riders sit where the cart is drawn.
+- Boats and armor stands placed onto a lowered block land on its visible surface.
+- These apply to blocks placed in this version. On older blocks, frames and carts keep the old
+  render-only behavior.
+
+### Fixed
+
+- Restored vanilla redstone connection, direction, occlusion, and power rules. Redstone can still
+  use supported slab steps, but ordinary solid blocks no longer create phantom wire arms or
+  power paths.
+- Bottom slabs and compatible bottom-like slab surfaces stay mob-proof: making those surfaces
+  usable for placement no longer makes them valid ground for mob spawning.
+- Placed heights stay stable when a block changes shape or state in place: fence, wall, and pane
+  connections, waterlogging, redstone power, and stair-shape updates.
+- Stored heights are no longer misread as whole blocks by the chunk renderer, which could draw a
+  correctly placed block far below its outline and server position.
+- Fabric's model path no longer applies a height offset twice on some non-vanilla models.
+
+### Limits and notes
+
+- Older blocks keep the old behavior by design. A future version will offer converting them.
+- `-Dslabbed.frozenDy=true` makes every block, old or new, read its stored height (a block with no
+  stored height reads flat). This is an opt-in for testing, not a supported way to play older worlds.
+- No claim is made about compatibility with large rendering or optimization modpacks beyond the
+  mods listed as tested in the release notes.
+- Open reports about delayed render refresh, missing item icons, and glass-pane crashes in large
+  packs are not declared fixed by this release without their own retest.
+- This is a Fabric 1.21.1 changelog. Changes released on other Minecraft versions or loaders are
+  not its baseline.
+
+## [Unreleased — deferred]
 - Terrain Slabs named-surface compatibility (objects lowering onto Terrain Slabs surfaces, compound −1.0) is planned for a follow-up; this build keeps the existing gated compat (Terrain Slabs blocks are excluded from Slabbed's visual offsets).
 
 ## [0.4.0-beta.3] - Slabbed 0.4.0 Beta 3 / Minecraft 1.21.1
