@@ -2,8 +2,10 @@ package com.slabbed.mixin;
 
 import com.slabbed.util.SlabSupport;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.particles.ParticleOptions;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.level.LevelAccessor;
 import net.minecraft.world.level.block.AbstractCandleBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.Vec3;
@@ -48,5 +50,24 @@ public abstract class CandleParticleMixin {
         BlockState state = capturedLevel.getBlockState(blockPos);
         double dy = SlabSupport.getYOffset(capturedLevel, blockPos, state);
         addParticlesAndSound(level, dy == 0.0 ? spawnPos : spawnPos.add(0.0, dy, 0.0), random);
+    }
+
+    @Redirect(
+            method = "lambda$extinguish$0",
+            at = @At(
+                    value = "INVOKE",
+                    target = "Lnet/minecraft/world/level/LevelAccessor;addParticle(Lnet/minecraft/core/particles/ParticleOptions;DDDDDD)V"
+            )
+    )
+    private static void slabbed$offsetExtinguishSmoke(
+            LevelAccessor redirectLevel, ParticleOptions options,
+            double x, double y, double z,
+            double xVelocity, double yVelocity, double zVelocity,
+            LevelAccessor level, BlockPos blockPos, Vec3 offset) {
+        BlockState state = level.getBlockState(blockPos);
+        double dy = SlabSupport.getYOffset(level, blockPos, state);
+        redirectLevel.addParticle(
+                options, x, y + (Double.isFinite(dy) ? dy : 0.0d), z,
+                xVelocity, yVelocity, zVelocity);
     }
 }
