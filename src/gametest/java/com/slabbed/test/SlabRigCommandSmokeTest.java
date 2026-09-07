@@ -344,12 +344,13 @@ public final class SlabRigCommandSmokeTest {
         BlockPos laterSubject = bCell.above();
         w.setBlock(laterSubject, Blocks.GOLD_BLOCK.defaultBlockState(), 3);
         BlockPos alreadyAirAttachment = bCell.above(2);
-        w.setBlock(alreadyAirAttachment, Blocks.GOLD_BLOCK.defaultBlockState(), 2);
-        SlabAnchorAttachment.capturePlacementDy(w, alreadyAirAttachment,
-                w.getBlockState(alreadyAirAttachment));
+        // An air cell may carry a stored-dy touch. The height is authored straight into the empty
+        // cell, so the fixture states the condition it needs and does not depend on how the cell
+        // came to be empty.
         w.setBlock(alreadyAirAttachment, Blocks.AIR.defaultBlockState(), 2);
+        SlabAnchorAttachment.writePlacementDy(w, alreadyAirAttachment, -0.5d);
         if (Double.isNaN(SlabAnchorAttachment.storedPlacementDy(w, alreadyAirAttachment))) {
-            throw h.assertionException("premise: flag-2 removal must leave a stored-dy touch on the air slot");
+            throw h.assertionException("premise: an air cell may carry a stored-dy touch");
         }
         exec(h, source, "slabrig clear");
         assertAir(h, w, sCell, "recipe S after clear");
@@ -495,12 +496,13 @@ public final class SlabRigCommandSmokeTest {
         SlabAnchorAttachment.capturePlacementDy(w, reservedOnly, w.getBlockState(reservedOnly));
         double stored = SlabAnchorAttachment.storedPlacementDy(w, reservedOnly);
         BlockPos hauntedAir = base.offset(-2, 1, -2);
-        w.setBlock(hauntedAir, Blocks.GOLD_BLOCK.defaultBlockState(), 2);
-        SlabAnchorAttachment.capturePlacementDy(w, hauntedAir, w.getBlockState(hauntedAir));
+        // Air cell plus a stored height = the haunted guard cell this row is about. Authored
+        // directly, so the fixture never rests on how the cell became empty.
         w.setBlock(hauntedAir, Blocks.AIR.defaultBlockState(), 2);
+        SlabAnchorAttachment.writePlacementDy(w, hauntedAir, -0.5d);
         double hauntedStored = SlabAnchorAttachment.storedPlacementDy(w, hauntedAir);
         if (Double.isNaN(hauntedStored)) {
-            throw h.assertionException("premise: flag-2 air must retain haunted stored dy");
+            throw h.assertionException("premise: the haunted air cell must carry a stored dy");
         }
 
         int built = tryExec(source, "slabrig cases 1 force");
@@ -638,13 +640,14 @@ public final class SlabRigCommandSmokeTest {
                 h.absolutePos(new BlockPos(30, 2, 0)));
         BlockPos base = SlabRigCommand.rigBase(source);
         BlockPos hauntedEffect = base.above();
-        world.setBlock(hauntedEffect, Blocks.GOLD_BLOCK.defaultBlockState(), 2);
-        SlabAnchorAttachment.capturePlacementDy(world, hauntedEffect,
-                world.getBlockState(hauntedEffect));
+        // This row is about /slabrig REFUSING to erase a pre-existing guard cell that sits inside a
+        // declared effect cell — not about how that cell came to be haunted. The guard state is
+        // therefore authored outright: an air cell carrying a stored height.
         world.setBlock(hauntedEffect, Blocks.AIR.defaultBlockState(), 2);
+        SlabAnchorAttachment.writePlacementDy(world, hauntedEffect, -0.5d);
         double before = SlabAnchorAttachment.storedPlacementDy(world, hauntedEffect);
         if (Double.isNaN(before)) {
-            throw h.assertionException("premise: flag-2 air must retain stored dy inside effect cell");
+            throw h.assertionException("premise: the guard cell must carry a stored dy before the build");
         }
 
         int refused = tryExec(source, "slabrig cases 1");
@@ -858,8 +861,10 @@ public final class SlabRigCommandSmokeTest {
                                 "premise: real creative proxy path must place stone before vanish");
                     }
                     creativePlaced[0] = true;
-                    SlabAnchorAttachment.capturePlacementDy(world, creativeTarget, placed);
+                    // The store residue is this row's only evidence that anything happened here, so
+                    // it is authored AFTER the vanish write, not before it.
                     world.setBlock(creativeTarget, Blocks.AIR.defaultBlockState(), 2);
+                    SlabAnchorAttachment.writePlacementDy(world, creativeTarget, -0.5d);
                 });
         try {
             if (tryExec(creativeSource, "slabrig cases " + page + " force") != 1

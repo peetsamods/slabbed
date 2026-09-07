@@ -214,13 +214,13 @@ public final class PistonPlacementDyTransferTest {
     // ── rows ─────────────────────────────────────────────────────────────────────────────────
 
     /**
-     * The subject is a SLAB on purpose: the interrupt landing reaches the removal hook as an ordinary
+     * The subject is a SLAB on purpose: the interrupt landing reaches the removal seam as an ordinary
      * update, where the in-place-transform allowance would keep a full cube's height without any
      * change here but never a slab's.
      *
-     * <p>MUTATION that must redden this row alone: narrow the moving-piston guard in
-     * {@code BlockOnStateReplacedAnchorMixin} to the moved-by-piston branch only. The ticked-landing
-     * row stays green.
+     * <p>MUTATION that must redden this row alone: narrow the moving-piston hand-off guard in
+     * {@code SlabAnchorAttachment.clearFactForDepartedOccupant} to the moved-by-piston branch only. The
+     * ticked-landing row stays green.
      */
     @GameTest(structure = "fabric-gametest-api-v1:empty")
     public void pushedLoweredSlabKeepsItsFactThroughTheInterruptLanding(GameTestHelper h) {
@@ -423,9 +423,9 @@ public final class PistonPlacementDyTransferTest {
      *
      * <p>MUTATION that must redden this row alone: delete the extending head-carry clause in the
      * capture. No other row touches the head cell's own height. Its final clause — the vacated head
-     * keeps no height — is also the tripwire for {@code PistonHeadRemovalAnchorMixin}: the head block
-     * overrides the removal hook without the base call, so without that mixin the carried height
-     * outlives the head.
+     * keeps no height — is also the tripwire for the removal seam at the vacated head cell: the head
+     * block overrides the per-block removal hook without the base call, so only a clear at the chunk
+     * write keeps the carried height from outliving the head.
      */
     @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = 200)
     public void extendedHeadInheritsTheBaseFactAndItsShapes(GameTestHelper h) {

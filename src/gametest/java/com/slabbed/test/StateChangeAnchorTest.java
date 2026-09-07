@@ -20,9 +20,14 @@ import net.minecraft.world.level.block.state.properties.SlabType;
  * unconditionally, so blocks placed on the maintainer's grass terrain un-lower/jitter WITH NO PLAYER ACTION. A
  * genuine break (→ air), a fluid, or a replacement with a non-lock block (a slab) must still clear.
  *
- * <p>Donor lesson preserved verbatim: the transform setBlock MUST use {@code Block.UPDATE_ALL} —
- * vanilla only fires the removal hook when (kind changed && (flags & 1)); UPDATE_LISTENERS-only
- * false-greened an earlier donor version (the NOTIFY_ALL vs NOTIFY_LISTENERS gametest lesson).
+ * <p>The transform setBlock here uses {@code Block.UPDATE_ALL} because that is the STRICTEST input:
+ * every notification vanilla can send does get sent, so nothing about the keep can be explained by a
+ * step that was skipped. It is no longer a correctness requirement of the rows. Slabbed's clear now
+ * sits at the block-write funnel and is flag-independent, so the same transform keeps its height at
+ * any update flags; the low-flag variant is pinned separately by
+ * {@code DepartedOccupantFactClearTest} (maintainer ruling, 2026-09-06). The donor's own lesson —
+ * that vanilla only fires its per-block removal hook when the kind changed AND the neighbours bit is
+ * set — is now a statement about vanilla, not about this mod.
  */
 public final class StateChangeAnchorTest {
 

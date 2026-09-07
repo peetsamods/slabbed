@@ -97,7 +97,6 @@ anything. The split above puts the fine granularity only where a leak has actual
 | `com/slabbed/mixin/BlockCollisionsLoweredAboveMixin` | Collision against a lowered slab above. |
 | `com/slabbed/mixin/BlockItemPlacementIntentMixin` | Captures placement intent for the WYSIWYG placement law. |
 | `com/slabbed/mixin/BlockOnPlacedAnchorMixin` | Writes the anchor on placement. |
-| `com/slabbed/mixin/BlockOnStateReplacedAnchorMixin` | Clears the anchor on state replacement. |
 | `com/slabbed/mixin/CampfireCookingParticleMixin` | Particle origin follows the lowered block. |
 | `com/slabbed/mixin/CampfireParticleMixin` | Particle origin follows the lowered block. |
 | `com/slabbed/mixin/CandleParticleMixin` | Particle origin follows the lowered block. |
@@ -108,6 +107,7 @@ anything. The split above puts the fine granularity only where a leak has actual
 | `com/slabbed/mixin/HangingSignAttachedMixin` | Hanging-sign attachment from above. |
 | `com/slabbed/mixin/ItemFrameWysiwygMixin` | Item-frame bounding box hangs on the support's drawn face; entity position untouched. |
 | `com/slabbed/mixin/ItemStackUseCreatedContactMixin` | Use-on contact point for offset placement. |
+| `com/slabbed/mixin/LevelChunkOccupantChangeAnchorMixin` | Clears a cell's stored height when its block kind is replaced, at the one write funnel every removal passes (maintainer ruling, 2026-09-06). |
 | `com/slabbed/mixin/LeverParticleMixin` | Particle origin follows the lowered block. |
 | `com/slabbed/mixin/LithiumBlockCollisionSweeperPosLoweredAboveMixin` | Lithium compat: a lowered block's hanging collision reaches Lithium's position-yielding block-collision sweeper; admitted only after the config plugin byte-checks that sweeper (maintainer ruling, 2026-09-02). |
 | `com/slabbed/mixin/LithiumBlockCollisionSweeperShapeLoweredAboveMixin` | Lithium compat: a lowered block's hanging collision reaches Lithium's shape-yielding block-collision sweeper; admitted only after the config plugin byte-checks that sweeper (maintainer ruling, 2026-09-02). |
@@ -115,7 +115,6 @@ anything. The split above puts the fine granularity only where a leak has actual
 | `com/slabbed/mixin/MinecartRailSeatMixin` | A minecart's real position follows a lowered rail: synced seat offset, spawn seat, per-tick rebind, save data, and the rail-cell derivation (maintainer ruling, 2026-09-06). |
 | `com/slabbed/mixin/OldMinecartBehaviorRailFrameMixin` | Default rail solver computes in the logical grid frame while the cart stays physical. |
 | `com/slabbed/mixin/NewMinecartBehaviorRailFrameMixin` | Experimental-movement rail solver computes in the logical grid frame; the synced interpolation step stays physical. |
-| `com/slabbed/mixin/PistonHeadRemovalAnchorMixin` | A retracting piston head leaves no stored height in its vacated cell; the head block overrides the removal hook without the base call, so the base-class clear never reaches it (maintainer ruling, 2026-09-06). |
 | `com/slabbed/mixin/PistonMoveDyTransferMixin` | A pushed or pulled block keeps the height it was placed at when a piston moves it (maintainer ruling, 2026-09-06). |
 | `com/slabbed/mixin/RedstoneWireBlockMixin` | Redstone wire connection/support over lowered slabs. |
 | `com/slabbed/mixin/ServerInteractBlockHitToleranceMixin` | Server-side hit tolerance for offset targeting. |

@@ -1036,44 +1036,104 @@ public final class SlabAnchorAttachment {
     }
 
     /**
-     * Clears any anchor at {@code pos}. Server-side only.
+     * The keep-or-clear decision for a cell whose block KIND is being replaced. One rule, one place;
+     * the removal seam ({@code LevelChunkOccupantChangeAnchorMixin}) is the only caller, and it hands
+     * in the chunk it already holds so nothing here looks one up again.
+     *
+     * <p>Only {@code pos} is read. Nothing around it is consulted, so no neighbour edit can reach a
+     * placed block's height through this method (LAW 1).
+     */
+    public static void clearFactForDepartedOccupant(
+            Level world, LevelChunk chunk, BlockPos pos,
+            BlockState oldState, BlockState newState, boolean movedByPiston) {
+        if (world == null || world.isClientSide() || pos == null
+                || !hasStoredAttachmentEvidence(chunk, pos.asLong())) {
+            return;
+        }
+        // The piston's stand-in is not an occupant, it is the animation of one. A cell handed TO the
+        // stand-in OUTSIDE a piston carry is the piston's own base cell mid-animation and keeps its
+        // height; a destination the carry itself writes (moved bit set) is a real departure and must
+        // clear, or a flat block pushed into a formerly-lowered cell would inherit that cell's height
+        // (maintainer ruling, 2026-09-06). Keyed on the block's IDENTITY plus the moved bit, never on
+        // a whole flag value, so a vanilla flag reshuffle cannot silently disarm it.
+        if (newState.is(Blocks.MOVING_PISTON) && !movedByPiston) {
+            return;
+        }
+        // Handing the cell BACK from the stand-in to a real occupant keeps: the height stored here was
+        // written FOR the arriving block. Handing off to AIR is a real departure and still clears —
+        // that is the interrupted source piston, which lands air in its own cell. Do not narrow this
+        // to one of the two moved branches: the two landing paths arrive differently — the ticked
+        // landing carries the moved-by-piston bit and the interrupt landing is an ordinary update,
+        // where a full cube would survive the allowance below but a slab or carpet would not — and
+        // both are exercised by the piston transfer rows.
+        if (oldState.is(Blocks.MOVING_PISTON) && !newState.isAir()) {
+            return;
+        }
+        // D1 port (donor: 1.21.11 78ec0ac4): only clear the height-lock when the block genuinely
+        // LEAVES this cell. An in-place block-KIND transform to another lock-eligible block
+        // (grass_block -> dirt from a random tick, log -> stripped_log, copper oxidation) keeps the
+        // lock so the block does not un-lower / jitter with no player action (the state-change jitter
+        // defense the port was missing — audit D1). A real break (-> air / fluid) or a replacement
+        // with a non-lock block still clears it.
+        if (!movedByPiston && replacementPreservesAnchor(world, pos, oldState, newState)) {
+            return;
+        }
+        removeAnchor(world, chunk, pos);
+    }
+
+    /**
+     * Clears every stored fact at {@code pos}. Server-side only.
+     *
+     * <p>The clear is driven from the block-write funnel ({@code LevelChunk.setBlockState}), not from
+     * a per-block removal hook: 28 vanilla classes override that hook without the base call, and
+     * vanilla reaches it only for some update-flag values (maintainer ruling, 2026-09-06). The
+     * command and gametest callers below invoke it directly.
      */
     public static void removeAnchor(Level world, BlockPos pos) {
-        boolean removed = removeFromAttachment(world, pos, ANCHOR_TYPE, "anchor");
-        // Freeze-on-place flat marker clears when the piece itself is broken/replaced
-        // (onStateReplaced calls removeAnchor for every removal), so a fresh placement in
-        // the same spot re-evaluates from scratch.
-        removeFromAttachment(world, pos, FROZEN_FLAT_TYPE, "frozen_flat");
+        if (world == null || world.isClientSide() || pos == null) {
+            return;
+        }
+        removeAnchor(world, world.getChunk(pos.getX() >> 4, pos.getZ() >> 4), pos);
+    }
+
+    /**
+     * Same clear, against a chunk the caller already holds — the seam runs on every server block-kind
+     * change, and the position-only form performed nine separate chunk lookups for one cell.
+     */
+    public static void removeAnchor(Level world, LevelChunk chunk, BlockPos pos) {
+        if (world == null || world.isClientSide() || chunk == null || pos == null) {
+            return;
+        }
+        removeFromAttachment(world, chunk, pos, ANCHOR_TYPE, "anchor");
+        // Freeze-on-place flat marker clears when the piece itself is broken/replaced, so a fresh
+        // placement in the same spot re-evaluates from scratch.
+        removeFromAttachment(world, chunk, pos, FROZEN_FLAT_TYPE, "frozen_flat");
         // 26.1.2 port: diagnostic side effect deferred until core compile is restored.
         // Beta4 sidecar travels with the ordinary anchor: when the compound block
         // itself is broken/replaced, clear the authored compound truth too.
-        removeFromAttachment(world, pos, COMPOUND_FULL_BLOCK_ANCHOR_TYPE, "compound_full_block_anchor");
-        removeFromAttachment(world, pos, COMPOUND_VISIBLE_SIDE_LOWER_SLAB_TYPE,
+        removeFromAttachment(world, chunk, pos, COMPOUND_FULL_BLOCK_ANCHOR_TYPE,
+                "compound_full_block_anchor");
+        removeFromAttachment(world, chunk, pos, COMPOUND_VISIBLE_SIDE_LOWER_SLAB_TYPE,
                 "compound_visible_side_lower_slab");
-        removeFromAttachment(world, pos, COMPOUND_VISIBLE_SIDE_UPPER_SLAB_TYPE,
+        removeFromAttachment(world, chunk, pos, COMPOUND_VISIBLE_SIDE_UPPER_SLAB_TYPE,
                 "compound_visible_side_upper_slab");
-        removeFromAttachment(world, pos, COMPOUND_VISIBLE_SIDE_DOUBLE_SLAB_TYPE,
+        removeFromAttachment(world, chunk, pos, COMPOUND_VISIBLE_SIDE_DOUBLE_SLAB_TYPE,
                 "compound_visible_side_double_slab");
-        removeFromAttachment(world, pos, COMPOUND_VISIBLE_OWNER_TOP_SLAB_TYPE,
+        removeFromAttachment(world, chunk, pos, COMPOUND_VISIBLE_OWNER_TOP_SLAB_TYPE,
                 "compound_visible_owner_top_slab");
         // F2 (haunted-cells audit, STATE_DEFENSE_DIVERGENCE_2026-07-07): the carrier marker must die
         // with its slab like every other attachment — it was the ONE type this method didn't clear
         // (and removePersistentLoweredSlabCarrier had zero callers), so markers outlived break/replace
         // cycles and re-lowered fresh slabs placed at old lane positions forever.
-        removeFromAttachment(world, pos, LOWERED_SLAB_CARRIER_TYPE, "lowered_slab_carrier");
+        removeFromAttachment(world, chunk, pos, LOWERED_SLAB_CARRIER_TYPE, "lowered_slab_carrier");
         // FROZEN-DY (Step 0): the stored placement height dies with the block, so a fresh placement in
         // the same cell captures its own aim from scratch.
-        if (world != null && !world.isClientSide()) {
-            LevelChunk dyChunk = world.getChunk(pos.getX() >> 4, pos.getZ() >> 4);
-            if (dyChunk != null) {
-                Long2DoubleOpenHashMap dyMap = dyChunk.getAttached(PLACEMENT_DY_TYPE);
-                if (dyMap != null && dyMap.containsKey(pos.asLong())) {
-                    Long2DoubleOpenHashMap copy = new Long2DoubleOpenHashMap(dyMap);
-                    copy.defaultReturnValue(Double.NaN);
-                    copy.remove(pos.asLong());
-                    dyChunk.setAttached(PLACEMENT_DY_TYPE, copy);
-                }
-            }
+        Long2DoubleOpenHashMap dyMap = chunk.getAttached(PLACEMENT_DY_TYPE);
+        if (dyMap != null && dyMap.containsKey(pos.asLong())) {
+            Long2DoubleOpenHashMap copy = new Long2DoubleOpenHashMap(dyMap);
+            copy.defaultReturnValue(Double.NaN);
+            copy.remove(pos.asLong());
+            chunk.setAttached(PLACEMENT_DY_TYPE, copy);
         }
     }
 
@@ -1090,8 +1150,29 @@ public final class SlabAnchorAttachment {
             throw new IllegalStateException(
                     "refusing raw attachment probe for unloaded chunk at " + pos.toShortString());
         }
-        long key = pos.asLong();
+        return hasStoredAttachmentEvidence(chunk, pos.asLong());
+    }
+
+    /**
+     * The same probe against a chunk the caller already holds, keyed by the packed position. This is
+     * the form the removal seam runs on every server block-kind change, so it must stay allocation-free
+     * and must not look a chunk up.
+     *
+     * <p>MEMBERSHIP, never presence: {@link #removeAnchor(Level, LevelChunk, BlockPos)} leaves an
+     * EMPTY placement-dy map attached rather than removing it, so a {@code getAttached(type) != null}
+     * probe would stay armed for the life of any chunk that ever held one fact.
+     *
+     * <p>The family list lives here and nowhere else: a new attachment family that is not added to
+     * this method is silently unprotected by the seam.
+     */
+    public static boolean hasStoredAttachmentEvidence(LevelChunk chunk, long key) {
+        if (chunk == null) {
+            return false;
+        }
         Long2DoubleOpenHashMap dyMap = chunk.getAttached(PLACEMENT_DY_TYPE);
+        if (dyMap != null && dyMap.containsKey(key)) {
+            return true;
+        }
         return contains(chunk.getAttached(ANCHOR_TYPE), key)
                 || contains(chunk.getAttached(FROZEN_FLAT_TYPE), key)
                 || contains(chunk.getAttached(COMPOUND_FULL_BLOCK_ANCHOR_TYPE), key)
@@ -1099,8 +1180,7 @@ public final class SlabAnchorAttachment {
                 || contains(chunk.getAttached(COMPOUND_VISIBLE_SIDE_UPPER_SLAB_TYPE), key)
                 || contains(chunk.getAttached(COMPOUND_VISIBLE_SIDE_DOUBLE_SLAB_TYPE), key)
                 || contains(chunk.getAttached(COMPOUND_VISIBLE_OWNER_TOP_SLAB_TYPE), key)
-                || contains(chunk.getAttached(LOWERED_SLAB_CARRIER_TYPE), key)
-                || dyMap != null && dyMap.containsKey(key);
+                || contains(chunk.getAttached(LOWERED_SLAB_CARRIER_TYPE), key);
     }
 
     private static boolean contains(LongOpenHashSet set, long key) {
@@ -1120,7 +1200,21 @@ public final class SlabAnchorAttachment {
         if (world == null || world.isClientSide()) {
             return false;
         }
-        LevelChunk chunk = world.getChunk(pos.getX() >> 4, pos.getZ() >> 4);
+        return removeFromAttachment(
+                world, world.getChunk(pos.getX() >> 4, pos.getZ() >> 4), pos, type, label);
+    }
+
+    /** The same removal against a chunk the caller already holds; see {@link #removeAnchor}. */
+    private static boolean removeFromAttachment(
+            Level world,
+            LevelChunk chunk,
+            BlockPos pos,
+            AttachmentType<LongOpenHashSet> type,
+            String label
+    ) {
+        if (world == null || world.isClientSide()) {
+            return false;
+        }
         if (chunk == null) {
             return false;
         }
