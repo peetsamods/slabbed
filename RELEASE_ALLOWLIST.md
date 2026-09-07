@@ -111,6 +111,8 @@ anything. The split above puts the fine granularity only where a leak has actual
 | `com/slabbed/mixin/LithiumBlockCollisionSweeperPosLoweredAboveMixin` | Lithium compat: a lowered block's hanging collision reaches Lithium's position-yielding block-collision sweeper; admitted only after the config plugin byte-checks that sweeper (maintainer ruling, 2026-09-02). |
 | `com/slabbed/mixin/LithiumBlockCollisionSweeperShapeLoweredAboveMixin` | Lithium compat: a lowered block's hanging collision reaches Lithium's shape-yielding block-collision sweeper; admitted only after the config plugin byte-checks that sweeper (maintainer ruling, 2026-09-02). |
 | `com/slabbed/mixin/LivingEntityLoweredScaffoldingMixin` | Scaffolding movement over lowered geometry. |
+| `com/slabbed/mixin/PistonHeadRemovalAnchorMixin` | A retracting piston head leaves no stored height in its vacated cell; the head block overrides the removal hook without the base call, so the base-class clear never reaches it (maintainer ruling, 2026-09-06). |
+| `com/slabbed/mixin/PistonMoveDyTransferMixin` | A pushed or pulled block keeps the height it was placed at when a piston moves it (maintainer ruling, 2026-09-06). |
 | `com/slabbed/mixin/RedstoneWireBlockMixin` | Redstone wire connection/support over lowered slabs. |
 | `com/slabbed/mixin/ServerInteractBlockHitToleranceMixin` | Server-side hit tolerance for offset targeting. |
 | `com/slabbed/mixin/SlabSupportBlockMixin` | Slab support surface. |

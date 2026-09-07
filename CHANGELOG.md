@@ -20,6 +20,12 @@ See LAW.md — this changelog does not redefine the law.
 
 ### Fixes
 
+- **Pistons no longer flatten what they push.** A block you placed at a lowered height kept that
+  height until a piston moved it, after which it sat flat forever, with no way to get the height
+  back short of breaking and replacing it. Pushed and pulled blocks now arrive at exactly the height
+  they were placed at, sticky pulls and slime chains included; a lowered piston keeps its own height
+  through extending and retracting, and its extended head sits at the same height as its base, in
+  collision as well as on screen (maintainer ruling, 2026-09-06).
 - **Ambient particles spawn at a lowered block's drawn height.** Anything a block puffs out on its
   own — an end rod's sparks, a lit furnace's smoke and flame, an ender chest's swirl, an enchanting
   table's glyphs, mycelium spores, crying obsidian's tears, redstone ore's sparkle, spore blossom

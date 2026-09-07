@@ -9,6 +9,7 @@ import net.fabricmc.fabric.api.client.renderer.v1.mesh.QuadEmitter;
 import net.fabricmc.fabric.api.client.renderer.v1.mesh.QuadTransform;
 import net.fabricmc.fabric.api.client.renderer.v1.model.FabricBlockStateModel;
 import net.minecraft.client.renderer.block.BlockAndTintGetter;
+import net.minecraft.client.renderer.block.MovingBlockRenderState;
 import net.minecraft.client.renderer.block.dispatch.BlockStateModel;
 import net.minecraft.client.renderer.block.dispatch.BlockStateModelPart;
 import net.minecraft.client.resources.model.sprite.Material;
@@ -58,6 +59,19 @@ public final class OffsetBlockStateModel implements BlockStateModel {
     @Override
     public void emitQuads(QuadEmitter emitter, BlockAndTintGetter view, BlockPos pos, BlockState state, RandomSource random,
                           Predicate<Direction> cullTest) {
+        // A moving body's reference cell is not the cell it is drawn in. Exactly two renderers build
+        // this view: the piston head renderer, whose reference cell is the cell the block came FROM,
+        // and the falling-block renderer, whose reference cell is whatever cell the entity currently
+        // overlaps. A stored placement height is a fact about a CELL, so it has no meaning on this
+        // view; a moving body's height is carried by whoever positions the body — the block-entity
+        // dispatcher for a piston body, the entity's own position for a falling block — and applying
+        // it a second time here is the double offset (maintainer ruling, 2026-09-06). Do not re-add a
+        // dy resolve on this path. The seam and cull work is meaningless here too: this view reports
+        // its own state only at its own position and nothing at any other.
+        if (slabbed$isMovingBodyView(view)) {
+            fabricWrapped.emitQuads(emitter, view, pos, state, random, cullTest);
+            return;
+        }
         // Resolve the frozen model dy before deciding whether this chain owns the special bridge.
         // A lowered TOP chain must take the ordinary shifted emitter path; only a flush TOP chain
         // keeps the 24px bridge. DOUBLE retains its existing bridge policy in SlabSupport.
@@ -158,6 +172,26 @@ public final class OffsetBlockStateModel implements BlockStateModel {
      */
     public static float liveModelDy(BlockAndTintGetter view, BlockPos pos, BlockState state) {
         return slabbed$modelDy(view, pos, state);
+    }
+
+    /**
+     * The dy this model path actually applies for {@code view} — the single point of truth shared by
+     * {@link #emitQuads} and by the moving-body draw-ownership proof, so the two can never disagree
+     * about whether the model contributed an offset.
+     *
+     * <p>A moving body's view carries none: its reference cell is not the cell it is drawn in, so the
+     * height belongs to whoever positions the body (maintainer ruling, 2026-09-06).
+     */
+    public static float appliedModelDy(BlockAndTintGetter view, BlockPos pos, BlockState state) {
+        if (slabbed$isMovingBodyView(view)) {
+            return 0.0f;
+        }
+        return slabbed$modelDy(view, pos, state);
+    }
+
+    /** True for the render view of a body in motion, whose {@code blockPos} is a reference cell. */
+    private static boolean slabbed$isMovingBodyView(BlockAndTintGetter view) {
+        return view instanceof MovingBlockRenderState;
     }
 
     private static float slabbed$modelDy(BlockAndTintGetter view, BlockPos pos, BlockState state) {

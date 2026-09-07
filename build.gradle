@@ -405,6 +405,7 @@ sourceSets {
             include("com/slabbed/test/WysiwygMarkerHandOffTest.java")
             include("com/slabbed/test/OffsetRaycastDeepLaneTest.java")
             include("com/slabbed/test/NeighborUpdateInvarianceTest.java")
+            include("com/slabbed/test/PistonPlacementDyTransferTest.java")
             include("com/slabbed/test/DeepCompoundTowerLawTest.java")
             include("com/slabbed/test/LandingRuleLawTest.java")
             include("com/slabbed/test/UpwardContinuationValidationTest.java")

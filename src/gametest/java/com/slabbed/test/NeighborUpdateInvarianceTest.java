@@ -322,6 +322,13 @@ public final class NeighborUpdateInvarianceTest {
     }
 
     // ── MUTATIONS: applied to the subject's neighbourhood, never its own cell ────────────────
+    // COVERAGE MAP: a piston move is not expressible in this table, for two structural reasons both
+    // visible in this file. This catalogue's contract is that the subject's OWN cell is never touched
+    // — the mutations only ever edit the cells around it — and a push relocates the subject; and
+    // runSubject's vanilla-mechanic carve-out continues when the subject cell reads air, so a
+    // push-shaped mutation that carried the subject away would be silently absorbed as a pass. The law
+    // obligation for a moved block is discharged instead by PistonPlacementDyTransferTest, whose
+    // neighbour-invariance row replays this same mutation set against the block's NEW cell.
     @FunctionalInterface
     private interface Mutation {
         void apply(ServerLevel w, BlockPos subject);

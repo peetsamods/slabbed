@@ -106,7 +106,8 @@
       "com.slabbed.test.SlabTestKitPaletteTest",
       "com.slabbed.test.SlabTestKitCommandsTest",
       "com.slabbed.anchor.FrozenFlatAttachmentCapacityTest",
-      "com.slabbed.anchor.PlacementDyAttachmentCapacityTest"
+      "com.slabbed.anchor.PlacementDyAttachmentCapacityTest",
+      "com.slabbed.test.PistonPlacementDyTransferTest"
     ],
     "fabric-client-gametest": [
       "com.slabbed.test.EventParticleFrozenDyClientGameTest",
