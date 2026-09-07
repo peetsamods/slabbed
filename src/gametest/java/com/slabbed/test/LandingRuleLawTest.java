@@ -803,6 +803,45 @@ public final class LandingRuleLawTest {
         c3Pass(h, "landing_rule_law_test_c3_pair_validation_negative_controls");
     }
 
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void loweredFarmlandTopFaceValidation(GameTestHelper h) {
+        BlockPos owner = h.absolutePos(new BlockPos(3, 5, 3));
+        double ownerDy = -2.0d;
+        Vec3 visibleTop = new Vec3(
+                owner.getX() + 0.5d,
+                owner.getY() + ownerDy + 15.0d / 16.0d,
+                owner.getZ() + 0.5d);
+        BlockState wheat = Blocks.WHEAT.defaultBlockState();
+
+        double admitted = LandingHitValidationPolicy.shiftedCenterDy(
+                owner, Blocks.FARMLAND.defaultBlockState(), ownerDy,
+                Direction.UP, visibleTop, wheat);
+        double sideHit = LandingHitValidationPolicy.shiftedCenterDy(
+                owner, Blocks.FARMLAND.defaultBlockState(), ownerDy,
+                Direction.NORTH, visibleTop, wheat);
+        double belowTop = LandingHitValidationPolicy.shiftedCenterDy(
+                owner, Blocks.FARMLAND.defaultBlockState(), ownerDy,
+                Direction.UP, visibleTop.add(0.0d, -1.0d / 16.0d, 0.0d), wheat);
+        double outsideFootprint = LandingHitValidationPolicy.shiftedCenterDy(
+                owner, Blocks.FARMLAND.defaultBlockState(), ownerDy,
+                Direction.UP, visibleTop.add(0.6d, 0.0d, 0.0d), wheat);
+        double flatOwner = LandingHitValidationPolicy.shiftedCenterDy(
+                owner, Blocks.FARMLAND.defaultBlockState(), 0.0d,
+                Direction.UP, visibleTop, wheat);
+
+        if (Double.doubleToRawLongBits(admitted) != Double.doubleToRawLongBits(ownerDy)
+                || !Double.isNaN(sideHit)
+                || !Double.isNaN(belowTop)
+                || !Double.isNaN(outsideFootprint)
+                || !Double.isNaN(flatOwner)) {
+            throw h.assertionException(owner,
+                    "lowered farmland validation must admit only its exact visible top face: admitted="
+                            + admitted + " side=" + sideHit + " below=" + belowTop
+                            + " outside=" + outsideFootprint + " flat=" + flatOwner);
+        }
+        c3Pass(h, "landing_rule_law_test_lowered_farmland_top_face_validation");
+    }
+
     private record PairScene(ServerLevel world, BlockPos primary, BlockPos partner, long publicationProbe) {
     }
 

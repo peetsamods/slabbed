@@ -20,6 +20,10 @@ See LAW.md — this changelog does not redefine the law.
 
 ### Fixes
 
+- **Placing onto lowered farmland works.** Clicking the visible top of a lowered farmland block to
+  plant or build on it could be refused, because the click was checked against the grid cell rather
+  than the farmland's drawn top, which sits a sliver below a full block. An exact click on the drawn
+  top is now accepted; clicks on the side, below the top, or outside the block are refused as before.
 - **Candle and redstone-torch smoke stays with the lowered block.** Snuffing a lowered candle, or a
   lowered redstone torch burning out, puffed its smoke at normal grid height, hovering above the
   block. Both now smoke from the block's drawn height, the way their idle particles already did.
