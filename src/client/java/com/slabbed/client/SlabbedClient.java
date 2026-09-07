@@ -35,6 +35,11 @@ public final class SlabbedClient implements ClientModInitializer {
         // until someone types them. The /slabrig family does NOT follow them out of the gate — it
         // stays dev-gated in Slabbed.initDevFeatures and excluded from the release artifacts.
         SlabbedDebugCommands.register();
+        // Two UNBOUND key mappings for the manual height nudge. Registered here, not lazily: Fabric's
+        // key-mapping registry refuses once the options object exists, so a deferred registration is a
+        // hard startup exception. Same shipped-default-off shape as the commands above: the tick body
+        // returns on an unbound-pair check before it touches the crosshair, the level or the network.
+        ManualDyKeybind.init();
     }
 
     private static void initDyFingerprintDump() {

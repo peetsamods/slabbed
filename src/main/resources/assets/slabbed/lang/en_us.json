@@ -5,5 +5,8 @@
   "slabbed.settings.pot_seat.flush": "TODO(human)",
   "slabbed.settings.pot_seat.vanilla_float": "TODO(human)",
   "slabbed.settings.pot_seat.flush.tooltip": "TODO(human)",
-  "slabbed.settings.pot_seat.vanilla_float.tooltip": "TODO(human) — must carry the server-decides sentence"
+  "slabbed.settings.pot_seat.vanilla_float.tooltip": "TODO(human) — must carry the server-decides sentence",
+  "key.category.slabbed.slabbed": "TODO(human)",
+  "key.slabbed.manual_dy_lower": "TODO(human)",
+  "key.slabbed.manual_dy_raise": "TODO(human)"
 }

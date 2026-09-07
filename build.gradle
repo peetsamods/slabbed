@@ -412,6 +412,7 @@ sourceSets {
             include("com/slabbed/test/BoatVisibleSurfacePlacementTest.java")
             include("com/slabbed/config/SlabbedConfigFileTest.java")
             include("com/slabbed/test/PotSeatOptionTest.java")
+            include("com/slabbed/test/ManualDyAdjustLawTest.java")
             include("com/slabbed/test/DeepCompoundTowerLawTest.java")
             include("com/slabbed/test/LandingRuleLawTest.java")
             include("com/slabbed/test/UpwardContinuationValidationTest.java")

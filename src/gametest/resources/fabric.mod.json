@@ -113,7 +113,8 @@
       "com.slabbed.test.ArmorStandVisibleTopPlacementTest",
       "com.slabbed.test.BoatVisibleSurfacePlacementTest",
       "com.slabbed.config.SlabbedConfigFileTest",
-      "com.slabbed.test.PotSeatOptionTest"
+      "com.slabbed.test.PotSeatOptionTest",
+      "com.slabbed.test.ManualDyAdjustLawTest"
     ],
     "fabric-client-gametest": [
       "com.slabbed.test.EventParticleFrozenDyClientGameTest",
