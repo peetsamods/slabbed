@@ -8,6 +8,7 @@ import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.EmptyBlockGetter;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.BedBlock;
+import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.EntityBlock;
 import net.minecraft.world.level.block.FlowerPotBlock;
 import net.minecraft.world.level.block.PointedDripstoneBlock;
@@ -111,6 +112,18 @@ public final class LandingHitValidationPolicy {
         }
 
         LandingResolver.Family heldFamily = LandingResolver.classify(heldState);
+        // Farmland presents a full-width top seat at 15/16 even though it is not a full cube.
+        // Shift only an exact click on that translated face; vanilla still owns item placement.
+        if (ownerState.is(Blocks.FARMLAND)
+                && heldFamily != LandingResolver.Family.UNSUPPORTED
+                && hitFace == Direction.UP
+                && Math.abs(hitPos.y - (ownerPos.getY() + ownerDy + 15.0d / 16.0d)) <= EPSILON
+                && hitPos.x >= ownerPos.getX() - EPSILON
+                && hitPos.x <= ownerPos.getX() + 1.0d + EPSILON
+                && hitPos.z >= ownerPos.getZ() - EPSILON
+                && hitPos.z <= ownerPos.getZ() + 1.0d + EPSILON) {
+            return ownerDy;
+        }
         if (heldFamily == LandingResolver.Family.USE_CREATED_FULL_CUBE_CONTACT) {
             boolean supportedOwner = ownerState.getBlock() instanceof SlabBlock
                     || ownerState.getBlock() instanceof EntityBlock
