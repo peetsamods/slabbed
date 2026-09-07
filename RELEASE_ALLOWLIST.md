@@ -111,6 +111,9 @@ anything. The split above puts the fine granularity only where a leak has actual
 | `com/slabbed/mixin/LithiumBlockCollisionSweeperPosLoweredAboveMixin` | Lithium compat: a lowered block's hanging collision reaches Lithium's position-yielding block-collision sweeper; admitted only after the config plugin byte-checks that sweeper (maintainer ruling, 2026-09-02). |
 | `com/slabbed/mixin/LithiumBlockCollisionSweeperShapeLoweredAboveMixin` | Lithium compat: a lowered block's hanging collision reaches Lithium's shape-yielding block-collision sweeper; admitted only after the config plugin byte-checks that sweeper (maintainer ruling, 2026-09-02). |
 | `com/slabbed/mixin/LivingEntityLoweredScaffoldingMixin` | Scaffolding movement over lowered geometry. |
+| `com/slabbed/mixin/MinecartRailSeatMixin` | A minecart's real position follows a lowered rail: synced seat offset, spawn seat, per-tick rebind, save data, and the rail-cell derivation (maintainer ruling, 2026-09-06). |
+| `com/slabbed/mixin/OldMinecartBehaviorRailFrameMixin` | Default rail solver computes in the logical grid frame while the cart stays physical. |
+| `com/slabbed/mixin/NewMinecartBehaviorRailFrameMixin` | Experimental-movement rail solver computes in the logical grid frame; the synced interpolation step stays physical. |
 | `com/slabbed/mixin/PistonHeadRemovalAnchorMixin` | A retracting piston head leaves no stored height in its vacated cell; the head block overrides the removal hook without the base call, so the base-class clear never reaches it (maintainer ruling, 2026-09-06). |
 | `com/slabbed/mixin/PistonMoveDyTransferMixin` | A pushed or pulled block keeps the height it was placed at when a piston moves it (maintainer ruling, 2026-09-06). |
 | `com/slabbed/mixin/RedstoneWireBlockMixin` | Redstone wire connection/support over lowered slabs. |
@@ -118,6 +121,7 @@ anything. The split above puts the fine granularity only where a leak has actual
 | `com/slabbed/mixin/SlabSupportBlockMixin` | Slab support surface. |
 | `com/slabbed/mixin/SlabSupportStateMixin` | Slab support state. |
 | `com/slabbed/mixin/AbstractArrowOffsetClipMixin` | Arrows/tridents hit a lowered block where it is drawn. |
+| `com/slabbed/mixin/ArmorStandItemVisibleTopMixin` | An armor stand's free-space check reads the band the stand will actually occupy over a lowered support (maintainer ruling, 2026-09-06). |
 | `com/slabbed/mixin/ClipContextBlockAccessor` | Reads a clip's block mode so the collider-clip supplement only answers COLLIDER queries. |
 | `com/slabbed/mixin/LivingEntitySightOffsetClipMixin` | Mob sight is blocked by a lowered block's drawn body. |
 | `com/slabbed/mixin/ProjectileBlockClipOffsetMixin` | Projectiles hit a lowered block where it is drawn. |
@@ -171,6 +175,8 @@ anything. The split above puts the fine granularity only where a leak has actual
 | `com/slabbed/util/SlabbedDebugCommandTree` | The Brigadier node structure and feedback strings for the shipped `/slabdy` and `/slabdev`. Pure Brigadier, generic over the command source, no Minecraft or client type in any signature — deliberately so: a client command tree is unreachable from a headless dedicated-server GameTest, and "the command is invocable" is only worth what its test is worth. `ShippedDebugCommandsTest` registers these exact builders into a real dispatcher and executes real command strings. Inert until invoked: everything runs inside an `executes(...)` body. |
 | `com/slabbed/util/SlabdyRowFormatter` | Headless field computation for the `[slabdy]` diagnostic row. **Previously excluded** with the reason "no shipped consumer on this line" — that is no longer true: `/slabdy row` is a shipped consumer, and it is the one debug subcommand that does real work on a release jar (it needs nothing but `SlabAnchorAttachment` and `SlabSupport`, both approved above). Read-only: it computes strings and touches no state. |
 | `com/slabbed/util/BlockDisplayParticleContext` | Carries a block's frozen visual height through its vanilla display tick so the particles that tick emits follow the drawn model; also the ownership handshake the three retained per-block particle hooks use to keep their emission single-shifted. |
+| `com/slabbed/util/MinecartRailFrame` | Physical/logical frame conversion for a minecart seated on a lowered rail; the single place the conversion is written, shared by the behaviour mixins and the renderer. |
+| `com/slabbed/util/RailSeatDyHolder` | Duck interface exposing a minecart's bound rail seat offset. |
 
 ## Ruling executed (2026-08-07)
 
