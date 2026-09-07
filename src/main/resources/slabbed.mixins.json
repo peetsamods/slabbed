@@ -25,6 +25,8 @@
     "LithiumBlockCollisionSweeperShapeLoweredAboveMixin",
     "LivingEntityLoweredScaffoldingMixin",
     "LivingEntitySightOffsetClipMixin",
+    "PistonHeadRemovalAnchorMixin",
+    "PistonMoveDyTransferMixin",
     "ProjectileBlockClipOffsetMixin",
     "RedstoneWireBlockMixin",
     "ServerExplosionOcclusionOffsetClipMixin",
