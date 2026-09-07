@@ -672,6 +672,12 @@ public final class SlabAnchorAttachment {
         // height instead — the documented read-only reading for exactly this seam. Under frozen-OFF the
         // two entries are the same code, so this is byte-identical there.
         double dy = SlabSupport.getUnstoredYOffset(world, pos, state);
+        // The marker and the fact are the two writers of one placement transaction and must agree on
+        // one value (see getUnstoredYOffset's own javadoc). Under the vanilla-gap pot seat the
+        // published fact for a pot is the seat-plus-gap value, so this classifier has to see the same
+        // number or a float pot on an unlowered slab is ANCHORED while its fact says flat.
+        // Byte-identical under the flush seat: the helper returns its input.
+        dy = com.slabbed.placement.LandingResolver.potSeatAdjustedDy(world, pos, state, dy);
         if (dy < -1.0e-6) {
             // A placed SLAB that reads lowered ONLY because of a lowered SIDE neighbour (slab-lane
             // inheritance), with no genuine lowered support directly below it, must NOT snap down to

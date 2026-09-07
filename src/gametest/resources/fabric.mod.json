@@ -111,7 +111,9 @@
       "com.slabbed.test.FrozenDyModePayloadTest",
       "com.slabbed.test.MinecartRailSeatDepthTest",
       "com.slabbed.test.ArmorStandVisibleTopPlacementTest",
-      "com.slabbed.test.BoatVisibleSurfacePlacementTest"
+      "com.slabbed.test.BoatVisibleSurfacePlacementTest",
+      "com.slabbed.config.SlabbedConfigFileTest",
+      "com.slabbed.test.PotSeatOptionTest"
     ],
     "fabric-client-gametest": [
       "com.slabbed.test.EventParticleFrozenDyClientGameTest",
@@ -123,7 +125,8 @@
       "com.slabbed.test.LoweredBandEntityLightClientGameTest",
       "com.slabbed.test.DevDiagnosticsCompanionLoadsClientGameTest",
       "com.slabbed.test.AmbientParticleFrozenDyClientGameTest",
-      "com.slabbed.test.MinecartRenderRailSnapClientGameTest"
+      "com.slabbed.test.MinecartRenderRailSnapClientGameTest",
+      "com.slabbed.test.SlabbedSettingsScreenClientGameTest"
     ]
   },
   "mixins": [

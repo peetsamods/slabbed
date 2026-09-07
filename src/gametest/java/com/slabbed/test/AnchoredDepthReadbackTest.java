@@ -1,6 +1,7 @@
 package com.slabbed.test;
 
 import com.slabbed.anchor.SlabAnchorAttachment;
+import com.slabbed.config.SlabbedConfig;
 import com.slabbed.util.SlabSupport;
 import net.fabricmc.fabric.api.gametest.v1.GameTest;
 import net.minecraft.core.BlockPos;
@@ -252,12 +253,25 @@ public final class AnchoredDepthReadbackTest {
                 new ItemStack(Items.OAK_FENCE), -1.0, "fence on lowered slab stack");
     }
 
-    /** Flower pot rides the same generic floor-top-contact lane as the candle: marked slab → -1.5. */
+    /**
+     * Flower pot rides the same generic floor-top-contact lane as the candle: marked slab → -1.5.
+     *
+     * <p>The flower-pot seat option is pinned to FLUSH here: this row measures the floor-top-contact
+     * LANDING lane, not the seat option, so it pins the option instead of inheriting whatever the
+     * shipped default happens to be. That pin is what keeps the shipped-default row's mutation
+     * isolated to the shipped-default row.
+     */
     @GameTest(structure = "fabric-gametest-api-v1:empty")
     public void flowerPotOnMarkedSlabSurvivesReadback(GameTestHelper helper) {
         ServerLevel w = helper.getLevel();
-        depthSurvivesReadback(helper, buildCompoundVisibleSupport(helper, w),
-                new ItemStack(Items.FLOWER_POT), -1.5, "flower pot on marked slab");
+        SlabbedConfig previousConfig =
+                SlabbedConfig.setActiveForTesting(SlabbedConfig.withPotSeat(SlabbedConfig.PotSeat.FLUSH));
+        try {
+            depthSurvivesReadback(helper, buildCompoundVisibleSupport(helper, w),
+                    new ItemStack(Items.FLOWER_POT), -1.5, "flower pot on marked slab");
+        } finally {
+            SlabbedConfig.setActiveForTesting(previousConfig);
+        }
     }
 
     // ── The five SIBLING whitelist families (high-sweeper MAJOR, verified): their anchored entries sat

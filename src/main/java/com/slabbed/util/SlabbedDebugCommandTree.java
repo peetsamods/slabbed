@@ -76,6 +76,12 @@ public final class SlabbedDebugCommandTree {
          * list when there is no player/world. Never null. See {@code ChunkPlacementGauge}.
          */
         List<String> chunkGauge();
+
+        /** Is a settings screen reachable from here? False on a dedicated server and in headless tests. */
+        boolean settingsAvailable();
+
+        /** Open the settings screen. Only called when {@link #settingsAvailable()} is true. */
+        void openSettings();
     }
 
     private SlabbedDebugCommandTree() {
@@ -91,6 +97,8 @@ public final class SlabbedDebugCommandTree {
      *   <li>{@code /slabdy chunk} — print the standing chunk's attachment-capacity gauge (the GH #36
      *       railing). Needs nothing but shipped code, so it works in a release jar.</li>
      *   <li>{@code /slabdy build} — print the jar identity stamp.</li>
+     *   <li>{@code /slabdy settings} — open the settings screen. Needs a client, so a dedicated
+     *       server reports it is not available rather than pretending.</li>
      * </ul>
      */
     public static <S> LiteralArgumentBuilder<S> slabdy(Function<CommandContext<S>, Session> sessions) {
@@ -105,7 +113,9 @@ public final class SlabbedDebugCommandTree {
                 .then(LiteralArgumentBuilder.<S>literal("off")
                         .executes(ctx -> overlay(sessions.apply(ctx), Boolean.FALSE)))
                 .then(LiteralArgumentBuilder.<S>literal("build")
-                        .executes(ctx -> build(sessions.apply(ctx))));
+                        .executes(ctx -> build(sessions.apply(ctx))))
+                .then(LiteralArgumentBuilder.<S>literal("settings")
+                        .executes(ctx -> settings(sessions.apply(ctx))));
     }
 
     /**
@@ -163,6 +173,19 @@ public final class SlabbedDebugCommandTree {
         session.feedback("[slabdev] live cursor recorder: " + (next ? "on" : "off")
                 + " (" + session.recorderStatus() + ")");
         session.feedback("[slabdev] " + session.buildStamp());
+        return 1;
+    }
+
+    /**
+     * The availability check has teeth: a session whose implementation is absent must never reach
+     * {@link Session#openSettings()}. The release-shape row proves that by throwing from it.
+     */
+    private static int settings(Session session) {
+        if (!session.settingsAvailable()) {
+            session.feedback("[slabdy] settings screen is " + NOT_AVAILABLE);
+            return 0;
+        }
+        session.openSettings();
         return 1;
     }
 

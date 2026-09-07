@@ -14,6 +14,10 @@ public class Slabbed implements ModInitializer {
     @Override
     public void onInitialize() {
         LOGGER.info("Slabbed initialized");
+        // One file read, before anything can consult a setting. Unconditional on purpose: the config
+        // governs a placement mint that runs on the logical server, so it must be loaded in every
+        // environment, not only a development one.
+        com.slabbed.config.SlabbedConfig.init();
         com.slabbed.anchor.SlabAnchorAttachment.register();
         net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry.serverboundPlay().register(
                 com.slabbed.network.PlacementDyPredictionEnvelopePayload.TYPE,

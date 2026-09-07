@@ -563,6 +563,11 @@ public abstract class BlockItemPlacementIntentMixin {
             double dy = resolution == null
                     ? SlabSupport.getUnstoredYOffset(world, primary, finalState)
                     : resolution.landingDy();
+            // BOTH branches must pass through the pot-seat policy. Putting it inside
+            // LandingResolver.resolve instead leaves the fallback branch above unadjusted, and a
+            // resolver that returns null for a pot still mints a lowered value here through
+            // getUnstoredYOffset's generic arm. One choke point, one value, one publish.
+            dy = LandingResolver.potSeatAdjustedDy(world, primary, finalState, dy);
             if (!Double.isFinite(dy)) {
                 frame.pending = new PendingCapture(Map.of());
                 return;

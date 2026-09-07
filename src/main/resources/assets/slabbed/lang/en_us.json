@@ -1,3 +1,9 @@
 {
-  "mod.slabbed.name": "Slabbed"
+  "mod.slabbed.name": "Slabbed",
+  "slabbed.settings.title": "TODO(human)",
+  "slabbed.settings.pot_seat": "TODO(human)",
+  "slabbed.settings.pot_seat.flush": "TODO(human)",
+  "slabbed.settings.pot_seat.vanilla_float": "TODO(human)",
+  "slabbed.settings.pot_seat.flush.tooltip": "TODO(human)",
+  "slabbed.settings.pot_seat.vanilla_float.tooltip": "TODO(human) — must carry the server-decides sentence"
 }
