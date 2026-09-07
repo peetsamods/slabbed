@@ -50,6 +50,19 @@ See LAW.md — this changelog does not redefine the law.
 
 ### Fixes
 
+- **Breaking a lowered chest, hopper, lever or rail no longer leaves its height behind.** Slabbed
+  remembers the height you placed a block at, and that memory is meant to die with the block. It was
+  being cleared through a per-block hook that 28 kinds of vanilla block quietly skip, including
+  chests, hoppers, dispensers, furnaces, levers, buttons, pressure plates, rails, repeaters,
+  comparators, observers, redstone torches, redstone dust, shulker boxes, lecterns, jukeboxes,
+  barrels and decorated pots, so breaking one of those on a lowered spot left the old height sitting
+  in the empty cell. Placing a block there yourself always overwrote it, but a block that arrives
+  without being placed could inherit the leftover height and sink. The same memory also survived
+  `/setblock ... strict`, for every block, and survived a piston head retracting off a lowered cell.
+  The clear now happens where the block actually leaves its cell, so it no longer depends on which
+  block it was or which command emptied it (maintainer ruling, 2026-09-06). Blocks transformed in
+  place, such as grass to dirt, a log being stripped, or copper oxidising, still keep their height,
+  as do blocks a piston carries.
 - **Minecarts really ride the rail you can see.** A rail laid on a lowered block drew its minecart at
   the right height, but the cart was only painted there: it physically ran half a block above the rail,
   so its hitbox, anything you could hit it with, and anyone riding it were all in the wrong place, and
