@@ -141,6 +141,7 @@ anything. The split above puts the fine granularity only where a leak has actual
 | `com/slabbed/client/SlabbedModelLoadingPlugin` | Installs the offset block-state model. |
 | `com/slabbed/client/SlabbedDebugCommands` | Registers `/slabdy` and `/slabdev` from the shipped client entrypoint — the standing debug-tooling rule under the maintainer's 2026-08-07 reading that the commands must be INVOCABLE on a shipped jar. Wiring only (read the crosshair, print to chat); the node structure and strings are in the headless `SlabbedDebugCommandTree`. Registers ONE callback that builds two Brigadier trees: no tick hook, no HUD element, no lifecycle listener, no world-save write, no disk access, nothing running until someone types the command. Names no excluded class — the debug tools are reached through `SlabbedDebugToolBridge`. |
 | `com/slabbed/client/SlabbedDebugToolBridge` | Release-safe client seam between those shipped commands and the two development-only debug tools (target-dy overlay, live-cursor recorder). Same architecture as `SlabbedDiagnosticsBridge`, applied to the command surface: with no provider installed — the release case — `available()` is false and the commands report "not available in this build" and change nothing. Shipping the seam is what keeps the implementations OUT of the jar while leaving the commands honest. |
+| `com/slabbed/client/FrozenDyModeClient` | Compares the server's reported stored-height compatibility flag against this client's own and warns once per connection on mismatch. Receive-only; changes no behaviour. |
 
 ### Network (class-level; `com/slabbed/network/` is a mixed package)
 
@@ -150,6 +151,9 @@ anything. The split above puts the fine granularity only where a leak has actual
 | `com/slabbed/network/PlacementDyCorrectionPayload` | Server→client dy correction payload. |
 | `com/slabbed/network/PlacementDyCorrectionServer` | Server side of the dy correction wire. |
 | `com/slabbed/network/PlacementDyPredictionEnvelopePayload` | Client→server prediction envelope. |
+| `com/slabbed/network/FrozenDyModePayload` | Server→client join notice of which way this side's stored-height compatibility flag is set (maintainer ruling, 2026-09-06). |
+| `com/slabbed/network/FrozenDyModeServer` | Sends that join notice; reads the flag live so the notice can never report a stale value. |
+| `com/slabbed/network/FrozenDyModeMessages` | Builds the plain-language mismatch chat text. Common on purpose: the only testable logic in the notice, kept out of the client source set so a server GameTest proves it. |
 
 ### Util (class-level; `com/slabbed/util/` is a mixed package)
 

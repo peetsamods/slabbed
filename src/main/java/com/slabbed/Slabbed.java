@@ -24,6 +24,13 @@ public class Slabbed implements ModInitializer {
         com.slabbed.network.PlacementDyCorrectionServer.registerReceiver();
         net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents.DISCONNECT.register(
                 (handler, server) -> com.slabbed.network.PlacementDyCorrectionServer.clearPlayer(handler.player));
+        // Join-time notice only: this payload reports which way this side's stored-height
+        // compatibility flag is set so a client can warn about a disagreement. It changes no
+        // behaviour on either side (maintainer ruling, 2026-09-06).
+        net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry.clientboundPlay().register(
+                com.slabbed.network.FrozenDyModePayload.TYPE,
+                com.slabbed.network.FrozenDyModePayload.CODEC);
+        com.slabbed.network.FrozenDyModeServer.register();
         // Recorder break capture (TEST (3)-triage upgrade): the recorder was break-blind — it caused
         // the "data-destructive downgrade" false alarm, and the maintainer's tower-churn "jumping when I break
         // things" report left ZERO rows. Observation only: the handler must ALWAYS return true (never
