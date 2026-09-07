@@ -187,6 +187,14 @@ public final class PlacementLandingRegressionTest {
                 {"pot_on_generated_bottom", ts(SlabType.BOTTOM, true), Items.FLOWER_POT, -0.5d},
                 {"torch_on_generated_bottom", ts(SlabType.BOTTOM, true), Items.TORCH, -0.5d},
                 {"vanilla_slab_on_generated_bottom", ts(SlabType.BOTTOM, true), Items.STONE_SLAB, -0.5d},
+                // A generated double is a bottom-like surface to the compat classifier: objects and slabs
+                // seat on its half-height plane; a full cube never lowers on natural terrain.
+                {"pot_on_generated_double", ts(SlabType.DOUBLE, true), Items.FLOWER_POT, -0.5d},
+                {"torch_on_generated_double", ts(SlabType.DOUBLE, true), Items.TORCH, -0.5d},
+                {"vanilla_slab_on_generated_double", ts(SlabType.DOUBLE, true), Items.STONE_SLAB, -0.5d},
+                {"chest_on_generated_double", ts(SlabType.DOUBLE, true), Items.CHEST, -0.5d},
+                {"pot_on_placed_top", ts(SlabType.TOP, false), Items.FLOWER_POT, 0.0d},
+                {"cube_on_placed_top", ts(SlabType.TOP, false), Items.DIRT, 0.0d},
             };
             int i = 0;
             for (Object[] c : cases) {
