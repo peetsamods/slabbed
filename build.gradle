@@ -433,6 +433,7 @@ sourceSets {
             include("com/slabbed/client/SlabModelStaleSentinelClientThrottleClientGameTest.java")
             include("com/slabbed/test/EventParticleFrozenDyClientGameTest.java")
             include("com/slabbed/test/LeverParticleFrozenAnchorClientGameTest.java")
+            include("com/slabbed/test/AmbientParticleFrozenDyClientGameTest.java")
             include("com/slabbed/test/LoweredBandEntityLightClientGameTest.java")
             include("com/slabbed/test/DevDiagnosticsCompanionLoadsClientGameTest.java")
             include("com/slabbed/anchor/FrozenFlatAttachmentCapacityTest.java")
@@ -444,6 +445,7 @@ sourceSets {
             include("com/slabbed/test/mixin/TerrainSlabsCompatGameTestMixin.java")
             include("com/slabbed/test/mixin/PlacementDyPredictionJournalGameTestMixin.java")
             include("com/slabbed/test/mixin/ClientLevelParticleCaptureMixin.java")
+            include("com/slabbed/test/mixin/ClientLevelSinkParticleCaptureMixin.java")
         }
     }
     diagnostics {

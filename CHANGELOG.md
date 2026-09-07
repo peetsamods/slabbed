@@ -20,6 +20,13 @@ See LAW.md — this changelog does not redefine the law.
 
 ### Fixes
 
+- **Ambient particles spawn at a lowered block's drawn height.** Anything a block puffs out on its
+  own — an end rod's sparks, a lit furnace's smoke and flame, an ender chest's swirl, an enchanting
+  table's glyphs, mycelium spores, crying obsidian's tears, redstone ore's sparkle, spore blossom
+  petals, a wet sponge's drips, a nether portal's haze, fire — used to appear at the block's grid
+  cell, floating above a lowered block instead of sitting on it. Every block that emits this way now
+  emits from the height it is drawn at, not just the handful that had their own fix before
+  (maintainer ruling, 2026-09-06).
 - **Placing onto lowered farmland works.** Clicking the visible top of a lowered farmland block to
   plant or build on it could be refused, because the click was checked against the grid cell rather
   than the farmland's drawn top, which sits a sliver below a full block. An exact click on the drawn
