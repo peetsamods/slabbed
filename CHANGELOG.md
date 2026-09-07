@@ -18,6 +18,15 @@ See LAW.md — this changelog does not redefine the law.
   this Minecraft version and Slabbed has not needed it since it moved to Fabric's own rendering
   API (maintainer ruling, 2026-09-03).
 
+### New
+
+- **A warning when your game and the server disagree about block heights.** Slabbed has a
+  launch flag that switches back to the pre-0.5 way of working out block heights (see Known
+  limitations below). If you join a world whose setting is the opposite of your own, you now get
+  one yellow chat message saying which side is out of step, once per connection. Nothing else
+  changes; the two sides keep running whatever their own launch settings say
+  (maintainer ruling, 2026-09-06).
+
 ### Fixes
 
 - **Pistons no longer flatten what they push.** A block you placed at a lowered height kept that
@@ -103,6 +112,21 @@ See LAW.md — this changelog does not redefine the law.
   segment. The chain now follows its cap exactly, and everything hanging from the chain agrees with
   it (maintainer ruling, 2026-09-01). Chains under top/double slabs are untouched — they keep their
   dedicated flush bridge rendering.
+
+### Known limitations
+
+- **The `-Dslabbed.frozenDy=false` launch flag is an escape hatch for worlds built before 0.5, not
+  a setting to toggle casually.** With it set, the mod goes back to recomputing a block's height
+  from its neighbours every time, the way it worked before 0.5.0, and it ignores the height a
+  block was locked in at when it was placed. Three consequences follow. It does not restore builds
+  that already look flat after upgrading; the old recompute simply resumes, and it may land
+  differently than it originally did. Turning it back on later does not undo anything either; the
+  mod just resumes trusting locked-in heights. And in multiplayer your game and the server must
+  have the same setting, because otherwise the heights your game draws and the heights the server
+  places you against can disagree, so a block can look like it is somewhere you cannot stand, or
+  the reverse. The mod does not fix a mismatch for you; when you see the new chat warning, ask
+  whoever controls the side that is out of step, usually the server's launch flags, to match the
+  other side (maintainer ruling, 2026-09-06).
 
 ## [0.5.2-alpha.1+26.2] — MC 26.2 alpha
 

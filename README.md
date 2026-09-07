@@ -28,6 +28,8 @@ acceptance result; the current status and known open work live in `HANDOFF.md` a
 Install the normal Slabbed jar and Fabric API on the environment appropriate for the feature being used.
 For a real multiplayer deployment, keep client and server Slabbed versions aligned. Do not use a TEST
 jar as a release artifact.
+The `-Dslabbed.frozenDy` compatibility flag for pre-0.5 worlds must match on both sides as well;
+the CHANGELOG's Known limitations explain what it does and what it costs.
 
 ## Diagnostics and testing
 
