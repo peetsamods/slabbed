@@ -56,6 +56,10 @@ GameTests plus a 315-case native client proof run green on every build.
 - Stored heights are no longer misread as whole blocks by the chunk renderer, which could draw a
   correctly placed block far below its outline and server position.
 - Fabric's model path no longer applies a height offset twice on some non-vanilla models.
+- Scaffolding on a lowered column is stood on, climbed and descended at its real height instead of
+  sliding down when jump is released.
+- A Terrain Slabs slab you place records its height like any other slab, so it sits on a lowered
+  block instead of floating. Natural Terrain Slabs terrain and slabs from older worlds are untouched.
 
 ### Limits and notes
 
@@ -70,7 +74,7 @@ GameTests plus a 315-case native client proof run green on every build.
   not its baseline.
 
 ## [Unreleased — deferred]
-- Terrain Slabs named-surface compatibility (objects lowering onto Terrain Slabs surfaces, compound −1.0) is planned for a follow-up; this build keeps the existing gated compat (Terrain Slabs blocks are excluded from Slabbed's visual offsets).
+- Natural Terrain Slabs terrain is still never offset by Slabbed (the see-through-terrain guard); only slabs you place record a height.
 
 ## [0.4.0-beta.3] - Slabbed 0.4.0 Beta 3 / Minecraft 1.21.1
 

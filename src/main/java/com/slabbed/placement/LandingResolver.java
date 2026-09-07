@@ -101,7 +101,8 @@ public final class LandingResolver {
             double ownerVisibleDy,
             Direction clickedFace,
             Vec3d hitLocation,
-            boolean replacementSameCell
+            boolean replacementSameCell,
+            boolean ownerModern
     ) {
         public PlacementAim {
             ownerPos = ownerPos.toImmutable();
@@ -113,8 +114,6 @@ public final class LandingResolver {
         BlockPos ownerPos = context.getBlockPos().toImmutable();
         BlockState ownerState = world.getBlockState(ownerPos);
         double ownerVisibleDy = ownerState.isAir()
-                || CompatHooks.shouldSkipOffset(ownerState)
-                || CompatHooks.shouldSkipSlabSupport(ownerState)
                 ? 0.0d
                 : visibleOwnerDy(world, ownerPos, ownerState);
         return new PlacementAim(
@@ -123,7 +122,8 @@ public final class LandingResolver {
                 ownerVisibleDy,
                 context.getSide(),
                 context.getHitPos(),
-                ownerState.canReplace(new ItemPlacementContext(context)));
+                ownerState.canReplace(new ItemPlacementContext(context)),
+                SlabAnchorAttachment.isModernPlacement(world, ownerPos));
     }
 
     /**
@@ -173,8 +173,7 @@ public final class LandingResolver {
         }
         Predicate<BlockState> override = compatFinalStateTestOverride;
         return (override != null && override.test(state))
-                || CompatHooks.shouldSkipOffset(state)
-                || CompatHooks.shouldSkipSlabSupport(state);
+                || CompatHooks.ownsPlacementHeight(state);
     }
 
     /**
@@ -242,7 +241,7 @@ public final class LandingResolver {
             // TOP-type slab owner seats the placement flush on its visible top; only a BOTTOM-type owner
             // takes the upgrade above. Written in the owner's frame so a taller climb keeps that frame
             // instead of subtracting each climbed cell.
-            landingDy = aim.ownerVisibleDy() + ownerTopPlaneOffset(aim.ownerState()) - 1.0d;
+            landingDy = aim.ownerVisibleDy() + ownerTopPlaneOffset(aim.ownerModern(), aim.ownerState()) - 1.0d;
         } else if (aim.clickedFace() == Direction.DOWN && insideOwnerColumn) {
             boolean flushTopVerticalChainBridge =
                     finalState.getBlock() instanceof ChainBlock
@@ -272,6 +271,7 @@ public final class LandingResolver {
                 && aim.clickedFace() == Direction.UP
                 && insideOwnerColumn
                 && CompatHooks.shouldSkipOffset(aim.ownerState())
+                && !aim.ownerModern()
                 && !CompatHooks.isPlacedBottomHalfTerrainSlab(aim.ownerState())) {
             landingDy = 0.0d;
         }
@@ -285,7 +285,7 @@ public final class LandingResolver {
      * PUBLIC live read. A Terrain Slabs owned owner renders flush, so it answers 0.0.
      */
     public static double visibleOwnerDy(BlockView world, BlockPos ownerPos, BlockState ownerState) {
-        if (ownerState == null || ownerState.isAir() || CompatHooks.shouldSkipOffset(ownerState)) {
+        if (ownerState == null || ownerState.isAir()) {
             return 0.0;
         }
         if (!(world instanceof World w) || !WorldUpgradeRuntimePolicy.authorsModernPlacements(w)) {
@@ -304,8 +304,8 @@ public final class LandingResolver {
      * presents as a half-height terrain surface) seats a placement at 0.5, exactly as the live support
      * lane does; any other Terrain Slabs state seats at 1.0. Vanilla owners use the slab-type plane.
      */
-    private static double ownerTopPlaneOffset(BlockState ownerState) {
-        if (CompatHooks.shouldSkipOffset(ownerState)) {
+    private static double ownerTopPlaneOffset(boolean ownerModern, BlockState ownerState) {
+        if (CompatHooks.shouldSkipOffset(ownerState) && !ownerModern) {
             return CompatHooks.customSlabSurfaceKind(ownerState) == CompatSlabSurfaceKind.BOTTOM_LIKE ? 0.5 : 1.0;
         }
         return topPlaneOffset(ownerState);

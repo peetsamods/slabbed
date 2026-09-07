@@ -72,6 +72,27 @@ public final class CompatHooks {
         return false;
     }
 
+    /**
+     * True for NATURAL Terrain Slabs terrain (generated), which never receives a Slabbed height. A
+     * player-placed Terrain Slabs slab is not natural: its placement records a height like any slab.
+     */
+    public static boolean isNaturalTerrainSlab(BlockState state) {
+        return TerrainSlabsCompat.isLoaded() && TerrainSlabsCompat.isNaturalTerrain(state);
+    }
+
+    /**
+     * True when a compat mod owns a state's placement height, so Slabbed authors no fact for it and
+     * validates no shifted hit on it: natural Terrain Slabs terrain, or any state the headless test
+     * override names (the headless suite drives the compat boundary through a vanilla stand-in).
+     */
+    public static boolean ownsPlacementHeight(BlockState state) {
+        if (state == null) {
+            return false;
+        }
+        Predicate<BlockState> override = shouldSkipSlabSupportTestOverride;
+        return (override != null && override.test(state)) || isNaturalTerrainSlab(state);
+    }
+
     /** Cheap precomputed gate so per-block hot paths can skip all compat work when TS is absent. */
     public static boolean isTerrainSlabsLoaded() {
         return TerrainSlabsCompat.isLoaded();

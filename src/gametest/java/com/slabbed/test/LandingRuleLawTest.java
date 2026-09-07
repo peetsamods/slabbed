@@ -83,7 +83,7 @@ public final class LandingRuleLawTest {
                     Vec3d hit = new Vec3d(owner.getX() + 0.5d, owner.getY() + depth + 0.25d,
                             owner.getZ() + 0.5d);
                     LandingResolver.PlacementAim aim = new LandingResolver.PlacementAim(
-                            owner, ownerState, depth, Direction.UP, hit, false);
+                            owner, ownerState, depth, Direction.UP, hit, false, false);
                     LandingResolver.PlacementResolution resolution = LandingResolver.resolve(
                             aim, owner.up(), held, LandingResolver.Family.PAIRED_FLOOR_SEAT);
                     boolean ownerIsBottomSlab = ownerState.getBlock() instanceof SlabBlock
@@ -165,7 +165,7 @@ public final class LandingRuleLawTest {
         double ownerDy = -1.5d;
         Vec3d hit = new Vec3d(owner.getX() + 0.5d, owner.getY() + ownerDy + 0.25d, owner.getZ() + 0.5d);
         LandingResolver.PlacementAim aim = new LandingResolver.PlacementAim(
-                owner, ownerState, ownerDy, Direction.UP, hit, false);
+                owner, ownerState, ownerDy, Direction.UP, hit, false, false);
         BlockState[] objects = {
                 Blocks.FLOWER_POT.getDefaultState(),
                 Blocks.OAK_FENCE_GATE.getDefaultState(),
@@ -244,11 +244,11 @@ public final class LandingRuleLawTest {
         double ownerDy = -1.0d;
         Vec3d hit = new Vec3d(owner.getX() + 0.5d, owner.getY() - 0.5d, owner.getZ() + 0.5d);
         LandingResolver.PlacementAim upAim = new LandingResolver.PlacementAim(
-                owner, ownerState, ownerDy, Direction.UP, hit, false);
+                owner, ownerState, ownerDy, Direction.UP, hit, false, false);
         LandingResolver.PlacementAim sideAim = new LandingResolver.PlacementAim(
-                owner, ownerState, ownerDy, Direction.SOUTH, hit, false);
+                owner, ownerState, ownerDy, Direction.SOUTH, hit, false, false);
         LandingResolver.PlacementAim replacementAim = new LandingResolver.PlacementAim(
-                owner, ownerState, ownerDy, Direction.UP, hit, true);
+                owner, ownerState, ownerDy, Direction.UP, hit, true, false);
         BlockState carpet = Blocks.MOSS_CARPET.getDefaultState();
         BlockState powder = Blocks.POWDER_SNOW.getDefaultState();
         List<String> violations = new ArrayList<>();

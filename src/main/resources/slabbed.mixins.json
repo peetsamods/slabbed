@@ -31,8 +31,11 @@
     "BlockOnPlacedAnchorMixin",
     "BlockOnStateReplacedAnchorMixin",
     "FencePaneSlabConnectionMixin",
-    "WallSlabConnectionMixin"
+    "WallSlabConnectionMixin",
+    "ScaffoldingLoweredStandMixin"
   ],
   "client": [],
-  "injectors": { "defaultRequire": 1 }
+  "injectors": {
+    "defaultRequire": 1
+  }
 }

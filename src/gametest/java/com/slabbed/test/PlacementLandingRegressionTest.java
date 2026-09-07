@@ -153,10 +153,27 @@ public final class PlacementLandingRegressionTest {
             h.assertTrue(same(world, gB.up(2), -0.5d) && same(world, gB.up(3), -0.5d), "B: vanilla slab on the lowered log");
             h.assertTrue(same(world, logC, -0.5d) && same(world, logC.east(), -0.5d), "C: full block beside the lowered log, lower half");
             h.assertTrue(same(world, logD, -0.5d) && same(world, logD.east(), -0.5d), "D: vanilla slab beside the lowered log, lower half");
-            h.assertTrue(world.getBlockState(logE.up()).isOf(TerrainSlabsTestShim.TEST_TS_SLAB) && same(world, logE.up(), 0.0d),
-                    "E: a Terrain Slabs slab on the lowered log stays at its own (un-offset) height");
-            h.assertTrue(world.getBlockState(logF.east()).isOf(TerrainSlabsTestShim.TEST_TS_SLAB) && same(world, logF.east(), 0.0d),
-                    "F: a Terrain Slabs slab beside the lowered log stays at its own (un-offset) height");
+            // A PLAYER-PLACED Terrain Slabs slab records a height like any slab (maintainer ruling,
+            // 2026-09-07): on the lowered log it sits on the log's visible top, beside it in its frame.
+            h.assertTrue(world.getBlockState(logE.up()).isOf(TerrainSlabsTestShim.TEST_TS_SLAB) && same(world, logE.up(), -0.5d)
+                            && SlabAnchorAttachment.isModernPlacement(world, logE.up()),
+                    "E: a placed Terrain Slabs slab on the lowered log lands on its visible top: " + cell(world, logE.up()));
+            h.assertTrue(world.getBlockState(logF.east()).isOf(TerrainSlabsTestShim.TEST_TS_SLAB) && same(world, logF.east(), -0.5d)
+                            && SlabAnchorAttachment.isModernPlacement(world, logF.east()),
+                    "F: a placed Terrain Slabs slab beside the lowered log lands in its frame: " + cell(world, logF.east()));
+            // A LEGACY Terrain Slabs slab (no provenance, as an older world carries it) beside the same
+            // lowered log keeps its old un-offset height, and natural terrain never moves.
+            BlockPos gG = h.getAbsolutePos(new BlockPos(1, 1, 13));
+            world.setBlockState(gG, Blocks.STONE.getDefaultState(), Block.NOTIFY_ALL);
+            world.setBlockState(gG.up(), tsBottom(), Block.NOTIFY_ALL);
+            player.setPosition(gG.getX() + 3.5d, gG.getY(), gG.getZ() + 0.5d);
+            PlacementCaptureBoundaryGameTest.useOn(player, new ItemStack(Items.OAK_LOG), gG.up(), Direction.UP);
+            BlockPos logG = gG.up(2);
+            world.setBlockState(logG.east(), tsBottom(), Block.NOTIFY_ALL);
+            world.setBlockState(logG.up(), tsBottom().with(TerrainSlabsTestShim.GENERATED, true), Block.NOTIFY_ALL);
+            h.assertTrue(same(world, logG, -0.5d) && same(world, logG.east(), 0.0d) && !SlabAnchorAttachment.isModernPlacement(world, logG.east())
+                            && same(world, logG.up(), 0.0d),
+                    "G: legacy and natural Terrain Slabs slabs stay un-offset: " + cell(world, logG.east()) + " / " + cell(world, logG.up()));
         } finally {
             SlabAnchorAttachment.FROZEN_DY_ENABLED = previousFrozen;
         }
@@ -267,6 +284,52 @@ public final class PlacementLandingRegressionTest {
                 h.assertTrue(same(world, target, expected) && Math.abs(live - expected) < 1.0e-6,
                         c[0] + ": expected " + expected + " (stored read must equal the live rule): " + report);
             }
+        } finally {
+            SlabAnchorAttachment.FROZEN_DY_ENABLED = previousFrozen;
+        }
+        h.complete();
+    }
+
+    /** A lowered scaffolding column is stood on at its real top: the standing layer follows the stored height. */
+    @GameTest(templateName = "fabric-gametest-api-v1:empty")
+    public void loweredScaffoldingIsStoodOnAtItsRealTop(TestContext h) {
+        ServerWorld world = h.getWorld();
+        boolean previousFrozen = SlabAnchorAttachment.FROZEN_DY_ENABLED;
+        SlabAnchorAttachment.FROZEN_DY_ENABLED = false;
+        try {
+            PlayerEntity player = h.createMockPlayer(GameMode.SURVIVAL);
+            BlockPos g = h.getAbsolutePos(new BlockPos(2, 1, 2));
+            world.setBlockState(g, Blocks.STONE.getDefaultState(), Block.NOTIFY_ALL);
+            world.setBlockState(g.up(), Blocks.STONE_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.BOTTOM), Block.NOTIFY_ALL);
+            player.setPosition(g.getX() + 3.5d, g.getY(), g.getZ() + 0.5d);
+            ActionResult r = PlacementCaptureBoundaryGameTest.useOn(player, new ItemStack(Items.SCAFFOLDING, 16), g.up(), Direction.UP);
+            BlockPos cell = g.up(2);
+            h.assertTrue(r.isAccepted() && world.getBlockState(cell).isOf(Blocks.SCAFFOLDING) && same(world, cell, -0.5d),
+                    "premise: lowered scaffolding on the slab: " + cell(world, cell));
+            BlockState state = world.getBlockState(cell);
+            // Feet on the lowered visible top (y + 0.5): the standing layer must exist and end at the real top.
+            player.setPosition(cell.getX() + 0.5d, cell.getY() + 0.5d, cell.getZ() + 0.5d);
+            net.minecraft.util.shape.VoxelShape standing = state.getCollisionShape(world, cell, net.minecraft.block.ShapeContext.of(player));
+            // Feet inside the lowered body (y + 0.2): no standing layer, the player is inside the column.
+            player.setPosition(cell.getX() + 0.5d, cell.getY() + 0.2d, cell.getZ() + 0.5d);
+            net.minecraft.util.shape.VoxelShape inside = state.getCollisionShape(world, cell, net.minecraft.block.ShapeContext.of(player));
+            // Control: a flush column on stone keeps vanilla's behaviour (stood on at y + 1.0).
+            BlockPos f = h.getAbsolutePos(new BlockPos(5, 1, 5));
+            world.setBlockState(f, Blocks.STONE.getDefaultState(), Block.NOTIFY_ALL);
+            player.setPosition(f.getX() + 3.5d, f.getY(), f.getZ() + 0.5d);
+            PlacementCaptureBoundaryGameTest.useOn(player, new ItemStack(Items.SCAFFOLDING, 16), f, Direction.UP);
+            BlockPos flat = f.up();
+            player.setPosition(flat.getX() + 0.5d, flat.getY() + 1.0d, flat.getZ() + 0.5d);
+            net.minecraft.util.shape.VoxelShape flatStanding = world.getBlockState(flat).getCollisionShape(world, flat, net.minecraft.block.ShapeContext.of(player));
+            player.setPosition(flat.getX() + 0.5d, flat.getY() + 0.5d, flat.getZ() + 0.5d);
+            net.minecraft.util.shape.VoxelShape flatInside = world.getBlockState(flat).getCollisionShape(world, flat, net.minecraft.block.ShapeContext.of(player));
+            String report = "lowered standing=" + standing.getBoundingBox() + " inside=" + inside
+                    + " | flat standing=" + flatStanding.getBoundingBox() + " inside=" + flatInside;
+            System.out.println("[LANDING_REGRESSION] scaffold_stand " + report);
+            h.assertTrue(!standing.isEmpty() && Math.abs(standing.getMax(Direction.Axis.Y) - 0.5d) < 1.0e-6 && inside.isEmpty(),
+                    "lowered scaffolding is not stood on at its real top: " + report);
+            h.assertTrue(!flatStanding.isEmpty() && Math.abs(flatStanding.getMax(Direction.Axis.Y) - 1.0d) < 1.0e-6 && flatInside.isEmpty(),
+                    "control: flush scaffolding changed: " + report);
         } finally {
             SlabAnchorAttachment.FROZEN_DY_ENABLED = previousFrozen;
         }

@@ -480,8 +480,7 @@ public abstract class BlockItemPlacementIntentMixin {
      * fact for a cell it does not govern.
      */
     private static boolean slabbed$c3CompatOwns(BlockState state) {
-        return state != null
-                && (CompatHooks.shouldSkipOffset(state) || CompatHooks.shouldSkipSlabSupport(state));
+        return LandingResolver.compatOwnsFinalState(state);
     }
 
     private static boolean slabbed$isOrdinaryLoweredFullBlock(ItemUsageContext context, BlockPos pos, BlockState state) {
