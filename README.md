@@ -39,9 +39,25 @@ Other partial blocks (stairs, fences, walls, trapdoors, panes) are intentionally
 2. Install Fabric API
 3. Drop the Slabbed `.jar` into your `mods` folder
 
+## How placement heights work (0.5.2 and later)
+
+Every block you place records its exact height at placement time and keeps it: breaking its
+support, building next to it, reloading, or restarting changes nothing. See LAW.md — this
+document does not redefine that rule.
+
+Blocks that already exist in a world from an earlier version are left exactly as they are. They
+keep the earlier behavior until you break and re-place them; nothing moves when an older world is
+loaded, and there is no conversion, prompt, or backup step.
+
+Placement reaches through three blocks of depth on a sixteenth-of-a-block grid. Item frames,
+minecarts, boats, and armor stands on blocks placed in this version sit at the block's real height.
+
+`-Dslabbed.frozenDy=true` (a JVM option) makes every block, old or new, read its stored height;
+a block with no stored height then reads flat. It exists for testing, not for playing older worlds.
+
 ## Status
-Slabbed is currently in **beta**.
-Behavior is intentionally limited and expands only after edge cases are validated.
+Slabbed is currently in **alpha**: the placement core was rebuilt around permanent heights and
+verified by the automated suite and a native client proof, but it has not yet had wide play-testing.
 
 ## License
 This project is licensed under **GPL-3.0-only**.  
