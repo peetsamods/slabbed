@@ -29,6 +29,20 @@ See LAW.md — this changelog does not redefine the law.
 
 ### Fixes
 
+- **Minecarts really ride the rail you can see.** A rail laid on a lowered block drew its minecart at
+  the right height, but the cart was only painted there: it physically ran half a block above the rail,
+  so its hitbox, anything you could hit it with, and anyone riding it were all in the wrong place, and
+  only one depth was covered. The cart now sits on the rail where the rail is drawn, keeps that height
+  while it runs, when it is saved and reloaded, and when it rolls onto ordinary rails, and rail snapping
+  and the tilt on sloped rails follow it (maintainer ruling, 2026-09-06). Carts on ordinary rails are
+  unchanged. With the experimental minecart movement enabled the same rule applies, but that path has
+  only been checked in automated tests, not in play.
+- **Armor stands are no longer refused where they plainly fit.** Placing an armor stand over a lowered
+  block checked for room at the old grid height even though the stand ends up standing on the block's
+  visible top, so a stand could be turned away by something it was never going to touch, or let into
+  space it could not occupy. The check now looks at the band the stand will actually stand in, including
+  when you place onto snow or grass growing on a lowered block. Where the stand ends up is unchanged
+  (maintainer ruling, 2026-09-06).
 - **Pistons no longer flatten what they push.** A block you placed at a lowered height kept that
   height until a piston moved it, after which it sat flat forever, with no way to get the height
   back short of breaking and replacing it. Pushed and pulled blocks now arrive at exactly the height

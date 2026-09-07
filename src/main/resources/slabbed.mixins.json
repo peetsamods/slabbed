@@ -5,6 +5,7 @@
   "plugin": "com.slabbed.mixin.SlabbedMixinConfigPlugin",
   "mixins": [
     "AbstractArrowOffsetClipMixin",
+    "ArmorStandItemVisibleTopMixin",
     "BlockCollisionsLoweredAboveMixin",
     "BlockItemPlacementIntentMixin",
     "BlockOnPlacedAnchorMixin",
@@ -25,6 +26,9 @@
     "LithiumBlockCollisionSweeperShapeLoweredAboveMixin",
     "LivingEntityLoweredScaffoldingMixin",
     "LivingEntitySightOffsetClipMixin",
+    "MinecartRailSeatMixin",
+    "NewMinecartBehaviorRailFrameMixin",
+    "OldMinecartBehaviorRailFrameMixin",
     "PistonHeadRemovalAnchorMixin",
     "PistonMoveDyTransferMixin",
     "ProjectileBlockClipOffsetMixin",

@@ -16,7 +16,7 @@
     "LevelEventParticleMixin",
     "LevelExtractorImportantDirtyAccessor",
     "LocalPlayerPickOffsetRaycastMixin",
-    "MinecartRenderOffsetMixin",
+    "MinecartRendererRailFrameMixin",
     "MultiPlayerGameModePredictionSequenceMixin"
   ],
   "injectors": {

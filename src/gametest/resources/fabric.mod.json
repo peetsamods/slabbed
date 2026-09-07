@@ -108,7 +108,10 @@
       "com.slabbed.anchor.FrozenFlatAttachmentCapacityTest",
       "com.slabbed.anchor.PlacementDyAttachmentCapacityTest",
       "com.slabbed.test.PistonPlacementDyTransferTest",
-      "com.slabbed.test.FrozenDyModePayloadTest"
+      "com.slabbed.test.FrozenDyModePayloadTest",
+      "com.slabbed.test.MinecartRailSeatDepthTest",
+      "com.slabbed.test.ArmorStandVisibleTopPlacementTest",
+      "com.slabbed.test.BoatVisibleSurfacePlacementTest"
     ],
     "fabric-client-gametest": [
       "com.slabbed.test.EventParticleFrozenDyClientGameTest",
@@ -119,7 +122,8 @@
       "com.slabbed.test.LeverParticleFrozenAnchorClientGameTest",
       "com.slabbed.test.LoweredBandEntityLightClientGameTest",
       "com.slabbed.test.DevDiagnosticsCompanionLoadsClientGameTest",
-      "com.slabbed.test.AmbientParticleFrozenDyClientGameTest"
+      "com.slabbed.test.AmbientParticleFrozenDyClientGameTest",
+      "com.slabbed.test.MinecartRenderRailSnapClientGameTest"
     ]
   },
   "mixins": [
