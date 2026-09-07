@@ -128,7 +128,8 @@
       "com.slabbed.test.DevDiagnosticsCompanionLoadsClientGameTest",
       "com.slabbed.test.AmbientParticleFrozenDyClientGameTest",
       "com.slabbed.test.MinecartRenderRailSnapClientGameTest",
-      "com.slabbed.test.SlabbedSettingsScreenClientGameTest"
+      "com.slabbed.test.SlabbedSettingsScreenClientGameTest",
+      "com.slabbed.test.PistonMovingRenderDyOwnerClientGameTest"
     ]
   },
   "mixins": [
