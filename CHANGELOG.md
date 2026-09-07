@@ -32,6 +32,15 @@ See LAW.md — this changelog does not redefine the law.
   see rather than floating in the air. Plain flower pots only: decorated pots and candles are
   unaffected. Pots you have already placed never move when you change the setting; it applies to pots
   placed from then on (maintainer ruling, 2026-09-06).
+- **Two new key bindings adjust the height of the block you are looking at.** Both start unbound;
+  set them in Options > Controls under "Slabbed". One nudges the aimed block half a block down, the
+  other back up: down only as far as the real surface beneath it allows, and up only as far as
+  flush. The server makes the change and saves it with the world, so it survives a reload and
+  everyone on the world sees it. In singleplayer anyone can use them; on a shared world they need
+  creative mode or op level 2 (maintainer ruling, 2026-09-06). Blocks that were never placed by a
+  player, such as worldgen terrain, `/setblock` scenery, and anything from a world older than the
+  saved-height store, carry no recorded height and are refused; break and re-place them to adjust
+  them.
 - **A warning when your game and the server disagree about block heights.** Slabbed has a
   launch flag that switches back to the pre-0.5 way of working out block heights (see Known
   limitations below). If you join a world whose setting is the opposite of your own, you now get

@@ -444,16 +444,28 @@ public final class LandingResolver {
         return Double.isFinite(live) ? live : 0.0;
     }
 
-    /** Visible top-plane offset within the owner's cell: bottom slab 0.5; full / TOP / DOUBLE 1.0. */
-    private static double topPlaneOffset(BlockState ownerState) {
+    /**
+     * Visible top-plane offset within the owner's cell: bottom slab 0.5; full / TOP / DOUBLE 1.0.
+     *
+     * <p>Also the authority for the manual height nudge's support gate: the seat a nudged block may
+     * not sink below is the same seat placement computes, by construction rather than by agreement.
+     * Do not narrow this back to private.
+     */
+    public static double topPlaneOffset(BlockState ownerState) {
         if (ownerState.getBlock() instanceof SlabBlock && ownerState.hasProperty(SlabBlock.TYPE)) {
             return ownerState.getValue(SlabBlock.TYPE) == SlabType.BOTTOM ? 0.5 : 1.0;
         }
         return 1.0;
     }
 
-    /** Visible bottom-plane offset within the owner's cell: full / bottom / DOUBLE 0.0; TOP slab 0.5. */
-    private static double bottomPlaneOffset(BlockState ownerState) {
+    /**
+     * Visible bottom-plane offset within the owner's cell: full / bottom / DOUBLE 0.0; TOP slab 0.5.
+     *
+     * <p>Also the authority for the manual height nudge's support gate: the seat a nudged block may
+     * not sink below is the same seat placement computes, by construction rather than by agreement.
+     * Do not narrow this back to private.
+     */
+    public static double bottomPlaneOffset(BlockState ownerState) {
         if (ownerState.getBlock() instanceof SlabBlock && ownerState.hasProperty(SlabBlock.TYPE)) {
             return ownerState.getValue(SlabBlock.TYPE) == SlabType.TOP ? 0.5 : 0.0;
         }

@@ -28,6 +28,14 @@ public class Slabbed implements ModInitializer {
         com.slabbed.network.PlacementDyCorrectionServer.registerReceiver();
         net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents.DISCONNECT.register(
                 (handler, server) -> com.slabbed.network.PlacementDyCorrectionServer.clearPlayer(handler.player));
+        // Manual height nudge (maintainer ruling, 2026-09-06): serverbound request, server-authoritative
+        // decision, one cell written. Ships unconditionally; inert until a player binds a key.
+        net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry.serverboundPlay().register(
+                com.slabbed.network.ManualDyAdjustPayload.TYPE,
+                com.slabbed.network.ManualDyAdjustPayload.CODEC);
+        com.slabbed.network.ManualDyAdjustServer.registerReceiver();
+        net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents.DISCONNECT.register(
+                (handler, server) -> com.slabbed.network.ManualDyAdjustServer.clearPlayer(handler.player));
         // Join-time notice only: this payload reports which way this side's stored-height
         // compatibility flag is set so a client can warn about a disagreement. It changes no
         // behaviour on either side (maintainer ruling, 2026-09-06).

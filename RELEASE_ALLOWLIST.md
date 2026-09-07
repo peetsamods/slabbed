@@ -148,6 +148,7 @@ anything. The split above puts the fine granularity only where a leak has actual
 | `com/slabbed/client/SlabbedSettingsScreen` | The vanilla-widgets settings screen opened by `/slabdy settings`. Constructed only when the command is typed: no tick hook, no HUD element, no lifecycle listener; it reads the loaded config and writes it back on Done. |
 | `com/slabbed/client/SlabbedDebugToolBridge` | Release-safe client seam between those shipped commands and the two development-only debug tools (target-dy overlay, live-cursor recorder). Same architecture as `SlabbedDiagnosticsBridge`, applied to the command surface: with no provider installed — the release case — `available()` is false and the commands report "not available in this build" and change nothing. Shipping the seam is what keeps the implementations OUT of the jar while leaving the commands honest. |
 | `com/slabbed/client/FrozenDyModeClient` | Compares the server's reported stored-height compatibility flag against this client's own and warns once per connection on mismatch. Receive-only; changes no behaviour. |
+| `com/slabbed/client/ManualDyKeybind` | Two key mappings, both UNBOUND by default, plus the client tick poll that sends the nudge request. Wiring only. Inert by a readable mechanism rather than by accident: the tick body's first statement is an `isUnbound()` pair check that returns before any crosshair, level or network access. No HUD element, no world-save write, no disk access. |
 
 ### Network (class-level; `com/slabbed/network/` is a mixed package)
 
@@ -160,6 +161,8 @@ anything. The split above puts the fine granularity only where a leak has actual
 | `com/slabbed/network/FrozenDyModePayload` | Server→client join notice of which way this side's stored-height compatibility flag is set (maintainer ruling, 2026-09-06). |
 | `com/slabbed/network/FrozenDyModeServer` | Sends that join notice; reads the flag live so the notice can never report a stale value. |
 | `com/slabbed/network/FrozenDyModeMessages` | Builds the plain-language mismatch chat text. Common on purpose: the only testable logic in the notice, kept out of the client source set so a server GameTest proves it. |
+| `com/slabbed/network/ManualDyAdjustPayload` | Client→server manual height-nudge request: the aimed cell, a signed half-step, and the aimed block's palette state id for staleness detection. Validating compact constructor; carries no magnitude, so a hostile client cannot express a multi-step request at all. |
+| `com/slabbed/network/ManualDyAdjustServer` | Server side of the manual height nudge: the permission ruling, range/loaded/identity/fact/envelope/support/rate validation, the single-cell store write, the connector settle pass, and the action-bar reply. The apply/notify split exists so the decisions are headlessly testable against a connection-less mock player. Registers one payload receiver and one disconnect listener at init; nothing runs until a player binds a key and presses it. |
 
 ### Util (class-level; `com/slabbed/util/` is a mixed package)
 
@@ -179,6 +182,7 @@ anything. The split above puts the fine granularity only where a leak has actual
 | `com/slabbed/util/BlockDisplayParticleContext` | Carries a block's frozen visual height through its vanilla display tick so the particles that tick emits follow the drawn model; also the ownership handshake the three retained per-block particle hooks use to keep their emission single-shifted. |
 | `com/slabbed/util/MinecartRailFrame` | Physical/logical frame conversion for a minecart seated on a lowered rail; the single place the conversion is written, shared by the behaviour mixins and the renderer. |
 | `com/slabbed/util/RailSeatDyHolder` | Duck interface exposing a minecart's bound rail seat offset. |
+| `com/slabbed/util/ManualDyEnvelope` | The manual-nudge step size and legal height envelope. Lives in this package so MIN_DY is derived from the package-private `SlabbedOffsetColliderClip.OWNER_REACH` rather than restated as a literal: the clip supplement's owner search depth and the deepest authorable height cannot drift apart. Pure constants and two static predicates; no state, no I/O. |
 
 ## Ruling executed (2026-08-07)
 
