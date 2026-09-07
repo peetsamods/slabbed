@@ -163,6 +163,55 @@ public final class PlacementLandingRegressionTest {
         h.complete();
     }
 
+    private static BlockState ts(SlabType type, boolean generated) {
+        return TerrainSlabsTestShim.TEST_TS_SLAB.getDefaultState()
+                .with(SlabBlock.TYPE, type).with(TerrainSlabsTestShim.GENERATED, generated);
+    }
+
+    /**
+     * Natural Terrain Slabs terrain: a full cube placed on a GENERATED bottom slab stays at grid height
+     * (the world-hole guard), a full cube on a PLACED bottom slab lowers -0.5, a full cube on a generated
+     * double stays flat, and objects on a generated bottom slab still sit on its half-height surface.
+     */
+    @GameTest(templateName = "fabric-gametest-api-v1:empty")
+    public void naturalTerrainSlabsKeepTheWorldHoleGuard(TestContext h) {
+        ServerWorld world = h.getWorld();
+        boolean previousFrozen = SlabAnchorAttachment.FROZEN_DY_ENABLED;
+        SlabAnchorAttachment.FROZEN_DY_ENABLED = false;
+        try {
+            PlayerEntity player = h.createMockPlayer(GameMode.SURVIVAL);
+            Object[][] cases = {
+                {"cube_on_generated_bottom", ts(SlabType.BOTTOM, true), Items.DIRT, 0.0d},
+                {"cube_on_placed_bottom", ts(SlabType.BOTTOM, false), Items.DIRT, -0.5d},
+                {"cube_on_generated_double", ts(SlabType.DOUBLE, true), Items.DIRT, 0.0d},
+                {"pot_on_generated_bottom", ts(SlabType.BOTTOM, true), Items.FLOWER_POT, -0.5d},
+                {"torch_on_generated_bottom", ts(SlabType.BOTTOM, true), Items.TORCH, -0.5d},
+                {"vanilla_slab_on_generated_bottom", ts(SlabType.BOTTOM, true), Items.STONE_SLAB, -0.5d},
+            };
+            int i = 0;
+            for (Object[] c : cases) {
+                BlockPos g = h.getAbsolutePos(new BlockPos(1 + (i % 4) * 3, 1, 1 + (i / 4) * 3));
+                i++;
+                world.setBlockState(g, Blocks.STONE.getDefaultState(), Block.NOTIFY_ALL);
+                world.setBlockState(g.up(), (BlockState) c[1], Block.NOTIFY_ALL);
+                player.setPosition(g.getX() + 3.5d, g.getY(), g.getZ() + 0.5d);
+                ActionResult r = PlacementCaptureBoundaryGameTest.useOn(player,
+                        new ItemStack((net.minecraft.item.Item) c[2]), g.up(), Direction.UP);
+                BlockPos placed = g.up(2);
+                double expected = (Double) c[3];
+                double live = SlabSupport.getUnstoredYOffset(world, placed, world.getBlockState(placed));
+                String report = c[0] + " r=" + r + " | owner " + cell(world, g.up()) + " | placed " + cell(world, placed);
+                System.out.println("[LANDING_REGRESSION] " + report);
+                h.assertTrue(r.isAccepted() && !world.getBlockState(placed).isAir(), "premise: " + report);
+                h.assertTrue(same(world, placed, expected) && Math.abs(live - expected) < 1.0e-6,
+                        c[0] + ": expected " + expected + " (stored read must equal the live rule): " + report);
+            }
+        } finally {
+            SlabAnchorAttachment.FROZEN_DY_ENABLED = previousFrozen;
+        }
+        h.complete();
+    }
+
     /** Scaffolding placed on a bottom slab must stack upward when the column is clicked again. */
     @GameTest(templateName = "fabric-gametest-api-v1:empty")
     public void scaffoldingStacksUpwardOnSlab(TestContext h) {
