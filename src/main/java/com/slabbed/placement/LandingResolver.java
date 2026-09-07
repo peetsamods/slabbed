@@ -2,6 +2,7 @@ package com.slabbed.placement;
 
 import com.slabbed.anchor.SlabAnchorAttachment;
 import com.slabbed.compat.CompatHooks;
+import com.slabbed.compat.CompatSlabSurfaceKind;
 import com.slabbed.util.SlabSupport;
 import com.slabbed.upgrade.WorldUpgradeRuntimePolicy;
 import net.minecraft.block.BedBlock;
@@ -235,15 +236,13 @@ public final class LandingResolver {
         boolean stackedAboveOwner = insideOwnerColumn && actualTarget.getY() > aim.ownerPos().getY();
 
         double landingDy;
-        if (aim.clickedFace() == Direction.UP && insideOwnerColumn) {
-            // UP face: land on the owner's VISIBLE top plane. A lowered TOP-type slab owner seats the
-            // placement flush on its visible top; only a BOTTOM-type owner takes the upgrade above.
-            landingDy = aim.ownerPos().getY() + aim.ownerVisibleDy() + topPlaneOffset(aim.ownerState())
-                    - actualTarget.getY();
-        } else if (stackedAboveOwner) {
-            // Same plane formula as the UP face for the cell directly above; a taller climb keeps the
-            // same frame instead of subtracting each climbed cell.
-            landingDy = aim.ownerVisibleDy() + topPlaneOffset(aim.ownerState()) - 1.0d;
+        if (stackedAboveOwner) {
+            // Any target above the owner in its own column rests on the owner's VISIBLE top plane: the
+            // cell directly above off an UP-face click, or a taller climb off a side click. A lowered
+            // TOP-type slab owner seats the placement flush on its visible top; only a BOTTOM-type owner
+            // takes the upgrade above. Written in the owner's frame so a taller climb keeps that frame
+            // instead of subtracting each climbed cell.
+            landingDy = aim.ownerVisibleDy() + ownerTopPlaneOffset(aim.ownerState()) - 1.0d;
         } else if (aim.clickedFace() == Direction.DOWN && insideOwnerColumn) {
             boolean flushTopVerticalChainBridge =
                     finalState.getBlock() instanceof ChainBlock
@@ -297,6 +296,19 @@ public final class LandingResolver {
         }
         double live = SlabSupport.getYOffset(world, ownerPos, ownerState);
         return Double.isFinite(live) ? live : 0.0;
+    }
+
+    /**
+     * The owner's visible top plane, asking the compat classifier first: a Terrain Slabs surface the
+     * classifier reports as bottom-like (a placed bottom slab, or a generated double, which that mod
+     * presents as a half-height terrain surface) seats a placement at 0.5, exactly as the live support
+     * lane does; any other Terrain Slabs state seats at 1.0. Vanilla owners use the slab-type plane.
+     */
+    private static double ownerTopPlaneOffset(BlockState ownerState) {
+        if (CompatHooks.shouldSkipOffset(ownerState)) {
+            return CompatHooks.customSlabSurfaceKind(ownerState) == CompatSlabSurfaceKind.BOTTOM_LIKE ? 0.5 : 1.0;
+        }
+        return topPlaneOffset(ownerState);
     }
 
     /** Visible top-plane offset within the owner's cell: bottom slab 0.5; full / TOP / DOUBLE 1.0. */
