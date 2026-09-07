@@ -4,7 +4,7 @@ See LAW.md — this changelog does not redefine the law.
 
 ### Platform
 
-- **Minecraft 26.3.** This line targets Minecraft 26.3 (built against pre-release 1 while the
+- **Minecraft 26.3.** This line targets Minecraft 26.3 (built against pre-release 2 while the
   release is pending) on Fabric, carrying every fix from the 26.2 `0.6.0` line. Build tooling moved to
   Fabric Loom 1.17 and Gradle 9.5; the mod still needs Java 25 like 26.2. The five chain-under-ceiling
   bridge models use 26.3's new `shade_direction_override` in place of the removed `shade` flag, so
@@ -150,6 +150,52 @@ See LAW.md — this changelog does not redefine the law.
 
 ### Known limitations
 
+Three blanket caveats up front:
+
+- **A world built on a version before 0.5 shows its previously lowered blocks flat.** A block's
+  height is decided and locked in the moment you place it, but only going forward: a block placed
+  under an earlier version has no such record, and this build does not recompute its height from its
+  neighbours the way older versions did. The block itself is not moved or damaged, and everything you
+  place from now on lowers and locks in correctly; it is specifically already-placed lowered blocks
+  that render and behave as if they were never lowered. There is no automatic conversion, the new
+  height keys cannot adjust a block with no record (break and re-place it instead), and the same
+  applies to lowered-looking blocks from world generation, `/setblock`, or another mod. The launch
+  flag described below is the only way back to the old behaviour, and it has costs of its own.
+  **Back up any world before opening it in this build**, and consider a copy or a fresh world first.
+- **Broad mod compatibility is an unverified alpha risk.** Running this build inside large modpacks
+  has not been broadly tested, and Sodium, Iris, Lithium and Terrain Slabs had no 26.3 builds when
+  this line was opened, so it has only been checked on the vanilla renderer (see Platform above).
+- **No formal performance benchmark was run.** Normal play has felt smooth, but nothing here is a
+  measured performance guarantee; please treat it as an open question and report anything that feels
+  off.
+
+Everything under New and Fixes above passes its automated tests. The following have **not yet been
+re-verified in live play on 26.3** and should be treated as "being verified", not "done":
+
+- The settings screen and the flower-pot seat option in both of its modes.
+- The two height-nudge key bindings end to end (the Controls rows, the nudge itself, the on-screen
+  reply).
+- A block keeping its lowered height through a piston push or pull, drawn exactly once.
+- Minecarts riding a lowered rail, and armor stands placed on a lowered surface.
+- Ambient and event particles (candles, torches, levers, redstone wire, campfires, end rods,
+  furnaces, ender chests) at a lowered block's drawn height.
+- Placing onto lowered farmland at every depth.
+- The yellow chat warning when your game and the server disagree about the height flag.
+
+Known open issues, carried from the 26.2 line and unchanged here:
+
+- In some deep arrangements, a hanging chain can still render at the wrong height even though its
+  targeting outline and collision are correct.
+- A connected dripstone's second segment at depth may still misbehave; this is parked for a
+  follow-up build.
+- In certain deep arrangements, a few block families (doors, carpets, banners, and beds) may still
+  land at grid height rather than the lowered height; powder snow intentionally never lowers.
+  Per-family placement height is ongoing work.
+- Redstone dust carries a signal up a lowered step but not back down it. This looks like an existing
+  vanilla quirk made more visible by lowered blocks rather than something the mod does, but it has
+  not been fully root-caused, and a fix applied before it is properly diagnosed risks breaking dust
+  connections that currently work, so it is deferred rather than rushed.
+
 - **The `-Dslabbed.frozenDy=false` launch flag is an escape hatch for worlds built before 0.5, not
   a setting to toggle casually.** With it set, the mod goes back to recomputing a block's height
   from its neighbours every time, the way it worked before 0.5.0, and it ignores the height a
@@ -162,6 +208,18 @@ See LAW.md — this changelog does not redefine the law.
   the reverse. The mod does not fix a mismatch for you; when you see the new chat warning, ask
   whoever controls the side that is out of step, usually the server's launch flags, to match the
   other side (maintainer ruling, 2026-09-06).
+
+**How you can help.** If you hit a problem, the most useful report includes:
+
+- **Reproducible steps**: what you placed, where, and in what order, so it can be recreated.
+- **Your full mod list** and loader version, plus the line `/slabdy build` prints, which names the
+  exact build you are running.
+- **Your `latest.log`, or the crash report** where one was produced.
+- **A screenshot or video** of the problem.
+- **For performance reports:** the same scene with Slabbed enabled versus disabled. "Lag with the
+  mod on and off" versus "lag only with the mod on" is worth ten times a bare "it lags".
+
+Thank you for testing an alpha; every report above makes the next build better.
 
 ## [0.5.2-alpha.1+26.2] — MC 26.2 alpha
 
