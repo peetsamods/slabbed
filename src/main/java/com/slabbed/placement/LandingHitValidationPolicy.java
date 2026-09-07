@@ -86,8 +86,7 @@ public final class LandingHitValidationPolicy {
                 || hitPos == null
                 || !Double.isFinite(ownerDy)
                 || !(ownerDy < -EPSILON)
-                || CompatHooks.shouldSkipOffset(ownerState)
-                || CompatHooks.shouldSkipSlabSupport(ownerState)
+                || CompatHooks.ownsPlacementHeight(ownerState)
                 || LandingResolver.compatOwnsFinalState(heldState)) {
             return Double.NaN;
         }

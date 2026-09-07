@@ -43,6 +43,15 @@ public final class TerrainSlabsCompat {
     }
 
     /**
+     * True for NATURAL Terrain Slabs terrain: a recognised Terrain Slabs block carrying
+     * {@code generated=true}. Natural terrain never receives a Slabbed height (the world-hole guard);
+     * a player-placed Terrain Slabs slab ({@code generated=false}) may.
+     */
+    public static boolean isNaturalTerrain(BlockState state) {
+        return shouldSkipOffset(state) && propertyEquals(state, "generated", "true");
+    }
+
+    /**
      * Terrain Slabs supplies terrain-shaped slab models and culling behavior.
      * Keep those blocks out of Slabbed's generic support-source rules.
      */

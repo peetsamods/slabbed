@@ -147,6 +147,7 @@ before this line's behaviour work closes — see the note beneath the table.
 | `com/slabbed/mixin/PistonPlacementDyTransferMixin` | Carries stored heights through vanilla piston movement. |
 | `com/slabbed/mixin/PistonMovingBlockDyMixin` | Preserves moving-cell heights when their final block state is installed. |
 | `com/slabbed/mixin/SnowBlockStoredSupportMixin` | Preserves snow support-face checks on translated collision shapes. |
+| `com/slabbed/mixin/ScaffoldingLoweredStandMixin` | Measures scaffolding's "entity is above" test against the cell's stored height so a lowered column is stood on, climbed and descended like a flush one. |
 | `com/slabbed/mixin/CampfireCookingParticleMixin` | Translates cooking smoke to its stored campfire height. |
 | `com/slabbed/mixin/CampfireSmokeParticleMixin` | Translates campfire smoke outside the shared display-tick scope without double-shifting ambient smoke. |
 | `com/slabbed/mixin/DecoratedPotParticleMixin` | Translates pot feedback particles to the stored pot height. |

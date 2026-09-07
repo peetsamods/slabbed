@@ -1183,7 +1183,10 @@ public final class SlabSupport {
         if (state == null || state.isAir()) {
             return 0.0;
         }
-        if (CompatHooks.shouldSkipOffset(state)) {
+        // A player-placed Terrain Slabs slab carries provenance and reads its stored height like any
+        // slab (maintainer ruling, 2026-09-07). Legacy and natural Terrain Slabs cells carry none and
+        // keep the compat skip below, so nothing existing moves and natural terrain never lowers.
+        if (CompatHooks.shouldSkipOffset(state) && !SlabAnchorAttachment.isModernPlacement(world, pos)) {
             return 0.0;
         }
 
