@@ -9,7 +9,8 @@
   ],
   "client": [
     "PlacementDyPredictionJournalGameTestMixin",
-    "ClientLevelParticleCaptureMixin"
+    "ClientLevelParticleCaptureMixin",
+    "ClientLevelSinkParticleCaptureMixin"
   ],
   "injectors": {
     "defaultRequire": 1

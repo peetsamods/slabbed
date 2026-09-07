@@ -12,27 +12,17 @@ import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 
 /**
- * Emits campfire particles from the campfire's DRAWN height. Torch, lever and candle particles
- * already follow their block down; the campfire's crackle ({@code animateTick}) and smoke column
- * ({@code makeParticles}) spawned at grid height, so a lowered campfire smoked from the air
- * above itself (maintainer ruling, 2026-09-01: WYSIWYG applies to emitted effects).
+ * Emits the campfire's smoke column from the campfire's DRAWN height, so a lowered campfire does
+ * not smoke from the air above itself (maintainer ruling, 2026-09-01: WYSIWYG applies to emitted
+ * effects).
+ *
+ * <p>Invariant: this mixin covers {@code makeParticles} ONLY, which vanilla reaches from dousing
+ * and from the block-entity tick — both outside the block display tick. The campfire's crackle is
+ * emitted inside the display tick and is owned by the funnel in
+ * {@code BlockDisplayParticleMixin}; do not re-add a per-block hook for it.
  */
 @Mixin(CampfireBlock.class)
 public abstract class CampfireParticleMixin {
-
-    @WrapOperation(
-            method = "animateTick",
-            at = @At(
-                    value = "INVOKE",
-                    target = "Lnet/minecraft/world/level/Level;addParticle(Lnet/minecraft/core/particles/ParticleOptions;DDDDDD)V"))
-    private static void slabbed$offsetCrackle(
-            Level level, ParticleOptions type,
-            double x, double y, double z, double vx, double vy, double vz,
-            Operation<Void> original,
-            @Local(argsOnly = true) BlockPos pos
-    ) {
-        original.call(level, type, x, y + slabbed$campfireDy(level, pos), z, vx, vy, vz);
-    }
 
     @WrapOperation(
             method = "makeParticles",

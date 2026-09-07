@@ -86,7 +86,7 @@ anything. The split above puts the fine granularity only where a leak has actual
 | `com/slabbed/client/runtime/*` | Lowered side-slab retargeter — client targeting. |
 | `com/slabbed/compat/*` | Compat hooks and the slab-surface-kind enum consumed by third-party slab mods. |
 | `com/slabbed/compat/terrainslabs/*` | Terrain Slabs compat (dual mod-id gate). |
-| `com/slabbed/mixin/client/*` | The 14 client render/interaction mixins declared in `slabbed.client.mixins.json`; every member handles render offset, emitted-effect alignment, remesh, entity light or offset raycast behavior. |
+| `com/slabbed/mixin/client/*` | The 15 client render/interaction mixins declared in `slabbed.client.mixins.json`; every member handles render offset, emitted-effect alignment, remesh, entity light or offset raycast behavior. |
 | `com/slabbed/mixin/torch/*` | `TorchBlockMixin` — torch attachment geometry. |
 
 ### Main mixins (class-level; `com/slabbed/mixin/` is a mixed package)
@@ -97,7 +97,6 @@ anything. The split above puts the fine granularity only where a leak has actual
 | `com/slabbed/mixin/BlockItemPlacementIntentMixin` | Captures placement intent for the WYSIWYG placement law. |
 | `com/slabbed/mixin/BlockOnPlacedAnchorMixin` | Writes the anchor on placement. |
 | `com/slabbed/mixin/BlockOnStateReplacedAnchorMixin` | Clears the anchor on state replacement. |
-| `com/slabbed/mixin/BrewingStandParticleMixin` | Particle origin follows the lowered block. |
 | `com/slabbed/mixin/CampfireCookingParticleMixin` | Particle origin follows the lowered block. |
 | `com/slabbed/mixin/CampfireParticleMixin` | Particle origin follows the lowered block. |
 | `com/slabbed/mixin/CandleParticleMixin` | Particle origin follows the lowered block. |
@@ -112,7 +111,6 @@ anything. The split above puts the fine granularity only where a leak has actual
 | `com/slabbed/mixin/LithiumBlockCollisionSweeperPosLoweredAboveMixin` | Lithium compat: a lowered block's hanging collision reaches Lithium's position-yielding block-collision sweeper; admitted only after the config plugin byte-checks that sweeper (maintainer ruling, 2026-09-02). |
 | `com/slabbed/mixin/LithiumBlockCollisionSweeperShapeLoweredAboveMixin` | Lithium compat: a lowered block's hanging collision reaches Lithium's shape-yielding block-collision sweeper; admitted only after the config plugin byte-checks that sweeper (maintainer ruling, 2026-09-02). |
 | `com/slabbed/mixin/LivingEntityLoweredScaffoldingMixin` | Scaffolding movement over lowered geometry. |
-| `com/slabbed/mixin/RedstoneTorchParticleMixin` | Particle origin follows the lowered block. |
 | `com/slabbed/mixin/RedstoneWireBlockMixin` | Redstone wire connection/support over lowered slabs. |
 | `com/slabbed/mixin/ServerInteractBlockHitToleranceMixin` | Server-side hit tolerance for offset targeting. |
 | `com/slabbed/mixin/SlabSupportBlockMixin` | Slab support surface. |
@@ -123,11 +121,7 @@ anything. The split above puts the fine granularity only where a leak has actual
 | `com/slabbed/mixin/ProjectileBlockClipOffsetMixin` | Projectiles hit a lowered block where it is drawn. |
 | `com/slabbed/mixin/ServerExplosionOcclusionOffsetClipMixin` | Explosions are sheltered by a lowered block's drawn body. |
 | `com/slabbed/mixin/SlabbedMixinConfigPlugin` | Mixin config plugin: withholds the explosion-occlusion redirect while Lithium owns the same call site, and admits the two Lithium sweeper mixins only after byte-checking Lithium's sweepers (maintainer ruling, 2026-09-02); loads no Minecraft class. |
-| `com/slabbed/mixin/TorchParticleAccessor` | Accessor supporting the torch particle mixins. |
-| `com/slabbed/mixin/TorchParticleMixin` | Particle origin follows the lowered block. |
-| `com/slabbed/mixin/WallRedstoneTorchParticleMixin` | Particle origin follows the lowered block. |
 | `com/slabbed/mixin/WallSlabConnectionMixin` | Wall connection against a lowered slab. |
-| `com/slabbed/mixin/WallTorchParticleMixin` | Particle origin follows the lowered block. |
 
 ### Client (class-level; `com/slabbed/client/` is a mixed package)
 
@@ -170,6 +164,7 @@ anything. The split above puts the fine granularity only where a leak has actual
 | `com/slabbed/util/SlabbedOffsetRaycast` | Offset-aware nearest-hit raycast — the targeting overhaul. |
 | `com/slabbed/util/SlabbedDebugCommandTree` | The Brigadier node structure and feedback strings for the shipped `/slabdy` and `/slabdev`. Pure Brigadier, generic over the command source, no Minecraft or client type in any signature — deliberately so: a client command tree is unreachable from a headless dedicated-server GameTest, and "the command is invocable" is only worth what its test is worth. `ShippedDebugCommandsTest` registers these exact builders into a real dispatcher and executes real command strings. Inert until invoked: everything runs inside an `executes(...)` body. |
 | `com/slabbed/util/SlabdyRowFormatter` | Headless field computation for the `[slabdy]` diagnostic row. **Previously excluded** with the reason "no shipped consumer on this line" — that is no longer true: `/slabdy row` is a shipped consumer, and it is the one debug subcommand that does real work on a release jar (it needs nothing but `SlabAnchorAttachment` and `SlabSupport`, both approved above). Read-only: it computes strings and touches no state. |
+| `com/slabbed/util/BlockDisplayParticleContext` | Carries a block's frozen visual height through its vanilla display tick so the particles that tick emits follow the drawn model; also the ownership handshake the three retained per-block particle hooks use to keep their emission single-shifted. |
 
 ## Ruling executed (2026-08-07)
 

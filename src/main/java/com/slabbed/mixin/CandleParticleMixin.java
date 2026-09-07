@@ -1,5 +1,6 @@
 package com.slabbed.mixin;
 
+import com.slabbed.util.BlockDisplayParticleContext;
 import com.slabbed.util.SlabSupport;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.particles.ParticleOptions;
@@ -28,6 +29,12 @@ import org.spongepowered.asm.mixin.injection.Redirect;
  * as intermediary {@code method_31611}). Redirect the helper call from inside that dispatcher, where
  * BlockPos is available to resolve dy. Vanilla's smoke-chance/jitter/sound formula is preserved
  * untouched; strict no-op when dy == 0.
+ *
+ * <p>Invariant: {@code addParticlesAndSound} feeds the shifted {@link Vec3} to BOTH particle sinks
+ * AND the candle's ambient sound, so a particle-only translation cannot replace this hook — the
+ * ambient sound would fall back to grid height. It therefore stays, and declares an owned emission
+ * so the display-tick funnel in {@code BlockDisplayParticleMixin} does not translate its two
+ * particles a second time (maintainer ruling, 2026-09-06).
  */
 @Mixin(AbstractCandleBlock.class)
 public abstract class CandleParticleMixin {
@@ -49,7 +56,13 @@ public abstract class CandleParticleMixin {
                                                       RandomSource capturedRandom, Vec3 flameOffset) {
         BlockState state = capturedLevel.getBlockState(blockPos);
         double dy = SlabSupport.getYOffset(capturedLevel, blockPos, state);
-        addParticlesAndSound(level, dy == 0.0 ? spawnPos : spawnPos.add(0.0, dy, 0.0), random);
+        Vec3 shifted = dy == 0.0 ? spawnPos : spawnPos.add(0.0, dy, 0.0);
+        BlockDisplayParticleContext.beginOwnedEmission();
+        try {
+            addParticlesAndSound(level, shifted, random);
+        } finally {
+            BlockDisplayParticleContext.endOwnedEmission();
+        }
     }
 
     @Redirect(
