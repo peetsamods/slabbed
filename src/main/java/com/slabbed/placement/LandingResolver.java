@@ -208,12 +208,12 @@ public final class LandingResolver {
                 && aim.ownerPos().equals(actualTarget)) {
             return new PlacementResolution(actualTarget, aim.ownerVisibleDy(), true);
         }
-        // Same-cell replacement: a thin layer stacking on itself, or a bucket filling a replaceable
-        // cell. The aim named the owner's own cell, so the landing is the owner's own height.
-        if ((family == Family.AIM_KEYED_FLOOR_SEAT
-                || family == Family.USE_CREATED_FULL_CUBE_CONTACT)
-                && aim.replacementSameCell()
-                && aim.ownerPos().equals(actualTarget)) {
+        // Same-cell replacement, every family: a thin layer stacking on itself, a bucket filling a
+        // replaceable cell, a block placed INTO grass / a fern / a one-layer snow cell, a second
+        // candle or sea pickle merged onto the first. The aim named the owner's own cell, so the
+        // landing is the owner's own height — the plane formulas below would answer a whole cell
+        // above (they describe a block resting ON the owner, which a replacement never is).
+        if (aim.replacementSameCell() && aim.ownerPos().equals(actualTarget)) {
             return new PlacementResolution(actualTarget, aim.ownerVisibleDy(), true);
         }
 
