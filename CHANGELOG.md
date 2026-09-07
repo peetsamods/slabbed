@@ -20,6 +20,9 @@ See LAW.md — this changelog does not redefine the law.
 
 ### Fixes
 
+- **Candle and redstone-torch smoke stays with the lowered block.** Snuffing a lowered candle, or a
+  lowered redstone torch burning out, puffed its smoke at normal grid height, hovering above the
+  block. Both now smoke from the block's drawn height, the way their idle particles already did.
 - **Things resting on a lowered block are lit properly.** A cushion, a dropped item, or any small
   creature sitting on the visible top of a lowered full block rendered pitch black, because the game
   took its lighting from the grid cell the thing is in, and that cell still belongs to the block that

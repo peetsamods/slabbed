@@ -431,6 +431,7 @@ sourceSets {
             include("com/slabbed/test/SlabbedLabLiveCursorIntentRecorderContractClientGameTest.java")
             include("com/slabbed/test/PlacementDyPredictionClientGameTest.java")
             include("com/slabbed/client/SlabModelStaleSentinelClientThrottleClientGameTest.java")
+            include("com/slabbed/test/EventParticleFrozenDyClientGameTest.java")
             include("com/slabbed/test/LeverParticleFrozenAnchorClientGameTest.java")
             include("com/slabbed/test/LoweredBandEntityLightClientGameTest.java")
             include("com/slabbed/test/DevDiagnosticsCompanionLoadsClientGameTest.java")

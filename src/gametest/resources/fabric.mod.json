@@ -109,6 +109,7 @@
       "com.slabbed.anchor.PlacementDyAttachmentCapacityTest"
     ],
     "fabric-client-gametest": [
+      "com.slabbed.test.EventParticleFrozenDyClientGameTest",
       "com.slabbed.test.PlacementDyPredictionClientGameTest",
       "com.slabbed.test.SlabbedLabLiveCursorIntentRecorderContractClientGameTest",
       "com.slabbed.test.ModelStaleSentinelSelfCheckClientGameTest",

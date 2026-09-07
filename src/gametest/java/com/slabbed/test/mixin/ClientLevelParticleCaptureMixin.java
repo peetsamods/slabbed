@@ -1,5 +1,6 @@
 package com.slabbed.test.mixin;
 
+import com.slabbed.test.EventParticleFrozenDyClientGameTest;
 import com.slabbed.test.LeverParticleFrozenAnchorClientGameTest;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.core.particles.DustParticleOptions;
@@ -25,6 +26,8 @@ public abstract class ClientLevelParticleCaptureMixin {
             double yVelocity,
             double zVelocity,
             CallbackInfo ci) {
+        EventParticleFrozenDyClientGameTest.captureParticle(
+                options, x, y, z, xVelocity, yVelocity, zVelocity);
         if (options instanceof DustParticleOptions dust) {
             LeverParticleFrozenAnchorClientGameTest.captureDustParticle(
                     dust, x, y, z, xVelocity, yVelocity, zVelocity);
