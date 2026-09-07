@@ -58,6 +58,9 @@ public final class TerrainSlabsTestShim implements ModInitializer {
     public void onInitialize() {
         Registry.register(Registries.BLOCK, TEST_TS_SLAB_ID, TEST_TS_SLAB);
         Registry.register(Registries.BLOCK, LEGACY_TS_SLAB_ID, LEGACY_TS_SLAB);
+        // Item form so a Terrain Slabs slab can be item-placed through the real placement path.
+        Registry.register(Registries.ITEM, TEST_TS_SLAB_ID,
+                new net.minecraft.item.BlockItem(TEST_TS_SLAB, new net.minecraft.item.Item.Settings()));
     }
 
     /** Vanilla slab plus the Terrain Slabs-style {@code generated} property (default false). */
