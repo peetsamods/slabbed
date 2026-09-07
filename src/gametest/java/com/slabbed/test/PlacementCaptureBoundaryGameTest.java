@@ -346,6 +346,63 @@ public final class PlacementCaptureBoundaryGameTest {
         pass(h, "single_initial_writer");
     }
 
+    /**
+     * The flower-pot seat policy is applied at BOTH writers of a placement transaction and at NO read
+     * path: exactly once at the mint choke point, exactly once at the marker writer, defined in the
+     * resolver, and never inside either {@code resolve} overload or inside the height read helper.
+     *
+     * <p>WHY A SOURCE-SHAPE ROW rather than a behavioural one. Moving the call into
+     * {@code LandingResolver.resolve}'s UP arm would leave the resolver-returned-null branch of the
+     * mint unadjusted — but no fixture in this repo produces that branch for a flower pot (its family
+     * is never UNSUPPORTED), so no behavioural row can see the move. This row pins the shape because
+     * the behaviour is unreachable, and says so instead of claiming a proof that does not exist. The
+     * read-path clause is a real LAW 1 safety assertion, not decoration: a placement-time policy on a
+     * read path would move blocks that are already placed.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void potSeatPolicyIsAppliedAtBothWriters(GameTestHelper h) {
+        String call = "potSeatAdjustedDy(";
+        try {
+            Path root = locateProjectRoot();
+            String itemMixin = Files.readString(root.resolve(
+                    "src/main/java/com/slabbed/mixin/BlockItemPlacementIntentMixin.java"));
+            String anchor = Files.readString(root.resolve(
+                    "src/main/java/com/slabbed/anchor/SlabAnchorAttachment.java"));
+            String resolver = Files.readString(root.resolve(
+                    "src/main/java/com/slabbed/placement/LandingResolver.java"));
+            String support = Files.readString(root.resolve(
+                    "src/main/java/com/slabbed/util/SlabSupport.java"));
+
+            if (occurrences(itemMixin, call) != 1) {
+                throw h.assertionException("the pot-seat policy must be applied EXACTLY once in the "
+                        + "placement mint, at the single choke point both dy branches funnel into; found "
+                        + occurrences(itemMixin, call));
+            }
+            if (occurrences(anchor, call) != 1) {
+                throw h.assertionException("the marker writer must judge a placement by the same value as "
+                        + "the fact writer: exactly one pot-seat policy call in the anchor attachment, found "
+                        + occurrences(anchor, call));
+            }
+            if (occurrences(resolver, call) < 1) {
+                throw h.assertionException("the pot-seat policy must be defined in the landing resolver");
+            }
+            if (support.contains("potSeatAdjustedDy")) {
+                throw h.assertionException("LAW 1: the pot-seat policy is PLACEMENT-TIME ONLY and must never "
+                        + "appear on the height read path — a placed pot's height is its stored fact for its "
+                        + "whole life, and flipping the option must not move it");
+            }
+            int firstResolve = resolver.indexOf("public static PlacementResolution resolve(");
+            int lastPolicy = resolver.lastIndexOf("potSeatAdjustedDy");
+            if (firstResolve < 0 || lastPolicy < 0 || lastPolicy > firstResolve) {
+                throw h.assertionException("the pot-seat policy must stay OUTSIDE both resolve overloads: a "
+                        + "resolver-only hook leaves the mint's own fallback branch unadjusted");
+            }
+        } catch (IOException exception) {
+            throw h.assertionException("unable to inspect the pot-seat policy sources: " + exception);
+        }
+        pass(h, "pot_seat_policy_is_applied_at_both_writers");
+    }
+
     public static InteractionResult useOn(Player player, ItemStack stack, BlockPos clicked, Direction face) {
         player.setItemInHand(InteractionHand.MAIN_HAND, stack);
         return stack.useOn(new UseOnContext(player, InteractionHand.MAIN_HAND, hit(clicked, face)));

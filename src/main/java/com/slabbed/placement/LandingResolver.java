@@ -2,6 +2,7 @@ package com.slabbed.placement;
 
 import com.slabbed.anchor.SlabAnchorAttachment;
 import com.slabbed.compat.CompatHooks;
+import com.slabbed.config.SlabbedConfig;
 import com.slabbed.util.SlabEnsembleCoherence;
 import com.slabbed.util.SlabSupport;
 import net.minecraft.core.BlockPos;
@@ -11,6 +12,7 @@ import net.minecraft.world.item.context.UseOnContext;
 import net.minecraft.world.level.BlockGetter;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.BedBlock;
+import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.ChainBlock;
 import net.minecraft.world.level.block.EntityBlock;
 import net.minecraft.world.level.block.PowderSnowBlock;
@@ -185,6 +187,54 @@ public final class LandingResolver {
                 || ((CompatHooks.shouldSkipOffset(state) || CompatHooks.shouldSkipSlabSupport(state))
                         && !SlabSupport.isTaggedSlab(state))
                 || CompatHooks.terrainSlabsHandlesObjectOffset(state);
+    }
+
+    /** Landings are halves; this tolerance is exactness, not a fuzzy match. */
+    private static final double SEAT_MATCH_EPSILON = 1.0e-9d;
+
+    /**
+     * VANILLA_FLOAT seat adjustment for {@code minecraft:flower_pot} (maintainer ruling, 2026-09-06).
+     *
+     * <p>Vanilla leaves a gap under a pot exactly equal to the distance from its support's visible
+     * top plane to the grid floor of the cell above: half a block over a BOTTOM slab, nothing over a
+     * full block or a TOP slab. This returns the flush landing plus that gap, so the option
+     * reproduces vanilla at grid height AND keeps the same relationship over a lowered support
+     * instead of leaving the pot hanging in air. A fixed {@code +0.5} would float a pot above
+     * ordinary stone; returning {@code 0.0} would leave a one-to-two block gap over a lowered owner.
+     *
+     * <p>SCOPE. {@code minecraft:flower_pot} only — not decorated pots, not candles, not the
+     * {@code potted_*} variants: those arrive through an in-place block-kind transition, never a
+     * placement, and keep the fact the empty pot was given.
+     *
+     * <p>THE SEAT GUARD is what keeps this off every other face. It adjusts ONLY a landing that
+     * actually seats on the block beneath the target. A side-inherited landing (the any-depth ruling,
+     * 2026-09-01) and an underside landing do not match the seat expression, so they are returned
+     * verbatim: FLOAT changes where a pot RESTS, never where a pot FOLLOWS.
+     *
+     * <p>PLACEMENT-TIME ONLY. Both callers are inside the placement transaction. Nothing on a read
+     * path may call this (LAW.md, LAW 1): flipping the option must not move a pot already placed.
+     */
+    public static double potSeatAdjustedDy(
+            BlockGetter world, BlockPos target, BlockState finalState, double flushDy) {
+        if (world == null || target == null || finalState == null
+                || !Double.isFinite(flushDy)
+                || !finalState.is(Blocks.FLOWER_POT)
+                || SlabbedConfig.get().potSeat() != SlabbedConfig.PotSeat.VANILLA_FLOAT) {
+            return flushDy;
+        }
+        BlockPos supportPos = target.below();
+        BlockState supportState = world.getBlockState(supportPos);
+        if (supportState.isAir()) {
+            // Nothing beneath it to keep a gap above: the aim stands.
+            return flushDy;
+        }
+        double seat = supportPos.getY() + visibleOwnerDy(world, supportPos, supportState)
+                + topPlaneOffset(supportState) - target.getY();
+        if (!Double.isFinite(seat) || Math.abs(flushDy - seat) > SEAT_MATCH_EPSILON) {
+            // This landing did not seat on the support below — leave it exactly as aimed.
+            return flushDy;
+        }
+        return flushDy + (1.0d - topPlaneOffset(supportState));
     }
 
     /**

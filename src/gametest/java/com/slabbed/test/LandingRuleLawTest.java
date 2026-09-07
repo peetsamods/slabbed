@@ -2,6 +2,7 @@ package com.slabbed.test;
 
 import com.slabbed.Slabbed;
 import com.slabbed.anchor.SlabAnchorAttachment;
+import com.slabbed.config.SlabbedConfig;
 import com.slabbed.placement.LandingHitValidationPolicy;
 import com.slabbed.placement.LandingResolver;
 import com.slabbed.util.SlabEnsembleCoherence;
@@ -236,6 +237,20 @@ public final class LandingRuleLawTest {
             body.run();
         } finally {
             SlabAnchorAttachment.FROZEN_DY_ENABLED = prev;
+        }
+    }
+
+    /**
+     * Pins the flower-pot seat option for a row that measures LANDING geometry rather than the
+     * option. Same static-global constraint as {@link #withFrozen}: synchronous bodies only, never
+     * across a tick, because several tests start in the same tick.
+     */
+    private static void withPotSeat(SlabbedConfig.PotSeat seat, FrozenBody body) {
+        SlabbedConfig previous = SlabbedConfig.setActiveForTesting(SlabbedConfig.withPotSeat(seat));
+        try {
+            body.run();
+        } finally {
+            SlabbedConfig.setActiveForTesting(previous);
         }
     }
 
@@ -1053,7 +1068,9 @@ public final class LandingRuleLawTest {
         long expectedBits = Double.doubleToRawLongBits(-1.5d);
         long supportBits = Double.doubleToRawLongBits(-1.0d);
 
-        withFrozen(() -> {
+        // This row measures the in-place pot transition at a fixed landing, not the flower-pot seat
+        // option, so it pins the option rather than inheriting the shipped default.
+        withPotSeat(SlabbedConfig.PotSeat.FLUSH, () -> withFrozen(() -> {
             double supportStored = storedDy(world, owner);
             double supportLive = liveDy(world, owner);
             if (Double.doubleToRawLongBits(supportStored) != supportBits
@@ -1149,7 +1166,7 @@ public final class LandingRuleLawTest {
             if (!Double.isNaN(storedDy(world, pot))) {
                 throw h.assertionException(pot, "non-pot to flower-pot replacement must not preserve stored dy");
             }
-        });
+        }));
         h.succeed();
     }
 

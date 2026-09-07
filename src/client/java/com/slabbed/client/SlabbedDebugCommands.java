@@ -141,5 +141,27 @@ public final class SlabbedDebugCommands {
                     world.getChunkAt(client.player.blockPosition()),
                     world.registryAccess());
         }
+
+        @Override
+        public boolean settingsAvailable() {
+            return source.getClient() != null;
+        }
+
+        /**
+         * DEFERRED ON PURPOSE. A client command executes inside
+         * {@code ClientPacketListener.sendCommand}, which {@code ChatScreen.handleChatInput} calls;
+         * {@code ChatScreen.keyPressed} then closes the chat screen with a {@code setScreen(null)}
+         * later in that SAME call. Opening the screen inline is therefore overwritten in the same
+         * frame. {@code Minecraft.execute} queues it onto the client task queue, which drains after
+         * the chat screen is gone. Do not "simplify" this back to a direct call.
+         */
+        @Override
+        public void openSettings() {
+            Minecraft client = source.getClient();
+            if (client == null) {
+                return;
+            }
+            client.execute(() -> client.setScreenAndShow(new SlabbedSettingsScreen()));
+        }
     }
 }

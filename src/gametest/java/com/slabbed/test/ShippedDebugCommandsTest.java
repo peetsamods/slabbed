@@ -110,15 +110,40 @@ public final class ShippedDebugCommandsTest {
             return List.of(
                     "[slabdy] chunk (0, 0): placement heights: 2 entries, 60 B of 31.7 KB sync budget (0%) — GREEN");
         }
+
+        @Override
+        public boolean settingsAvailable() {
+            return false;
+        }
+
+        @Override
+        public void openSettings() {
+            throw new AssertionError("release build must not reach the settings screen implementation");
+        }
     }
 
     /** A Session with the debug tools PRESENT — i.e. the dev / diagnostics-companion shape. */
     private static final class DevSession extends ReleaseSession {
         private boolean overlay;
         private boolean recorder;
+        private boolean settingsOpened;
 
         DevSession() {
             super(List.of());
+        }
+
+        @Override
+        public boolean settingsAvailable() {
+            return true;
+        }
+
+        @Override
+        public void openSettings() {
+            settingsOpened = true;
+        }
+
+        boolean settingsOpened() {
+            return settingsOpened;
         }
 
         @Override
@@ -202,6 +227,7 @@ public final class ShippedDebugCommandsTest {
                 "slabdy off",
                 "slabdy build",
                 "slabdy chunk",
+                "slabdy settings",
                 "slabdev",
                 "slabdev debug",
                 "slabdev debug on",
@@ -248,6 +274,14 @@ public final class ShippedDebugCommandsTest {
                     "bare /slabdy did not toggle the overlay on");
         }
 
+        // The settings node is a real state change too, not a parse-only row: a handler that reports
+        // success without opening anything must be visible here.
+        run(dispatcher, "slabdy settings", helper, where);
+        if (!session.settingsOpened()) {
+            throw helper.assertionException(helper.relativePos(where),
+                    "/slabdy settings did not open the settings screen");
+        }
+
         helper.succeed();
     }
 
@@ -262,7 +296,8 @@ public final class ShippedDebugCommandsTest {
         ReleaseSession session = new ReleaseSession(List.of());
         CommandDispatcher<Object> dispatcher = dispatcherFor(session);
 
-        for (String command : new String[]{"slabdy", "slabdy on", "slabdev debug on", "slabdev record on"}) {
+        for (String command : new String[]{
+                "slabdy", "slabdy on", "slabdy settings", "slabdev debug on", "slabdev record on"}) {
             session.feedback.clear();
             int result = run(dispatcher, command, helper, where);
             if (result != 0) {

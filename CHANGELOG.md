@@ -20,6 +20,18 @@ See LAW.md — this changelog does not redefine the law.
 
 ### New
 
+- **Slabbed now has a settings file and a settings screen.** Settings live in `config/slabbed.json`
+  and `/slabdy settings` opens a small screen to change them in game. Every setting defaults to
+  exactly what the mod did before, so a world that never touches the file behaves as it always has
+  (maintainer ruling, 2026-09-06).
+- **Flower pots can keep vanilla's gap.** Vanilla leaves a small gap under a flower pot standing on a
+  slab; Slabbed normally seats the pot down onto the slab's surface. A new **flower pot seat** setting
+  lets builders choose ([#64](https://github.com/peetsamods/slabbed/issues/64)). On *flush* (the
+  default) nothing changes. On *vanilla gap*, a newly placed pot keeps the same small gap vanilla would
+  leave it, including over a lowered block, where it sits that gap above the surface you can actually
+  see rather than floating in the air. Plain flower pots only: decorated pots and candles are
+  unaffected. Pots you have already placed never move when you change the setting; it applies to pots
+  placed from then on (maintainer ruling, 2026-09-06).
 - **A warning when your game and the server disagree about block heights.** Slabbed has a
   launch flag that switches back to the pre-0.5 way of working out block heights (see Known
   limitations below). If you join a world whose setting is the opposite of your own, you now get
