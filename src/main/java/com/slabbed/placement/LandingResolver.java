@@ -265,6 +265,17 @@ public final class LandingResolver {
             // the placed block sits in the owner's own frame.
             landingDy = aim.ownerVisibleDy() + aim.ownerPos().getY() - actualTarget.getY();
         }
+        // Terrain Slabs full-cube rule, mirrored from the live lane (SlabSupport's
+        // placedTerrainSlabBottomFullCubeDy): a full cube lowers onto a Terrain Slabs slab only when that
+        // slab was PLACED (type=BOTTOM, not generated). Natural terrain never lowers a full cube — the
+        // world-hole guard — so the landing is the grid height there, exactly as the live lane answers.
+        if (family == Family.FULL_BLOCK
+                && aim.clickedFace() == Direction.UP
+                && insideOwnerColumn
+                && CompatHooks.shouldSkipOffset(aim.ownerState())
+                && !CompatHooks.isPlacedBottomHalfTerrainSlab(aim.ownerState())) {
+            landingDy = 0.0d;
+        }
         return Double.isFinite(landingDy)
                 ? new PlacementResolution(actualTarget, landingDy, false)
                 : null;
