@@ -212,6 +212,59 @@ public final class PlacementLandingRegressionTest {
         h.complete();
     }
 
+    /**
+     * A placement that REPLACES the owner's own cell (into grass or a snow layer, or a same-item merge
+     * such as a second candle) lands at the owner cell's own height, never a cell above it.
+     */
+    @GameTest(templateName = "fabric-gametest-api-v1:empty")
+    public void replacingTheOwnerCellLandsAtItsOwnHeight(TestContext h) {
+        ServerWorld world = h.getWorld();
+        boolean previousFrozen = SlabAnchorAttachment.FROZEN_DY_ENABLED;
+        SlabAnchorAttachment.FROZEN_DY_ENABLED = false;
+        try {
+            PlayerEntity player = h.createMockPlayer(GameMode.SURVIVAL);
+            // {name, pedestal (null = a real dirt placement onto a bottom slab, -0.5), cell content, item, expected}
+            Object[][] cases = {
+                {"dirt_into_grass_on_dirt", Blocks.DIRT.getDefaultState(), Blocks.SHORT_GRASS.getDefaultState(), Items.DIRT, 0.0d},
+                {"dirt_into_snow_layer_on_stone", Blocks.STONE.getDefaultState(), Blocks.SNOW.getDefaultState(), Items.DIRT, 0.0d},
+                {"snow_onto_snow_layer_on_stone", Blocks.STONE.getDefaultState(), Blocks.SNOW.getDefaultState(), Items.SNOW, 0.0d},
+                {"candle_onto_candle_on_stone", Blocks.STONE.getDefaultState(), Blocks.CANDLE.getDefaultState(), Items.CANDLE, 0.0d},
+                {"torch_into_grass_on_dirt", Blocks.DIRT.getDefaultState(), Blocks.SHORT_GRASS.getDefaultState(), Items.TORCH, 0.0d},
+                {"dirt_into_grass_on_lowered_dirt", null, Blocks.SHORT_GRASS.getDefaultState(), Items.DIRT, -0.5d},
+                {"candle_onto_candle_on_bottom_slab", Blocks.STONE_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.BOTTOM), Blocks.CANDLE.getDefaultState(), Items.CANDLE, -0.5d},
+            };
+            int i = 0;
+            for (Object[] c : cases) {
+                BlockPos g = h.getAbsolutePos(new BlockPos(1 + (i % 4) * 3, 1, 1 + (i / 4) * 3));
+                i++;
+                world.setBlockState(g, Blocks.STONE.getDefaultState(), Block.NOTIFY_ALL);
+                BlockPos pedestal = g.up(), target = g.up(2);
+                if (c[1] == null) {
+                    world.setBlockState(pedestal, Blocks.STONE_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.BOTTOM), Block.NOTIFY_ALL);
+                    player.setPosition(g.getX() + 3.5d, g.getY(), g.getZ() + 0.5d);
+                    PlacementCaptureBoundaryGameTest.useOn(player, new ItemStack(Items.DIRT), pedestal, Direction.UP);
+                    pedestal = g.up(2);
+                    target = g.up(3);
+                } else {
+                    world.setBlockState(pedestal, (BlockState) c[1], Block.NOTIFY_ALL);
+                }
+                world.setBlockState(target, (BlockState) c[2], Block.NOTIFY_ALL);
+                player.setPosition(g.getX() + 3.5d, g.getY(), g.getZ() + 0.5d);
+                ActionResult r = PlacementCaptureBoundaryGameTest.useOn(player, new ItemStack((net.minecraft.item.Item) c[3]), target, Direction.UP);
+                double expected = (Double) c[4];
+                double live = SlabSupport.getUnstoredYOffset(world, target, world.getBlockState(target));
+                String report = c[0] + " r=" + r + " | pedestal " + cell(world, pedestal) + " | cell " + cell(world, target);
+                System.out.println("[LANDING_REGRESSION] " + report);
+                h.assertTrue(r.isAccepted() && world.getBlockState(target.up()).isAir(), "premise: " + report);
+                h.assertTrue(same(world, target, expected) && Math.abs(live - expected) < 1.0e-6,
+                        c[0] + ": expected " + expected + " (stored read must equal the live rule): " + report);
+            }
+        } finally {
+            SlabAnchorAttachment.FROZEN_DY_ENABLED = previousFrozen;
+        }
+        h.complete();
+    }
+
     /** Scaffolding placed on a bottom slab must stack upward when the column is clicked again. */
     @GameTest(templateName = "fabric-gametest-api-v1:empty")
     public void scaffoldingStacksUpwardOnSlab(TestContext h) {
