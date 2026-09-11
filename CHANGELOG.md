@@ -12,6 +12,9 @@ In development. Entries land here as they are proved.
 
 ### Fixed
 
+- **Missing side faces beside lowered blocks now render correctly with Sodium.** Exposed faces at
+  height steps no longer disappear when Sodium performs its own face-culling checks.
+
 - **A chain hanging from a lowered beam now hangs from where the beam actually is.** A chain
   under an ordinary lowered block — a cantilevered beam, say, rather than a slab — stayed at
   full grid height while a lantern further down the same chain correctly dropped with the beam.
