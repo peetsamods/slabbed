@@ -7,6 +7,7 @@
     "BlockRenderInfoCullMixin",
     "SodiumBlockRenderContextCullMixin",
     "SodiumInsetTopLightingMixin",
+    "ContinuityOverlayHeightMixin",
     "CarpetDyShapeMixin",
     "ClientPickOffsetRaycastMixin",
     "ItemFrameRenderOffsetMixin",
