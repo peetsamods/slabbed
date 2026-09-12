@@ -2,7 +2,7 @@
 
 Player-facing changes for the Fabric 1.21.1 line. See LAW.md — this doc does not redefine the law.
 
-## [0.5.2-alpha.9] — Minecraft 1.21.1 (Fabric) — unreleased candidate
+## [0.5.2-alpha.9] — Minecraft 1.21.1 (Fabric) — 2026-09-12
 
 Brings the Fabric 1.21.1 line forward from `0.4.2-beta.1`. The headline: **where you place a block is
 where it stays.** This alpha introduces permanent heights for new placements while keeping
