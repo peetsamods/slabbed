@@ -123,7 +123,7 @@ jar that lies about its own contents is a release defect even when every entry i
 | `com/slabbed/mixin/LithiumStoredPlacementShapeMixin` | Optional Lithium collision-shape discovery for stored lowered owners. |
 | `com/slabbed/mixin/LithiumStoredPlacementPosMixin` | Optional Lithium support-position discovery for stored lowered owners. |
 | `com/slabbed/mixin/ScaffoldingStoredPlacementStandMixin` | Compares standing and descending feet with the stored scaffold top. |
-| `com/slabbed/mixin/client/*` | The client mixins declared in `slabbed.client.mixins.json`; every member is a render-offset, cull, remesh or offset-raycast mixin. The optional Sodium hook preserves exposed height-step faces. Non-recursive, so the excluded `mixin/client/recorder/**` cannot creep back under this row. |
+| `com/slabbed/mixin/client/*` | The client mixins declared in `slabbed.client.mixins.json`; every member is a render-offset, cull, lighting, remesh or offset-raycast mixin. The optional Sodium hooks preserve exposed height-step faces and shade inset tops at their drawn height. Non-recursive, so the excluded `mixin/client/recorder/**` cannot creep back under this row. |
 | `com/slabbed/mixin/torch/*` | `TorchBlockMixin` — torch attachment geometry. |
 
 ### Main mixins (class-level; `com/slabbed/mixin/` is a mixed package)

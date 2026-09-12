@@ -6,6 +6,7 @@
     "BlockEntityOffsetMixin",
     "BlockRenderInfoCullMixin",
     "SodiumBlockRenderContextCullMixin",
+    "SodiumInsetTopLightingMixin",
     "CarpetDyShapeMixin",
     "ClientPickOffsetRaycastMixin",
     "ItemFrameRenderOffsetMixin",

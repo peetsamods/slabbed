@@ -1,6 +1,7 @@
 package com.slabbed.client.model;
 
 import net.fabricmc.fabric.api.renderer.v1.mesh.QuadEmitter;
+import net.minecraft.util.math.Direction;
 
 import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
@@ -10,7 +11,14 @@ import java.lang.reflect.Proxy;
  * Avoids brittle hand-written delegation against evolving FRAPI APIs.
  */
 public final class YOffsetEmitter {
+    private static final ThreadLocal<Boolean> INSET_TOP = new ThreadLocal<>();
+
     private YOffsetEmitter() {
+    }
+
+    /** True only while a translated top face inside its source cell is being shaded. */
+    public static boolean isShadingInsetTop() {
+        return Boolean.TRUE.equals(INSET_TOP.get());
     }
 
     public static QuadEmitter wrap(QuadEmitter delegate, float dy) {
@@ -39,7 +47,25 @@ public final class YOffsetEmitter {
                 float z = delegate.z(i);
                 delegate.pos(i, x, y + dy, z);
             }
-            return method.invoke(delegate, args);
+            // A translated full block can have an inset top despite its full-cube state.
+            // Keep this context scoped to emission; chunk builders run on separate threads.
+            boolean insetTop = delegate.lightFace() == Direction.UP;
+            float top = delegate.y(0);
+            insetTop &= top >= 0.0f && top < 0.9999f;
+            for (int i = 1; i < 4; i++) {
+                insetTop &= Math.abs(delegate.y(i) - top) < 0.0001f;
+            }
+            Boolean previous = INSET_TOP.get();
+            INSET_TOP.set(insetTop);
+            try {
+                return method.invoke(delegate, args);
+            } finally {
+                if (previous == null) {
+                    INSET_TOP.remove();
+                } else {
+                    INSET_TOP.set(previous);
+                }
+            }
         }
 
         Object result = method.invoke(delegate, args);
