@@ -6,43 +6,50 @@ latest file, see [Modrinth](https://modrinth.com/mod/slabbed) or
 [CurseForge](https://www.curseforge.com/minecraft/mc-mods/slabbed).
 See LAW.md — this doc does not redefine the law.
 
-## [0.5.2-alpha.1] — 1.21.11 (Fabric) — unreleased
+## [0.5.2-alpha.1] — 1.21.11 (Fabric) — 2026-09-12
 
-In development. Entries land here as they are proved.
+This update improves deeper slab-supported builds and fixes rendering differences with Sodium,
+Continuity, Better Block Entities, and Create Fly.
+
+### Changed
+
+- **New placements can lower by up to three blocks without enabling the older deep-height option.**
+  Targeting, outlines, collision, and server placement checks cover the same range. Placements
+  beyond that range are refused instead of creating a block that cannot be reached correctly.
+  Existing stored heights stay unchanged; older blocks without a stored height retain their
+  previous normal or opted-in depth limit.
+- **Movement and support checks find deeply lowered blocks**, including across an empty chunk
+  section. This also applies when Lithium supplies the collision search. Lowered scaffolding's
+  standing surface follows its stored height, while its interior remains open for climbing.
 
 ### Fixed
 
-- **Missing side faces beside lowered blocks now render correctly with Sodium.** Exposed faces at
-  height steps no longer disappear when Sodium performs its own face-culling checks.
+- **Missing side faces beside lowered blocks now render correctly with Sodium.** Exposed faces
+  at height steps no longer disappear during Sodium's face-culling checks.
+- **Corner shading on lowered block tops works with Sodium's ambient occlusion.** Top faces
+  lowered within their original cell receive shading at their drawn height.
+- **Continuity top overlays stop at height steps.** Connected grass overlays no longer spread
+  onto a neighboring log's top face when the two tops are drawn at different heights.
+- **Better Block Entities models align with lowered placements.** Its static and animated
+  rendering follow the saved height; chests, shulker boxes, and beds were checked.
+- **Create Fly chests and shulker boxes sit at their saved height.** Their animated parts share
+  the corrected base position, so opening and closing no longer lifts them above the slab.
+- **Smoke from extinguishing a candle appears at the candle's height**, rather than above it at
+  the original block height.
+- **Chains under ordinary lowered beams follow the beam**, along with decorations hanging below
+  the chain. Chains under top and double slab ceilings retain their existing behavior.
+- **Tall legacy stacks no longer sink into themselves after the sixth course.** Full-height
+  supports pass their height up the column without incorrectly consuming the lowering budget.
 
-- **A chain hanging from a lowered beam now hangs from where the beam actually is.** A chain
-  under an ordinary lowered block — a cantilevered beam, say, rather than a slab — stayed at
-  full grid height while a lantern further down the same chain correctly dropped with the beam.
-  The beam's lowered body then sat inside the top link of the chain, and the chain disagreed
-  with the lantern hanging off it. The chain now follows its cap exactly, and so does everything
-  hanging below it, however long the chain is. Chains under top and double slabs are unchanged.
-  *(Proved by a failing test first, with controls pinning both boundaries; the whole suite is
-  green.)*
+### Upgrading an existing world
 
-- **A tall stack of blocks in a lowered hole no longer sinks into itself part-way up.** Blocks
-  resting on a lowered block sit at the same depth as the block under them, all the way up — but
-  past the seventh course, an older block (one carrying no saved height, so any build made before
-  0.5.1-alpha.1) stopped inheriting that depth and dropped to the deepest height the version
-  allows, sinking half a block into the block it stands on. It is drawn and clicked at the sunken
-  height, so a tall column read as visibly broken from the seventh block up. Fixed at the root:
-  the resolver's depth budget is spent only by a support that actually lowers its neighbour, so a
-  straight stack — which lowers nothing, it just passes the depth along — no longer runs out of
-  budget at all. *(Proved by a failing test first, at both height limits; the whole suite is green
-  at both.)*
+Back up your world before updating. Blocks with a saved placement height keep that height.
 
-### ⚠️ Upgrading a world built on 0.5.1-alpha.1 or earlier — some tall stacks move back up
-
-Blocks placed before 0.5.1-alpha.1 carry no saved height, so they follow the current rule each time
-they load. If such a build has **more than six blocks stacked in a lowered hole**, everything from
-the seventh block up was sitting half a block too low (a block and a half too low in a world using
-the deeper height range). Those blocks now line up with the rest of the stack — they move **up**,
-back to where the column reads as straight. Nothing is deleted or relocated. Anything placed from
-0.5.1-alpha.1 onward records its own height and is unaffected.
+In builds made before placement heights were stored, a stack with more than six blocks in a
+lowered hole could have its upper courses drawn too low. Those upper courses now move back up
+into line with the rest of the column. This changes their rendered and targeted height; it does
+not delete or relocate blocks. Ordinary stacks were half a block too low, or a block and a half
+in worlds using the older deep-height option.
 
 ## [0.5.1-alpha.1] — 1.21.11 (Fabric) — 2026-08-18
 
