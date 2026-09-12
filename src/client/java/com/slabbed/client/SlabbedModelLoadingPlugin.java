@@ -8,6 +8,7 @@ import net.fabricmc.fabric.api.client.model.loading.v1.ModelModifier;
 import net.minecraft.client.render.model.BakedModel;
 import net.minecraft.client.render.model.MultipartBakedModel;
 import net.minecraft.client.render.model.WeightedBakedModel;
+import net.minecraft.client.util.ModelIdentifier;
 
 public final class SlabbedModelLoadingPlugin {
     private SlabbedModelLoadingPlugin() {
@@ -21,14 +22,20 @@ public final class SlabbedModelLoadingPlugin {
             // time via BakedModelManager#getModel(Identifier) (Fabric-injected overload).
             plugin.addModels(ChainCeilingGeometry.MODEL_ID);
 
-            plugin.modifyModelAfterBake().register(ModelModifier.WRAP_PHASE, (model, context) -> {
-                if (model == null || model instanceof OffsetBlockStateModel || model instanceof MultipartBakedModel || model instanceof WeightedBakedModel) {
-                    return model;
-                }
-
-                BakedModel bakedModel = model;
-                return new OffsetBlockStateModel(bakedModel);
-            });
+            plugin.modifyModelAfterBake().register(ModelModifier.WRAP_PHASE,
+                    (model, context) -> wrapModel(context.topLevelId(), model));
         });
+    }
+
+    static BakedModel wrapModel(ModelIdentifier topLevelId, BakedModel model) {
+        if (model == null
+                || (topLevelId != null && ModelIdentifier.INVENTORY_VARIANT.equals(topLevelId.getVariant()))
+                || model instanceof OffsetBlockStateModel
+                || model instanceof MultipartBakedModel
+                || model instanceof WeightedBakedModel) {
+            return model;
+        }
+
+        return new OffsetBlockStateModel(model);
     }
 }
