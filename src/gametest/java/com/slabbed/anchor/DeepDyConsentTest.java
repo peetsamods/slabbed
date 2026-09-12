@@ -77,7 +77,7 @@ public final class DeepDyConsentTest {
                         + "something else is writing the cached cap. " + measured);
 
         if (SlabSupport.DEEP_DY_ALPHABET) {
-            ctx.assertTrue(Math.abs(inForce - SlabbedOffsetRaycast.DEEPEST_TARGETABLE_DY) <= EPS,
+            ctx.assertTrue(Math.abs(inForce - SlabSupport.LEGACY_DEEP_MIN_RESOLVED_DY) <= EPS,
                     "the developer override must force the deep cap regardless of world state — "
                             + measured);
         } else {
@@ -91,22 +91,22 @@ public final class DeepDyConsentTest {
 
     /**
      * <b>The derivation, both answers, without touching the live cap.</b> Armed, the cap IS
-     * {@link SlabbedOffsetRaycast#DEEPEST_TARGETABLE_DY} — the same field the pick window sizes
+     * {@link SlabSupport#LEGACY_DEEP_MIN_RESOLVED_DY} — the same field the pick window sizes
      * itself from, not a second copy of the number — so the standing identity
      * {@code cap == -(window radius)} cannot be written wrong. Unarmed it is the shipped cap,
      * unless the developer override is on, in which case it may not fall.
      */
     @GameTest(structure = "fabric-gametest-api-v1:empty")
-    public void consentDerivesTheWindowsOwnContractFieldAndNeverASecondCopyOfIt(TestContext ctx) {
+    public void consentPreservesLegacyDepthWithinThePlacementWindow(TestContext ctx) {
         double armed = SlabSupport.capFor(true);
         double unarmed = SlabSupport.capFor(false);
 
-        ctx.assertTrue(armed == SlabbedOffsetRaycast.DEEPEST_TARGETABLE_DY,
-                "a consented world's cap must BE SlabbedOffsetRaycast.DEEPEST_TARGETABLE_DY, not a "
+        ctx.assertTrue(armed == SlabSupport.LEGACY_DEEP_MIN_RESOLVED_DY,
+                "a consented world's cap must BE SlabSupport.LEGACY_DEEP_MIN_RESOLVED_DY, not a "
                         + "value that happens to equal it — got " + armed + " against "
-                        + SlabbedOffsetRaycast.DEEPEST_TARGETABLE_DY);
-        ctx.assertTrue((int) Math.ceil(-armed) == SlabbedOffsetRaycast.WINDOW_RADIUS,
-                "the standing identity cap == -(window radius) must hold for a consented world, or "
+                        + SlabSupport.LEGACY_DEEP_MIN_RESOLVED_DY);
+        ctx.assertTrue((int) Math.ceil(-armed) <= SlabbedOffsetRaycast.WINDOW_RADIUS,
+                "the targeting window must contain every legacy consented height, or "
                         + "a consenting player gets blocks drawn where they cannot aim: cap="
                         + armed + " radius=" + SlabbedOffsetRaycast.WINDOW_RADIUS);
 

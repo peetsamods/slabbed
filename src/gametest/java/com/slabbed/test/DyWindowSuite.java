@@ -845,8 +845,8 @@ public final class DyWindowSuite {
         ServerWorld w = ctx.getWorld();
         BlockPos origin = ctx.getAbsolutePos(BlockPos.ORIGIN);
 
-        double[] caps = {-1.0, -1.5, -2.0};
-        int[] expected = {1, 2, 2};
+        double[] caps = {-1.0, -1.5, -2.0, -2.5, -3.0};
+        int[] expected = {1, 2, 2, 3, 3};
         StringBuilder table = new StringBuilder();
         for (int i = 0; i < caps.length; i++) {
             BlockPos slabPos = forceStoredDy(ctx, origin.add(2, 1 + i * 2, 3),
@@ -881,9 +881,9 @@ public final class DyWindowSuite {
                         + "cap (" + SlabbedOffsetRaycast.DEEPEST_TARGETABLE_DY + " -> radius "
                         + (int) Math.ceil(-SlabbedOffsetRaycast.DEEPEST_TARGETABLE_DY) + "), "
                         + "measured " + TODAYS_WINDOW_RADIUS + " —" + table);
-        ctx.assertTrue(TODAYS_WINDOW_RADIUS == 2,
+        ctx.assertTrue(TODAYS_WINDOW_RADIUS == 3,
                 "STAGE 1: the ruled cap is -2.0 and the measured required radius at -2.0 is 2, so "
-                        + "the shipping radius must be 2 — measured " + TODAYS_WINDOW_RADIUS
+                        + "the shipping radius must cover new -3 placements — measured " + TODAYS_WINDOW_RADIUS
                         + ". (It was 1 before Stage 1; this row is the inverted Stage 0 row.) —"
                         + table);
         ctx.complete();
@@ -1511,9 +1511,9 @@ public final class DyWindowSuite {
                 "premise: one course must actually cost something, or the derivation below divides "
                         + "by nothing — " + measured);
 
-        int derived = (int) Math.ceil(-targetable / measuredDropPerCourse) + 2;
+        int derived = (int) Math.ceil(-SlabSupport.LEGACY_DEEP_MIN_RESOLVED_DY / measuredDropPerCourse) + 2;
         ctx.assertTrue(cap == derived,
-                "the depth budget must equal ceil(-DEEPEST_TARGETABLE_DY / measuredDropPerCourse) "
+                "the legacy depth budget must equal ceil(-LEGACY_DEEP_MIN_RESOLVED_DY / measuredDropPerCourse) "
                         + "+ 2 = " + derived + ", got " + cap + ". Either the window's contract "
                         + "depth moved without the budget, or supportSeatDy's half-height arm now "
                         + "drops a different amount than DEEPEST_SEAT_DROP_PER_COURSE says — "
@@ -2232,8 +2232,8 @@ public final class DyWindowSuite {
                 + "  dyResolutions x" + ratio(after.dyResolutions, before.dyResolutions)
                 + "  posAllocations x" + ratio(after.posAllocations, before.posAllocations));
 
-        ctx.assertTrue(radius == PREVIOUS_WINDOW_RADIUS + 1,
-                "fixture: this cell measures the radius-1 -> radius-2 step; WINDOW_RADIUS is "
+        ctx.assertTrue(radius == 3,
+                "fixture: new placements require the radius-3 window; WINDOW_RADIUS is "
                         + radius + ". Re-derive the accepted cost before changing it.");
         ctx.assertTrue(before.cellsMarched > 0 && before.shapeRaycasts > 0,
                 "fixture: the battery must do real work — " + before);
@@ -2280,8 +2280,14 @@ public final class DyWindowSuite {
                 before.shapeRaycasts);
         assertAtOrUnder(ctx, "dy resolutions (support-resolver walks)", after.dyResolutions,
                 ACCEPTED_R2_DY_RESOLUTIONS, before.dyResolutions);
-        assertAtOrUnder(ctx, "BlockPos allocations", after.posAllocations,
+        Totals previous = total(w, rays, 2);
+        assertAtOrUnder(ctx, "historical radius-2 BlockPos allocations", previous.posAllocations,
                 ACCEPTED_R2_POS_ALLOCATIONS, before.posAllocations);
+        long addedOuterProbes = 2L * (radius - 2) * after.cellsMarched;
+        ctx.assertTrue(after.posAllocations <= ACCEPTED_R2_POS_ALLOCATIONS + addedOuterProbes,
+                "new outer-ring allocation cost must stay within its exact additional probe count");
+        ctx.assertTrue(after.dyResolutions == previous.dyResolutions && after.shapeRaycasts == previous.shapeRaycasts,
+                "the outer ring must not add legacy support walks or shape tests");
 
         // The one ratio that IS derivable, restated as the sanity bound on the whole gate: real
         // work can never outgrow the probe count, because every unit of work is caused by a probe.

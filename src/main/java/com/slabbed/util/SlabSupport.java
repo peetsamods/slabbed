@@ -1990,6 +1990,12 @@ public final class SlabSupport {
      */
     public static final double SHIPPED_MIN_RESOLVED_DY = -1.0;
 
+    /** Existing opt-in worlds retain their original unstored-block resolver limit. */
+    public static final double LEGACY_DEEP_MIN_RESOLVED_DY = -2.0;
+
+    /** New immutable placements use the full targeting envelope without changing legacy terrain. */
+    public static final double MIN_PLACEMENT_DY = SlabbedOffsetRaycast.DEEPEST_TARGETABLE_DY;
+
     /**
      * THE CAP — the deepest dy this line will ever RESOLVE, and the one constant every clamp site
      * in this file reads.
@@ -2054,7 +2060,7 @@ public final class SlabSupport {
      * reads this name.
      */
     private static volatile double minResolvedDy =
-            DEEP_DY_ALPHABET ? SlabbedOffsetRaycast.DEEPEST_TARGETABLE_DY : SHIPPED_MIN_RESOLVED_DY;
+            DEEP_DY_ALPHABET ? LEGACY_DEEP_MIN_RESOLVED_DY : SHIPPED_MIN_RESOLVED_DY;
 
     /**
      * Reads THE CAP. See the field above for what it is and why it is cached rather than resolved.
@@ -2091,7 +2097,7 @@ public final class SlabSupport {
      */
     public static double capFor(boolean armed) {
         return (armed || DEEP_DY_ALPHABET)
-                ? SlabbedOffsetRaycast.DEEPEST_TARGETABLE_DY
+                ? LEGACY_DEEP_MIN_RESOLVED_DY
                 : SHIPPED_MIN_RESOLVED_DY;
     }
 
@@ -2157,7 +2163,7 @@ public final class SlabSupport {
      * deep, and a counter that also ticks for pass-through courses cannot prove it.
      */
     public static final int MAX_SUPPORT_RESOLVE_DEPTH =
-            (int) Math.ceil(-SlabbedOffsetRaycast.DEEPEST_TARGETABLE_DY / DEEPEST_SEAT_DROP_PER_COURSE) + 2;
+            (int) Math.ceil(-LEGACY_DEEP_MIN_RESOLVED_DY / DEEPEST_SEAT_DROP_PER_COURSE) + 2;
 
     /**
      * THE WALK BOUND — how many CELLS the support walk may visit, as distinct from how many
@@ -2453,6 +2459,17 @@ public final class SlabSupport {
     /** True while {@link #rawOutlineReachesCellTop} is reading a raw shape — see that field. */
     public static boolean isRawShapeProbeActive() {
         return IN_RAW_SHAPE_PROBE.get();
+    }
+
+    /** Runs a native shape query without feeding an outline offset back into collision geometry. */
+    public static VoxelShape withRawShapeProbe(java.util.function.Supplier<VoxelShape> query) {
+        boolean previous = IN_RAW_SHAPE_PROBE.get();
+        IN_RAW_SHAPE_PROBE.set(Boolean.TRUE);
+        try {
+            return query.get();
+        } finally {
+            IN_RAW_SHAPE_PROBE.set(previous);
+        }
     }
 
     /**

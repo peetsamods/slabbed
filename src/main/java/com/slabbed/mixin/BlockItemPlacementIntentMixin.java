@@ -157,6 +157,18 @@ public abstract class BlockItemPlacementIntentMixin {
             frame.actualContext = context;
             frame.actualTargetSeen = true;
             slabbed$snapshotCandidates(frame, context, placementState);
+            BlockPos target = context.getBlockPos();
+            CellSnapshot prior = frame.snapshots.get(target);
+            boolean preservedMerge = prior != null && prior.priorFact().present()
+                    && prior.priorState().getBlock() == placementState.getBlock();
+            LandingResolver.PlacementResolution resolution = LandingResolver.resolve(
+                    context.getWorld(), slabbed$aimForResolve(frame, target), target,
+                    placementState, LandingResolver.classify(placementState),
+                    slabbed$isAuthoredCustomSlabFinal(placementState));
+            if (!preservedMerge && resolution != null
+                    && resolution.landingDy() < SlabSupport.MIN_PLACEMENT_DY - LOWERED_VISUAL_BOUNDARY_EPSILON) {
+                return null;
+            }
         }
         return placementState;
     }
@@ -412,14 +424,14 @@ public abstract class BlockItemPlacementIntentMixin {
                 LandingResolver.classify(heldState),
                 authoredCustomSlab);
         double proposedDy = preview == null ? aim.ownerVisibleDy() : preview.landingDy();
-        return proposedDy < SlabSupport.minResolvedDy() - LOWERED_VISUAL_BOUNDARY_EPSILON;
+        return proposedDy < SlabSupport.MIN_PLACEMENT_DY - LOWERED_VISUAL_BOUNDARY_EPSILON;
     }
 
     private static boolean slabbed$isSupportedLoweredHalfStep(double yOffset) {
         double doubledYOffset = yOffset * 2.0d;
         return Double.isFinite(yOffset)
                 && yOffset <= -0.5d
-                && yOffset >= SlabSupport.minResolvedDy()
+                && yOffset >= SlabSupport.MIN_PLACEMENT_DY
                 && Math.abs(doubledYOffset - Math.rint(doubledYOffset))
                         <= LOWERED_VISUAL_BOUNDARY_EPSILON;
     }

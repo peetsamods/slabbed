@@ -128,7 +128,7 @@ public final class SlabbedOffsetRaycast {
      * constants cross-reference each other on purpose — {@code ClampUnificationTest} pins
      * the identity so neither can drift alone.
      */
-    public static final double DEEPEST_TARGETABLE_DY = -2.0;
+    public static final double DEEPEST_TARGETABLE_DY = -3.0;
 
     /**
      * How many cells above and below each marched cell {@link NearestCollector#consumeCell} tests.
@@ -289,8 +289,8 @@ public final class SlabbedOffsetRaycast {
             cellsMarched++;
             testPrimary(x, y, z);
             for (int d = 1; d <= windowRadius; d++) {
-                testNeighbor(x, y - d, z);
-                testNeighbor(x, y + d, z);
+                testNeighbor(x, y - d, z, d);
+                testNeighbor(x, y + d, z, d);
             }
         }
 
@@ -302,7 +302,7 @@ public final class SlabbedOffsetRaycast {
             accumulate(new BlockPos(x, y, z), true);
         }
 
-        private void testNeighbor(int x, int y, int z) {
+        private void testNeighbor(int x, int y, int z, int distance) {
             neighborProbes++;
             long key = BlockPos.asLong(x, y, z);
             if (shapeTested.contains(key)) {
@@ -310,6 +310,12 @@ public final class SlabbedOffsetRaycast {
             }
             posAllocations++;
             BlockPos pos = new BlockPos(x, y, z);
+            // Only newly stored deep placements need the outer ring. Legacy geometry keeps its
+            // existing two-cell search without extra support-resolution walks.
+            if (distance > (int) Math.ceil(-SlabSupport.LEGACY_DEEP_MIN_RESOLVED_DY)) {
+                double stored = com.slabbed.anchor.SlabPlacementDyAttachment.storedDy(world, pos);
+                if (!Double.isFinite(stored) || stored >= SlabSupport.LEGACY_DEEP_MIN_RESOLVED_DY) return;
+            }
             BlockState state = world.getBlockState(pos);
             if (state.isAir()) {
                 return;

@@ -331,7 +331,7 @@ public final class PlacementTransactionGameTest {
         BlockPos paneContact = destination.east();
         Item slabItem = TerrainSlabsTestShim.TEST_TS_SLAB_ITEM;
         Block slab = ((BlockItem) slabItem).getBlock();
-        double minimum = SlabSupport.minResolvedDy();
+        double minimum = SlabSupport.MIN_PLACEMENT_DY;
 
         for (double ownerDy = -0.5d;
                 ownerDy >= minimum - EPSILON;
@@ -421,7 +421,7 @@ public final class PlacementTransactionGameTest {
         ServerWorld world = ctx.getWorld();
         BlockPos owner = ctx.getAbsolutePos(new BlockPos(4, 4, 4));
         BlockPos destination = owner.east();
-        double ownerDy = SlabSupport.minResolvedDy() - 0.5d;
+        double ownerDy = SlabSupport.MIN_PLACEMENT_DY - 0.5d;
         BlockState ownerBefore = Blocks.STRIPPED_BIRCH_WOOD.getDefaultState();
         BlockState destinationBefore = world.getBlockState(destination);
 
@@ -458,7 +458,7 @@ public final class PlacementTransactionGameTest {
         BlockPos destination = owner.up();
         BlockState ownerState = TerrainSlabsTestShim.TEST_TS_SLAB.getDefaultState()
                 .with(SlabBlock.TYPE, SlabType.BOTTOM);
-        double ownerDy = SlabSupport.minResolvedDy();
+        double ownerDy = SlabSupport.MIN_PLACEMENT_DY;
 
         for (Item slabItem : new Item[]{Blocks.OAK_SLAB.asItem()}) {
             world.setBlockState(owner, ownerState, Block.NOTIFY_ALL);
