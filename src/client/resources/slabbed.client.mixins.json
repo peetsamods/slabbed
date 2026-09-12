@@ -4,6 +4,10 @@
   "compatibilityLevel": "JAVA_21",
   "client": [
     "BlockEntityOffsetMixin",
+    "BetterBlockEntitiesMeshOffsetMixin",
+    "BetterBlockEntitiesRenderOffsetMixin",
+    "SodiumRenderContextAccessor",
+    "SodiumBlockOriginAccessor",
     "BlockRenderInfoCullMixin",
     "SodiumBlockRenderContextCullMixin",
     "SodiumInsetTopLightingMixin",
