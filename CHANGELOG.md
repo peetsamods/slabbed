@@ -5,8 +5,8 @@ Player-facing changes for the Fabric 1.21.1 line. See LAW.md — this doc does n
 ## [0.5.2-alpha.9] — Minecraft 1.21.1 (Fabric) — unreleased candidate
 
 Brings the Fabric 1.21.1 line forward from `0.4.2-beta.1`. The headline: **where you place a block is
-where it stays.** Alpha status reflects the size of the rebuild, not its test coverage: 152 server
-GameTests plus a 315-case native client proof run green on every build.
+where it stays.** This alpha introduces permanent heights for new placements while keeping
+existing blocks on their older behavior.
 
 ### New placements are permanent; existing blocks are untouched
 
@@ -15,8 +15,8 @@ GameTests plus a 315-case native client proof run green on every build.
   nothing. This closes the long-standing family of "block pops up / snaps down later" bugs at the
   root instead of case by case.
 - **Blocks that already exist in your world keep behaving exactly as they do today.** Nothing moves
-  when you load an older world into this version, and there is no conversion step, prompt, or
-  backup requirement. Older blocks keep the old rules, including the old rules' quirks, until you
+  when you load an older world into this version, and there is no conversion step or prompt.
+  Older blocks keep the old rules, including the old rules' quirks, until you
   break and re-place them.
 - Placing a new block on top of an older lowered block lands it flush on that block's visible top.
 - A new placement appears at its final height immediately instead of rendering flat and snapping
@@ -46,6 +46,9 @@ GameTests plus a 315-case native client proof run green on every build.
 
 ### Fixed
 
+- Fixed bed and shulker-box inventory icons and held rendering by preserving their builtin models.
+- Fixed a world-loading and saving hang caused by chest minecarts created during world generation.
+  Minecarts now wait for their normal server tick before checking the rails beneath them.
 - Restored vanilla redstone connection, direction, occlusion, and power rules. Redstone can still
   use supported slab steps, but ordinary solid blocks no longer create phantom wire arms or
   power paths.
@@ -63,12 +66,12 @@ GameTests plus a 315-case native client proof run green on every build.
 
 ### Limits and notes
 
-- Older blocks keep the old behavior by design. A future version will offer converting them.
+- Older blocks keep the old behavior by design; this release does not migrate existing placements.
 - `-Dslabbed.frozenDy=true` makes every block, old or new, read its stored height (a block with no
   stored height reads flat). This is an opt-in for testing, not a supported way to play older worlds.
 - No claim is made about compatibility with large rendering or optimization modpacks beyond the
   mods listed as tested in the release notes.
-- Open reports about delayed render refresh, missing item icons, and glass-pane crashes in large
+- Open reports about delayed render refresh, other custom item icons, and glass-pane crashes in large
   packs are not declared fixed by this release without their own retest.
 - This is a Fabric 1.21.1 changelog. Changes released on other Minecraft versions or loaders are
   not its baseline.
