@@ -14,6 +14,7 @@ import net.minecraft.entity.data.TrackedDataHandlerRegistry;
 import net.minecraft.entity.vehicle.AbstractMinecartEntity;
 import net.minecraft.entity.vehicle.VehicleEntity;
 import net.minecraft.nbt.NbtCompound;
+import net.minecraft.server.world.ServerWorld;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.World;
@@ -48,6 +49,9 @@ public abstract class MinecartPhysicalOffsetMixin extends VehicleEntity {
     private void slabbed$placeAtRailHeight(EntityType<?> type, World world,
                                           double x, double y, double z, CallbackInfo ci) {
         if (world.isClient) return;
+        // Structure generation constructs carts off-thread; rail lookup waits for the server.
+        // Defer binding until the existing server-tick hook can safely read the finished chunk.
+        if (world instanceof ServerWorld serverWorld && !serverWorld.getServer().isOnThread()) return;
         BlockPos rail = slabbed$railAt(x, y, z);
         if (rail != null && SlabAnchorAttachment.usesFrozenPlacementHeight(world, rail)) {
             double dy = SlabSupport.getYOffset(world, rail, world.getBlockState(rail));

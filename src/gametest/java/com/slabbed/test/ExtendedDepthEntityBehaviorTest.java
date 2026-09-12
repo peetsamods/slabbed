@@ -437,6 +437,47 @@ public final class ExtendedDepthEntityBehaviorTest {
     }
 
     @GameTest(templateName = "fabric-gametest-api-v1:empty", batchId = RAIL_BATCH)
+    public void backgroundMinecartConstructionDoesNotWaitForTheServer(TestContext context) throws InterruptedException {
+        ServerWorld world = context.getWorld();
+        BlockPos rail = context.getAbsolutePos(new BlockPos(4, 16, 4));
+        railShape(world, rail, RailShape.EAST_WEST, DEEP_DY);
+        var cart = new java.util.concurrent.atomic.AtomicReference<net.minecraft.entity.vehicle.ChestMinecartEntity>();
+        var error = new java.util.concurrent.atomic.AtomicReference<Throwable>();
+        var done = new java.util.concurrent.CountDownLatch(1);
+        Thread worker = new Thread(() -> {
+            try {
+                cart.set(new net.minecraft.entity.vehicle.ChestMinecartEntity(
+                        world, rail.getX() + 0.5d, rail.getY() + 0.0625d, rail.getZ() + 0.5d));
+            } catch (Throwable failure) {
+                error.set(failure);
+            } finally {
+                done.countDown();
+            }
+        }, "minecart-construction-test");
+        worker.setDaemon(true);
+        worker.start();
+        // Holding the server thread makes a synchronous world lookup fail deterministically.
+        if (!done.await(2, java.util.concurrent.TimeUnit.SECONDS)) {
+            context.throwGameTestException("BACKGROUND_MINECART_CONSTRUCTION_RED: constructor waited for the server thread");
+        }
+        if (error.get() != null || cart.get() == null) {
+            context.throwGameTestException("background minecart construction failed: " + error.get());
+        }
+        double originalY = rail.getY() + 0.0625d;
+        if (Math.abs(cart.get().getY() - originalY) > EPSILON) {
+            context.throwGameTestException("background constructor must retain its vanilla position until the server tick");
+        }
+        cart.get().tick();
+        NbtCompound saved = new NbtCompound();
+        cart.get().writeNbt(saved);
+        if (saved.getDouble("slabbed:rail_dy") != DEEP_DY) {
+            context.throwGameTestException("first server tick must bind the deferred lowered rail");
+        }
+        System.out.println("BACKGROUND_MINECART_CONSTRUCTION_GREEN deferred rail binding verified");
+        context.complete();
+    }
+
+    @GameTest(templateName = "fabric-gametest-api-v1:empty", batchId = RAIL_BATCH)
     public void minecartRailQueriesReloadAndReentryUsePhysicalCoordinates(TestContext context) {
         ServerWorld world = context.getWorld();
         BlockPos flatRail = context.getAbsolutePos(new BlockPos(4, 16, 4));
