@@ -60,6 +60,7 @@
       "com.slabbed.test.FloorMountedIsNotHangingTest",
       "com.slabbed.test.ReplaceableCellSeatTest",
       "com.slabbed.test.ThinLayerOwnCellPlacementTest",
+      "com.slabbed.test.WallSignAboveSlabTest",
       "com.slabbed.test.RelocatedPlacementAimTest",
       "com.slabbed.test.BottomSlabLoweredByCarrierBelowTest",
       "com.slabbed.test.BlockEntityNeverPopTest",
