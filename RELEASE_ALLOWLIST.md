@@ -94,7 +94,7 @@ jar that lies about its own contents is a release defect even when every entry i
 | `META-INF/MANIFEST.MF` | Jar manifest. Required by the loader; its `Fabric-Loom-Client-Only-Entries` attribute is separately validated against the archive by this same gate. |
 | `LICENSE_slabbed` | The mod's GPL-3.0 licence, copied in by the `jar` block. Mod jar only. |
 | `fabric.mod.json` | Mod descriptor. Required by the loader. |
-| `slabbed.mixins.json` | Main mixin config. Declares the 21 shipped main mixins; referenced from `fabric.mod.json`. |
+| `slabbed.mixins.json` | Main mixin config. Declares the 24 shipped main mixins; referenced from `fabric.mod.json`. |
 | `slabbed.client.mixins.json` | Client mixin config. Declares the 8 shipped client mixins; referenced from `fabric.mod.json`. |
 | `assets/slabbed/**` | The mod's own lang file. Recursive by policy — asset subdirectories are content, not behaviour. |
 
@@ -129,7 +129,7 @@ jar that lies about its own contents is a release defect even when every entry i
 ### Main mixins (class-level; `com/slabbed/mixin/` is a mixed package)
 
 Every row below is declared in `slabbed.mixins.json`. The config and the archive agree exactly:
-20 direct members here plus `torch/TorchBlockMixin`, and the config lists exactly those 21. There is
+23 direct members here plus `torch/TorchBlockMixin`, and the config lists exactly those 24. There is
 no inert, undeclared mixin shipping on this line.
 
 | Entry | Reason |
@@ -143,6 +143,9 @@ no inert, undeclared mixin shipping on this line.
 | `com/slabbed/mixin/DecoratedPotParticleMixin` | Particle origin tracks the lowered block. |
 | `com/slabbed/mixin/FencePaneSlabConnectionMixin` | Fence and pane connection against a lowered slab. |
 | `com/slabbed/mixin/HangingSignAttachedMixin` | Hanging-sign attachment from above. |
+| `com/slabbed/mixin/HangingEntityRememberedSeatMixin` | A hung decoration (frame, painting) remembers the drawn face it was hung on: seat minted once, synced, applied to the box; entity position untouched (maintainer ruling, 2026-09-13). |
+| `com/slabbed/mixin/ItemFrameWysiwygMixin` | Item-frame remembered seat persisted in save data. |
+| `com/slabbed/mixin/PaintingRememberedSeatMixin` | Painting remembered seat persisted in save data. |
 | `com/slabbed/mixin/LeverParticleMixin` | Lever particle origin tracks the frozen visual height. |
 | `com/slabbed/mixin/RedstoneTorchParticleMixin` | Particle origin tracks the lowered block. |
 | `com/slabbed/mixin/RedstoneWireBlockMixin` | Redstone wire connection and support over lowered slabs. |
@@ -192,6 +195,7 @@ None of these four does file I/O, and none allocates per block or per frame.
 | Entry | Reason |
 | --- | --- |
 | `com/slabbed/util/SlabSupport` | Support-surface resolution and the visual Y offset — the core of the feature. |
+| `com/slabbed/util/HangingSeatDyHolder` | Duck interface exposing a hung decoration's remembered seat. |
 | `com/slabbed/util/DependentRemeshQueue` | Pure section-keyed queue policy for coalescing and budgeting client dependent-mesh refreshes. No client, file or network access. |
 | `com/slabbed/util/SlabbedOffsetRaycast` | Offset-aware nearest-hit raycast — the targeting overhaul. |
 | `com/slabbed/util/SlabbedServerHitValidation` | Server-side hit validation for offset placement; the sole consumer of `ServerInteractBlockHitToleranceMixin`'s widened tolerance. |

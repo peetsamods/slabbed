@@ -4,6 +4,9 @@
   "compatibilityLevel": "JAVA_21",
   "mixins": [
     "HangingSignAttachedMixin",
+    "HangingEntityRememberedSeatMixin",
+    "ItemFrameWysiwygMixin",
+    "PaintingRememberedSeatMixin",
     "CarpetBlockMixin",
     "torch.TorchBlockMixin",
     "SlabSupportBlockMixin",

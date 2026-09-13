@@ -6,6 +6,21 @@ latest file, see [Modrinth](https://modrinth.com/mod/slabbed) or
 [CurseForge](https://www.curseforge.com/minecraft/mc-mods/slabbed).
 See LAW.md — this doc does not redefine the law.
 
+## [Unreleased]
+
+See LAW.md — this changelog does not redefine the law.
+
+### Fixed
+
+- **Paintings hang where you see the block, and hung things remember it.** A painting placed on a
+  lowered block's visible face hung at normal grid height, floating above the surface it was aimed
+  at; it now hangs on the drawn face like item frames do. And both frames and paintings now
+  remember the height of the face they were hung on: it is decided once, when you hang them, saved
+  with the world, and never re-read from the wall. Rebuilding the wall behind a frame at a
+  different height moves the wall, not the frame (maintainer ruling, 2026-09-13: where you place
+  it is where it stays applies to everything hung on a wall). Frames from an older save take their
+  height from their wall once, the first time they load, and remember it from then on.
+
 ## [0.5.2-alpha.1] — 1.21.11 (Fabric) — 2026-09-12
 
 This update improves deeper slab-supported builds and fixes rendering differences with Sodium,

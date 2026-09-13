@@ -15,8 +15,9 @@
     "SodiumInsetTopLightingMixin",
     "ContinuityOverlayHeightMixin",
     "CarpetDyShapeMixin",
+    "ItemFrameDrawnFaceRenderMixin",
+    "PaintingDrawnFaceRenderMixin",
     "ClientPickOffsetRaycastMixin",
-    "ItemFrameRenderOffsetMixin",
     "MinecartRenderOffsetMixin",
     "SlabbedDependentRerenderMixin",
     "WorldRendererImportantRemeshInvoker"
