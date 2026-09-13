@@ -107,6 +107,14 @@ public abstract class MinecartRailSeatMixin extends Entity implements RailSeatDy
         if (!(this.level() instanceof ServerLevel level)) {
             return;
         }
+        // Structure generation positions its chest carts on a worker thread. A block read from
+        // there is answered by the server thread, which may itself be waiting on this worker, so
+        // the read must not happen here at all: the seat is bound by the tick hook below on the
+        // first server tick instead. Do not replace this with a chunk-presence check — that only
+        // covers the unloaded case, not the cross-thread wait on a loaded chunk.
+        if (!level.getServer().isSameThread()) {
+            return;
+        }
         BlockPos cell = this.getCurrentBlockPosOrRailBelow();
         // Never force a chunk load from a spawn: an unloaded cell simply seats nothing.
         if (!level.hasChunkAt(cell)) {
