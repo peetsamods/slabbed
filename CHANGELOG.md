@@ -219,8 +219,6 @@ re-verified in live play on 26.3** and should be treated as "being verified", no
 - Breaking a lowered chest, lever or rail leaving no height behind in the empty cell, and a block a
   piston later pushes into that cell arriving flush.
 - Standing on a scaffolding column placed on a slab without sinking back down.
-- Paintings and item frames drawn on a lowered wall's visible face, and staying put after the wall
-  behind them is rebuilt.
 
 Known open issues, carried from the 26.2 line and unchanged here:
 
