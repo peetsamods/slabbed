@@ -15,6 +15,14 @@ is not cut.
   itself stayed at grid height, so the lowered block above visibly descended
   into it. A chain under a lowered TOP/DOUBLE slab is unaffected: that case
   keeps its own dedicated flush treatment.
+- Item frames and paintings now hang on a lowered block's visible face instead of floating at
+  normal grid height beside it, and both remember the height they were hung at. That height is
+  decided once, when you hang the thing, saved with the world, and never read from the wall
+  again — rebuilding the wall behind a frame at a different height moves the wall, not the frame
+  (maintainer ruling, 2026-09-13). Frames and paintings from an older save take their height from
+  their wall once, the first time they load, and remember it from then on. Under the hood only the
+  clickable box and the drawing move; the entity's real position stays on the grid so support
+  checks keep judging the right block.
 
 ## [0.5.2-alpha.2] - Minecraft 1.21.1 (NeoForge)
 
