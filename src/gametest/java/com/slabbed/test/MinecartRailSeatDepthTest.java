@@ -450,6 +450,74 @@ public final class MinecartRailSeatDepthTest {
         helper.succeed();
     }
 
+    /**
+     * A cart positioned on a WORKER thread — the way mineshaft generation places its chest carts —
+     * must not read the world from there: that read is answered by the server thread, which during
+     * generation may be waiting on this very worker, and the two wait on each other forever. The row
+     * holds the server thread while a worker positions a cart over a lowered rail, so a synchronous
+     * world read from the worker times out deterministically. The seat is then bound by the first
+     * server tick, exactly as the spawn hook would have bound it.
+     *
+     * <p>MUTATION that must redden this row alone: remove the {@code isSameThread} early return from
+     * {@code MinecartRailSeatMixin.slabbed$seatOnSpawn}.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void aCartPositionedOnAWorkerThreadNeverWaitsForTheServer(GameTestHelper helper) throws InterruptedException {
+        ServerLevel level = helper.getLevel();
+        boolean previous = SlabAnchorAttachment.FROZEN_DY_ENABLED;
+        SlabAnchorAttachment.FROZEN_DY_ENABLED = true;
+        try {
+            BlockPos rail = railRun(helper, new BlockPos(1, 3, 2), 3, LOWERED);
+            double gridSeat = rail.getY() + RAIL_LIFT;
+            java.util.concurrent.atomic.AtomicReference<AbstractMinecart> cart = new java.util.concurrent.atomic.AtomicReference<>();
+            java.util.concurrent.atomic.AtomicReference<Throwable> error = new java.util.concurrent.atomic.AtomicReference<>();
+            java.util.concurrent.CountDownLatch done = new java.util.concurrent.CountDownLatch(1);
+            Thread worker = new Thread(() -> {
+                try {
+                    AbstractMinecart created = EntityTypes.CHEST_MINECART.create(level, EntitySpawnReason.STRUCTURE);
+                    if (created == null) {
+                        throw new IllegalStateException("premise: could not create a chest minecart");
+                    }
+                    created.setInitialPos(rail.getX() + 0.5d, gridSeat, rail.getZ() + 0.5d);
+                    cart.set(created);
+                } catch (Throwable failure) {
+                    error.set(failure);
+                } finally {
+                    done.countDown();
+                }
+            }, "slabbed-minecart-worker-row");
+            worker.setDaemon(true);
+            worker.start();
+            // This thread IS the server thread; blocking it here is what turns a cross-thread world
+            // read into a bounded, observable wait instead of a live-game deadlock.
+            if (!done.await(2, java.util.concurrent.TimeUnit.SECONDS)) {
+                throw helper.assertionException("BACKGROUND_MINECART_POSITION_RED: positioning a cart on a "
+                        + "worker thread waited for the server thread (a world read leaked off-thread)");
+            }
+            if (error.get() != null || cart.get() == null) {
+                throw helper.assertionException("worker-thread cart positioning failed: " + error.get());
+            }
+            AbstractMinecart created = cart.get();
+            if (Math.abs(created.getY() - gridSeat) > EPS || seatOf(created) != 0.0d) {
+                throw helper.assertionException("a cart positioned off-thread must keep vanilla's grid "
+                        + "position and an unbound seat until the server tick; got y=" + created.getY()
+                        + " seat=" + seatOf(created));
+            }
+            level.addFreshEntity(created);
+            created.tick();
+            double drawnSeat = gridSeat + LOWERED;
+            if (Math.abs(seatOf(created) - LOWERED) > EPS || Math.abs(created.getY() - drawnSeat) > EPS) {
+                throw helper.assertionException("the first server tick must bind the deferred lowered seat: "
+                        + "expected seat " + LOWERED + " at y=" + drawnSeat + ", got seat " + seatOf(created)
+                        + " at y=" + created.getY());
+            }
+            System.out.println("[MINECART_WORKER_ROW] deferred seat bound on the first server tick: y=" + created.getY());
+            helper.succeed();
+        } finally {
+            SlabAnchorAttachment.FROZEN_DY_ENABLED = previous;
+        }
+    }
+
     private static AABB thinBandAt(AbstractMinecart cart, double minY, double maxY) {
         return new AABB(cart.getX() - 0.1d, minY, cart.getZ() - 0.1d,
                 cart.getX() + 0.1d, maxY, cart.getZ() + 0.1d);
