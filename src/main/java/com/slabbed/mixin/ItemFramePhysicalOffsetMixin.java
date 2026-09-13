@@ -1,6 +1,7 @@
 package com.slabbed.mixin;
 
 import com.slabbed.anchor.SlabAnchorAttachment;
+import com.slabbed.util.HangingSeatDyHolder;
 import com.slabbed.util.SlabSupport;
 import net.minecraft.entity.EntityType;
 import net.minecraft.entity.data.DataTracker;
@@ -22,7 +23,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 /** The attachment owns one saved physical height; neighbor edits cannot move it (LAW.md). */
 @Mixin(ItemFrameEntity.class)
-public abstract class ItemFramePhysicalOffsetMixin extends AbstractDecorationEntity {
+public abstract class ItemFramePhysicalOffsetMixin extends AbstractDecorationEntity implements HangingSeatDyHolder {
     @Unique
     private static final TrackedData<Long> SLABBED_FRAME_DY = DataTracker.registerData(
             ItemFrameEntity.class, TrackedDataHandlerRegistry.LONG);
@@ -31,6 +32,17 @@ public abstract class ItemFramePhysicalOffsetMixin extends AbstractDecorationEnt
 
     protected ItemFramePhysicalOffsetMixin(EntityType<? extends AbstractDecorationEntity> type, World world) {
         super(type, world);
+    }
+
+    @Override
+    public double slabbed$hangSeatDy() {
+        double dy = Double.longBitsToDouble(dataTracker.get(SLABBED_FRAME_DY));
+        return Double.isFinite(dy) ? dy : 0.0d;
+    }
+
+    @Override
+    public boolean slabbed$hasHangSeat() {
+        return Double.isFinite(Double.longBitsToDouble(dataTracker.get(SLABBED_FRAME_DY)));
     }
 
     @Inject(method = "initDataTracker", at = @At("TAIL"))
