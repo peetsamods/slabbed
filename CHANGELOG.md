@@ -1,3 +1,19 @@
+## [Unreleased]
+
+See LAW.md — this changelog does not redefine the law.
+
+### Fixes
+
+- **Item frames and paintings hang where you see the block, and remember it.** A frame or painting
+  placed on a lowered block's visible face hung at normal grid height, floating above (or beside) the
+  surface it was aimed at. Both now hang on the drawn face, and both remember the height of the face
+  they were hung on: it is decided once, when you hang them, saved with the world, and never re-read
+  from the wall. Rebuilding the wall behind a frame at a different height moves the wall, not the
+  frame (maintainer ruling, 2026-09-13: where you place it is where it stays applies to everything
+  hung on a wall). Frames and paintings from an older save take their height from their wall once, the
+  first time they load, and remember it from then on. Under the hood only the clickable box and the
+  drawing move; the real position stays on the grid so support checks keep judging the right block.
+
 ## [0.5.2-alpha.10+26.2] — MC 26.2 alpha hotfix
 
 See LAW.md — this changelog does not redefine the law.

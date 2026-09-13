@@ -86,7 +86,7 @@ anything. The split above puts the fine granularity only where a leak has actual
 | `com/slabbed/client/runtime/*` | Lowered side-slab retargeter — client targeting. |
 | `com/slabbed/compat/*` | Compat hooks and the slab-surface-kind enum consumed by third-party slab mods. |
 | `com/slabbed/compat/terrainslabs/*` | Terrain Slabs compat (dual mod-id gate). |
-| `com/slabbed/mixin/client/*` | The 12 client render/interaction mixins declared in `slabbed.client.mixins.json`; every member is a render-offset, remesh or offset-raycast mixin. |
+| `com/slabbed/mixin/client/*` | The 11 client render/interaction mixins declared in `slabbed.client.mixins.json`; every member is a render-offset, remesh or offset-raycast mixin. |
 | `com/slabbed/mixin/torch/*` | `TorchBlockMixin` — torch attachment geometry. |
 
 ### Main mixins (class-level; `com/slabbed/mixin/` is a mixed package)
@@ -102,7 +102,9 @@ anything. The split above puts the fine granularity only where a leak has actual
 | `com/slabbed/mixin/CarpetBlockMixin` | Carpet support/shape over a lowered slab. |
 | `com/slabbed/mixin/DecoratedPotParticleMixin` | Particle origin follows the lowered block. |
 | `com/slabbed/mixin/FencePaneSlabConnectionMixin` | Fence/pane connection against a lowered slab. |
+| `com/slabbed/mixin/HangingEntityRememberedSeatMixin` | A hung decoration (frame, painting) remembers the drawn face it was hung on: seat minted once, synced, applied to the box; entity position untouched (maintainer ruling, 2026-09-13). |
 | `com/slabbed/mixin/HangingSignAttachedMixin` | Hanging-sign attachment from above. |
+| `com/slabbed/mixin/ItemFrameWysiwygMixin` | Item-frame remembered seat persisted in save data. |
 | `com/slabbed/mixin/ItemStackUseCreatedContactMixin` | Use-on contact point for offset placement. |
 | `com/slabbed/mixin/LeverParticleMixin` | Particle origin follows the lowered block. |
 | `com/slabbed/mixin/LithiumBlockCollisionSweeperPosLoweredAboveMixin` | Lithium compat: a lowered block's hanging collision reaches Lithium's position-yielding block-collision sweeper; admitted only after the config plugin byte-checks that sweeper (maintainer ruling, 2026-09-02). |
@@ -110,6 +112,7 @@ anything. The split above puts the fine granularity only where a leak has actual
 | `com/slabbed/mixin/LivingEntityLoweredScaffoldingMixin` | Scaffolding movement over lowered geometry. |
 | `com/slabbed/mixin/RedstoneTorchParticleMixin` | Particle origin follows the lowered block. |
 | `com/slabbed/mixin/RedstoneWireBlockMixin` | Redstone wire connection/support over lowered slabs. |
+| `com/slabbed/mixin/PaintingRememberedSeatMixin` | Painting remembered seat persisted in save data. |
 | `com/slabbed/mixin/ScaffoldingLoweredStandMixin` | Scaffolding standing layer gated at the lowered drawn top. |
 | `com/slabbed/mixin/ServerInteractBlockHitToleranceMixin` | Server-side hit tolerance for offset targeting. |
 | `com/slabbed/mixin/SlabSupportBlockMixin` | Slab support surface. |
@@ -159,6 +162,7 @@ anything. The split above puts the fine granularity only where a leak has actual
 | `com/slabbed/util/BuildStamp` | Reads the manifest identity stamp at runtime; release infrastructure, not diagnostics. |
 | `com/slabbed/util/SlabbedDiagnosticsBridge` | The deliberate release-safe no-op boundary: the public mod ships THIS bridge and none of the recorder/overlay/Sentinel implementations behind it. Dev and GameTest runtimes install the real provider; in release every call is a cheap no-op. That is architecture keeping diagnostics OUT of the jar, not diagnostics leaking in. |
 | `com/slabbed/util/ChainBridgeTextureVariant` | Chain ceiling-bridge texture selection. |
+| `com/slabbed/util/HangingSeatDyHolder` | Duck interface exposing a hung decoration's remembered seat. |
 | `com/slabbed/util/PlacementIntentState` | Placement intent carried across the use-on path. |
 | `com/slabbed/util/PlacementVerificationVerdict` | Placement verification result type. |
 | `com/slabbed/util/SlabEnsembleCoherence` | Combined-slab ensemble coherence law. |
