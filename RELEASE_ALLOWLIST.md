@@ -117,6 +117,7 @@ anything. The split above puts the fine granularity only where a leak has actual
 | `com/slabbed/mixin/NewMinecartBehaviorRailFrameMixin` | Experimental-movement rail solver computes in the logical grid frame; the synced interpolation step stays physical. |
 | `com/slabbed/mixin/PistonMoveDyTransferMixin` | A pushed or pulled block keeps the height it was placed at when a piston moves it (maintainer ruling, 2026-09-06). |
 | `com/slabbed/mixin/RedstoneWireBlockMixin` | Redstone wire connection/support over lowered slabs. |
+| `com/slabbed/mixin/ScaffoldingLoweredStandMixin` | Scaffolding standing layer gated at the lowered drawn top. |
 | `com/slabbed/mixin/ServerInteractBlockHitToleranceMixin` | Server-side hit tolerance for offset targeting. |
 | `com/slabbed/mixin/SlabSupportBlockMixin` | Slab support surface. |
 | `com/slabbed/mixin/SlabSupportStateMixin` | Slab support state. |
