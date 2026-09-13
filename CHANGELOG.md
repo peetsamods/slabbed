@@ -115,6 +115,13 @@ See LAW.md — this changelog does not redefine the law.
   transformed, so it now stays exactly where you put it (maintainer ruling, 2026-09-03). Any in-place
   transform whose result still fills the cell (at least 15/16 tall) keeps its height; slabs, carpets
   and other partial replacements still clear it as before.
+- **Scaffolding on a lowered column is stood on at its real height.** Scaffolding has no solid body;
+  its only collision is a thin standing layer that Minecraft switches on when your feet are above
+  the top of the block. That check compared your feet with the unlowered block, so on scaffolding
+  placed on a slab the layer never appeared: you climbed to the top, then sank and slid back down
+  as soon as you released jump. The check now uses the lowered height, so you stand where the
+  scaffolding is drawn. Scaffolding on plain ground is unchanged
+  ([#65](https://github.com/peetsamods/slabbed/issues/65)).
 - **Starts alongside Lithium.** With Lithium installed, the game crashed on startup before the
   title screen, because both mods rewrite the same piece of Minecraft's explosion code. It now
   starts, and explosions behind a lowered block follow normal Minecraft rules while Lithium is
@@ -196,6 +203,7 @@ re-verified in live play on 26.3** and should be treated as "being verified", no
 - The yellow chat warning when your game and the server disagree about the height flag.
 - Breaking a lowered chest, lever or rail leaving no height behind in the empty cell, and a block a
   piston later pushes into that cell arriving flush.
+- Standing on a scaffolding column placed on a slab without sinking back down.
 
 Known open issues, carried from the 26.2 line and unchanged here:
 
@@ -235,6 +243,57 @@ Known open issues, carried from the 26.2 line and unchanged here:
   mod on and off" versus "lag only with the mod on" is worth ten times a bare "it lags".
 
 Thank you for testing an alpha; every report above makes the next build better.
+
+## [0.5.2-alpha.10+26.2] — MC 26.2 alpha hotfix
+
+See LAW.md — this changelog does not redefine the law.
+
+Version note: alpha.8 and alpha.9 are held by the Fabric 1.21.1 line (shared alpha series), so this
+hotfix takes the next free number.
+
+### Fixes
+
+- **Scaffolding on a lowered column is stood on at its real height.** Scaffolding has no solid body;
+  its only collision is a thin standing layer that Minecraft switches on when your feet are above
+  the top of the block. That check compared your feet with the unlowered block, so on scaffolding
+  placed on a slab the layer never appeared: you climbed to the top, then sank and slid back down
+  as soon as you released jump. The check now uses the lowered height, so you stand where the
+  scaffolding is drawn. Scaffolding on plain ground is unchanged.
+
+## [0.5.2-alpha.7+26.2] — MC 26.2 alpha hotfix
+
+See LAW.md — this changelog does not redefine the law.
+
+### Fixes
+
+- **Starts alongside Lithium.** With Lithium installed, the game crashed on startup before the
+  title screen, because both mods rewrite the same piece of Minecraft's explosion code. It now
+  starts, and explosions behind a lowered block follow normal Minecraft rules while Lithium is
+  present (Lithium's optimised explosion path stays in charge there). Arrows and snowballs still
+  hit a lowered block where it is drawn, and mobs still cannot see through it, with Lithium
+  installed. ([#74](https://github.com/peetsamods/slabbed/issues/74))
+- **Lowered blocks stay solid with Lithium installed.** Lithium swaps in its own, faster search
+  for the blocks an entity can bump into, and that search never saw the part of a lowered block
+  that hangs below its grid cell, so with Lithium you could walk through the lower half of what
+  you can see. Slabbed now adds that hanging part to Lithium's search as well (only after checking
+  that Lithium's search is present and still looks the way this build was tested against; a future
+  Lithium that changes it gets a warning in the log instead of a crash).
+  One narrow edge stays open: a lowered block hanging into a 16×16×16 chunk section that is
+  otherwise completely empty is still missed by Lithium's search, which skips empty sections
+  outright.
+
+## [0.5.2-alpha.6+26.2] — MC 26.2 alpha hotfix
+
+See LAW.md — this changelog does not redefine the law.
+
+### Fixes
+
+- **Chains follow a lowered beam.** A chain hanging under an ordinary lowered block (a cantilevered
+  beam, for instance — not a slab) stayed at grid height while the lantern on the same chain
+  correctly followed the beam down, so the beam's lowered body visually sank into the chain's top
+  segment. The chain now follows its cap exactly, and everything hanging from the chain agrees with
+  it (maintainer ruling, 2026-09-01). Chains under top/double slabs are untouched — they keep their
+  dedicated flush bridge rendering.
 
 ## [0.5.2-alpha.1+26.2] — MC 26.2 alpha
 
