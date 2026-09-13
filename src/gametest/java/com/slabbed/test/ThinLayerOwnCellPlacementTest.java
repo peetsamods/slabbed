@@ -33,10 +33,14 @@ import net.minecraft.world.phys.Vec3;
  * snow layer's top is an eighth of a block up, not the cell's full-cube face) and require the
  * vanilla same-cell result, on flush ground and on a lowered support.
  *
- * <p>MUTATION that must redden these rows alone: make
- * {@code BlockItemPlacementIntentMixin.slabbed$canPlaceInClickedCell} answer {@code false} for
- * every occupied cell (drop the {@code canBeReplaced} answer), so the intent lane always builds
- * against the clicked block instead of into it.
+ * <p>REACH, measured not argued: on this line NO mod code decides the CELL for a vertical click
+ * into a replaceable block — the intent lane's clicked-cell checks return early for vertical faces
+ * (forcing them to "not replaceable" left every case green), and for a full-cube support the
+ * resolver's merge branch and its same-cell replacement branch compute the same seat, so no
+ * resolver mutation reddens these rows either. They are a REGRESSION TRIPWIRE for the vanilla
+ * same-cell contract plus the merged piece's stored seat on a lowered support, not a pin on a
+ * present seam. A future change that relocates the cell or re-mints the seat on this path is what
+ * turns them red.
  */
 public final class ThinLayerOwnCellPlacementTest {
 
@@ -109,6 +113,15 @@ public final class ThinLayerOwnCellPlacementTest {
             if (c.property() != null && intProperty(result, c.property()) != c.expectedValue()) {
                 throw helper.assertionException(helper.relativePos(cell),
                         "the stack did not grow in place (expected " + c.property() + "=" + c.expectedValue() + "): " + report);
+            }
+            // The merged or replacing piece keeps the cell's seat: the support's drawn top.
+            double supportDy = com.slabbed.util.SlabSupport.getYOffset(level, support, level.getBlockState(support));
+            double stored = com.slabbed.anchor.SlabAnchorAttachment.storedPlacementDy(level, cell);
+            double seat = Double.isFinite(stored) ? stored : 0.0d;
+            if (Math.abs(seat - supportDy) > 1.0e-6d) {
+                throw helper.assertionException(helper.relativePos(cell),
+                        "the piece in the thin block's cell must seat on the support's drawn top (" + supportDy
+                                + "), stored " + stored + ": " + report);
             }
         }
     }
