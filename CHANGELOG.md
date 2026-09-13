@@ -71,6 +71,13 @@ See LAW.md — this changelog does not redefine the law.
   and the tilt on sloped rails follow it (maintainer ruling, 2026-09-06). Carts on ordinary rails are
   unchanged. With the experimental minecart movement enabled the same rule applies, but that path has
   only been checked in automated tests, not in play.
+- **Mineshaft minecarts can no longer stall world generation.** When the game builds an abandoned
+  mineshaft it creates its chest minecarts on a background thread. Slabbed's rail check for a newly
+  placed cart asked the world about the rail from that thread, and such a question is answered by the
+  main game thread, which during generation can be waiting on that same background work, so the two
+  could wait on each other forever. The check now waits for the cart's first normal tick instead, where
+  it already ran anyway. Carts placed by a player are unaffected. Nobody reported this on 26.3; the same
+  stall was found and fixed on the Fabric 1.21.1 line, and the guard is carried here before it can happen.
 - **Armor stands are no longer refused where they plainly fit.** Placing an armor stand over a lowered
   block checked for room at the old grid height even though the stand ends up standing on the block's
   visible top, so a stand could be turned away by something it was never going to touch, or let into
