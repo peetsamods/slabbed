@@ -1,13 +1,12 @@
 package com.slabbed.mixin;
 
 import com.slabbed.util.HangingSeatDyHolder;
-import net.minecraft.core.Direction;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.Tag;
 import net.minecraft.network.syncher.EntityDataAccessor;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.decoration.HangingEntity;
-import net.minecraft.world.entity.decoration.ItemFrame;
+import net.minecraft.world.entity.decoration.Painting;
 import net.minecraft.world.level.Level;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
@@ -16,51 +15,28 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 /**
- * An item frame (glow frames included, which inherit this box math) hangs on the face it
- * REMEMBERS being hung on, and that seat survives a save and reload.
+ * A painting's remembered seat survives a save and reload (maintainer ruling, 2026-09-13:
+ * paintings hang on the drawn face like item frames, and remember it).
  *
- * <p>The seat itself - minted once when the frame is hung, carried in entity data, applied to the
- * bounding box - lives in {@code HangingEntityRememberedSeatMixin}, shared with paintings. This
- * class is the frame's half of two jobs:
- *
- * <ul>
- *   <li>PERSISTENCE. {@code HangingEntity} declares no save-data hooks, so each hung class writes
- *       and reads the number itself. A frame saved before the seat existed has no key and mints
- *       from its wall on its first server layout (one-time migration).</li>
- *   <li>RELAY. {@code ItemFrame} re-implements {@code defineSynchedData}, {@code setDirection},
- *       {@code recalculateBoundingBox} and {@code onSyncedDataUpdated} WITHOUT calling super, so
- *       the shared hooks on {@code HangingEntity} never run for a frame. Each relay below calls
- *       the one shared implementation; do not inline a second copy of any of them here.</li>
- * </ul>
- *
- * <p>The entity's real position stays at grid height (the box moves, the position does not);
- * moving it corrupts the derived grid cell and {@code survives()} judges the wrong support. Do NOT
- * re-add a per-read derivation from the support: the predecessor of this class recomputed the
- * support's height on every layout, which is "follow the support" - the violation itself.
+ * <p>The seat lives in {@code HangingEntityRememberedSeatMixin}; this class persists it and relays
+ * the two methods {@code Painting} re-implements without calling super. A painting KEEPS the
+ * shared {@code setDirection}, {@code recalculateBoundingBox} and {@code survives} - it does not
+ * override them - so the mint, the box seat and the grid-cell survival check all reach it through
+ * the shared mixin. Keep the persistence hooks identical to {@code ItemFrameWysiwygMixin}'s.
  */
-@Mixin(ItemFrame.class)
-public abstract class ItemFrameWysiwygMixin extends HangingEntity {
+@Mixin(Painting.class)
+public abstract class PaintingRememberedSeatMixin extends HangingEntity {
 
     @Unique
     private static final String SLABBED$HANG_DY_KEY = "slabbed:hang_dy";
 
-    protected ItemFrameWysiwygMixin(EntityType<? extends HangingEntity> type, Level level) {
+    protected PaintingRememberedSeatMixin(EntityType<? extends HangingEntity> type, Level level) {
         super(type, level);
     }
 
     @Inject(method = "defineSynchedData()V", at = @At("TAIL"))
     private void slabbed$defineHangSeat(CallbackInfo ci) {
         ((HangingSeatDyHolder) this).slabbed$declareHangSeatKey();
-    }
-
-    @Inject(method = "setDirection(Lnet/minecraft/core/Direction;)V", at = @At("HEAD"))
-    private void slabbed$mintSeatOnDirection(Direction facing, CallbackInfo ci) {
-        ((HangingSeatDyHolder) this).slabbed$mintHangSeatFor(facing);
-    }
-
-    @Inject(method = "recalculateBoundingBox()V", at = @At("TAIL"))
-    private void slabbed$hangBoxOnRememberedSeat(CallbackInfo ci) {
-        ((HangingSeatDyHolder) this).slabbed$seatHangBox();
     }
 
     @Inject(method = "onSyncedDataUpdated(Lnet/minecraft/network/syncher/EntityDataAccessor;)V", at = @At("TAIL"))

@@ -9,6 +9,16 @@
   over a full block, exactly where a click on the ground itself would put it —
   instead of being recorded a full block deep inside the dirt. Side placements
   over open air keep following the aim all the way down.
+- **Paintings hang where you see the block, and hung things remember it.** A painting placed on
+  a lowered block's visible face hung at normal grid height, floating above the surface it was
+  aimed at; it now hangs on the drawn face like item frames already do. And both frames and
+  paintings now remember the height of the face they were hung on: it is decided once, when you
+  hang them, saved with the world, and never re-read from the wall afterwards. Rebuilding the wall
+  behind a frame at a different height moves the wall, not the frame (maintainer ruling,
+  2026-09-13: where you place it is where it stays applies to everything hung on a wall). Frames
+  and paintings from an older save take their height from their wall once, the first time they
+  load, and remember it from then on. Under the hood only the clickable box and the drawing move;
+  the entity's real position stays on the grid, so support checks keep judging the right block.
 
 ## [0.5.2-beta.1] - Minecraft 1.20.1 (Forge)
 
