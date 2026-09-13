@@ -32,6 +32,21 @@ must be reverted.
    (e.g. vanilla itself breaking a block that lost its support). That is the *block* being removed by
    vanilla — never Slabbed silently re-deriving a different height for a block that is still there.
 
+## LAW 1 corollary — hung and wall-mounted things remember too (maintainer ruling, 2026-09-13)
+
+> **Where I place it is where it stays (WIPIWIS).** Absolute, for every Slabbed version. The moment
+> of placement is the only moment the surroundings are consulted; from then on the thing remembers.
+
+- A wall-mounted block (sign, banner, torch, hanging sign, lever, button) takes its seat from the
+  block it is MOUNTED ON at placement — never from the floor under its cell — and keeps it.
+- A hung decoration (item frame, glow frame, painting) is an entity with no block store, so it
+  carries its own remembered seat: minted once when it is hung, from the face it hangs on, synced
+  and saved with the entity. Rebuilding the wall behind it at another height changes the wall,
+  not the decoration. "Follows the support" is the same violation as clause 3 above.
+- Any lane that re-derives a height from neighbours on read — including the pre-0.5 recompute
+  behind the `-Dslabbed.frozenDy=false` escape hatch — is outside this law. It exists only for
+  worlds older than the store and is not a second definition of correct behaviour.
+
 ## LAW 2 — Everything can lower (maintainer ruling, 2026-08-06, verbatim)
 
 > **Everything should be able to lower; no exceptions.**

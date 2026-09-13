@@ -159,6 +159,14 @@ See LAW.md — this changelog does not redefine the law.
   solid ground, the placement now seats on the real surface — aim is honored to the physical
   limit, never past it, and the stored height agrees with what you see (maintainer ruling,
   2026-09-02: the burial arbitration resolves to the real seat).
+- **Paintings hang where you see the block, and hung things remember it.** A painting placed on a
+  lowered block's visible face hung at normal grid height, floating above the surface it was aimed at;
+  it now hangs on the drawn face like item frames do. And both frames and paintings now remember the
+  height of the face they were hung on: it is decided once, when you hang them, saved with the world,
+  and never re-read from the wall. Rebuilding the wall behind a frame at a different height moves the
+  wall, not the frame (maintainer ruling, 2026-09-13: where you place it is where it stays applies to
+  everything hung on a wall). Frames from an older save take their height from their wall once, the
+  first time they load, and remember it from then on.
 - **Item frames hang where you see the block.** An item frame placed on a lowered block's
   visible face hung at normal grid height, floating above (or beside) the surface it was
   aimed at. Frames — glow frames included — now hang on the support's drawn face (maintainer
@@ -211,6 +219,8 @@ re-verified in live play on 26.3** and should be treated as "being verified", no
 - Breaking a lowered chest, lever or rail leaving no height behind in the empty cell, and a block a
   piston later pushes into that cell arriving flush.
 - Standing on a scaffolding column placed on a slab without sinking back down.
+- Paintings and item frames drawn on a lowered wall's visible face, and staying put after the wall
+  behind them is rebuilt.
 
 Known open issues, carried from the 26.2 line and unchanged here:
 

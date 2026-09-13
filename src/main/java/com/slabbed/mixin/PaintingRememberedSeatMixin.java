@@ -3,7 +3,7 @@ package com.slabbed.mixin;
 import com.slabbed.util.HangingSeatDyHolder;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.decoration.HangingEntity;
-import net.minecraft.world.entity.decoration.ItemFrame;
+import net.minecraft.world.entity.decoration.painting.Painting;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.storage.ValueInput;
 import net.minecraft.world.level.storage.ValueOutput;
@@ -14,24 +14,19 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 /**
- * An item frame's remembered seat survives a save and reload.
+ * A painting's remembered seat survives a save and reload (maintainer ruling, 2026-09-13: paintings
+ * hang on the drawn face like item frames, and remember it).
  *
- * <p>The seat itself — minted once when the frame is hung, carried in entity data, applied to the
- * bounding box — lives in {@code HangingEntityRememberedSeatMixin}, shared with paintings. This
- * class only persists it: {@code HangingEntity} declares no save-data hooks, so each hung class
- * writes and reads the number itself. A frame saved before the seat existed has no key and mints
- * from its wall on its first server layout (one-time migration).
- *
- * <p>The entity's real position stays at grid height (the box moves, the position does not);
- * moving it corrupts the derived grid cell and {@code survives()} judges the wrong support.
+ * <p>The seat lives in {@code HangingEntityRememberedSeatMixin}; this class only persists it, the
+ * same way {@code ItemFrameWysiwygMixin} does for frames. Keep the two hooks identical.
  */
-@Mixin(ItemFrame.class)
-public abstract class ItemFrameWysiwygMixin extends HangingEntity {
+@Mixin(Painting.class)
+public abstract class PaintingRememberedSeatMixin extends HangingEntity {
 
     @Unique
     private static final String SLABBED$HANG_DY_KEY = "slabbed:hang_dy";
 
-    protected ItemFrameWysiwygMixin(EntityType<? extends HangingEntity> type, Level level) {
+    protected PaintingRememberedSeatMixin(EntityType<? extends HangingEntity> type, Level level) {
         super(type, level);
     }
 
@@ -43,7 +38,6 @@ public abstract class ItemFrameWysiwygMixin extends HangingEntity {
         }
     }
 
-    /** Vanilla re-lays the box while reading (direction); the seat arrives after, so lay it out again. */
     @Inject(method = "readAdditionalSaveData(Lnet/minecraft/world/level/storage/ValueInput;)V", at = @At("TAIL"))
     private void slabbed$loadHangSeat(ValueInput input, CallbackInfo ci) {
         double dy = input.getDoubleOr(SLABBED$HANG_DY_KEY, Double.NaN);

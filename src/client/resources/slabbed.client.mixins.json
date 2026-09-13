@@ -13,6 +13,7 @@
     "EntityLightProbeLoweredBandMixin",
     "GameRendererCrosshairRetargetMixin",
     "ItemFrameDrawnFaceRenderMixin",
+    "PaintingDrawnFaceRenderMixin",
     "LevelEventParticleMixin",
     "LevelExtractorImportantDirtyAccessor",
     "LocalPlayerPickOffsetRaycastMixin",
