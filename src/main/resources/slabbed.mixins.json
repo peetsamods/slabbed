@@ -12,6 +12,8 @@
     "BlockCollisionDepthWindowMixin",
     "BoatItemOffsetRaycastMixin",
     "ItemFramePhysicalOffsetMixin",
+    "PaintingRememberedSeatMixin",
+    "HangingSurvivalOnGridMixin",
     "MinecartPhysicalOffsetMixin",
     "PistonPlacementDyTransferMixin",
     "PistonMovingBlockDyMixin",

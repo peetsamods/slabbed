@@ -2,6 +2,21 @@
 
 Player-facing changes for the Fabric 1.21.1 line. See LAW.md — this doc does not redefine the law.
 
+## [Unreleased]
+
+See LAW.md — this changelog does not redefine the law.
+
+### Fixed
+
+- **Paintings hang where you see the block, and remember it.** A painting placed on a lowered block's
+  visible face hung at normal grid height, floating above the surface it was aimed at; it now hangs on
+  the drawn face the way item frames already do on this line. Like frames, a painting remembers the
+  height of the face it was hung on: it is decided once, when you hang it, saved with the world, and
+  never re-read from the wall. Rebuilding the wall behind it at a different height moves the wall, not
+  the painting (maintainer ruling, 2026-09-13: where you place it is where it stays applies to everything
+  hung on a wall). Paintings from an older save take their height from their wall once, the first time
+  they load. Paintings on blocks placed before this mod's height store existed are unchanged.
+
 ## [0.5.2-alpha.9] — Minecraft 1.21.1 (Fabric) — 2026-09-12
 
 Brings the Fabric 1.21.1 line forward from `0.4.2-beta.1`. The headline: **where you place a block is
