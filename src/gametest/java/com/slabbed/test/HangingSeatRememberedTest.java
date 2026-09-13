@@ -31,9 +31,11 @@ import net.minecraft.world.phys.AABB;
  * ignores a slab under its cell (the GH #48 scene, for entities); a frame saved before the seat
  * existed mints from its wall once on load.
  *
- * <p>MUTATION that must redden the reload row alone: re-derive the seat from the support in
- * {@code HangingEntityRememberedSeatMixin.slabbed$hangBoxOnRememberedSeat} instead of reading the
- * remembered number (drop the {@code slabbed$hasHangSeat()} guard).
+ * <p>MUTATION that must redden the reload row alone (measured 2026-09-13): in
+ * {@code HangingEntityRememberedSeatMixin.slabbed$hangBoxOnRememberedSeat}, replace the remembered
+ * number with a fresh read of the support's height ("follow the support"). Dropping the mint guard
+ * in {@code slabbed$mintSeatOnDirection} does NOT bite — the per-class read hook restores the saved
+ * seat after any re-mint — so do not name that one.
  */
 public final class HangingSeatRememberedTest {
 
