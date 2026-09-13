@@ -345,6 +345,7 @@ sourceSets {
             include("com/slabbed/test/ChainUnderLoweredFullBlockCapTest.java")
             include("com/slabbed/test/GhostLoweredCollisionProofTest.java")
             include("com/slabbed/test/ItemFrameWysiwygBoxTest.java")
+            include("com/slabbed/test/HangingSeatRememberedTest.java")
             include("com/slabbed/test/TrampledSupportConversionTest.java")
             include("com/slabbed/test/Slabbed2612LoweringContractTest.java")
             include("com/slabbed/test/Slabbed2612DyFingerprintTest.java")

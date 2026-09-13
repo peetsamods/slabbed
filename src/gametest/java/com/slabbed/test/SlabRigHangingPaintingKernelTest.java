@@ -822,13 +822,18 @@ public final class SlabRigHangingPaintingKernelTest {
                 || !component.unwrapKey().orElseThrow().equals(key)) {
             throw helper.assertionException("placed painting component/final holder disagree for " + variantId);
         }
-        AABB expectedAabb = expectedAabb(painting.getPos(), painting.getDirection(),
+        AABB vanillaAabb = expectedAabb(painting.getPos(), painting.getDirection(),
                 value.width(), value.height());
+        // A hung painting remembers its seat (LAW 1 corollary, 2026-09-13): its BOX is vanilla's
+        // moved by that seat, while its POSITION stays at vanilla's grid centre.
+        double seat = ((com.slabbed.util.HangingSeatDyHolder) painting).slabbed$hangSeatDy();
+        AABB expectedAabb = vanillaAabb.move(0.0d, seat, 0.0d);
         if (!painting.getBoundingBox().equals(expectedAabb)
-                || !painting.position().equals(expectedAabb.getCenter())
+                || !painting.position().equals(vanillaAabb.getCenter())
                 || painting.getBoundingBox().hasNaN()) {
             throw helper.assertionException("placed painting position/AABB differs from mapped geometry: "
-                    + painting.getBoundingBox() + " expected=" + expectedAabb);
+                    + painting.getBoundingBox() + " expected=" + expectedAabb + " (seat " + seat
+                    + ") position=" + painting.position() + " expected centre=" + vanillaAabb.getCenter());
         }
 
         CompoundTag nbt = saveNbt(helper, painting);

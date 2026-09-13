@@ -1,61 +1,55 @@
 package com.slabbed.mixin;
 
-import com.slabbed.util.SlabSupport;
-import net.minecraft.core.BlockPos;
+import com.slabbed.util.HangingSeatDyHolder;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.decoration.HangingEntity;
 import net.minecraft.world.entity.decoration.ItemFrame;
 import net.minecraft.world.level.Level;
-import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.storage.ValueInput;
+import net.minecraft.world.level.storage.ValueOutput;
 import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 /**
- * Item frames (and glow frames, which inherit this box math) hang on the DRAWN face of their
- * support (maintainer ruling, 2026-09-01: WYSIWYG applies to hung decorations). A frame's
- * geometry is re-derived from its grid cell on every recalculation, so without this a frame
- * aimed at a lowered block's visible face hung above it.
+ * An item frame's remembered seat survives a save and reload.
  *
- * <p>Only the BOUNDING BOX is shifted — the interaction and projectile surface — never the
- * entity's real position. The position feeds {@code BlockPos.containing} in the attachment
- * math and in every position packet the server ever sends, so moving it by a full block (a
- * −1.0 face is legal under the ruling) silently re-derives the frame's grid cell one block
- * low, and {@code survives()} then judges the wrong support. The DRAWN frame is shifted by
- * the render layer instead ({@code ItemFrameDrawnFaceRenderMixin}), which reads the SAME
- * support cell; the two must stay in step.
+ * <p>The seat itself — minted once when the frame is hung, carried in entity data, applied to the
+ * bounding box — lives in {@code HangingEntityRememberedSeatMixin}, shared with paintings. This
+ * class only persists it: {@code HangingEntity} declares no save-data hooks, so each hung class
+ * writes and reads the number itself. A frame saved before the seat existed has no key and mints
+ * from its wall on its first server layout (one-time migration).
  *
- * <p>The support cell may sit in a neighbouring chunk (wall frames on a chunk border), and
- * this derivation runs during entity deserialization — reading an unloaded chunk there forces
- * a synchronous chunk load on the server and answers a wrong height from an empty chunk on
- * the client. An unloaded support skips the shift; the next recalculation re-derives.
- *
- * <p>Applied at TAIL of the derivation and recomputed fresh each call, so the shift never
- * compounds. {@code survives()} keeps reading the support's grid cell, which is where the
- * support block actually is regardless of how low it draws — popping law is untouched.
+ * <p>The entity's real position stays at grid height (the box moves, the position does not);
+ * moving it corrupts the derived grid cell and {@code survives()} judges the wrong support.
  */
 @Mixin(ItemFrame.class)
 public abstract class ItemFrameWysiwygMixin extends HangingEntity {
+
+    @Unique
+    private static final String SLABBED$HANG_DY_KEY = "slabbed:hang_dy";
 
     protected ItemFrameWysiwygMixin(EntityType<? extends HangingEntity> type, Level level) {
         super(type, level);
     }
 
-    @Inject(method = "recalculateBoundingBox", at = @At("TAIL"))
-    private void slabbed$hangBoxOnDrawnFace(CallbackInfo ci) {
-        if (this.pos == null || this.getDirection() == null || this.level() == null) {
-            return;
+    @Inject(method = "addAdditionalSaveData(Lnet/minecraft/world/level/storage/ValueOutput;)V", at = @At("TAIL"))
+    private void slabbed$saveHangSeat(ValueOutput output, CallbackInfo ci) {
+        HangingSeatDyHolder holder = (HangingSeatDyHolder) this;
+        if (holder.slabbed$hasHangSeat()) {
+            output.putDouble(SLABBED$HANG_DY_KEY, holder.slabbed$hangSeatDy());
         }
-        BlockPos supportPos = this.pos.relative(this.getDirection().getOpposite());
-        if (!this.level().hasChunkAt(supportPos)) {
-            return;
+    }
+
+    /** Vanilla re-lays the box while reading (direction); the seat arrives after, so lay it out again. */
+    @Inject(method = "readAdditionalSaveData(Lnet/minecraft/world/level/storage/ValueInput;)V", at = @At("TAIL"))
+    private void slabbed$loadHangSeat(ValueInput input, CallbackInfo ci) {
+        double dy = input.getDoubleOr(SLABBED$HANG_DY_KEY, Double.NaN);
+        if (Double.isFinite(dy)) {
+            ((HangingSeatDyHolder) this).slabbed$restoreHangSeatDy(dy);
+            this.recalculateBoundingBox();
         }
-        BlockState support = this.level().getBlockState(supportPos);
-        double dy = SlabSupport.getYOffset(this.level(), supportPos, support);
-        if (!Double.isFinite(dy) || Math.abs(dy) < 1.0e-6d) {
-            return;
-        }
-        this.setBoundingBox(this.getBoundingBox().move(0.0d, dy, 0.0d));
     }
 }

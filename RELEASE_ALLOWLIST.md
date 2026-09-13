@@ -87,7 +87,7 @@ anything. The split above puts the fine granularity only where a leak has actual
 | `com/slabbed/client/runtime/*` | Lowered side-slab retargeter — client targeting. |
 | `com/slabbed/compat/*` | Compat hooks and the slab-surface-kind enum consumed by third-party slab mods. |
 | `com/slabbed/compat/terrainslabs/*` | Terrain Slabs compat (dual mod-id gate). |
-| `com/slabbed/mixin/client/*` | The 15 client render/interaction mixins declared in `slabbed.client.mixins.json`; every member handles render offset, emitted-effect alignment, remesh, entity light or offset raycast behavior. |
+| `com/slabbed/mixin/client/*` | The 14 client render/interaction mixins declared in `slabbed.client.mixins.json`; every member handles render offset, emitted-effect alignment, remesh, entity light or offset raycast behavior. |
 | `com/slabbed/mixin/torch/*` | `TorchBlockMixin` — torch attachment geometry. |
 
 ### Main mixins (class-level; `com/slabbed/mixin/` is a mixed package)
@@ -105,7 +105,8 @@ anything. The split above puts the fine granularity only where a leak has actual
 | `com/slabbed/mixin/DecoratedPotParticleMixin` | Particle origin follows the lowered block. |
 | `com/slabbed/mixin/FencePaneSlabConnectionMixin` | Fence/pane connection against a lowered slab. |
 | `com/slabbed/mixin/HangingSignAttachedMixin` | Hanging-sign attachment from above. |
-| `com/slabbed/mixin/ItemFrameWysiwygMixin` | Item-frame bounding box hangs on the support's drawn face; entity position untouched. |
+| `com/slabbed/mixin/HangingEntityRememberedSeatMixin` | A hung decoration (frame, painting) remembers the drawn face it was hung on: seat minted once, synced, applied to the box; entity position untouched (maintainer ruling, 2026-09-13). |
+| `com/slabbed/mixin/ItemFrameWysiwygMixin` | Item-frame remembered seat persisted in save data. |
 | `com/slabbed/mixin/ItemStackUseCreatedContactMixin` | Use-on contact point for offset placement. |
 | `com/slabbed/mixin/LevelChunkOccupantChangeAnchorMixin` | Clears a cell's stored height when its block kind is replaced, at the one write funnel every removal passes (maintainer ruling, 2026-09-06). |
 | `com/slabbed/mixin/LeverParticleMixin` | Particle origin follows the lowered block. |
@@ -117,6 +118,7 @@ anything. The split above puts the fine granularity only where a leak has actual
 | `com/slabbed/mixin/NewMinecartBehaviorRailFrameMixin` | Experimental-movement rail solver computes in the logical grid frame; the synced interpolation step stays physical. |
 | `com/slabbed/mixin/PistonMoveDyTransferMixin` | A pushed or pulled block keeps the height it was placed at when a piston moves it (maintainer ruling, 2026-09-06). |
 | `com/slabbed/mixin/RedstoneWireBlockMixin` | Redstone wire connection/support over lowered slabs. |
+| `com/slabbed/mixin/PaintingRememberedSeatMixin` | Painting remembered seat persisted in save data. |
 | `com/slabbed/mixin/ScaffoldingLoweredStandMixin` | Scaffolding standing layer gated at the lowered drawn top. |
 | `com/slabbed/mixin/ServerInteractBlockHitToleranceMixin` | Server-side hit tolerance for offset targeting. |
 | `com/slabbed/mixin/SlabSupportBlockMixin` | Slab support surface. |
@@ -181,6 +183,7 @@ anything. The split above puts the fine granularity only where a leak has actual
 | `com/slabbed/util/SlabdyRowFormatter` | Headless field computation for the `[slabdy]` diagnostic row. **Previously excluded** with the reason "no shipped consumer on this line" — that is no longer true: `/slabdy row` is a shipped consumer, and it is the one debug subcommand that does real work on a release jar (it needs nothing but `SlabAnchorAttachment` and `SlabSupport`, both approved above). Read-only: it computes strings and touches no state. |
 | `com/slabbed/util/BlockDisplayParticleContext` | Carries a block's frozen visual height through its vanilla display tick so the particles that tick emits follow the drawn model; also the ownership handshake the three retained per-block particle hooks use to keep their emission single-shifted. |
 | `com/slabbed/util/MinecartRailFrame` | Physical/logical frame conversion for a minecart seated on a lowered rail; the single place the conversion is written, shared by the behaviour mixins and the renderer. |
+| `com/slabbed/util/HangingSeatDyHolder` | Duck interface exposing a hung decoration's remembered seat. |
 | `com/slabbed/util/RailSeatDyHolder` | Duck interface exposing a minecart's bound rail seat offset. |
 | `com/slabbed/util/ManualDyEnvelope` | The manual-nudge step size and legal height envelope. Lives in this package so MIN_DY is derived from the package-private `SlabbedOffsetColliderClip.OWNER_REACH` rather than restated as a literal: the clip supplement's owner search depth and the deepest authorable height cannot drift apart. Pure constants and two static predicates; no state, no I/O. |
 
