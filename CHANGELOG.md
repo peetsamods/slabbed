@@ -6,7 +6,9 @@ latest file, see [Modrinth](https://modrinth.com/mod/slabbed) or
 [CurseForge](https://www.curseforge.com/minecraft/mc-mods/slabbed).
 See LAW.md — this doc does not redefine the law.
 
-## [Unreleased]
+## [0.5.2-alpha.12] — 1.21.11 (Fabric) — 2026-09-14
+
+Version note: alpha.12 is the next free number in the shared alpha series across all Slabbed lines.
 
 See LAW.md — this changelog does not redefine the law.
 
