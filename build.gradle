@@ -138,6 +138,7 @@ sourceSets {
                     "com/slabbed/test/SlabPlacementHeightSchemaTest.java",
                     "com/slabbed/test/SlabbedHotPathAllocationRegressionTest.java",
                     "com/slabbed/test/SlabHeightStepCullTest.java",
+                    "com/slabbed/test/StateChangeAnchorTest.java",
                     "com/slabbed/test/SlabbedLabFixtureTest.java",
                     "com/slabbed/test/TerrainSlabsHeadlessClassifierTest.java",
                     "com/slabbed/test/UpFaceEdgeCombineGuardTest.java",

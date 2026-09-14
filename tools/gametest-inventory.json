@@ -41,6 +41,7 @@
     {"path": "com/slabbed/test/SlabbedLabUltraGoblin2StressClientGameTest.java", "classification": "client_only"},
     {"path": "com/slabbed/test/SlabbedLabVanillaIllegalSlabToSlabPlacementClientGameTest.java", "classification": "client_only"},
     {"path": "com/slabbed/test/SlabbedLabVerticalChainHitboxOwnershipClientGameTest.java", "classification": "client_only"},
+    {"path": "com/slabbed/test/StateChangeAnchorTest.java", "classification": "registered_server"},
     {"path": "com/slabbed/test/TerrainSlabsHeadlessClassifierTest.java", "classification": "registered_server"},
     {"path": "com/slabbed/test/UpFaceEdgeCombineGuardTest.java", "classification": "registered_server"},
     {"path": "com/slabbed/test/WallSignAboveSlabTest.java", "classification": "registered_server"},

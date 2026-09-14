@@ -14,6 +14,7 @@ import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.tags.BlockTags;
 import net.minecraft.world.level.BlockGetter;
+import net.minecraft.world.level.EmptyBlockGetter;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
@@ -24,6 +25,8 @@ import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 import net.minecraft.world.level.block.state.properties.SlabType;
 import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.phys.AABB;
+import net.minecraft.world.phys.shapes.BooleanOp;
+import net.minecraft.world.phys.shapes.Shapes;
 import net.minecraft.world.phys.shapes.VoxelShape;
 import net.neoforged.bus.api.EventPriority;
 import net.neoforged.bus.api.IEventBus;
@@ -624,7 +627,33 @@ public final class SlabAnchorAttachment {
         if (consumeMatchingToolTransition(world, pos, oldState, newState)) {
             return true;
         }
-        return isExplicitInPlacePlacementTruthTransition(oldState, newState);
+        return isExplicitInPlacePlacementTruthTransition(oldState, newState)
+                || isSameShapeTransform(oldState, newState);
+    }
+
+    /**
+     * The occupant changed KIND but not SHAPE: a compat grass slab becoming its dirt slab once
+     * something covers it, a slab swapped for another slab of the same half. What the player placed
+     * is still standing there with the same shape, so its height stays (LAW.md Law 1 corollary,
+     * maintainer ruling 2026-09-13). Judged on context-free shapes, read from an empty view at the
+     * origin, so the lowered-shape mixins cannot feed a shifted shape back into the decision; a
+     * change of shape (slab to carpet, full block to slab) is a different occupant and still clears.
+     */
+    public static boolean isSameShapeTransform(BlockState oldState, BlockState newState) {
+        if (oldState == null || newState == null || oldState.isAir() || newState.isAir()
+                || !newState.getFluidState().isEmpty() || oldState.is(newState.getBlock())) {
+            return false;
+        }
+        VoxelShape before = oldState.getCollisionShape(EmptyBlockGetter.INSTANCE, BlockPos.ZERO);
+        VoxelShape after = newState.getCollisionShape(EmptyBlockGetter.INSTANCE, BlockPos.ZERO);
+        if (before.isEmpty() || after.isEmpty()) {
+            before = oldState.getShape(EmptyBlockGetter.INSTANCE, BlockPos.ZERO);
+            after = newState.getShape(EmptyBlockGetter.INSTANCE, BlockPos.ZERO);
+            if (before.isEmpty() || after.isEmpty()) {
+                return false;
+            }
+        }
+        return !Shapes.joinIsNotEmpty(before, after, BooleanOp.NOT_SAME);
     }
 
     private static boolean isExplicitInPlacePlacementTruthTransition(

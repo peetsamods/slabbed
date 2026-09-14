@@ -15,6 +15,12 @@ is not cut.
   itself stayed at grid height, so the lowered block above visibly descended
   into it. A chain under a lowered TOP/DOUBLE slab is unaffected: that case
   keeps its own dedicated flush treatment.
+- A lowered slab that changes kind in place keeps its height. A Terrain Slabs grass slab turns
+  into a dirt slab when you cover it, the way vanilla grass turns to dirt. On a lowered stack the
+  converted slab popped back up to grid height and sank into the block above it, because the change
+  of block kind was read as the slab leaving its cell. A block that changes kind but keeps its shape
+  is the same thing you placed, so it now keeps its height (maintainer ruling, 2026-09-13). A change
+  of shape, a slab becoming a carpet or a full block becoming a slab, still counts as a new block.
 - Item frames and paintings now hang on a lowered block's visible face instead of floating at
   normal grid height beside it, and both remember the height they were hung at. That height is
   decided once, when you hang the thing, saved with the world, and never read from the wall

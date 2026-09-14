@@ -256,7 +256,12 @@ public final class SlabPlacementHeightLifecycleTest {
                 "tool-token decoy must start with an explicit flat fact");
 
         postToolModification(ctx, world, toolSubject, Blocks.DIRT.defaultBlockState());
-        world.setBlock(decoySubject, Blocks.DIRT.defaultBlockState(), Block.UPDATE_ALL);
+        // The decoy is a SHAPE-changing replacement on purpose: a same-shape kind change keeps its fact
+        // by rule (maintainer ruling, 2026-09-13), so only a shape change can show that the token minted
+        // for the OTHER cell does not leak here.
+        world.setBlock(decoySubject, Blocks.OAK_SLAB.defaultBlockState()
+                .setValue(net.minecraft.world.level.block.SlabBlock.TYPE,
+                        net.minecraft.world.level.block.state.properties.SlabType.BOTTOM), Block.UPDATE_ALL);
         assertAbsent(ctx, world, decoySubject,
                 "a tool token for another cell must not preserve the next replacement");
 
@@ -308,8 +313,9 @@ public final class SlabPlacementHeightLifecycleTest {
         assertStored(ctx, world, third, -1, "unrelated replacement row requires a stored fact");
 
         world.setBlock(third, Blocks.DIRT.defaultBlockState(), Block.UPDATE_ALL);
-        assertAbsent(ctx, world, third,
-                "an unrelated full-block occupant must not inherit the old placement fact");
+        // maintainer ruling, 2026-09-13: a kind change that keeps the shape is the placed block staying.
+        assertStored(ctx, world, third, -1,
+                "a full block replaced in place by another of the same shape keeps the fact");
         ctx.succeed();
     }
 
