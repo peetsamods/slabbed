@@ -50,6 +50,12 @@ See LAW.md — this changelog does not redefine the law.
 
 ### Fixes
 
+- **A lowered slab that changes kind in place keeps its height.** A Terrain Slabs grass slab turns
+  into a dirt slab when you cover it, the way vanilla grass turns to dirt. On a lowered stack the
+  converted slab popped back up to grid height and sank into the block above it, because the change of
+  block kind was treated like the slab leaving its cell. A block that changes kind but keeps its shape
+  is the same thing you placed, so it now keeps its height (maintainer ruling, 2026-09-13). A change of
+  shape, a slab becoming a carpet or a full block becoming a slab, still counts as a new block.
 - **Breaking a lowered chest, hopper, lever or rail no longer leaves its height behind.** Slabbed
   remembers the height you placed a block at, and that memory is meant to die with the block. It was
   being cleared through a per-block hook that 28 kinds of vanilla block quietly skip, including
