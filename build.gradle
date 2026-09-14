@@ -235,12 +235,14 @@ dependencies {
     annotationProcessor 'org.spongepowered:mixin:0.8.5:processor'
     // Forge 1.20.1 does NOT bundle MixinExtras (NeoForge does). The donor tree
     // uses @WrapOperation/@WrapMethod/@Local on the placement path, so the mod
-    // has to ship it jar-in-jar. 0.4.x is the line that has @WrapMethod and
-    // still targets Mixin 0.8.5, which is what Forge 47 ships.
-    annotationProcessor "io.github.llamalad7:mixinextras-common:0.4.1"
-    compileOnly "io.github.llamalad7:mixinextras-common:0.4.1"
-    implementation(jarJar("io.github.llamalad7:mixinextras-forge:[0.4.1,0.5)")) {
-        jarJar.ranged(it, "[0.4.1,0.5)")
+    // has to ship it jar-in-jar. The bundled range must overlap what other mods on the
+    // same loader request (Terrain Slabs asks for 0.5.4 or newer); a disjoint range is a
+    // mod-loading conflict, not a code error, and only shows in a real profile.
+    annotationProcessor "io.github.llamalad7:mixinextras-common:0.5.5"
+    compileOnly "io.github.llamalad7:mixinextras-common:0.5.5"
+    implementation(jarJar("io.github.llamalad7:mixinextras-forge:[0.5.4,)")) {
+        jarJar.ranged(it, "[0.5.4,)")
+        jarJar.pin(it, "0.5.5")
     }
     testImplementation "org.junit.jupiter:junit-jupiter:5.11.4"
     testRuntimeOnly "org.junit.platform:junit-platform-launcher:1.11.4"

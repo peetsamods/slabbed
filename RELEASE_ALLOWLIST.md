@@ -175,7 +175,7 @@ META-INF/
 META-INF/MANIFEST.MF
 META-INF/jarjar/
 META-INF/jarjar/metadata.json
-META-INF/jarjar/mixinextras-forge-0.4.1.jar
+META-INF/jarjar/mixinextras-forge-0.5.5.jar
 META-INF/mods.toml
 assets/
 assets/slabbed/

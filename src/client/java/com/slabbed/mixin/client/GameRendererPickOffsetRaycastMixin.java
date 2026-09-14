@@ -15,7 +15,9 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Redirect;
 
 /**
- * The single ownership rule for Slabbed crosshair targeting (MC 1.21.1).
+ * The single ownership rule for Slabbed crosshair targeting. On 1.20.1 the entity raycast lives
+ * inside {@code GameRenderer.pick(float)}; the 1.21 overload taking the entity does not exist here,
+ * and a target that does not exist is not remapped into the refmap and fails only in production.
  */
 @Mixin(GameRenderer.class)
 public abstract class GameRendererPickOffsetRaycastMixin {
@@ -24,7 +26,7 @@ public abstract class GameRendererPickOffsetRaycastMixin {
     private static long slabbed$lastTraceNanos;
 
     @Redirect(
-            method = "pick(Lnet/minecraft/world/entity/Entity;DDF)Lnet/minecraft/world/phys/HitResult;",
+            method = "pick(F)V",
             at = @At(
                     value = "INVOKE",
                     target = "Lnet/minecraft/world/entity/Entity;pick(DFZ)Lnet/minecraft/world/phys/HitResult;"
