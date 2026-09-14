@@ -11,6 +11,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.tags.BlockTags;
 import net.minecraft.world.level.BlockGetter;
+import net.minecraft.world.level.EmptyBlockGetter;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
@@ -21,6 +22,9 @@ import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 import net.minecraft.world.level.block.state.properties.SlabType;
 import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.phys.AABB;
+import net.minecraft.world.phys.shapes.BooleanOp;
+import net.minecraft.world.phys.shapes.CollisionContext;
+import net.minecraft.world.phys.shapes.Shapes;
 import net.minecraft.world.phys.shapes.VoxelShape;
 import net.minecraftforge.eventbus.api.EventPriority;
 import net.minecraftforge.eventbus.api.IEventBus;
@@ -632,7 +636,53 @@ public final class SlabAnchorAttachment {
         if (consumeMatchingToolTransition(world, pos, oldState, newState)) {
             return true;
         }
-        return isExplicitInPlacePlacementTruthTransition(oldState, newState);
+        return isExplicitInPlacePlacementTruthTransition(oldState, newState)
+                || isSameShapeTransform(oldState, newState);
+    }
+
+    /**
+     * The occupant changed KIND but not SHAPE: a compat grass slab becoming its dirt slab when it is
+     * covered, a slab swapped for another slab of the same half. The thing the player placed is still
+     * standing there with the same shape, so its height stays (LAW.md, Law 1; maintainer ruling,
+     * 2026-09-13 - live with a terrain-slab compat mod the converted slab rose to grid height).
+     *
+     * <p>Judged on context-free shapes, read through {@link EmptyBlockGetter} with no position, so
+     * the offset shape lanes cannot feed already-shifted geometry back into this decision. A change
+     * of shape - a slab becoming a carpet, a full block becoming a slab - is a different thing in
+     * that cell and still clears. Only the two states are read; nothing around {@code pos} is
+     * consulted, so no neighbour edit can reach a placed block's height through here.
+     *
+     * <p>The rule is absolute and holds for every occupant, a full cube as much as a slab: shape,
+     * not block identity, decides whether the thing a player placed is still standing in that cell.
+     * The explicit transition table above stays as the narrower statement it always was; it now
+     * only adds the transformations that DO change shape, such as dirt becoming farmland.
+     */
+    public static boolean isSameShapeTransform(BlockState oldState, BlockState newState) {
+        if (oldState == null || newState == null || oldState.isAir() || newState.isAir()
+                || !newState.getFluidState().isEmpty() || oldState.is(newState.getBlock())) {
+            return false;
+        }
+        VoxelShape before = contextFreeCollisionShape(oldState);
+        VoxelShape after = contextFreeCollisionShape(newState);
+        if (before.isEmpty() || after.isEmpty()) {
+            // A shapeless occupant (a plant, a torch) has no collision box to compare; its outline
+            // still describes the space it takes up.
+            before = contextFreeOutlineShape(oldState);
+            after = contextFreeOutlineShape(newState);
+            if (before.isEmpty() || after.isEmpty()) {
+                return false;
+            }
+        }
+        return !Shapes.joinIsNotEmpty(before, after, BooleanOp.NOT_SAME);
+    }
+
+    private static VoxelShape contextFreeCollisionShape(BlockState state) {
+        return state.getCollisionShape(
+                EmptyBlockGetter.INSTANCE, BlockPos.ZERO, CollisionContext.empty());
+    }
+
+    private static VoxelShape contextFreeOutlineShape(BlockState state) {
+        return state.getShape(EmptyBlockGetter.INSTANCE, BlockPos.ZERO, CollisionContext.empty());
     }
 
     private static boolean isExplicitInPlacePlacementTruthTransition(

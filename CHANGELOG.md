@@ -19,6 +19,13 @@
   and paintings from an older save take their height from their wall once, the first time they
   load, and remember it from then on. Under the hood only the clickable box and the drawing move;
   the entity's real position stays on the grid, so support checks keep judging the right block.
+- **A lowered slab that changes kind in place keeps its height.** A terrain-slab compat mod's grass
+  slab turns into a dirt slab when you cover it, the way vanilla grass turns to dirt. On a lowered
+  stack the converted slab popped back up to grid height and sank into the block above it, because
+  the change of block kind was treated like the slab leaving its cell. A block that changes kind but
+  keeps its shape is the same thing you placed, so it now keeps its height (maintainer ruling,
+  2026-09-13). A change of shape — a slab becoming a carpet, a full block becoming a slab — still
+  counts as a new block and starts over.
 
 ## [0.5.2-beta.1] - Minecraft 1.20.1 (Forge)
 

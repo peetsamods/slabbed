@@ -374,7 +374,9 @@ public final class SlabPlacementHeightLifecycleTest {
                 "tool-token decoy must start with an explicit flat fact");
 
         postToolModification(ctx, world, toolSubject, Blocks.DIRT.defaultBlockState());
-        world.setBlock(decoySubject, Blocks.DIRT.defaultBlockState(), Block.UPDATE_ALL);
+        // The decoy takes a SHAPE-changing replacement so only the token's position can preserve it:
+        // a same-shape swap is kept on its own merits and would stop discriminating token scope.
+        world.setBlock(decoySubject, oakBottomSlab(), Block.UPDATE_ALL);
         assertAbsent(ctx, world, decoySubject,
                 "a tool token for another cell must not preserve the next replacement");
 
@@ -425,9 +427,10 @@ public final class SlabPlacementHeightLifecycleTest {
         placeHeldBlock(ctx, Blocks.STONE.defaultBlockState(), thirdSupport, Direction.UP, 0.0F);
         assertStored(ctx, world, third, -1, "unrelated replacement row requires a stored fact");
 
+        // maintainer ruling, 2026-09-13: a kind change that keeps the shape is the placed block staying
         world.setBlock(third, Blocks.DIRT.defaultBlockState(), Block.UPDATE_ALL);
-        assertAbsent(ctx, world, third,
-                "an unrelated full-block occupant must not inherit the old placement fact");
+        assertStored(ctx, world, third, -1,
+                "a full-block occupant replaced in place by the same shape must keep the fact");
         ctx.succeed();
     }
 
@@ -847,6 +850,10 @@ public final class SlabPlacementHeightLifecycleTest {
 
     private static BlockState bottomSlab() {
         return Blocks.STONE_SLAB.defaultBlockState().setValue(SlabBlock.TYPE, SlabType.BOTTOM);
+    }
+
+    private static BlockState oakBottomSlab() {
+        return Blocks.OAK_SLAB.defaultBlockState().setValue(SlabBlock.TYPE, SlabType.BOTTOM);
     }
 
     private static void exerciseConnectorPlacement(
