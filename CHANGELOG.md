@@ -1,4 +1,6 @@
-## [Unreleased]
+## [0.5.2-beta.2] - Minecraft 1.20.1 (Forge)
+
+Hotfix for 0.5.2-beta.1, which failed to start in a real launcher (see the Forge fixes below).
 
 ### Placement
 
