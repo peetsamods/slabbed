@@ -22,6 +22,13 @@ See LAW.md — this changelog does not redefine the law.
   the painting (maintainer ruling, 2026-09-13: where you place it is where it stays applies to everything
   hung on a wall). Paintings from an older save take their height from their wall once, the first time
   they load. Paintings on blocks placed before this mod's height store existed are unchanged.
+- **Wall signs were checked too.** A wall sign hangs on its wall and is never pulled down by a slab
+  on the floor under its cell. An automated check for that scene now runs on every Minecraft version
+  Slabbed supports.
+- **A background task asking for a block's height no longer waits on the server.** Height lookups
+  made off the server thread, for example by world generation placing a chest minecart, are answered
+  flat immediately instead of queueing behind the server thread. The server thread still resolves and
+  syncs every height, so no placed block moves.
 
 ## [0.5.2-alpha.9] — Minecraft 1.21.1 (Fabric) — 2026-09-12
 
