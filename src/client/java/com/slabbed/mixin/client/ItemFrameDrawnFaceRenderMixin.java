@@ -1,13 +1,14 @@
 package com.slabbed.mixin.client;
 
+import com.mojang.blaze3d.vertex.PoseStack;
 import com.slabbed.util.HangingSeatDyHolder;
+import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.entity.ItemFrameRenderer;
 import net.minecraft.world.entity.decoration.ItemFrame;
-import net.minecraft.world.phys.Vec3;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
-import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 /**
  * Draws an item frame on the face it REMEMBERS being hung on (maintainer ruling, 2026-09-01 for
@@ -18,31 +19,32 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
  *
  * <p>The offset is the frame's REMEMBERED seat (see {@code HangingEntityRememberedSeatMixin}),
  * never a fresh read of the support: the same number the bounding box carries, so box and drawing
- * cannot disagree and neither follows a wall rebuilt later. A predecessor of this class read the
- * support cell on every frame; do not regress to that, and do not regress further to reading the
- * frame's OWN cell (usually air, so it never fired for wall frames at all).
+ * cannot disagree and neither follows a wall rebuilt later.
  *
- * <p>The hook is {@code getRenderOffset}, which the entity render dispatcher applies and then
- * un-applies around the whole draw. On this line that is the live path: the renderer declares the
- * narrowed override and vanilla's bridge delegates to it. Do NOT also translate the pose stack
- * inside {@code render} - the predecessor did, and keeping both would double the offset.
+ * <p>The hook is a pose translate inside {@code render}, right after vanilla's own first
+ * translate. Do NOT route this through {@code getRenderOffset}: on this version the frame renderer
+ * subtracts that vector again a few lines into {@code render}, so anything added there cancels out
+ * and the frame draws at grid height while its box sits on the seat (live, 2026-09-14: the frame
+ * appeared a block above the slab it was hung on).
  */
 @Mixin(ItemFrameRenderer.class)
 public abstract class ItemFrameDrawnFaceRenderMixin {
 
-    @Inject(method = "getRenderOffset(Lnet/minecraft/world/entity/decoration/ItemFrame;F)Lnet/minecraft/world/phys/Vec3;",
-            at = @At("RETURN"),
-            cancellable = true)
+    @Inject(method = "render(Lnet/minecraft/world/entity/decoration/ItemFrame;FFLcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/client/renderer/MultiBufferSource;I)V",
+            at = @At(value = "INVOKE",
+                    target = "Lcom/mojang/blaze3d/vertex/PoseStack;translate(DDD)V",
+                    ordinal = 0,
+                    shift = At.Shift.AFTER))
     private void slabbed$drawOnRememberedSeat(ItemFrame entity,
-                                              float partialTicks,
-                                              CallbackInfoReturnable<Vec3> cir) {
-        // The REMEMBERED seat (synced entity data), the same number the bounding box carries.
-        // Do not re-read the support here: the seat is minted once when the frame is hung and
-        // must not follow a wall rebuilt at a different height (LAW.md, Law 1; ruling 2026-09-13).
+                                              float yaw,
+                                              float tickDelta,
+                                              PoseStack matrices,
+                                              MultiBufferSource vertexConsumers,
+                                              int light,
+                                              CallbackInfo ci) {
         double dy = ((HangingSeatDyHolder) entity).slabbed$hangSeatDy();
         if (Math.abs(dy) >= 1.0e-6d) {
-            Vec3 vanilla = cir.getReturnValue();
-            cir.setReturnValue(new Vec3(vanilla.x, vanilla.y + dy, vanilla.z));
+            matrices.translate(0.0d, dy, 0.0d);
         }
     }
 }
