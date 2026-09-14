@@ -62,7 +62,8 @@
       "com.slabbed.test.ReplaceableCellPlacementSuite",
       "com.slabbed.test.TerrainOwnedOnTopConsistencySuite",
       "com.slabbed.client.BetaNoticeSuite",
-      "com.slabbed.test.NormalDepthContractTest"
+      "com.slabbed.test.NormalDepthContractTest",
+      "com.slabbed.test.StateChangeAnchorTest"
     ],
     "fabric-client-gametest": [
       "com.slabbed.test.CandleExtinguishParticleClientGameTest",

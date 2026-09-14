@@ -12,6 +12,13 @@ See LAW.md — this changelog does not redefine the law.
 
 ### Fixed
 
+- **A lowered slab that changes kind in place keeps its height.** A Terrain Slabs grass slab turns
+  into a dirt slab when you cover it, the way vanilla grass turns to dirt. On a lowered stack the
+  converted slab popped back up to grid height and sank into the block above it, because the change
+  of block kind was treated like the slab leaving its cell. A block that changes kind but keeps its
+  shape is the same thing you placed, so it now keeps its height (maintainer ruling, 2026-09-13).
+  A change of shape, a slab becoming a carpet or a full block becoming a slab, still counts as a
+  new block.
 - **Paintings hang where you see the block, and hung things remember it.** A painting placed on a
   lowered block's visible face hung at normal grid height, floating above the surface it was aimed
   at; it now hangs on the drawn face like item frames do. And both frames and paintings now

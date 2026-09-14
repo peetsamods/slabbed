@@ -31,8 +31,12 @@ public abstract class BlockOnStateReplacedAnchorMixin {
         // stripped_log) keeps the lock so the block does not un-lower / jitter (WYSIWYG — the
         // grass-tower conversion jitter). A piston move (moved), a real break (-> air / fluid),
         // or a replacement with a non-lock block still clears it. onStateReplaced fires AFTER
-        // the new state is set, so getBlockState(pos) here is the replacement.
-        if (!moved && SlabAnchorAttachment.replacementPreservesAnchor(world, pos, world.getBlockState(pos))) {
+        // the new state is set, so getBlockState(pos) here is the replacement and the hook's own
+        // first argument is the departing occupant — both states are in hand, which is what
+        // lets a same-SHAPE kind change (a compat grass slab covered into its dirt slab) be told
+        // apart from the slab actually leaving the cell (maintainer ruling, 2026-09-13).
+        if (!moved && SlabAnchorAttachment.replacementPreservesAnchor(
+                world, pos, oldState, world.getBlockState(pos))) {
             return;
         }
         SlabAnchorAttachment.removeAnchor(world, pos);

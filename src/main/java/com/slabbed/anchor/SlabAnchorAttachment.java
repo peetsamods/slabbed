@@ -17,15 +17,20 @@ import net.minecraft.block.FenceBlock;
 import net.minecraft.block.FenceGateBlock;
 import net.minecraft.block.PaleMossCarpetBlock;
 import net.minecraft.block.PaneBlock;
+import net.minecraft.block.ShapeContext;
 import net.minecraft.block.SlabBlock;
 import net.minecraft.block.WallBlock;
 import net.minecraft.network.RegistryByteBuf;
 import net.minecraft.network.codec.PacketCodec;
 import net.minecraft.state.property.Properties;
 import net.minecraft.util.Identifier;
+import net.minecraft.util.function.BooleanBiFunction;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Direction;
+import net.minecraft.util.shape.VoxelShape;
+import net.minecraft.util.shape.VoxelShapes;
 import net.minecraft.world.BlockView;
+import net.minecraft.world.EmptyBlockView;
 import net.minecraft.world.World;
 import net.minecraft.world.chunk.WorldChunk;
 
@@ -697,12 +702,68 @@ public final class SlabAnchorAttachment {
      * does not un-lower/jitter (WYSIWYG). A genuine break (→air), fluid, or replacement with a
      * non-lock block (slab / carpet / thin-top / block-entity / non-solid non-connecting)
      * returns false so the cell is freed and re-evaluated.
+     *
+     * <p>{@code oldState} is the DEPARTING occupant, so a same-position transform that keeps the
+     * SHAPE can be told apart from a real departure — see {@link #isSameShapeTransform}. That
+     * test is asked LAST, after the two cheap ones, so a cell that already keeps its lock never
+     * pays for a shape read.
      */
-    public static boolean replacementPreservesAnchor(BlockView world, BlockPos pos, BlockState newState) {
+    public static boolean replacementPreservesAnchor(BlockView world, BlockPos pos,
+                                                     BlockState oldState, BlockState newState) {
         if (newState == null || newState.isAir() || !newState.getFluidState().isEmpty()) {
             return false;
         }
-        return isOrdinaryAnchorCandidate(world, pos, newState) || isConnectingStructural(newState);
+        return isOrdinaryAnchorCandidate(world, pos, newState)
+                || isConnectingStructural(newState)
+                || isSameShapeTransform(oldState, newState);
+    }
+
+    /**
+     * The occupant changed KIND but not SHAPE: a compat grass slab turning into its dirt slab when
+     * covered (the way vanilla grass turns to dirt), a slab swapped for another slab of the same
+     * half. The thing the player placed is still there with the same outline, so its height stays
+     * (LAW 1 corollary, {@code LAW.md}; maintainer ruling, 2026-09-13). Live on 1.21.1 with Terrain
+     * Slabs the converted slab popped up to grid height and sank into the block above it, because
+     * the change of block kind was read as the slab leaving its cell.
+     *
+     * <p>Judged on CONTEXT-FREE shapes read under {@link SlabSupport#withRawShapeProbe}, so a
+     * shape that a stored height has already shifted can never be fed back into this decision
+     * — on this line {@code getCollisionShape} is offset by exactly that number, and an empty
+     * view defers to the client lookup, which would answer for cell (0,0,0). A change of SHAPE
+     * — a slab becoming a carpet, a full block becoming a slab — is a different thing
+     * and still clears.
+     */
+    public static boolean isSameShapeTransform(BlockState oldState, BlockState newState) {
+        if (oldState == null || newState == null || oldState.isAir() || newState.isAir()
+                || !newState.getFluidState().isEmpty() || oldState.isOf(newState.getBlock())) {
+            return false;
+        }
+        VoxelShape before = contextFreeShape(oldState, false);
+        VoxelShape after = contextFreeShape(newState, false);
+        if (before.isEmpty() || after.isEmpty()) {
+            before = contextFreeShape(oldState, true);
+            after = contextFreeShape(newState, true);
+            if (before.isEmpty() || after.isEmpty()) {
+                return false;
+            }
+        }
+        return !VoxelShapes.matchesAnywhere(before, after, BooleanBiFunction.NOT_SAME);
+    }
+
+    /**
+     * The state's own un-offset shape: its collision, or its outline for an occupant that has no
+     * collision at all. A block whose shape genuinely needs world context may object to the empty
+     * view; that is not a reason to fail a block edit, so it is left unclassified and the cell
+     * clears exactly as it did before this test existed.
+     */
+    private static VoxelShape contextFreeShape(BlockState state, boolean outline) {
+        try {
+            return SlabSupport.withRawShapeProbe(() -> outline
+                    ? state.getOutlineShape(EmptyBlockView.INSTANCE, BlockPos.ORIGIN, ShapeContext.absent())
+                    : state.getCollisionShape(EmptyBlockView.INSTANCE, BlockPos.ORIGIN));
+        } catch (RuntimeException ignored) {
+            return VoxelShapes.empty();
+        }
     }
 
     /** Fence / wall / pane / gate — connecting blocks that must be height-locked like solids. */
