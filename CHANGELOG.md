@@ -1,4 +1,6 @@
-## [Unreleased]
+## [0.5.2-alpha.11+26.2] — MC 26.2 alpha hotfix
+
+Version note: alpha.11 is the next free number in the shared alpha series (8 and 9 are held by the Fabric 1.21.1 line).
 
 See LAW.md — this changelog does not redefine the law.
 
