@@ -29,6 +29,16 @@ Hotfix for 0.5.2-beta.1, which failed to start in a real launcher (see the Forge
   2026-09-13). A change of shape — a slab becoming a carpet, a full block becoming a slab — still
   counts as a new block and starts over.
 
+### Forge
+
+- **Starts in a real launcher again.** 0.5.2-beta.1 crashed on startup in a Modrinth or CurseForge
+  profile while running fine in the development client. The crosshair-targeting patch named the
+  1.21 form of the game's aiming method, which does not exist on 1.20.1, so the patch could not be
+  resolved once the game's names were obfuscated. It now names the 1.20.1 method.
+- **Loads alongside Terrain Slabs again.** The bundled MixinExtras library was declared with a
+  version range that could not overlap the one Terrain Slabs asks for, so Forge refused to load the
+  two mods together. Slabbed now bundles MixinExtras 0.5.5 with a range that overlaps.
+
 ## [0.5.2-beta.1] - Minecraft 1.20.1 (Forge)
 
 **Slabbed's first Forge release!** The mod has lived on Fabric and NeoForge
