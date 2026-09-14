@@ -43,6 +43,7 @@ import net.minecraft.block.enums.SlabType;
 import net.minecraft.block.ShapeContext;
 import net.minecraft.entity.Entity;
 import net.minecraft.registry.Registries;
+import net.minecraft.server.world.ServerWorld;
 import net.minecraft.state.property.Properties;
 import net.minecraft.util.hit.BlockHitResult;
 import net.minecraft.util.math.BlockPos;
@@ -1181,6 +1182,13 @@ public final class SlabSupport {
             return 0.0;
         }
         if (state == null || state.isAir()) {
+            return 0.0;
+        }
+
+        // Background server queries must not touch chunk attachments or walk support geometry.
+        // The authoritative server thread resolves and synchronizes the visible value.
+        if (world instanceof ServerWorld serverWorld
+                && !serverWorld.getServer().isOnThread()) {
             return 0.0;
         }
         // A player-placed Terrain Slabs slab carries provenance and reads its stored height like any

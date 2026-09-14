@@ -313,6 +313,38 @@ public final class PlacementCaptureBoundaryGameTest {
         pass(h, "keep_existing_collision_guard_skips_policy_lookups_on_unsafe_workers");
     }
 
+    @GameTest(templateName = "fabric-gametest-api-v1:empty", batchId = "slabbed_background_shape_query_guard")
+    public void backgroundShapeQueryDoesNotWaitForServerThread(TestContext h) throws InterruptedException {
+        ServerWorld world = h.getWorld();
+        BlockPos unloadedPos = h.getAbsolutePos(new BlockPos(16_384, 64, 16_384));
+        var result = new java.util.concurrent.atomic.AtomicReference<Double>();
+        var error = new java.util.concurrent.atomic.AtomicReference<Throwable>();
+        var done = new java.util.concurrent.CountDownLatch(1);
+        Thread worker = new Thread(() -> {
+            try {
+                result.set(SlabSupport.getYOffset(world, unloadedPos, Blocks.STONE.getDefaultState()));
+            } catch (Throwable failure) {
+                error.set(failure);
+            } finally {
+                done.countDown();
+            }
+        }, "background-shape-query-test");
+        worker.setDaemon(true);
+        worker.start();
+
+        // Holding the server thread makes any synchronous chunk request fail deterministically.
+        if (!done.await(2, java.util.concurrent.TimeUnit.SECONDS)) {
+            h.throwGameTestException("BACKGROUND_SHAPE_QUERY_RED: offset lookup waited for the server thread");
+        }
+        if (error.get() != null) {
+            h.throwGameTestException("background shape query failed: " + error.get());
+        }
+        h.assertTrue(result.get() != null
+                        && Double.doubleToRawLongBits(result.get()) == Double.doubleToRawLongBits(0.0d),
+                "background shape query must stay flat until the authoritative server thread resolves it");
+        pass(h, "background_shape_query_does_not_wait_for_server_thread");
+    }
+
     @GameTest(templateName = "fabric-gametest-api-v1:empty")
     public void keepExistingRoutesOnlyPostDecisionPlacementsToFrozenHeight(TestContext h) {
         ServerWorld world = h.getWorld();
