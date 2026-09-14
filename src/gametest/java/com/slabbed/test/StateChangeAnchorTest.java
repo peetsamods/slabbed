@@ -66,6 +66,48 @@ public final class StateChangeAnchorTest {
         helper.succeed();
     }
 
+    /**
+     * A SLAB that changes kind in place keeps its height: a compat grass slab turning into its dirt
+     * slab when covered (the way vanilla grass turns to dirt) is the block STAYING with the same shape,
+     * not a new placement (LAW 1 corollary, maintainer ruling 2026-09-13). Live on 1.21.1 with Terrain
+     * Slabs: the converted slab popped up to grid height and sank into the block above. Vanilla stands
+     * in here: a lowered stone slab becomes an oak slab of the same shape.
+     *
+     * <p>MUTATION that must redden this row alone: drop the same-shape clause from
+     * {@code SlabAnchorAttachment.replacementPreservesAnchor}.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void inPlaceSlabKindChangeWithTheSameShapeKeepsAnchorAndDy(GameTestHelper helper) {
+        ServerLevel w = helper.getLevel();
+        BlockPos support = helper.absolutePos(new BlockPos(3, 2, 3));
+        BlockPos slab = support.above();
+        w.setBlock(support, bottomSlab(), Block.UPDATE_CLIENTS);
+        w.setBlock(slab, Blocks.STONE_SLAB.defaultBlockState().setValue(SlabBlock.TYPE, SlabType.BOTTOM), Block.UPDATE_CLIENTS);
+        // The slab's recorded seat, authored the way a placement leaves it; read with the store ON,
+        // the way the shipped jar reads (the test JVM defaults to the store OFF).
+        SlabAnchorAttachment.writePlacementDy(w, slab, -0.5d);
+        boolean previous = SlabAnchorAttachment.FROZEN_DY_ENABLED;
+        SlabAnchorAttachment.FROZEN_DY_ENABLED = true;
+        try {
+            double before = SlabSupport.getYOffset(w, slab, w.getBlockState(slab));
+            if (!Double.isFinite(SlabAnchorAttachment.storedPlacementDy(w, slab)) || Math.abs(before + 0.5d) > EPS) {
+                throw helper.assertionException("precondition: the lowered slab must carry its seat, dy=" + before);
+            }
+            // Stone slab -> oak slab: a block-KIND change at the SAME position with the SAME shape.
+            w.setBlock(slab, Blocks.OAK_SLAB.defaultBlockState().setValue(SlabBlock.TYPE, SlabType.BOTTOM), Block.UPDATE_ALL);
+            double stored = SlabAnchorAttachment.storedPlacementDy(w, slab);
+            double after = SlabSupport.getYOffset(w, slab, w.getBlockState(slab));
+            if (!Double.isFinite(stored) || Math.abs(after - before) > EPS) {
+                throw helper.assertionException("a slab that changes kind in place with the same shape must keep its height: before="
+                        + before + " after=" + after + " stored=" + stored
+                        + " — the converted slab pops up (the Terrain Slabs grass->dirt slab report)");
+            }
+        } finally {
+            SlabAnchorAttachment.FROZEN_DY_ENABLED = previous;
+        }
+        helper.succeed();
+    }
+
     @GameTest(structure = "fabric-gametest-api-v1:empty")
     public void inPlaceTransformKeepsFrozenFlat(GameTestHelper helper) {
         // 26.2 addition (audit D1 inverse case): FROZEN_FLAT must survive the same transform — the

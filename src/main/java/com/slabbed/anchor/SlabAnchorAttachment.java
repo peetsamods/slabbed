@@ -26,6 +26,10 @@ import net.minecraft.world.level.block.MossyCarpetBlock;
 import net.minecraft.world.level.block.SlabBlock;
 import net.minecraft.world.level.block.state.properties.SlabType;
 import net.minecraft.core.Direction;
+import net.minecraft.world.phys.shapes.VoxelShape;
+import net.minecraft.world.phys.shapes.Shapes;
+import net.minecraft.world.phys.shapes.BooleanOp;
+import net.minecraft.world.level.EmptyBlockGetter;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.world.level.block.state.properties.BlockStateProperties;
@@ -977,10 +981,36 @@ public final class SlabAnchorAttachment {
                 && oldState.getBlock() instanceof FlowerPotBlock
                 && newState.getBlock() instanceof FlowerPotBlock;
         return flowerPotStateTransition
+                || isSameShapeTransform(oldState, newState)
                 || isOrdinaryFullBlockAnchorCandidate(world, pos, newState)
                 || (newState.getBlock() instanceof EntityBlock
                         && !SlabSupport.isAlwaysCeilingHungDecoration(newState))
                 || isConnectingStructural(newState);
+    }
+
+    /**
+     * The occupant changed KIND but not SHAPE: a compat grass slab becoming its dirt slab when
+     * covered, a slab swapped for another slab of the same half. The thing the player placed is
+     * still there with the same geometry, so its height stays (LAW 1 corollary, maintainer ruling
+     * 2026-09-13; live on 1.21.1 with Terrain Slabs the converted slab popped to grid height).
+     * Judged on context-free shapes so the lowered-shape mixins cannot feed shifted geometry back
+     * in; a change of shape (slab to carpet, block to slab) is still a different thing and clears.
+     */
+    public static boolean isSameShapeTransform(BlockState oldState, BlockState newState) {
+        if (oldState == null || newState == null || oldState.isAir() || newState.isAir()
+                || !newState.getFluidState().isEmpty() || oldState.is(newState.getBlock())) {
+            return false;
+        }
+        VoxelShape before = oldState.getCollisionShape(EmptyBlockGetter.INSTANCE, BlockPos.ZERO);
+        VoxelShape after = newState.getCollisionShape(EmptyBlockGetter.INSTANCE, BlockPos.ZERO);
+        if (before.isEmpty() || after.isEmpty()) {
+            before = oldState.getShape(EmptyBlockGetter.INSTANCE, BlockPos.ZERO);
+            after = newState.getShape(EmptyBlockGetter.INSTANCE, BlockPos.ZERO);
+            if (before.isEmpty() || after.isEmpty()) {
+                return false;
+            }
+        }
+        return !Shapes.joinIsNotEmpty(before, after, BooleanOp.NOT_SAME);
     }
 
     /** Fence / wall / pane / gate — connecting blocks that must be height-locked like solids
