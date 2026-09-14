@@ -1,4 +1,6 @@
-## [Unreleased]
+## [0.5.2-alpha.13] - Minecraft 1.21.1 (NeoForge)
+
+Version note: alpha.13 is the next free number in the shared alpha series across all Slabbed lines.
 
 The NeoForge 1.21.1 hotfix line off the released `0.5.2-alpha.2` carries
 `0.5.2-alpha.5+1.21.1` (maintainer ruling, 2026-09-02). The label
