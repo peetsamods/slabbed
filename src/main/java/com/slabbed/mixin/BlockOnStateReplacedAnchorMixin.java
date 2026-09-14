@@ -4,8 +4,13 @@ import com.slabbed.anchor.SlabAnchorAttachment;
 import net.minecraft.block.AbstractBlock;
 import net.minecraft.block.BlockState;
 import net.minecraft.util.math.BlockPos;
+import net.minecraft.util.function.BooleanBiFunction;
+import net.minecraft.util.shape.VoxelShape;
+import net.minecraft.util.shape.VoxelShapes;
+import net.minecraft.world.EmptyBlockView;
 import net.minecraft.world.World;
 import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
@@ -41,6 +46,31 @@ public abstract class BlockOnStateReplacedAnchorMixin {
         if (oldState.isOf(newState.getBlock())) {
             return;
         }
+        // Different block, SAME shape: the placed thing is still there, transformed in place — a
+        // compat grass slab becoming its dirt slab when covered. Its height stays (LAW.md corollary,
+        // maintainer ruling 2026-09-13; live, the converted slab popped to grid height). A change of
+        // shape (slab to carpet, block to slab) is a different thing and still clears.
+        if (slabbed$sameShape(oldState, newState)) {
+            return;
+        }
         SlabAnchorAttachment.removeAnchor(world, pos);
+    }
+
+    /** Context-free shapes, so the lowered-shape mixins cannot feed shifted geometry back in. */
+    @Unique
+    private static boolean slabbed$sameShape(BlockState oldState, BlockState newState) {
+        if (oldState.isAir() || newState.isAir() || !newState.getFluidState().isEmpty()) {
+            return false;
+        }
+        VoxelShape before = oldState.getCollisionShape(EmptyBlockView.INSTANCE, BlockPos.ORIGIN);
+        VoxelShape after = newState.getCollisionShape(EmptyBlockView.INSTANCE, BlockPos.ORIGIN);
+        if (before.isEmpty() || after.isEmpty()) {
+            before = oldState.getOutlineShape(EmptyBlockView.INSTANCE, BlockPos.ORIGIN);
+            after = newState.getOutlineShape(EmptyBlockView.INSTANCE, BlockPos.ORIGIN);
+            if (before.isEmpty() || after.isEmpty()) {
+                return false;
+            }
+        }
+        return !VoxelShapes.matchesAnywhere(before, after, BooleanBiFunction.NOT_SAME);
     }
 }

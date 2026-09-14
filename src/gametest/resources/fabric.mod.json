@@ -27,6 +27,7 @@
       "com.slabbed.test.OffsetRaycastTargetingTest",
       "com.slabbed.test.ExtendedDepthEntityBehaviorTest",
       "com.slabbed.test.HangingSeatRememberedTest",
+      "com.slabbed.test.StateChangeAnchorTest",
       "com.slabbed.test.WallSignAboveSlabTest",
       "com.slabbed.test.ExtendedDepthShapeTest",
       "com.slabbed.test.ExtendedDepthPlacementTest",

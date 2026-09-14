@@ -132,7 +132,7 @@ before this line's behaviour work closes — see the note beneath the table.
 | `com/slabbed/mixin/ArmorStandItemOffsetPlacementMixin` | Places armor stands against the stored visible support plane while retaining vanilla item collision and entity-data handling. |
 | `com/slabbed/mixin/BlockItemPlacementIntentMixin` | Captures placement intent for the placement law. |
 | `com/slabbed/mixin/BlockOnPlacedAnchorMixin` | Writes the dy anchor on placement. |
-| `com/slabbed/mixin/BlockOnStateReplacedAnchorMixin` | Clears the dy anchor on state replacement. |
+| `com/slabbed/mixin/BlockOnStateReplacedAnchorMixin` | Clears the dy anchor on state replacement; a same-shape kind change keeps it. |
 | `com/slabbed/mixin/CarpetBlockMixin` | Carpet support and shape over a lowered slab. |
 | `com/slabbed/mixin/FencePaneSlabConnectionMixin` | Fence and pane connection against a lowered slab. |
 | `com/slabbed/mixin/HangingSignAttachedMixin` | Hanging-sign attachment from above. |
