@@ -61,6 +61,14 @@ public abstract class ServerInteractBlockHitToleranceMixin {
         }
 
         World world = player.getEntityWorld();
+        if (!slabbed$mayFinalizeSameCellMergeAt(world, pos)) {
+            // Vanilla's remaining server-side gates for a player-driven block change sit AFTER this
+            // injection point, and this merge writes a block itself. So it must answer the same
+            // questions vanilla would before any such write. Reach and hit tolerance already ran
+            // upstream, so they are not repeated here. Decline WITHOUT cancelling, leaving vanilla's
+            // own path to produce its normal refusal.
+            return;
+        }
         BlockState state = world.getBlockState(pos);
         BlockState mergedState = state.with(SlabBlock.TYPE, SlabType.DOUBLE);
         if (Boolean.getBoolean(REPEAT_SEAM_TRACE_OPT_IN)) {
@@ -264,6 +272,25 @@ public abstract class ServerInteractBlockHitToleranceMixin {
                 center,
                 legalLoweredSameCellMerge ? loweredSameCellSlabMergeCenter : center,
                 legalLoweredSameCellMerge ? "LOWERED_SAME_CELL_SLAB_MERGE" : "not_lowered_same_cell_merge");
+    }
+
+    /**
+     * The server-side gates this merge must satisfy on its own, because it writes a block from an
+     * injection point that sits ahead of vanilla's remaining checks. Fail closed: a null player or an
+     * unexpected state declines the merge.
+     *
+     * <p>Spectators may not modify the world. Adventure mode may forbid building. The position must
+     * lie inside the world. And the player must be allowed to modify THIS position, which is the
+     * check that carries spawn protection and the world border.
+     */
+    private boolean slabbed$mayFinalizeSameCellMergeAt(World world, BlockPos pos) {
+        return player != null
+                && world != null
+                && pos != null
+                && !player.isSpectator()
+                && player.canModifyBlocks()
+                && world.isInBuildLimit(pos)
+                && world.canPlayerModifyAt(player, pos);
     }
 
     private Vec3d slabbed$loweredSameCellSlabMergeValidationCenter(
