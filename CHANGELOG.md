@@ -4,8 +4,8 @@ See LAW.md — this changelog does not redefine the law.
 
 ### Platform
 
-- **Minecraft 26.3.** This line targets Minecraft 26.3 (built against pre-release 2 while the
-  release is pending) on Fabric, carrying every fix from the 26.2 `0.6.0` line. Build tooling moved to
+- **Minecraft 26.3.** This line targets the Minecraft 26.3 release on Fabric, carrying every fix
+  from the 26.2 `0.6.0` line. Build tooling moved to
   Fabric Loom 1.17 and Gradle 9.5; the mod still needs Java 25 like 26.2. The five chain-under-ceiling
   bridge models use 26.3's new `shade_direction_override` in place of the removed `shade` flag, so
   they look exactly as before. Sodium, Iris, Lithium and Terrain Slabs had no 26.3 builds when this
