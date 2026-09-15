@@ -47,11 +47,15 @@ See LAW.md — this changelog does not redefine the law.
   solid ground, the placement now seats on the real surface — aim is honored to the physical
   limit, never past it, and the stored height agrees with what you see (maintainer ruling,
   2026-09-02: the burial arbitration resolves to the real seat).
-- **Item frames hang where you see the block.** An item frame placed on a lowered block's
-  visible face hung at normal grid height, floating above (or beside) the surface it was
-  aimed at. Frames — glow frames included — now hang on the support's drawn face (maintainer
-  ruling, 2026-09-01). Under the hood only the frame's clickable box and its drawing move;
-  the frame's real position stays on the grid so support checks keep judging the right block.
+- **Item frames and paintings hang where you see the block, and remember it.** A frame or painting
+  placed on a lowered block's visible face hung at normal grid height, floating above (or beside) the
+  surface it was aimed at. Both now hang on the drawn face, and both remember the height of the face
+  they were hung on: it is decided once, when you hang them, saved with the world, and never re-read
+  from the wall. Rebuilding the wall behind a frame at a different height moves the wall, not the
+  frame (maintainer ruling, 2026-09-13: where you place it is where it stays applies to everything
+  hung on a wall). Frames and paintings from an older save take their height from their wall once, the
+  first time they load, and remember it from then on. Under the hood only the clickable box and the
+  drawing move; the real position stays on the grid so support checks keep judging the right block.
 - **Campfire smoke rises from the fire, not above it.** A lowered campfire's crackle, smoke
   column, and cooking smoke all spawned at normal grid height, hovering in the air above the
   visible fire. All three now emit from the campfire's drawn height (maintainer ruling,
