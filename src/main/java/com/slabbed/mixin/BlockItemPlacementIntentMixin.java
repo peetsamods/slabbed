@@ -331,9 +331,16 @@ public abstract class BlockItemPlacementIntentMixin {
         if (occupiedSingleSlabBecameDouble) {
             SlabAnchorAttachment.PlacementDyFact priorBacking = primarySnapshot.priorBacking();
             double priorDy = priorBacking.valueOrNaN();
-            rawBits = priorBacking.present() && Double.isFinite(priorDy)
-                    ? priorBacking.rawBits()
-                    : Double.doubleToRawLongBits(0.0d);
+            if (!priorBacking.present() || !Double.isFinite(priorDy)) {
+                // A legacy cell carries NO stored fact: its lowering is answered by the live lanes.
+                // Publishing 0.0 here would install a flat fact over that live answer, and because a
+                // stored fact outranks the live read the block would rise half a step and stay there
+                // for good. LAW 1 forbids that. Publish NOTHING and leave the cell factless, exactly
+                // as the declined reciprocal pair below does, so the live lane keeps answering.
+                frame.pending = new PendingCapture(Map.of());
+                return;
+            }
+            rawBits = priorBacking.rawBits();
         } else {
             // The landing decision: where the aim says this block goes. A frame with no root aim, or a
             // family the resolver does not own, keeps the explicit placement-time lane reading.
