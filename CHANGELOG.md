@@ -28,11 +28,17 @@
 - Campfire crackle, smoke column, and cooking smoke emit from the campfire's
   drawn height, joining torches, levers, and candles. A lowered campfire
   previously smoked and crackled from the air above itself.
-- Item frames and glow item frames hang on their support's drawn face
-  (maintainer ruling, 2026-09-01: hung decorations obey WYSIWYG). A frame
-  aimed at a lowered block's visible face previously hung a full block above
-  it. The frame's drawn position and its interaction surface move together;
-  paintings are not yet covered.
+- Item frames, glow item frames, and paintings hang on their support's drawn
+  face, and each one remembers the height it was hung at (maintainer ruling,
+  2026-09-13). A decoration aimed at a lowered block's visible face previously
+  hung a full block above it, and paintings were not covered at all. The
+  height is decided once, when the decoration is hung, saved with the world,
+  and never read back from the wall: rebuilding the wall behind a frame at a
+  different height moves the wall, not the frame. Frames and paintings from an
+  older save take their height from their wall once, the first time they load,
+  and keep it from then on. Only the clickable box and the drawing move; the
+  entity's real position stays on the grid, so support checks keep judging the
+  right block.
 
 ### Rendering fixes behind deep placements
 

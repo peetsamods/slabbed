@@ -20,6 +20,21 @@ its protection, apply every mutation, and record whether the resolver's answer
 actually moved. A law gate full of unreachable rows is worse than no gate,
 because it reads as proof (maintainer ruling, 2026-09-03).
 
+## Law 1 corollary — hung and wall-mounted things remember too (maintainer ruling, 2026-09-13)
+
+> **Where I place it is where it stays.** Absolute, for every Slabbed version. The moment of
+> placement is the only moment the surroundings are consulted; from then on the thing remembers.
+
+- A wall-mounted block (sign, banner, torch, hanging sign, lever, button) takes its seat from the
+  block it is MOUNTED ON at placement — never from the floor under its cell — and keeps it.
+- A hung decoration (item frame, glow frame, painting) is an entity with no block store, so it
+  carries its own remembered seat: minted once when it is hung, from the face it hangs on, synced
+  and saved with the entity. Rebuilding the wall behind it at another height changes the wall,
+  not the decoration. "Follows the support" is the same violation as Law 1 above.
+- Any lane that re-derives a height from neighbours on read is outside this law. Such a lane
+  exists only for worlds older than the placement record and is not a second definition of
+  correct behaviour.
+
 ## Law 2 — lowering eligibility is geometric
 
 Eligibility to lower an unplaced structural block comes from the intended placement

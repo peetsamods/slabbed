@@ -4,7 +4,9 @@
   "compatibilityLevel": "JAVA_21",
   "mixins": [
     "HangingSignAttachedMixin",
+    "HangingEntityRememberedSeatMixin",
     "ItemFrameWysiwygMixin",
+    "PaintingRememberedSeatMixin",
     "CandleParticleMixin",
     "CampfireParticleMixin",
     "CampfireCookingParticleMixin",

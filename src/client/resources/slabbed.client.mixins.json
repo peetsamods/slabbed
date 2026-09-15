@@ -8,6 +8,7 @@
     "CarpetDyShapeMixin",
     "GameRendererPickOffsetRaycastMixin",
     "ItemFrameDrawnFaceRenderMixin",
+    "PaintingDrawnFaceRenderMixin",
     "MinecartRenderOffsetMixin"
   ],
   "injectors": { "defaultRequire": 1 }
