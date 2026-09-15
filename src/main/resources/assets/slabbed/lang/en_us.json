@@ -1,12 +1,12 @@
 {
   "mod.slabbed.name": "Slabbed",
-  "slabbed.settings.title": "TODO(human)",
-  "slabbed.settings.pot_seat": "TODO(human)",
-  "slabbed.settings.pot_seat.flush": "TODO(human)",
-  "slabbed.settings.pot_seat.vanilla_float": "TODO(human)",
-  "slabbed.settings.pot_seat.flush.tooltip": "TODO(human)",
-  "slabbed.settings.pot_seat.vanilla_float.tooltip": "TODO(human) — must carry the server-decides sentence",
-  "key.category.slabbed.slabbed": "TODO(human)",
-  "key.slabbed.manual_dy_lower": "TODO(human)",
-  "key.slabbed.manual_dy_raise": "TODO(human)"
+  "slabbed.settings.title": "Slabbed Settings",
+  "slabbed.settings.pot_seat": "Flower pot height",
+  "slabbed.settings.pot_seat.flush": "Sit flush",
+  "slabbed.settings.pot_seat.vanilla_float": "Keep vanilla's gap",
+  "slabbed.settings.pot_seat.flush.tooltip": "Flower pots sit right on the surface you can see, with no gap. This only changes pots you place from now on.",
+  "slabbed.settings.pot_seat.vanilla_float.tooltip": "Flower pots keep the small gap vanilla leaves above the surface. This only changes pots you place from now on, and on a server it is the server's setting that decides.",
+  "key.category.slabbed.slabbed": "Slabbed",
+  "key.slabbed.manual_dy_lower": "Lower block height",
+  "key.slabbed.manual_dy_raise": "Raise block height"
 }
