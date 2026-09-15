@@ -2,6 +2,23 @@
 
 Player-facing changes for the Fabric 1.21.1 line. See LAW.md — this doc does not redefine the law.
 
+## [Unreleased] — Minecraft 1.21.1 (Fabric)
+
+See LAW.md — this changelog does not redefine the law.
+
+### Fixed
+
+- **Merging two slabs on an older build no longer lifts it.** Drop a second slab into a lowered slab
+  you built before this mod started remembering placement heights, and the merged block jumped up half
+  a step and stayed up. Its height was never written down, so it was being worked out from the blocks
+  around it; merging the slab wrote down a flat height instead and that stuck for good. Nothing is
+  written down now, so the block keeps answering the way it did before you touched it. Where you place
+  it is where it stays applies to blocks placed before the height store existed too (see LAW.md).
+- **Slab merging respects the same protections as placing a block.** Merging two slabs into one full
+  block skipped the server's own checks, so it could work inside a spawn-protected area, past the
+  world border, above or below the build limits, and in adventure mode. It now asks the same questions
+  the game asks before any other block you place, and refuses the same way.
+
 ## [0.5.2-alpha.14] — Minecraft 1.21.1 (Fabric) — 2026-09-14
 
 See LAW.md — this changelog does not redefine the law.
