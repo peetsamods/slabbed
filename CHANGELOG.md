@@ -1,4 +1,4 @@
-## [Unreleased]
+## [0.6.0-alpha.1+26.3] — MC 26.3 alpha
 
 See LAW.md — this changelog does not redefine the law.
 
