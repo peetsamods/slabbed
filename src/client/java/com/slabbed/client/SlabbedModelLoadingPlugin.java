@@ -18,6 +18,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.BiFunction;
 
 public final class SlabbedModelLoadingPlugin {
     private static final String MODEL_WRAPPER_PROOF_PROPERTY = "slabbed.neoforge.modelWrapperProof";
@@ -39,14 +40,14 @@ public final class SlabbedModelLoadingPlugin {
     private static void modifyBakingResult(ModelEvent.ModifyBakingResult event) {
         ChainCeilingGeometry.captureBakedModel(event.getModels());
         if (!Boolean.getBoolean(MODEL_WRAPPER_PROOF_PROPERTY)) {
-            event.getModels().replaceAll(SlabbedModelLoadingPlugin::wrapModel);
+            replaceModels(event.getModels(), SlabbedModelLoadingPlugin::wrapModel);
             return;
         }
 
         AtomicInteger total = new AtomicInteger();
         AtomicInteger wrapped = new AtomicInteger();
         AtomicInteger skipped = new AtomicInteger();
-        event.getModels().replaceAll((id, model) -> {
+        replaceModels(event.getModels(), (id, model) -> {
             total.incrementAndGet();
             BakedModel wrappedModel = wrapModel(id, model);
             if (wrappedModel == model) {
@@ -61,6 +62,21 @@ public final class SlabbedModelLoadingPlugin {
                 total.get(),
                 wrapped.get(),
                 skipped.get());
+    }
+
+    static void replaceModels(
+            Map<ModelResourceLocation, BakedModel> models,
+            BiFunction<ModelResourceLocation, BakedModel, BakedModel> replacement
+    ) {
+        // Resolve actual values: lazy registries may probe bulk callbacks with null and
+        // mistake a null-safe result for an instruction to skip the real model.
+        for (Map.Entry<ModelResourceLocation, BakedModel> entry : models.entrySet()) {
+            BakedModel original = entry.getValue();
+            BakedModel updated = replacement.apply(entry.getKey(), original);
+            if (updated != original) {
+                entry.setValue(updated);
+            }
+        }
     }
 
     static BakedModel wrapModel(ModelResourceLocation id, BakedModel model) {

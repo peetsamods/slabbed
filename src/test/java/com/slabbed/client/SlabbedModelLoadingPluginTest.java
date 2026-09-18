@@ -2,6 +2,8 @@ package com.slabbed.client;
 
 import com.slabbed.client.model.OffsetBlockStateModel;
 import java.util.List;
+import java.util.HashMap;
+import java.util.function.BiFunction;
 import java.util.function.Predicate;
 import net.fabricmc.fabric.api.renderer.v1.model.FabricBakedModel;
 import net.minecraft.client.renderer.RenderType;
@@ -81,6 +83,37 @@ final class SlabbedModelLoadingPluginTest {
         assertSame(failingExternalEmitter,
                 SlabbedModelLoadingPlugin.wrapModel(worldId, failingExternalEmitter),
                 "a failed external-emitter query must preserve renderer ownership");
+    }
+
+    @Test
+    void registryNullProbeDoesNotSuppressOrdinaryBlockWrapping() {
+        ModelResourceLocation blockId = ModelResourceLocation.vanilla("stone", "normal");
+        ModelResourceLocation itemId = ModelResourceLocation.inventory(
+                ResourceLocation.withDefaultNamespace("stone"));
+        BakedModel block = new StubBakedModel(false);
+        BakedModel item = new StubBakedModel(false);
+        NullProbingRegistry models = new NullProbingRegistry();
+        models.put(blockId, block);
+        models.put(itemId, item);
+
+        SlabbedModelLoadingPlugin.replaceModels(models, SlabbedModelLoadingPlugin::wrapModel);
+
+        assertInstanceOf(OffsetBlockStateModel.class, models.get(blockId),
+                "a registry's null probe must not suppress the real block model's offset owner");
+        assertSame(item, models.get(itemId), "inventory model identity remains unchanged");
+    }
+
+    private static final class NullProbingRegistry
+            extends HashMap<ModelResourceLocation, BakedModel> {
+        @Override
+        public void replaceAll(BiFunction<? super ModelResourceLocation,
+                ? super BakedModel, ? extends BakedModel> replacement) {
+            for (var entry : entrySet()) {
+                if (replacement.apply(entry.getKey(), null) != null) {
+                    entry.setValue(replacement.apply(entry.getKey(), entry.getValue()));
+                }
+            }
+        }
     }
 
     private static WeightedBakedModel weightedComposite() {
