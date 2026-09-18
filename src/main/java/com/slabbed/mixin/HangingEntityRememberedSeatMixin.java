@@ -10,10 +10,12 @@ import net.minecraft.entity.data.TrackedDataHandlerRegistry;
 import net.minecraft.entity.decoration.AbstractDecorationEntity;
 import net.minecraft.entity.decoration.BlockAttachedEntity;
 import net.minecraft.server.world.ServerWorld;
+import net.minecraft.storage.ReadView;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Box;
 import net.minecraft.util.math.Direction;
 import net.minecraft.world.World;
+import net.minecraft.world.chunk.WorldChunk;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.Unique;
@@ -39,8 +41,8 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
  * at its TAIL and fires exactly once per layout for frames (whose override calls into this one) and
  * paintings alike.
  *
- * <p>A decoration saved before this seat existed carries no number; its first server layout mints
- * one from the wall it hangs on today. That is a one-time migration, not a re-derivation.
+ * <p>A decoration saved before this seat existed carries no number; its first server tick with
+ * available chunks mints one from its wall. That is a one-time migration, not a re-derivation.
  */
 @Mixin(AbstractDecorationEntity.class)
 public abstract class HangingEntityRememberedSeatMixin extends BlockAttachedEntity implements HangingSeatDyHolder {
@@ -52,6 +54,9 @@ public abstract class HangingEntityRememberedSeatMixin extends BlockAttachedEnti
 
     @Unique
     private static final long SLABBED$UNSET = Double.doubleToRawLongBits(Double.NaN);
+
+    @Unique
+    private boolean slabbed$readingData;
 
     protected HangingEntityRememberedSeatMixin(EntityType<? extends BlockAttachedEntity> type, World world) {
         super(type, world);
@@ -87,25 +92,57 @@ public abstract class HangingEntityRememberedSeatMixin extends BlockAttachedEnti
     /**
      * The ONE derivation, at the moment the decoration learns which way it faces: both the item's
      * hang path and the load path set the raw direction with the position already known, and the
-     * box is laid out right after. Server thread only (a hang from any other thread would answer
-     * through the server and could wait on it); support loaded (an unloaded support answers
-     * nothing, not "flush"). A saved seat restored by the per-class read hook wins over this mint.
+     * box is laid out right after. Server thread only, with both decoration and support chunks available:
+     * entity loading must never wait on the chunk whose loading it is completing. An unfinished
+     * support defers the mint to a later tick, not to a guessed "flush" seat. A saved seat restored
+     * by the per-class read hook wins over this mint.
      */
     @Inject(method = "setFacingInternal(Lnet/minecraft/util/math/Direction;)V", at = @At("TAIL"))
     private void slabbed$mintSeatOnDirection(CallbackInfo ci) {
-        if (this.slabbed$hasHangSeat() || this.getAttachedBlockPos() == null || this.getHorizontalFacing() == null) {
-            return;
+        this.slabbed$tryMintHangSeat();
+    }
+
+    /** NBT loading may run inside chunk promotion; only restore saved seats until it finishes. */
+    @Override
+    public void readData(ReadView input) {
+        this.slabbed$readingData = true;
+        try {
+            super.readData(input);
+        } finally {
+            this.slabbed$readingData = false;
+        }
+    }
+
+    @Override
+    public void tick() {
+        if (this.slabbed$tryMintHangSeat()) {
+            this.updateAttachmentPosition();
+        }
+        super.tick();
+    }
+
+    @Unique
+    private boolean slabbed$tryMintHangSeat() {
+        if (this.slabbed$readingData || this.slabbed$hasHangSeat()
+                || this.getAttachedBlockPos() == null || this.getHorizontalFacing() == null) {
+            return false;
         }
         if (!(this.getEntityWorld() instanceof ServerWorld world) || !world.getServer().isOnThread()) {
-            return;
+            return false;
         }
-        BlockPos supportPos = this.getAttachedBlockPos().offset(this.getHorizontalFacing().getOpposite());
-        if (!world.isPosLoaded(supportPos)) {
-            return;
+        BlockPos attachedPos = this.getAttachedBlockPos();
+        if (world.getChunkManager().getWorldChunk(attachedPos.getX() >> 4, attachedPos.getZ() >> 4) == null) {
+            return false;
         }
-        BlockState support = world.getBlockState(supportPos);
+        BlockPos supportPos = attachedPos.offset(this.getHorizontalFacing().getOpposite());
+        WorldChunk supportChunk = world.getChunkManager().getWorldChunk(supportPos.getX() >> 4, supportPos.getZ() >> 4);
+        if (supportChunk == null) {
+            return false;
+        }
+        BlockState support = supportChunk.getBlockState(supportPos);
         double dy = SlabSupport.getYOffset(world, supportPos, support);
         this.slabbed$restoreHangSeatDy(Double.isFinite(dy) ? dy : 0.0d);
+        return true;
     }
 
     /** Apply the remembered seat to the freshly laid-out box; the position set just before stays on the grid. */
