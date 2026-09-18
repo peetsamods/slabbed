@@ -11,6 +11,7 @@
     {"path": "com/slabbed/test/DySpecificationTest.java", "classification": "registered_server"},
     {"path": "com/slabbed/test/HangingSeatRememberedTest.java", "classification": "registered_server"},
     {"path": "com/slabbed/test/ItemFrameWysiwygBoxTest.java", "classification": "registered_server"},
+    {"path": "com/slabbed/test/Issue34PonderRenderViewProof.java", "classification": "registered_server"},
     {"path": "com/slabbed/test/LegacySupportSeatResolutionTest.java", "classification": "registered_server"},
     {"path": "com/slabbed/test/Mc1211GoblinRouteCanaryGameTest.java", "classification": "registered_server"},
     {"path": "com/slabbed/test/Mc1211GoblinRouteClientEntrypoint.java", "classification": "client_only"},

@@ -313,6 +313,7 @@ public final class SlabSupport {
     public static boolean isVerticalChainDirectlyUnderCeilingSupport(BlockGetter world, BlockPos pos, BlockState state) {
         return world != null
                 && pos != null
+                && !CompatHooks.shouldSkipOffsetView(world)
                 && isBeta35VerticalChainVisibleOwnerObject(state)
                 && isCeilingSupportBottomSurface(world, pos.above());
     }
@@ -370,7 +371,8 @@ public final class SlabSupport {
     }
 
     public static boolean isCeilingBridgedVerticalChainColumnMember(BlockGetter world, BlockPos pos, BlockState state) {
-        if (world == null || pos == null || !isBeta35VerticalChainVisibleOwnerObject(state)) {
+        if (world == null || pos == null || CompatHooks.shouldSkipOffsetView(world)
+                || !isBeta35VerticalChainVisibleOwnerObject(state)) {
             return false;
         }
         BlockPos cursor = pos;
@@ -2343,7 +2345,7 @@ public final class SlabSupport {
             BlockState state,
             boolean consultStoredHeight
     ) {
-        if (world == null || pos == null) {
+        if (world == null || pos == null || CompatHooks.shouldSkipOffsetView(world)) {
             return 0.0;
         }
         if (state == null || state.isAir()) {
@@ -2769,7 +2771,8 @@ public final class SlabSupport {
      * predicate conservatively leaves vanilla culling unchanged.
      */
     public static boolean isSlabHeightStepFace(BlockGetter world, BlockPos pos, BlockState state, Direction direction) {
-        if (STEP_CULL_DISABLED || world == null || pos == null || state == null || direction == null) {
+        if (STEP_CULL_DISABLED || world == null || pos == null || state == null || direction == null
+                || CompatHooks.shouldSkipOffsetView(world)) {
             return false;
         }
         if (!direction.getAxis().isHorizontal()) {

@@ -55,6 +55,7 @@ com/slabbed/client/model/OffsetBlockStateModel.class
 com/slabbed/compat/
 com/slabbed/compat/CompatSlabSurfaceKind.class
 com/slabbed/compat/CompatHooks.class
+com/slabbed/compat/CompatHooks$1.class
 com/slabbed/compat/terrainslabs/
 com/slabbed/compat/terrainslabs/TerrainSlabsCompat$1.class
 com/slabbed/compat/terrainslabs/TerrainSlabsCompat.class

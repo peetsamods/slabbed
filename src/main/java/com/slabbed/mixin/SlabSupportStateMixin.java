@@ -321,6 +321,10 @@ public abstract class SlabSupportStateMixin {
             at = @At("RETURN"), cancellable = true)
     private void slabbed$offsetRaycast(BlockGetter world, BlockPos pos,
                                        CallbackInfoReturnable<VoxelShape> cir) {
+        if (CompatHooks.shouldSkipOffsetView(world)) {
+            return;
+        }
+
         BlockState self = (BlockState) (Object) this;
         VoxelShape shape = cir.getReturnValue();
         if (slabbed$isTopHalfTrapdoor(self) && (shape == null || shape.isEmpty())) {
@@ -467,6 +471,10 @@ public abstract class SlabSupportStateMixin {
             at = @At("RETURN"), cancellable = true)
     private void slabbed$offsetOutline(BlockGetter world, BlockPos pos, CollisionContext ctx,
                                        CallbackInfoReturnable<VoxelShape> cir) {
+        if (CompatHooks.shouldSkipOffsetView(world)) {
+            return;
+        }
+
         // Server-side background shape queries must never enter offset resolution: that path reads
         // chunk attachments and support state, which may synchronously request a server-owned chunk.
         // Keep the legacy named-worker fallback for non-server worlds whose owner is unavailable.

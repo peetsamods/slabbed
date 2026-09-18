@@ -121,6 +121,7 @@ sourceSets {
                     "com/slabbed/test/ChainColumnLoweredCapCoherenceTest.java",
                     "com/slabbed/test/ChainUnderLoweredFullBlockCapTest.java",
                     "com/slabbed/test/ChainSurvivalReproTest.java",
+                    "com/slabbed/test/Issue34PonderRenderViewProof.java",
                     "com/slabbed/test/CombinedSlabChainingMatrixTest.java",
                     "com/slabbed/test/DeepDyConsentTest.java",
                     "com/slabbed/test/DySpecificationTest.java",

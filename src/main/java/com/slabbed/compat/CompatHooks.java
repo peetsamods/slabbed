@@ -10,6 +10,25 @@ import net.minecraft.world.level.block.state.BlockState;
  * unreachable when their target mod is not present.
  */
 public final class CompatHooks {
+    private static final String PONDER_LEVEL_CLASS_NAME =
+            "net.createmod.ponder.api.level.PonderLevel";
+    private static final ClassValue<Boolean> PONDER_RENDER_VIEW = new ClassValue<>() {
+        @Override
+        protected Boolean computeValue(Class<?> type) {
+            for (Class<?> cursor = type; cursor != null; cursor = cursor.getSuperclass()) {
+                if (PONDER_LEVEL_CLASS_NAME.equals(cursor.getName())) {
+                    return true;
+                }
+            }
+            return false;
+        }
+    };
+
+    /** Ponder owns its tutorial geometry; live-world height policy must not query its chunks. */
+    public static boolean shouldSkipOffsetView(Object view) {
+        return view != null && PONDER_RENDER_VIEW.get(view.getClass());
+    }
+
     private CompatHooks() {
     }
 
