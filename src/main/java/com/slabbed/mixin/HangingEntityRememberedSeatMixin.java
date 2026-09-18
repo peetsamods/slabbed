@@ -41,8 +41,9 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
  * at its TAIL and fires exactly once per layout for frames (whose override calls into this one) and
  * paintings alike.
  *
- * <p>A decoration saved before this seat existed carries no number; its first server tick with
- * available chunks mints one from its wall. That is a one-time migration, not a re-derivation.
+ * <p>A decoration saved before this seat existed carries no number; after its data is restored,
+ * available chunks allow a mint from its wall, otherwise a later tick retries. That is a one-time
+ * migration, not a re-derivation.
  */
 @Mixin(AbstractDecorationEntity.class)
 public abstract class HangingEntityRememberedSeatMixin extends BlockAttachedEntity implements HangingSeatDyHolder {
@@ -110,6 +111,13 @@ public abstract class HangingEntityRememberedSeatMixin extends BlockAttachedEnti
             super.readData(input);
         } finally {
             this.slabbed$readingData = false;
+        }
+        // The restored variant can put a painting's center in a different chunk from its attachment.
+        BlockPos entityPos = this.getBlockPos();
+        if (this.getEntityWorld() instanceof ServerWorld world && world.getServer().isOnThread()
+                && world.getChunkManager().getWorldChunk(entityPos.getX() >> 4, entityPos.getZ() >> 4) != null
+                && this.slabbed$tryMintHangSeat()) {
+            this.updateAttachmentPosition();
         }
     }
 
