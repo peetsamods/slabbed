@@ -63,7 +63,8 @@
       "com.slabbed.test.TerrainOwnedOnTopConsistencySuite",
       "com.slabbed.client.BetaNoticeSuite",
       "com.slabbed.test.NormalDepthContractTest",
-      "com.slabbed.test.StateChangeAnchorTest"
+      "com.slabbed.test.StateChangeAnchorTest",
+      "com.slabbed.test.HangingLoadDeferralTest"
     ],
     "fabric-client-gametest": [
       "com.slabbed.test.CandleExtinguishParticleClientGameTest",
@@ -75,7 +76,8 @@
     ]
   },
   "mixins": [
-    "slabbed-lever-particle-test.mixins.json"
+    "slabbed-lever-particle-test.mixins.json",
+    "slabbed-pending-hang-test.mixins.json"
   ],
   "depends": {
     "fabricloader": ">=0.18.1",
