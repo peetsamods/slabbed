@@ -9,7 +9,7 @@ import net.minecraft.util.math.ChunkSectionPos;
  * cache region, while a burst across sections must be spread across client ticks.
  */
 public final class DependentRemeshQueue {
-    /** One ordinary dependent region can intersect at most twelve sections. */
+    /** Maximum number of dependent sections refreshed during one client tick. */
     public static final int MAX_SECTION_REBUILDS_PER_TICK = 12;
 
     /** Slabbed rebuilds are caused by a visible player-side change and must not enter a deferred lane. */

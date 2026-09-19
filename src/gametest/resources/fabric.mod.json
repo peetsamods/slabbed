@@ -67,6 +67,7 @@
       "com.slabbed.test.HangingLoadDeferralTest"
     ],
     "fabric-client-gametest": [
+      "com.slabbed.test.LegacySlabRemeshClientGameTest",
       "com.slabbed.test.CandleExtinguishParticleClientGameTest",
       "com.slabbed.test.OffsetRaycastClientGameTest",
       "com.slabbed.test.BsFbUpperFacePerpendicularPlacementClientGameTest",
