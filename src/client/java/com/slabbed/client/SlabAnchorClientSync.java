@@ -288,7 +288,10 @@ public final class SlabAnchorClientSync {
             BlockPos pos = mutable.toImmutable();
             BlockState current = mc.world.getBlockState(pos);
             if (current != null) {
-                mc.worldRenderer.scheduleBlockRerenderIfNeeded(pos, current, current);
+                // Height attachments can change without changing the vanilla block state.
+                // The model-equality shortcut would discard this redraw.
+                mc.worldRenderer.scheduleBlockRenders(pos.getX(), pos.getY(), pos.getZ(),
+                        pos.getX(), pos.getY(), pos.getZ());
             }
         }
     }
@@ -352,7 +355,9 @@ public final class SlabAnchorClientSync {
                 if (SlabAnchorAttachment.isCompoundVisibleAttachmentType(attachmentType)) {
                     scheduleCompoundVisibleRenderRefresh(mc, rerenderPos, current, attachmentType);
                 } else {
-                    mc.worldRenderer.scheduleBlockRerenderIfNeeded(rerenderPos, current, current);
+                    mc.worldRenderer.scheduleBlockRenders(
+                            rerenderPos.getX(), rerenderPos.getY(), rerenderPos.getZ(),
+                            rerenderPos.getX(), rerenderPos.getY(), rerenderPos.getZ());
                 }
             }
         }
