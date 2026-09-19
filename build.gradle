@@ -73,6 +73,27 @@ loom {
             source sourceSets.gametest
             runDir "build/run/depth-client-probe"
         }
+        attachmentClientProbe {
+            client()
+            name = "Slabbed Attachment Render Probe"
+            source sourceSets.gametest
+            runDir "build/run/attachment-client-probe"
+            property "slabbed.attachmentRemeshProbe", "true"
+        }
+    }
+}
+
+// A native client can exit normally after reporting a failed assertion. Require the
+// positive completion marker from this invocation so a stopped client cannot pass.
+tasks.named("runAttachmentClientProbe").configure {
+    long startedAt = 0L
+    doFirst { startedAt = System.currentTimeMillis() }
+    doLast {
+        File log = file("build/run/attachment-client-probe/logs/latest.log")
+        if (!log.exists() || log.lastModified() < startedAt
+                || !log.text.contains("[ATTACHMENT_REMESH] GREEN mesh refreshed after attachment with unchanged block state")) {
+            throw new GradleException("Attachment render probe did not report a fresh passing result.")
+        }
     }
 }
 

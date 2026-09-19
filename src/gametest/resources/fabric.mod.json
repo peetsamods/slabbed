@@ -16,6 +16,7 @@
       "com.slabbed.test.TerrainSlabsTestShim"
     ],
     "client": [
+      "com.slabbed.test.AttachmentRemeshProbe",
       "com.slabbed.test.ExtendedDepthClientProbe",
       "com.slabbed.test.Mc1211GoblinRouteClientEntrypoint",
       "com.slabbed.test.KeepOnlyReopenProbe"

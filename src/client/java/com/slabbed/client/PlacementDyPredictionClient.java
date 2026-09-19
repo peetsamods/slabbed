@@ -98,7 +98,9 @@ public final class PlacementDyPredictionClient {
         }
         var state = mc.world.getBlockState(pos);
         if (state != null) {
-            mc.worldRenderer.scheduleBlockRerenderIfNeeded(pos, state, state);
+            // Retiring a prediction changes geometry even when the block state is identical.
+            mc.worldRenderer.scheduleBlockRenders(pos.getX(), pos.getY(), pos.getZ(),
+                    pos.getX(), pos.getY(), pos.getZ());
         }
     }
 }
