@@ -6,6 +6,27 @@ latest file, see [Modrinth](https://modrinth.com/mod/slabbed) or
 [CurseForge](https://www.curseforge.com/minecraft/mc-mods/slabbed).
 See LAW.md — this doc does not redefine the law.
 
+## [0.5.2-alpha.18] — 1.21.11 (Fabric) — 2026-09-19
+
+### Fixed
+
+- Older connected slab structures now redraw correctly after their support changes, including
+  across chunk boundaries. Distant slabs could previously retain an outdated rendered height.
+- Rendering updates follow connected slabs and occupied neighboring columns. Exact cache coverage
+  is retained while combining section rebuilds, avoiding unnecessary refreshes through empty space.
+
+Saved placement heights are unchanged. This addresses the reproduced stale-height case investigated
+in [#80](https://github.com/peetsamods/slabbed/issues/80); that report remains open for its remaining
+missing-face behavior.
+
+## [0.5.2-alpha.16] — 1.21.11 (Fabric) — 2026-09-18
+
+### Fixed
+
+- Restoring saved item frames and paintings no longer waits synchronously for unavailable chunks,
+  avoiding the hanging-entity loading stall with C2ME reported in
+  [#82](https://github.com/peetsamods/slabbed/issues/82).
+
 ## [0.5.2-alpha.12] — 1.21.11 (Fabric) — 2026-09-14
 
 Version note: alpha.12 is the next free number in the shared alpha series across all Slabbed lines.
