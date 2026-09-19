@@ -6,6 +6,16 @@ latest file, see [Modrinth](https://modrinth.com/mod/slabbed) or
 [CurseForge](https://www.curseforge.com/minecraft/mc-mods/slabbed).
 See LAW.md — this doc does not redefine the law.
 
+## [0.5.2-alpha.19] — 1.21.11 (Fabric) — 2026-09-19
+
+### Fixed
+
+- Lowered stairs and other partial block shapes keep their exposed side faces beside blocks
+  at a different height, fixing see-through gaps such as those reported in
+  [#3](https://github.com/peetsamods/slabbed/issues/3).
+- The correction works with the standard Fabric renderer and Sodium. Blocks at equal heights
+  retain normal face culling, and placed blocks keep their saved positions.
+
 ## [0.5.2-alpha.18] — 1.21.11 (Fabric) — 2026-09-19
 
 ### Fixed
