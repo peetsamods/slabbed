@@ -46,29 +46,7 @@ public abstract class SlabbedDependentRerenderMixin {
         if (!slabbed$affectsLoweredDependents(world, pos, old, updated)) {
             return;
         }
-        // Bounded dependent region: a small horizontal margin and the column up to
-        // MAX_CHAIN_DEPTH above pos (stacked/column dependents). The horizontal margin
-        // is 2 (not 1): adjacent-side-slab lowering propagates HORIZONTALLY through a
-        // chain of slabs, and a TS+VS surface combined against a block+slab leaves a
-        // dependent two cells away (often in a different chunk section) with a stale
-        // baked mesh — the "ghost" full block that only fills in on a later edit. Two
-        // cells covers that immediate propagation while keeping the AABB small (it still
-        // snaps to section granularity, so this only adds sections near a boundary —
-        // exactly the ghost case). Render-only and strictly additive: it only schedules
-        // extra rerenders and refreshes more visual-cache cells; it never removes faces
-        // or changes any dy.
-        int minX = pos.getX() - 2;
-        int maxX = pos.getX() + 2;
-        int minZ = pos.getZ() - 2;
-        int maxZ = pos.getZ() + 2;
-        // SYMMETRIC in Y. The upward span covers blocks stacked ON a lowered support. The
-        // DOWNWARD span is not 1: a ceiling-attached run (a chain column, and whatever hangs from
-        // it) resolves its height from the cap at the TOP of the run, so up to MAX_CHAIN_DEPTH
-        // cells BELOW this one depend on it. With a 1-cell margin only the first link refreshed
-        // and the rest of the run kept a baked mesh at the old height. Strictly additive, as above.
-        int minY = pos.getY() - SlabSupport.chainRerenderDepth();
-        int maxY = pos.getY() + SlabSupport.chainRerenderDepth();
-        SlabDependentRemeshScheduler.enqueue(world, minX, minY, minZ, maxX, maxY, maxZ);
+        SlabDependentRemeshScheduler.enqueueDependents(world, pos);
     }
 
     private static boolean slabbed$affectsLoweredDependents(ClientWorld world, BlockPos pos, BlockState old, BlockState updated) {

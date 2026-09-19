@@ -58,6 +58,7 @@
             "com.slabbed.test.NeighborUpdateInvarianceTest",
       "com.slabbed.test.CeilingRoleNotClassnameTest",
       "com.slabbed.test.DependentRemeshQueueTest",
+      "com.slabbed.test.DependentSlabRemeshRegionsTest",
       "com.slabbed.test.ScaffoldingColumnPlacementSuite",
       "com.slabbed.test.ReplaceableCellPlacementSuite",
       "com.slabbed.test.TerrainOwnedOnTopConsistencySuite",
@@ -67,6 +68,7 @@
       "com.slabbed.test.HangingLoadDeferralTest"
     ],
     "fabric-client-gametest": [
+      "com.slabbed.test.LegacySlabRemeshClientGameTest",
       "com.slabbed.test.CandleExtinguishParticleClientGameTest",
       "com.slabbed.test.OffsetRaycastClientGameTest",
       "com.slabbed.test.BsFbUpperFacePerpendicularPlacementClientGameTest",

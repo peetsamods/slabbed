@@ -2,6 +2,8 @@ package com.slabbed.util;
 
 import it.unimi.dsi.fastutil.longs.Long2ObjectLinkedOpenHashMap;
 import net.minecraft.util.math.ChunkSectionPos;
+import java.util.BitSet;
+import java.util.function.Consumer;
 
 /**
  * Coalesces Slabbed-dependent block regions by chunk section and exposes a fixed drain budget.
@@ -9,14 +11,14 @@ import net.minecraft.util.math.ChunkSectionPos;
  * cache region, while a burst across sections must be spread across client ticks.
  */
 public final class DependentRemeshQueue {
-    /** One ordinary dependent region can intersect at most twelve sections. */
+    /** Maximum number of dependent sections refreshed during one client tick. */
     public static final int MAX_SECTION_REBUILDS_PER_TICK = 12;
 
     /** Slabbed rebuilds are caused by a visible player-side change and must not enter a deferred lane. */
     public static final boolean REQUEST_IMPORTANT_REBUILD = true;
 
     private final int perTickBudget;
-    private final Long2ObjectLinkedOpenHashMap<BlockRegion> pending = new Long2ObjectLinkedOpenHashMap<>();
+    private final Long2ObjectLinkedOpenHashMap<SectionRegion> pending = new Long2ObjectLinkedOpenHashMap<>();
 
     public DependentRemeshQueue(int perTickBudget) {
         if (perTickBudget <= 0) {
@@ -48,8 +50,9 @@ public final class DependentRemeshQueue {
                             normalizedMaxX, normalizedMaxY, normalizedMaxZ,
                             sectionX, sectionY, sectionZ);
                     long key = ChunkSectionPos.asLong(sectionX, sectionY, sectionZ);
-                    BlockRegion existing = pending.get(key);
-                    pending.put(key, existing == null ? clipped : existing.union(clipped));
+                    SectionRegion existing = pending.get(key);
+                    if (existing == null) pending.put(key, new SectionRegion(clipped));
+                    else existing.add(clipped);
                 }
             }
         }
@@ -59,7 +62,7 @@ public final class DependentRemeshQueue {
         int processed = 0;
         while (processed < perTickBudget && !pending.isEmpty()) {
             long section = pending.firstLongKey();
-            BlockRegion region = pending.remove(section);
+            SectionRegion region = pending.remove(section);
             consumer.accept(
                     ChunkSectionPos.unpackX(section),
                     ChunkSectionPos.unpackY(section),
@@ -110,8 +113,51 @@ public final class DependentRemeshQueue {
         }
     }
 
+    /** Exact cache coverage within one section; sparse unions do not fill unrelated cells. */
+    public static final class SectionRegion {
+        private BlockRegion bounds;
+        private final BitSet cells = new BitSet(4096);
+
+        private SectionRegion(BlockRegion initial) {
+            bounds = initial;
+            add(initial);
+        }
+
+        private void add(BlockRegion region) {
+            bounds = bounds.union(region);
+            for (int y = region.minY(); y <= region.maxY(); y++) {
+                for (int z = region.minZ(); z <= region.maxZ(); z++) {
+                    int first = ((y & 15) << 8) | ((z & 15) << 4) | (region.minX() & 15);
+                    cells.set(first, first + region.maxX() - region.minX() + 1);
+                }
+            }
+        }
+
+        public BlockRegion bounds() { return bounds; }
+
+        public void forEachRegion(Consumer<BlockRegion> consumer) {
+            int volume = (bounds.maxX() - bounds.minX() + 1) * (bounds.maxY() - bounds.minY() + 1)
+                    * (bounds.maxZ() - bounds.minZ() + 1);
+            if (cells.cardinality() == volume) {
+                consumer.accept(bounds);
+                return;
+            }
+            int baseX = bounds.minX() & ~15;
+            int baseY = bounds.minY() & ~15;
+            int baseZ = bounds.minZ() & ~15;
+            for (int first = cells.nextSetBit(0); first >= 0;) {
+                int end = Math.min(cells.nextClearBit(first), (first | 15) + 1);
+                int y = baseY + (first >> 8);
+                int z = baseZ + ((first >> 4) & 15);
+                consumer.accept(new BlockRegion(baseX + (first & 15), y, z,
+                        baseX + ((end - 1) & 15), y, z));
+                first = cells.nextSetBit(end);
+            }
+        }
+    }
+
     @FunctionalInterface
     public interface SectionConsumer {
-        void accept(int sectionX, int sectionY, int sectionZ, BlockRegion region);
+        void accept(int sectionX, int sectionY, int sectionZ, SectionRegion region);
     }
 }
