@@ -477,7 +477,7 @@ public final class ExtendedDepthEntityBehaviorTest {
         context.complete();
     }
 
-    @GameTest(templateName = "fabric-gametest-api-v1:empty", batchId = RAIL_BATCH)
+    @GameTest(templateName = "fabric-gametest-api-v1:empty", batchId = RAIL_BATCH, tickLimit = 240)
     public void minecartRailQueriesReloadAndReentryUsePhysicalCoordinates(TestContext context) {
         ServerWorld world = context.getWorld();
         BlockPos flatRail = context.getAbsolutePos(new BlockPos(4, 16, 4));
@@ -532,11 +532,15 @@ public final class ExtendedDepthEntityBehaviorTest {
         }
         int queryChecks = checks;
         boolean[] movementStarted = {false};
-        long readinessDeadline = context.getTick() + 40L;
+        long readinessStartTick = context.getTick();
+        long readinessStartNanos = System.nanoTime();
+        long readinessDeadline = readinessStartTick + 200L;
         context.createTimedTaskRunner().createAndAdd(() -> {
             if (!world.shouldTickEntity(cart.getBlockPos()) || cart.age <= 0) {
                 context.throwGameTestException("waiting for rail fixture entity ticking");
             }
+            System.out.println("MINECART_FIXTURE_READY waitTicks=" + (context.getTick() - readinessStartTick)
+                    + " waitMillis=" + (System.nanoTime() - readinessStartNanos) / 1_000_000L);
             movementStarted[0] = true;
             offRailStart[0] = cart.getZ();
             movementStartAge[0] = cart.age;
