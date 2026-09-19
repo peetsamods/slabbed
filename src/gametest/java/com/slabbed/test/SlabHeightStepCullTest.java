@@ -29,6 +29,28 @@ import net.minecraft.util.math.Direction;
  */
 public final class SlabHeightStepCullTest {
 
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void partialAndTransparentModelsKeepExposedStepFaces(TestContext ctx) {
+        ServerWorld w = ctx.getWorld();
+        BlockPos a = ctx.getAbsolutePos(BlockPos.ORIGIN).add(3, 3, 3);
+        BlockPos b = a.east();
+        for (Block subject : new Block[]{Blocks.COBBLED_DEEPSLATE_STAIRS, Blocks.GLASS,
+                Blocks.OAK_TRAPDOOR}) {
+            w.setBlockState(a, subject.getDefaultState(), Block.NOTIFY_LISTENERS);
+            w.setBlockState(b, Blocks.OAK_PLANKS.getDefaultState(), Block.NOTIFY_LISTENERS);
+            com.slabbed.anchor.SlabPlacementDyAttachment.record(w, a, -0.5);
+            com.slabbed.anchor.SlabPlacementDyAttachment.record(w, b, 0.0);
+            ctx.assertTrue(SlabSupport.isSlabHeightStepFace(w, a, w.getBlockState(a), Direction.EAST),
+                    "partial subject must preserve exposed face: " + subject);
+            ctx.assertTrue(SlabSupport.isSlabHeightStepFace(w, b, w.getBlockState(b), Direction.WEST),
+                    "neighbor must preserve exposed face toward partial subject: " + subject);
+            com.slabbed.anchor.SlabPlacementDyAttachment.record(w, b, -0.5);
+            ctx.assertTrue(!SlabSupport.isSlabHeightStepFace(w, a, w.getBlockState(a), Direction.EAST),
+                    "equal-height pair must retain ordinary culling: " + subject);
+        }
+        ctx.complete();
+    }
+
     // THE FIX: an anchored (persistently lowered) dirt cube beside a flush (unlowered) dirt
     // cube must have its shared face redrawn (previously: false, since neither is a "direct
     // custom slab supported object" — dirt-on-a-vanilla-slab isn't a Terrain Slabs surface).

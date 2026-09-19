@@ -463,7 +463,8 @@ public final class SlabSupport {
     }
 
     private static boolean isStepCullEligibleSubject(BlockState state) {
-        return state.isOpaqueFullCube() || (state.getBlock() instanceof SlabBlock && state.contains(SlabBlock.TYPE));
+        // Partial and transparent models can also lose a culled face at a height step.
+        return !state.isAir();
     }
 
     /**
@@ -509,10 +510,10 @@ public final class SlabSupport {
      * provably at dy 0 — one {@code getBlockState} plus a few precomputed state flags decides it,
      * and no height is resolved. Everything else answers "maybe".
      *
-     * <p>SLAB SUBJECT. A slab's dy can come from a purely LATERAL source
+     * <p>PARTIAL SUBJECT. A slab's dy can come from a purely LATERAL source
      * ({@code isAdjacentSideSlabLowered} BFSs sideways through the connected slab chain), so no
-     * bounded look at the block below is a sound screen for it. A slab therefore always answers
-     * "maybe" unless it is frozen-flat. HONEST COST: an unanchored slab pair now pays up to two
+     * bounded look at the block below is a sound screen for it. Partial models therefore answer
+     * "maybe" unless frozen-flat; the opaque-cube support shortcut does not establish their height. HONEST COST: an unanchored slab pair now pays up to two
      * {@link #getVisualYOffset} calls per face where it previously paid none. Slabs are a
      * vanishing fraction of terrain blocks (worldgen places none), the calls are the same ones
      * the model path already makes once per block, and the alternative — re-deriving a cheap
@@ -525,7 +526,7 @@ public final class SlabSupport {
         if (SlabAnchorAttachment.isFrozenFlat(world, pos)) {
             return false;
         }
-        if (state.getBlock() instanceof SlabBlock) {
+        if (!state.isOpaqueFullCube()) {
             return true;
         }
         // Bed / double-block halves resolve their support from a DIFFERENT cell than pos.down()

@@ -15,7 +15,7 @@
 1	PaleMossCarpetBlock
 1	PaneBlock
 1	PointedDripstoneBlock
-36	SlabBlock
+34	SlabBlock
 1	SnowBlock
 3	SporeBlossomBlock
 1	StairsBlock
