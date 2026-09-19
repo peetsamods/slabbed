@@ -12,6 +12,20 @@ import java.util.List;
 public final class DependentRemeshQueueTest {
 
     @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void distantRegionsShareOneRebuildWithoutFillingTheGap(TestContext ctx) {
+        var queue = new DependentRemeshQueue(12);
+        queue.enqueueBlockRegion(-16, -16, -16, -15, -15, -15);
+        queue.enqueueBlockRegion(-2, -2, -2, -1, -1, -1);
+        long[] cells = {0};
+        int rebuilt = queue.drain((x, y, z, coverage) -> coverage.forEachRegion(r ->
+                cells[0] += (long) (r.maxX() - r.minX() + 1) * (r.maxY() - r.minY() + 1)
+                        * (r.maxZ() - r.minZ() + 1)));
+        ctx.assertTrue(rebuilt == 1, "both regions must share one section rebuild");
+        ctx.assertTrue(cells[0] == 16, "only the two requested cubes may refresh, got " + cells[0]);
+        ctx.complete();
+    }
+
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
     public void repeatedChangesInOneSectionCoalesce(TestContext ctx) {
         DependentRemeshQueue queue = new DependentRemeshQueue(8);
         queue.enqueueBlockRegion(1, 2, 3, 4, 5, 6);
@@ -21,7 +35,7 @@ public final class DependentRemeshQueueTest {
                 "two overlapping changes in one section must queue one rebuild, got "
                         + queue.pendingSectionCount());
         List<BlockRegion> drained = new ArrayList<>();
-        int count = queue.drain((sectionX, sectionY, sectionZ, region) -> drained.add(region));
+        int count = queue.drain((sectionX, sectionY, sectionZ, region) -> drained.add(region.bounds()));
         ctx.assertTrue(count == 1 && drained.size() == 1,
                 "the coalesced section must drain exactly once, got " + count);
         BlockRegion region = drained.getFirst();
@@ -39,7 +53,8 @@ public final class DependentRemeshQueueTest {
         ctx.assertTrue(queue.pendingSectionCount() == 8,
                 "a two-block cube crossing all three section boundaries must touch eight sections, got "
                         + queue.pendingSectionCount());
-        int count = queue.drain((sectionX, sectionY, sectionZ, region) -> {
+        int count = queue.drain((sectionX, sectionY, sectionZ, coverage) -> {
+            BlockRegion region = coverage.bounds();
             ctx.assertTrue(region.minX() >= sectionX * 16 && region.maxX() <= sectionX * 16 + 15,
                     "x cache region escaped its scheduled section: " + region);
             ctx.assertTrue(region.minY() >= sectionY * 16 && region.maxY() <= sectionY * 16 + 15,

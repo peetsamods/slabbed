@@ -2,10 +2,12 @@ package com.slabbed.client;
 
 import com.slabbed.mixin.client.WorldRendererImportantRemeshInvoker;
 import com.slabbed.util.DependentRemeshQueue;
+import com.slabbed.util.DependentSlabRemeshRegions;
 import com.slabbed.util.SlabSupport;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.world.ClientWorld;
+import net.minecraft.util.math.BlockPos;
 
 /** Client-thread owner for coalesced, bounded, important dependent-section rebuilds. */
 public final class SlabDependentRemeshScheduler {
@@ -35,6 +37,14 @@ public final class SlabDependentRemeshScheduler {
         PENDING.enqueueBlockRegion(minX, minY, minZ, maxX, maxY, maxZ);
     }
 
+    public static void enqueueDependents(ClientWorld world, BlockPos changed) {
+        if (world != queuedWorld) {
+            PENDING.clear();
+            queuedWorld = world;
+        }
+        DependentSlabRemeshRegions.enqueue(world, changed, SlabSupport.chainRerenderDepth(), PENDING);
+    }
+
     private static void drain(MinecraftClient client) {
         if (client == null || client.world == null || client.worldRenderer == null) {
             PENDING.clear();
@@ -47,11 +57,11 @@ public final class SlabDependentRemeshScheduler {
             return;
         }
 
-        PENDING.drain((sectionX, sectionY, sectionZ, region) -> {
-            SlabSupport.refreshVisualYOffsetRegion(
+        PENDING.drain((sectionX, sectionY, sectionZ, coverage) -> {
+            coverage.forEachRegion(region -> SlabSupport.refreshVisualYOffsetRegion(
                     client.world,
                     region.minX(), region.minY(), region.minZ(),
-                    region.maxX(), region.maxY(), region.maxZ());
+                    region.maxX(), region.maxY(), region.maxZ()));
             ((WorldRendererImportantRemeshInvoker) client.worldRenderer).slabbed$scheduleChunkRender(
                     sectionX,
                     sectionY,
