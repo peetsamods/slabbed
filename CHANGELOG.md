@@ -2,6 +2,16 @@
 
 Player-facing changes for the Fabric 1.21.1 line. See LAW.md — this doc does not redefine the law.
 
+## [0.5.2-alpha.17] — Minecraft 1.21.1 (Fabric) — 2026-09-18
+
+### Fixed
+
+- Blocks now redraw when their saved-height data arrives or a placement prediction is corrected.
+  This fixes cases where a block remained invisible or showed an outdated model until a manual
+  chunk refresh or shader toggle.
+
+Thanks to the reporter of [#54](https://github.com/peetsamods/slabbed/issues/54) for the refresh comparison.
+
 ## [0.5.2-alpha.14] — Minecraft 1.21.1 (Fabric) — 2026-09-14
 
 See LAW.md — this changelog does not redefine the law.
