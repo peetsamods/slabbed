@@ -1,3 +1,16 @@
+## [Unreleased]
+
+See LAW.md — this changelog does not redefine the law.
+
+### Fixed
+
+- **Fence and wall posts under top slabs.** Clicking a fence or wall onto the underside of a top slab
+  did nothing: the post was asked to hang from the slab's visible underside, half a block up, and a
+  post is taller than one block, so it would have poked into the slab and the placement was refused.
+  An underside landing is now honored to the physical limit of its cell, stepping back toward grid
+  height until the post fits, the same way a side placement already settles onto the real surface
+  (maintainer ruling, 2026-09-20). Lanterns, chains and bars, which fit, are unchanged.
+
 ## [0.6.0-alpha.1+26.3] — MC 26.3 alpha
 
 See LAW.md — this changelog does not redefine the law.

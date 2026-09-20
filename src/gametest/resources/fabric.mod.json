@@ -86,6 +86,7 @@
       "com.slabbed.test.ConnectingStructuralFreezeTest",
       "com.slabbed.test.AnchoredDepthReadbackTest",
       "com.slabbed.test.CeilingFlushRulingTest",
+      "com.slabbed.test.UndersideSeatClampTest",
       "com.slabbed.test.WaterlogReadSymmetryTest",
       "com.slabbed.test.WysiwygMarkerHandOffTest",
       "com.slabbed.test.OffsetRaycastDeepLaneTest",

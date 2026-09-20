@@ -365,8 +365,9 @@ public final class LandingResolver {
             // the support. Lowered chains keep the generic underside formula (for example -2.0 -> -1.5).
             landingDy = flushTopVerticalChainBridge
                     ? 0.0d
-                    : aim.ownerPos().getY() + aim.ownerVisibleDy() + bottomPlaneOffset(aim.ownerState())
-                            - (actualTarget.getY() + 1.0d);
+                    : clampToUndersideLimit(world, actualTarget, finalState,
+                            aim.ownerPos().getY() + aim.ownerVisibleDy() + bottomPlaneOffset(aim.ownerState())
+                                    - (actualTarget.getY() + 1.0d));
         } else {
             landingDy = clampToRealSeat(world, actualTarget, finalState,
                     aim.ownerVisibleDy() + aim.ownerPos().getY() - actualTarget.getY());
@@ -421,6 +422,57 @@ public final class LandingResolver {
             clamped = Math.min(clamped + 0.5d, 0.0d);
         }
         return clamped;
+    }
+
+    /**
+     * UNDERSIDE clamp (maintainer ruling, 2026-09-20): a DOWN-face landing is honored to the physical
+     * limit of the landing cell, exactly as the side-arm seat clamp above honors a side aim. The
+     * underside formula seats the placed block's cell ceiling on the owner's visible underside; for a
+     * body taller than its own cell (a fence or wall post is 1.5 high), or for a lowered landing over a
+     * solid floor, that landing pushes the body into the owner above or the support below, and the
+     * translated-occupancy gate then refused the click outright — live: no fence or wall could be
+     * placed under any flush TOP slab. The landing is stepped in half-steps TOWARD grid height until
+     * neither overlap exceeds the same states' vanilla baseline, grid height at the latest. A body that
+     * still collides at 0.0 (a fence under a lowered TOP slab) is left to the gate, which is the honest
+     * answer: the clamp never steps PAST grid height in either direction, so it cannot sink a post into
+     * a floor or lift one into a ceiling that the aim did not ask for. A hanging body that already fits
+     * (lantern, bars, chain) is returned verbatim. Same overlap predicate as the gate, so the mint and
+     * the gate cannot judge one placement at two depths. Placement-time only (LAW.md, LAW 1).
+     */
+    private static double clampToUndersideLimit(
+            BlockGetter world, BlockPos target, BlockState finalState, double aimDy) {
+        if (world == null || !Double.isFinite(aimDy) || Math.abs(aimDy) <= 1.0e-6d) {
+            return aimDy;
+        }
+        double clamped = aimDy;
+        while (Math.abs(clamped) > 1.0e-6d
+                && undersideLandingIncreasesOverlap(world, target, finalState, clamped)) {
+            // Step toward 0.0 and never overshoot: at grid height the candidate sits at the vanilla
+            // baseline, so the overlap predicate is false by construction and the loop terminates.
+            clamped = aimDy > 0.0d
+                    ? Math.max(clamped - 0.5d, 0.0d)
+                    : Math.min(clamped + 0.5d, 0.0d);
+        }
+        return clamped;
+    }
+
+    /** The two vertical neighbours an underside landing can be pushed into: owner above, support below. */
+    private static boolean undersideLandingIncreasesOverlap(
+            BlockGetter world, BlockPos target, BlockState finalState, double dy) {
+        BlockPos abovePos = target.above();
+        BlockState aboveState = world.getBlockState(abovePos);
+        if (!aboveState.isAir()
+                && SlabEnsembleCoherence.relativeTranslationIncreasesBodyOverlap(
+                        finalState, target, dy,
+                        aboveState, abovePos, visibleOwnerDy(world, abovePos, aboveState))) {
+            return true;
+        }
+        BlockPos belowPos = target.below();
+        BlockState belowState = world.getBlockState(belowPos);
+        return !belowState.isAir()
+                && SlabEnsembleCoherence.relativeTranslationIncreasesBodyOverlap(
+                        belowState, belowPos, visibleOwnerDy(world, belowPos, belowState),
+                        finalState, target, dy);
     }
 
     /**
