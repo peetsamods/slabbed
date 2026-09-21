@@ -1,6 +1,7 @@
 package com.slabbed.test;
 
 import com.mojang.brigadier.CommandDispatcher;
+import com.sun.management.ThreadMXBean;
 import com.slabbed.Slabbed;
 import com.slabbed.anchor.SlabAnchorAttachment;
 import com.slabbed.command.SlabRigCommand;
@@ -43,6 +44,7 @@ import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 
 import java.io.IOException;
+import java.lang.management.ManagementFactory;
 import java.lang.reflect.Field;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -61,28 +63,29 @@ public final class SlabRigHangingDirectExecutorTest {
     private static final String START =
             "slabrig hangs direct 6143 topology 42 paintings 1";
     private static final String FORCE = START + " force";
-    // These are a FLOOR, not the enforced ceiling: fluidityBudgetMillis() below scales them up from a
-    // same-run calibration. A shared/loaded build machine can run the store's fsync-backed writes
-    // several times slower than idle for reasons that have nothing to do with the executor's own
-    // speed, so a bare wall-clock constant false-REDs under load; a same-run ratio does not, because
-    // load slows the calibration and the real command together. Do not delete the calibration and
-    // fall back to comparing elapsedMillis straight against these constants.
-    private static final long START_BUDGET_MILLIS = 15_000L;
-    // Read/clear floor recalibrated 5_000 -> 8_000 (maintainer ruling, 2026-08-30): the late-run
-    // status read repeatedly measured 5.7-7.5s on a host whose same-run calibration reported idle
-    // (~11.6-14.4ms/round trip), so the scaled term never engaged and the old floor false-REDed.
-    // The budget only needs to catch a regression in the executor's own cost, which would blow far
-    // past this; do not tighten it back without fresh multi-host timings.
-    private static final long READ_OR_CLEAR_BUDGET_MILLIS = 8_000L;
-    private static final int FLUIDITY_CALIBRATION_SAMPLES = 3;
-    // Sized so the scaled budget lands ON the floor at idle (measured calibration ~11.7ms/round trip,
-    // so 15_000/11.7 ~= 1300 and 8_000/11.7 ~= 680). That matters: with a smaller multiplier the
-    // floor wins until the host is far slower, and historical false-REDs happened at ~3.5x — the
-    // scaling would never have engaged for the very case it exists to cover. Landing on the floor
-    // means idle strictness is unchanged and ANY slowdown scales from there.
-    private static final int START_FLUIDITY_MULTIPLIER = 1_300;
-    private static final int READ_OR_CLEAR_FLUIDITY_MULTIPLIER = 680;
-    private static long cachedFluidityCalibrationNanos = -1L;
+    // Fluidity budgets are WORK budgets, in bytes allocated by the executing server thread while the
+    // timed command or reconstruction runs, and they are compared against that thread's allocation
+    // counter, never against time. The budget exists to catch a regression in the direct executor's
+    // OWN cost (for example, losing the verified-prefix fast path and re-reading and re-hashing every
+    // ledger state and artifact on each status), and every timed operation here runs to completion on
+    // the calling thread, so what that thread allocates is a direct, host-independent measure of the
+    // work it did. Time is not: the cold late-run status read costs about two seconds at idle and has
+    // measured 5-14x that under host load (shared CPU, memory pressure, disk contention), including in
+    // CPU time, while a same-run I/O calibration probe inflated only 2x, so no wall- or CPU-time
+    // budget scaled from such a probe could be both strict at idle and green under load. Wall and CPU
+    // time are still logged beside the allocation figure for diagnosis and appear in the failure
+    // message. Do not switch the comparison back to a time measurement, scaled or not; a regression
+    // that adds blocking I/O rather than work is guarded by the store's sync/reuse counters.
+    //
+    // Sizing: about 4x the largest allocation each class measures on a green run of this line (a
+    // page-4 start allocates ~7.2 GiB, page 3 ~5.4 GiB, page 1 ~1.7 GiB; the cold late-run status
+    // ~5.7 GiB, an independent reconstruction up to ~420 MiB, a clear under 100 MiB, a warm status
+    // ~15 MiB), which is the same idle headroom the retired time budgets had. Repeated identical
+    // commands agree within about ten percent across runs, so JIT-tier variance (interpreted frames
+    // allocate what compiled frames scalar-replace) stays far inside the budget, while the
+    // regressions above, which multiply the bytes read and hashed, exceed it by orders of magnitude.
+    private static final long START_BUDGET_BYTES = 28L << 30;
+    private static final long READ_OR_CLEAR_BUDGET_BYTES = 22L << 30;
 
     private static String startCommand(int selectorPage) {
         return "slabrig hangs direct 6143 topology 42 paintings " + selectorPage;
@@ -1648,71 +1651,72 @@ public final class SlabRigHangingDirectExecutorTest {
     private static int execute(GameTestHelper helper,
                                CommandDispatcher<CommandSourceStack> dispatcher,
                                CommandSourceStack source, String command) {
-        long started = System.nanoTime();
+        WorkMeter meter = WorkMeter.start(helper);
         int result;
         try {
             result = dispatcher.execute(command, source);
         } catch (Exception failure) {
             throw helper.assertionException("/" + command + " threw: " + failure);
         }
-        long elapsedMillis = (System.nanoTime() - started) / 1_000_000L;
-        Slabbed.LOGGER.info("[RIG-3B3A-PERF] command={} duration_ms={}",
-                command, elapsedMillis);
+        meter.stop();
+        Slabbed.LOGGER.info("[RIG-3B3A-PERF] command={} duration_ms={} cpu_ms={} alloc_kib={}",
+                command, meter.wallMillis, meter.cpuMillis, meter.allocatedBytes >> 10);
         boolean startClass = command.matches(
                 "slabrig hangs direct 6143 topology 42 paintings [1-4]( force)?");
-        long budget = startClass
-                ? fluidityBudgetMillis(helper, START_BUDGET_MILLIS, START_FLUIDITY_MULTIPLIER)
-                : fluidityBudgetMillis(helper, READ_OR_CLEAR_BUDGET_MILLIS,
-                        READ_OR_CLEAR_FLUIDITY_MULTIPLIER);
-        if (elapsedMillis > budget) {
-            throw helper.assertionException("/" + command + " exceeded fluidity budget "
-                    + elapsedMillis + "ms > " + budget + "ms");
-        }
+        meter.requireWithin(helper, "/" + command,
+                startClass ? START_BUDGET_BYTES : READ_OR_CLEAR_BUDGET_BYTES);
         return result;
     }
 
     /**
-     * A proven-at-idle budget, scaled up by same-run calibration so a loaded host does not false-RED.
-     * Returns {@code max(baseBudgetMillis, calibration * multiplier)}: a fast/idle host is never held
-     * to a tighter bound than the historical constant (the floor), and a loaded host gets a
-     * proportionally looser one (the scale). The multiplier is deliberately generous: it only needs
-     * to cover host load, not the executor's own algorithmic cost, so a genuine regression (which
-     * would not move the calibration at all) still exceeds it.
+     * Work done by the calling thread between {@link #start} and {@link #stop}: bytes allocated (the
+     * quantity held to the fluidity budgets, see the budget constants) plus wall and CPU time for the
+     * log and the failure message. Allocation accounting is required, not optional: a JVM that cannot
+     * report it fails the row loudly instead of silently dropping the budget.
      */
-    private static long fluidityBudgetMillis(
-            GameTestHelper helper, long baseBudgetMillis, int calibrationMultiplier) {
-        long scaledMillis = (fluidityCalibrationNanos(helper) * calibrationMultiplier) / 1_000_000L;
-        return Math.max(baseBudgetMillis, scaledMillis);
-    }
+    private static final class WorkMeter {
+        private final ThreadMXBean threads;
+        private final long allocStarted;
+        private final long cpuStarted;
+        private final long wallStarted;
+        long allocatedBytes;
+        long cpuMillis;
+        long wallMillis;
 
-    /**
-     * Cost, right now, of one fresh write+read through the exact fsync-backed content-addressed
-     * artifact path (writeArtifact/readArtifact) the direct executor itself uses for every
-     * planned/final/cleared artifact and ledger append. Whatever is slowing this host down (shared
-     * CPU, shared disk, or both) slows this identically-shaped round trip too, so it tracks host load
-     * the same way the timed commands above do. Computed once per test run (cached) from the worst of
-     * a few samples, so one lucky fast sample cannot under-calibrate the rest of the run.
-     */
-    private static long fluidityCalibrationNanos(GameTestHelper helper) {
-        if (cachedFluidityCalibrationNanos >= 0L) {
-            return cachedFluidityCalibrationNanos;
+        private WorkMeter(ThreadMXBean threads) {
+            this.threads = threads;
+            this.allocStarted = threads.getCurrentThreadAllocatedBytes();
+            this.cpuStarted = threads.isCurrentThreadCpuTimeSupported()
+                    ? threads.getCurrentThreadCpuTime() : -1L;
+            this.wallStarted = System.nanoTime();
         }
-        long worst = 0L;
-        try {
-            for (int sample = 0; sample < FLUIDITY_CALIBRATION_SAMPLES; sample++) {
-                String probe = "schema\tslabbed-rig-fluidity-calibration-v1\nnonce\t"
-                        + UUID.randomUUID() + '\n';
-                long started = System.nanoTime();
-                SlabRigHangingDirectStateStore.WrittenArtifact written = store().writeArtifact(probe);
-                store().readArtifact(written.hash());
-                worst = Math.max(worst, System.nanoTime() - started);
+
+        static WorkMeter start(GameTestHelper helper) {
+            if (!(ManagementFactory.getThreadMXBean() instanceof ThreadMXBean threads)
+                    || !threads.isThreadAllocatedMemorySupported()) {
+                throw helper.assertionException("fluidity budget needs per-thread allocation "
+                        + "accounting, which this JVM does not report");
             }
-        } catch (IOException failure) {
-            throw helper.assertionException("fluidity calibration write/read failed: " + failure);
+            if (!threads.isThreadAllocatedMemoryEnabled()) {
+                threads.setThreadAllocatedMemoryEnabled(true);
+            }
+            return new WorkMeter(threads);
         }
-        Slabbed.LOGGER.info("[RIG-3B3A-PERF] fluidity_calibration_nanos={}", worst);
-        cachedFluidityCalibrationNanos = worst;
-        return worst;
+
+        void stop() {
+            wallMillis = (System.nanoTime() - wallStarted) / 1_000_000L;
+            cpuMillis = cpuStarted < 0L ? -1L
+                    : (threads.getCurrentThreadCpuTime() - cpuStarted) / 1_000_000L;
+            allocatedBytes = threads.getCurrentThreadAllocatedBytes() - allocStarted;
+        }
+
+        void requireWithin(GameTestHelper helper, String subject, long budgetBytes) {
+            if (allocatedBytes > budgetBytes) {
+                throw helper.assertionException(subject + " exceeded fluidity budget "
+                        + (allocatedBytes >> 10) + " KiB allocated > " + (budgetBytes >> 10)
+                        + " KiB (" + wallMillis + "ms wall, " + cpuMillis + "ms cpu)");
+            }
+        }
     }
 
     private static void requireResult(GameTestHelper helper, int actual, int expected, String lane) {
@@ -1736,22 +1740,18 @@ public final class SlabRigHangingDirectExecutorTest {
 
     private static List<SlabRigHangingDirectStateStore.Reconstruction> ledgers(
             GameTestHelper helper) {
-        long started = System.nanoTime();
+        WorkMeter meter = WorkMeter.start(helper);
         List<SlabRigHangingDirectStateStore.Reconstruction> result;
         try {
             result = store().reconstructAll();
         } catch (IOException failure) {
             throw helper.assertionException("direct integration reconstruction failed: " + failure);
         }
-        long elapsedMillis = (System.nanoTime() - started) / 1_000_000L;
-        Slabbed.LOGGER.info("[RIG-3B3A-PERF] independent_reconstruct_all duration_ms={}",
-                elapsedMillis);
-        long budget = fluidityBudgetMillis(
-                helper, READ_OR_CLEAR_BUDGET_MILLIS, READ_OR_CLEAR_FLUIDITY_MULTIPLIER);
-        if (elapsedMillis > budget) {
-            throw helper.assertionException("independent ledger reconstruction exceeded fluidity budget "
-                    + elapsedMillis + "ms > " + budget + "ms");
-        }
+        meter.stop();
+        Slabbed.LOGGER.info(
+                "[RIG-3B3A-PERF] independent_reconstruct_all duration_ms={} cpu_ms={} alloc_kib={}",
+                meter.wallMillis, meter.cpuMillis, meter.allocatedBytes >> 10);
+        meter.requireWithin(helper, "independent ledger reconstruction", READ_OR_CLEAR_BUDGET_BYTES);
         return result;
     }
 
