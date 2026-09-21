@@ -70,10 +70,20 @@ public final class TrampledSupportConversionTest {
         BlockPos cropPos = farmland.above();
         // Crops refuse to plant below light 8, the gametest scene carries no daylight
         // guarantee, and light propagates asynchronously — so the light source is part of the
-        // fixture AND the planting waits for the engine to catch up.
+        // fixture AND the planting waits on the crop cell's own light read. A fixed delay is
+        // not a wait: the engine may lag past any constant under load, and the refusal then
+        // reads as darkness rather than as a farmland verdict. The poll reads the exact value
+        // the crop checks (raw brightness at the crop cell, no sky term); the planting step
+        // then runs once, and the tick budget bounds the wait with the light named as cause.
         helper.setBlock(farmlandRel.above().west(), Blocks.GLOWSTONE.defaultBlockState());
 
-        helper.runAfterDelay(10, () -> {
+        helper.startSequence().thenWaitUntil(() -> {
+            int light = level.getRawBrightness(cropPos, 0);
+            if (light < 8) {
+                throw helper.assertionException(farmlandRel.above(),
+                        "the crop cell must reach light 8 before planting, got " + light);
+            }
+        }).thenExecute(() -> {
             Player player = helper.makeMockPlayer(net.minecraft.world.level.GameType.SURVIVAL);
             player.setPos(farmland.getX() + 0.5d, farmland.getY() + 2.0d, farmland.getZ() + 0.5d);
             ItemStack seeds = new ItemStack(Items.WHEAT_SEEDS);
@@ -96,7 +106,6 @@ public final class TrampledSupportConversionTest {
                 throw helper.assertionException(farmlandRel.above(),
                         "the crop must actually be planted, got " + level.getBlockState(cropPos));
             }
-            helper.succeed();
-        });
+        }).thenSucceed();
     }
 }
