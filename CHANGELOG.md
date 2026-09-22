@@ -1,3 +1,17 @@
+## [0.5.2-alpha.20] - Minecraft 1.21.1 (NeoForge)
+
+Version note: alpha.20 is the next free number in the shared alpha series across all Slabbed lines.
+
+### Compatibility
+
+- Sable physics objects (Sable 2.0.3-2.0.5, used by Create Aeronautics, Tree Physics and other
+  physics mods) now rest on lowered blocks where the blocks are drawn. Sable builds one collision
+  shape per block type and reuses it everywhere, so a lowered block kept its grid-height shape and
+  physics objects floated half a block above it (#49). Sable now asks Slabbed for each position's
+  collision, from the same source the player's own movement uses, and re-reads a position once
+  its placed height is stored. Positions nothing is lowered near keep Sable's own shapes, and a
+  Sable version whose code no longer matches is left untouched rather than patched.
+
 ## [0.5.2-alpha.13] - Minecraft 1.21.1 (NeoForge)
 
 Version note: alpha.13 is the next free number in the shared alpha series across all Slabbed lines.
