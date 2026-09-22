@@ -7,7 +7,10 @@ import com.slabbed.Slabbed;
 import it.unimi.dsi.fastutil.longs.Long2ByteOpenHashMap;
 import it.unimi.dsi.fastutil.longs.LongArrayList;
 import java.util.Arrays;
+import java.util.List;
 import java.util.OptionalInt;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.function.BiConsumer;
 import java.util.function.LongToIntFunction;
 import java.util.stream.IntStream;
 import java.util.stream.LongStream;
@@ -40,6 +43,8 @@ public final class SlabPlacementHeightAttachment {
     public static final int ABSENT_HALF_STEPS = Integer.MIN_VALUE;
 
     private static volatile LongToIntFunction clientRenderHalfStepsLookup;
+    /** Told after an authoritative fact is stored or removed; listeners never write the store. */
+    private static final List<BiConsumer<Level, BlockPos>> CHANGE_LISTENERS = new CopyOnWriteArrayList<>();
 
     /** Maximum number of physical block cells in one legal 1.21.1 chunk column. */
     public static final int MAX_FACTS_PER_CHUNK = 16 * 16 * DimensionType.Y_SIZE;
@@ -233,6 +238,7 @@ public final class SlabPlacementHeightAttachment {
         replacement.put(packed, (byte) halfSteps);
         chunk.setData(PLACEMENT_DY_TYPE.get(), replacement);
         chunk.setUnsaved(true);
+        notifyChanged(chunk, pos);
         return true;
     }
 
@@ -262,7 +268,47 @@ public final class SlabPlacementHeightAttachment {
             chunk.setData(PLACEMENT_DY_TYPE.get(), replacement);
         }
         chunk.setUnsaved(true);
+        notifyChanged(chunk, pos);
         return true;
+    }
+
+    /** Whether any fact on this chunk stores a height other than flush; never creates the attachment. */
+    public static boolean hasNonFlushFact(LevelChunk chunk) {
+        if (chunk == null) {
+            return false;
+        }
+        Long2ByteOpenHashMap facts = chunk.getExistingDataOrNull(PLACEMENT_DY_TYPE.get());
+        if (facts == null) {
+            return false;
+        }
+        for (var values = facts.values().iterator(); values.hasNext(); ) {
+            if (values.nextByte() != 0) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** Registers a read-only observer of stored-fact changes on authoritative chunks. */
+    public static void addChangeListener(BiConsumer<Level, BlockPos> listener) {
+        if (listener != null) {
+            CHANGE_LISTENERS.add(listener);
+        }
+    }
+
+    private static void notifyChanged(LevelChunk chunk, BlockPos pos) {
+        if (CHANGE_LISTENERS.isEmpty()) {
+            return;
+        }
+        Level level = chunk.getLevel();
+        for (BiConsumer<Level, BlockPos> listener : CHANGE_LISTENERS) {
+            try {
+                listener.accept(level, pos);
+            } catch (RuntimeException | LinkageError failure) {
+                // The fact is already stored; an observer failing must not undo or abort placement.
+                Slabbed.LOGGER.warn("[SLABBED] a placement-height observer failed at {}", pos, failure);
+            }
+        }
     }
 
     /** Deterministic bounded codec used by native chunk persistence. */

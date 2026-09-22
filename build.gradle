@@ -55,6 +55,11 @@ def p9SnowProofDirectory = layout.buildDirectory.dir("run/p9Snow")
 def p9SmoothStepsProofDirectory = layout.buildDirectory.dir("run/p9SmoothSteps")
 def p9SmoothStepsRedDirectory = layout.buildDirectory.dir("run/p9SmoothStepsRed")
 def parityServerDirectory = layout.buildDirectory.dir("run/parityServer")
+def p11SableProofDirectory = layout.buildDirectory.dir("run/p11Sable")
+def p11SableRedDirectory = layout.buildDirectory.dir("run/p11SableRed")
+// Sable ships its physics module and companion API as nested jars; they are unpacked here for
+// compiling the optional Sable compatibility mixins only and are never packaged.
+def sableCompileDirectory = layout.buildDirectory.dir("sable-compile")
 
 // Descriptive build identity. Exact runtime bytes remain authoritative through BuildStamp's
 // content digest; this label makes a dev launch traceable to the checkout that produced it.
@@ -139,6 +144,7 @@ sourceSets {
                     "com/slabbed/test/SlabPlacementHeightSchemaTest.java",
                     "com/slabbed/test/SlabbedHotPathAllocationRegressionTest.java",
                     "com/slabbed/test/SlabHeightStepCullTest.java",
+                    "com/slabbed/test/SablePhysicsHeightCellTest.java",
                     "com/slabbed/test/StateChangeAnchorTest.java",
                     "com/slabbed/test/SlabbedLabFixtureTest.java",
                     "com/slabbed/test/TerrainSlabsHeadlessClassifierTest.java",
@@ -193,6 +199,18 @@ sourceSets {
         }
         compileClasspath += sourceSets.main.output + sourceSets.main.compileClasspath
         runtimeClasspath += output + compileClasspath
+    }
+    p11sabletest {
+        java {
+            setSrcDirs(["src/p11sabletest/java"])
+        }
+        resources {
+            setSrcDirs([])
+        }
+        compileClasspath += sourceSets.main.output + sourceSets.main.compileClasspath
+        // Runtime carries only the Sable under test (p11sabletestImplementation), never the
+        // compile-only jars main is built against, so another Sable version can be proven.
+        runtimeClasspath += output + sourceSets.main.output + sourceSets.main.runtimeClasspath
     }
     p9smoothstepstest {
         java {
@@ -268,6 +286,7 @@ neoForge {
     addModdingDependenciesTo sourceSets.p8test
     addModdingDependenciesTo sourceSets.p9snowtest
     addModdingDependenciesTo sourceSets.p9smoothstepstest
+    addModdingDependenciesTo sourceSets.p11sabletest
     addModdingDependenciesTo sourceSets.tsshim
     addModdingDependenciesTo sourceSets.devtools
     addModdingDependenciesTo sourceSets.serverenv
@@ -381,6 +400,24 @@ neoForge {
             systemProperty "slabbed.collisionFollow", "false"
             taskBefore tasks.named("p9smoothstepstestClasses")
         }
+        p11SableServer {
+            server()
+            programArgument "--nogui"
+            sourceSet = sourceSets.p11sabletest
+            gameDirectory = p11SableProofDirectory
+            systemProperty "slabbed.p11.sable.proof", "true"
+            taskBefore tasks.named("p11sabletestClasses")
+        }
+        p11SableRedServer {
+            server()
+            programArgument "--nogui"
+            sourceSet = sourceSets.p11sabletest
+            gameDirectory = p11SableRedDirectory
+            systemProperty "slabbed.p11.sable.proof", "true"
+            systemProperty "slabbed.p11.sable.expect_red", "true"
+            systemProperty "slabbed.sablePhysicsHeight", "false"
+            taskBefore tasks.named("p11sabletestClasses")
+        }
         configureEach {
             logLevel = org.slf4j.event.Level.DEBUG
         }
@@ -395,6 +432,7 @@ neoForge {
             sourceSet sourceSets.p8test
             sourceSet sourceSets.p9snowtest
             sourceSet sourceSets.p9smoothstepstest
+            sourceSet sourceSets.p11sabletest
         }
         tsshim {
             sourceSet sourceSets.tsshim
@@ -425,6 +463,10 @@ configurations {
     p8testImplementation.extendsFrom implementation
     p9snowtestImplementation.extendsFrom implementation
     p9smoothstepstestImplementation.extendsFrom implementation
+    p11sabletestImplementation.extendsFrom implementation
+    sableCompile {
+        transitive = false
+    }
 }
 
 dependencies {
@@ -441,6 +483,16 @@ dependencies {
     p9smoothstepstestImplementation "maven.modrinth:countereds-terrain-slabs:3.1.2"
     p9smoothstepstestImplementation "maven.modrinth:architectury-api:13.0.8+neoforge"
     testImplementation "org.sinytra.forgified-fabric-api:fabric-renderer-api-v1:3.4.1+9125b6dc19"
+    // Sable 2.0.5 for NeoForge 1.21.1: compile-only for the optional compatibility mixins, and a
+    // real runtime mod only inside the isolated P11 physics proof server.
+    sableCompile "maven.modrinth:sable:U678xqle"
+    compileOnly files({ configurations.sableCompile.files })
+    compileOnly files(
+            sableCompileDirectory.map { it.file("dev.ryanhcode.sable.sable-sable_rapier-1.21.1-2.0.5.jar") },
+            sableCompileDirectory.map { it.file("sable-companion-common-1.21.1-1.6.0.jar") }
+    ).builtBy("extractSableCompileJars")
+    // -Pp11SableVersion=1L6XJqnY proves Sable 2.0.3 (the version in the original report).
+    p11sabletestImplementation "maven.modrinth:sable:${findProperty("p11SableVersion") ?: "U678xqle"}"
     testImplementation "org.junit.jupiter:junit-jupiter:5.11.4"
     testRuntimeOnly "org.junit.platform:junit-platform-launcher:1.11.4"
 }
@@ -1172,5 +1224,66 @@ publishing {
         }
     }
     repositories {
+    }
+}
+
+tasks.register("extractSableCompileJars", Copy) {
+    from({ configurations.sableCompile.collect { zipTree(it) } }) {
+        include "META-INF/jarjar/dev.ryanhcode.sable.sable-sable_rapier-*.jar"
+        include "META-INF/jarjar/sable-companion-common-*.jar"
+        eachFile { it.path = it.name }
+        includeEmptyDirs = false
+    }
+    into sableCompileDirectory
+}
+
+tasks.named("compileJava").configure {
+    dependsOn(tasks.named("extractSableCompileJars"))
+}
+
+[["P11Sable", p11SableProofDirectory], ["P11SableRed", p11SableRedDirectory]].each { entry ->
+    String label = entry[0]
+    def directoryProvider = entry[1]
+    tasks.register("clean${label}RunDirectory", Delete) {
+        delete directoryProvider
+    }
+    tasks.register("prepare${label}RunDirectory") {
+        dependsOn(tasks.named("clean${label}RunDirectory"))
+        outputs.dir(directoryProvider)
+        doLast {
+            File directory = directoryProvider.get().asFile
+            if (!directory.mkdirs() && !directory.isDirectory()) {
+                throw new GradleException("Could not create the ${label} proof directory")
+            }
+            new File(directory, "eula.txt").setText("eula=true\n", "UTF-8")
+            new File(directory, "server.properties").setText(
+                    "level-type=minecraft\\:flat\nspawn-animals=false\nspawn-monsters=false\nspawn-protection=0\nonline-mode=false\nenable-rcon=false\n", "UTF-8")
+        }
+    }
+}
+
+tasks.named("runP11SableServer").configure {
+    dependsOn(tasks.named("prepareP11SableRunDirectory"))
+}
+
+tasks.named("runP11SableRedServer").configure {
+    dependsOn(tasks.named("prepareP11SableRedRunDirectory"))
+}
+
+tasks.register("runP11SableProof") {
+    group = "verification"
+    description = "Drops real Sable 2.0.5 physics objects onto lowered and flush blocks, with and without the height bridge."
+    dependsOn(tasks.named("runP11SableServer"), tasks.named("runP11SableRedServer"))
+    doLast {
+        [[p11SableProofDirectory, "p11-sable.ok"], [p11SableRedDirectory, "p11-sable-red.ok"]].each { pair ->
+            File proofDirectory = pair[0].get().dir("proof").asFile
+            File receipt = new File(proofDirectory, pair[1])
+            File failure = new File(proofDirectory, "p11-sable.failed")
+            if (!receipt.isFile() || failure.exists()) {
+                String detail = failure.isFile() ? failure.getText("UTF-8").trim() : "missing receipt"
+                throw new GradleException("The P11 Sable proof did not pass (" + pair[1] + "): " + detail)
+            }
+            logger.lifecycle(pair[1] + ": " + receipt.getText("UTF-8").trim())
+        }
     }
 }

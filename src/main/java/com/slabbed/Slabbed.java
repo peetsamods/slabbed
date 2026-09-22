@@ -19,6 +19,7 @@ public class Slabbed {
     private static final String P7_PROOF_PROPERTY = "slabbed.p7.proof";
     private static final String P8_PROOF_PROPERTY = "slabbed.p8.proof";
     private static final String P9_SNOW_PROOF_PROPERTY = "slabbed.p9.snow.proof";
+    private static final String P11_SABLE_PROOF_PROPERTY = "slabbed.p11.sable.proof";
     private static final String P9_SMOOTH_STEPS_PROOF_PROPERTY = "slabbed.p9.smooth_steps.proof";
 
     public Slabbed(IEventBus modEventBus) {
@@ -78,6 +79,9 @@ public class Slabbed {
         }
         if (Boolean.getBoolean(P9_SMOOTH_STEPS_PROOF_PROPERTY) && FMLEnvironment.dist == Dist.CLIENT) {
             registerRequiredDevHook("com.slabbed.client.P9SmoothStepsMovementProof", "register");
+        }
+        if (Boolean.getBoolean(P11_SABLE_PROOF_PROPERTY)) {
+            registerRequiredDevHook("com.slabbed.test.P11SablePhysicsHeightProof", "register");
         }
     }
 

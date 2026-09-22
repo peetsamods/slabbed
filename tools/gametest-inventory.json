@@ -20,6 +20,7 @@
     {"path": "com/slabbed/test/P6InteractionParityTest.java", "classification": "registered_server"},
     {"path": "com/slabbed/test/P7VisualParityTest.java", "classification": "registered_server"},
     {"path": "com/slabbed/test/SlabHeightStepCullTest.java", "classification": "registered_server"},
+    {"path": "com/slabbed/test/SablePhysicsHeightCellTest.java", "classification": "registered_server"},
     {"path": "com/slabbed/test/SlabPlacementHeightLifecycleTest.java", "classification": "registered_server"},
     {"path": "com/slabbed/test/SlabPlacementHeightPersistenceSyncTest.java", "classification": "registered_server"},
     {"path": "com/slabbed/test/SlabPlacementHeightResolverTest.java", "classification": "registered_server"},

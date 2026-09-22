@@ -2688,7 +2688,7 @@ public final class SlabSupport {
      * states, wall-mounted states, and the vertical-chain family each own lanes that read
      * sideways or upward, so they always resolve.
      */
-    private static boolean isMeshScreenBelowResolvedState(BlockState state) {
+    public static boolean isMeshScreenBelowResolvedState(BlockState state) {
         return !(state.getBlock() instanceof SlabBlock)
                 && !(state.getBlock() instanceof PowderSnowBlock)
                 && state.getFluidState().isEmpty()

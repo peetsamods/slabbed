@@ -59,6 +59,19 @@ com/slabbed/compat/CompatHooks$1.class
 com/slabbed/compat/terrainslabs/
 com/slabbed/compat/terrainslabs/TerrainSlabsCompat$1.class
 com/slabbed/compat/terrainslabs/TerrainSlabsCompat.class
+com/slabbed/compat/sable/
+com/slabbed/compat/sable/SableCellColliderSource.class
+com/slabbed/compat/sable/SableCellKey.class
+com/slabbed/compat/sable/SablePhysicsHeight$CellCollision.class
+com/slabbed/compat/sable/SablePhysicsHeight$Memo.class
+com/slabbed/compat/sable/SablePhysicsHeight.class
+com/slabbed/compat/sable/SablePlacementRefresh.class
+com/slabbed/mixin/compat/
+com/slabbed/mixin/compat/sable/
+com/slabbed/mixin/compat/sable/SableColliderBakeryCellMixin.class
+com/slabbed/mixin/compat/sable/SableMixinPlugin.class
+com/slabbed/mixin/compat/sable/SablePhysicsSystemRefreshMixin.class
+com/slabbed/mixin/compat/sable/SableRapierPipelineHeightMixin.class
 com/slabbed/command/
 com/slabbed/command/DeepDyCommand$CallerKey.class
 com/slabbed/command/DeepDyCommand$ConfirmationStore.class
@@ -142,6 +155,7 @@ com/slabbed/util/SlabbedOffsetRaycast$NearestCollector.class
 com/slabbed/util/SlabbedOffsetRaycast.class
 com/slabbed/util/SlabbedServerHitValidation.class
 slabbed.mixins.json
+slabbed.sable.mixins.json
 slabbed.client.mixins.json
 ```
 <!-- release-allowlist:runtime:end -->
@@ -183,6 +197,17 @@ com/slabbed/compat/CompatSlabSurfaceKind.java
 com/slabbed/compat/CompatHooks.java
 com/slabbed/compat/terrainslabs/
 com/slabbed/compat/terrainslabs/TerrainSlabsCompat.java
+com/slabbed/compat/sable/
+com/slabbed/compat/sable/SableCellColliderSource.java
+com/slabbed/compat/sable/SableCellKey.java
+com/slabbed/compat/sable/SablePhysicsHeight.java
+com/slabbed/compat/sable/SablePlacementRefresh.java
+com/slabbed/mixin/compat/
+com/slabbed/mixin/compat/sable/
+com/slabbed/mixin/compat/sable/SableColliderBakeryCellMixin.java
+com/slabbed/mixin/compat/sable/SableMixinPlugin.java
+com/slabbed/mixin/compat/sable/SablePhysicsSystemRefreshMixin.java
+com/slabbed/mixin/compat/sable/SableRapierPipelineHeightMixin.java
 com/slabbed/command/
 com/slabbed/command/DeepDyCommand.java
 com/slabbed/init/
@@ -241,5 +266,6 @@ com/slabbed/util/SlabbedOffsetRaycast.java
 com/slabbed/util/SlabbedServerHitValidation.java
 slabbed.client.mixins.json
 slabbed.mixins.json
+slabbed.sable.mixins.json
 ```
 <!-- release-allowlist:sources:end -->

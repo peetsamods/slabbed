@@ -16,6 +16,9 @@ config="slabbed.mixins.json"
 [[mixins]]
 config="slabbed.client.mixins.json"
 
+[[mixins]]
+config="slabbed.sable.mixins.json"
+
 [[dependencies.${mod_id}]]
 modId="neoforge"
 type="required"

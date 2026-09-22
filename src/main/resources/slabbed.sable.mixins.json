@@ -1,0 +1,14 @@
+{
+  "required": false,
+  "package": "com.slabbed.mixin.compat.sable",
+  "plugin": "com.slabbed.mixin.compat.sable.SableMixinPlugin",
+  "compatibilityLevel": "JAVA_21",
+  "mixins": [
+    "SableColliderBakeryCellMixin",
+    "SablePhysicsSystemRefreshMixin",
+    "SableRapierPipelineHeightMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}
