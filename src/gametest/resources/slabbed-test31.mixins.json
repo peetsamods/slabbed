@@ -5,7 +5,8 @@
   "mixins": [
     "SlabRigCommandGameTestMixin",
     "BlockItemFixtureGameTestMixin",
-    "TerrainSlabsCompatGameTestMixin"
+    "TerrainSlabsCompatGameTestMixin",
+    "PendingHangChunkMixin"
   ],
   "client": [
     "PlacementDyPredictionJournalGameTestMixin",

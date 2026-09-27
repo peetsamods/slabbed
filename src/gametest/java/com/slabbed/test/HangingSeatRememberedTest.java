@@ -33,9 +33,9 @@ import net.minecraft.world.phys.AABB;
  *
  * <p>MUTATION that must redden the reload row alone (measured 2026-09-13): in
  * {@code HangingEntityRememberedSeatMixin.slabbed$hangBoxOnRememberedSeat}, replace the remembered
- * number with a fresh read of the support's height ("follow the support"). Dropping the mint guard
- * in {@code slabbed$mintSeatOnDirection} does NOT bite — the per-class read hook restores the saved
- * seat after any re-mint — so do not name that one.
+ * number with a fresh read of the support's height ("follow the support"). Dropping the has-seat
+ * guard in {@code slabbed$tryMintHangSeat} now also reddens that row, because the post-load
+ * migration would re-read the rebuilt wall.
  */
 public final class HangingSeatRememberedTest {
 

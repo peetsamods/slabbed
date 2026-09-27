@@ -20,7 +20,8 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
  * bounding box — lives in {@code HangingEntityRememberedSeatMixin}, shared with paintings. This
  * class only persists it: {@code HangingEntity} declares no save-data hooks, so each hung class
  * writes and reads the number itself. A frame saved before the seat existed has no key and mints
- * from its wall on its first server layout (one-time migration).
+ * from its wall once its data is restored and its chunks are ready, otherwise on a later server
+ * tick (one-time migration).
  *
  * <p>The entity's real position stays at grid height (the box moves, the position does not);
  * moving it corrupts the derived grid cell and {@code survives()} judges the wrong support.
