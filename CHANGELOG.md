@@ -2,6 +2,25 @@
 
 Player-facing changes for the Fabric 1.21.1 line. See LAW.md — this doc does not redefine the law.
 
+## [0.5.2-alpha.22] — Minecraft 1.21.1 (Fabric) — 2026-09-27
+
+### Fixed
+
+- **Opening newly generated areas that contain paintings or item frames no longer freezes the game.**
+  When a chunk finished generating, restoring the decorations saved in it asked for the chunk's blocks
+  through a lookup that could wait for the chunk to finish loading, from inside the very load it was
+  waiting on, and the server thread stalled for good. Slow terrain generation made it far more likely.
+  Restoring a decoration now only uses lookups that answer "not ready yet" instead of waiting, keeps
+  any height already saved with it, and otherwise takes its height on a later tick once its area is
+  actually there. Decorations from before the remembered-height change, and ones placed by world
+  generation, get their height the same way: a one-time migration, never a re-derivation of a saved
+  height.
+  On this line the same change also covers decorations placed by structures on a world-generation
+  thread, which reached the same waiting lookup.
+- Item frames that take their height only after a client has first seen them are now positioned from
+  their attachment cell in the tracking packets, so the late height never moves the frame a whole
+  block on the client.
+
 ## [0.5.2-alpha.17] — Minecraft 1.21.1 (Fabric) — 2026-09-18
 
 ### Fixed
