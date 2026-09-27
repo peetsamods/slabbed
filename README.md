@@ -7,7 +7,7 @@ chosen when it was placed; a later neighbour edit must not move it. See `LAW.md`
 ## This line
 
 - Minecraft 26.3 on Fabric. Fabric Loader and Fabric API are required. Java 25 builds and runs it.
-- Version: see `gradle.properties`; the current cycle is `0.6.0-alpha.1+26.3`.
+- Version: see `gradle.properties`; the current cycle is `0.6.0-alpha.2+26.3`.
 - Other Minecraft versions and loaders live on their own branches (`port/...`) and reach the same
   features when they are ported; this branch is where 0.6 is developed first.
 - `CHANGELOG.md` describes what the current build changes for players, including its known

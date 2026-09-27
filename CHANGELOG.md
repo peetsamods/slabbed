@@ -1,8 +1,18 @@
-## [Unreleased]
+## [0.6.0-alpha.2+26.3] — MC 26.3 alpha hotfix
 
 See LAW.md — this changelog does not redefine the law.
 
 ### Fixed
+
+- **Opening newly generated areas that contain paintings or item frames no longer freezes the game.**
+  When a chunk finished generating, restoring the decorations saved in it asked for the chunk's blocks
+  through a lookup that could wait for the chunk to finish loading, from inside the very load it was
+  waiting on, and the server thread stalled for good. Slow terrain generation made it far more likely.
+  Restoring a decoration now only uses lookups that answer "not ready yet" instead of waiting, keeps
+  any height already saved with it, and otherwise takes its height on a later tick once its area is
+  actually there. Decorations from before the remembered-height change, and ones placed by world
+  generation, get their height the same way: a one-time migration, never a re-derivation of a saved
+  height.
 
 - **Fence and wall posts under top slabs.** Clicking a fence or wall onto the underside of a top slab
   did nothing: the post was asked to hang from the slab's visible underside, half a block up, and a
