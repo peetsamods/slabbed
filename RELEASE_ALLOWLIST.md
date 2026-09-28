@@ -120,6 +120,7 @@ anything. The split above puts the fine granularity only where a leak has actual
 | `com/slabbed/mixin/PoweredRailVisualSignalMixin` | A powered rail seated on a lowered block is also powered by what touches the row it is drawn in, in its own update and in the rail-to-rail chain check (maintainer ruling, 2026-09-28). |
 | `com/slabbed/mixin/PistonMoveDyTransferMixin` | A pushed or pulled block keeps the height it was placed at when a piston moves it (maintainer ruling, 2026-09-06). |
 | `com/slabbed/mixin/RedstoneWireBlockMixin` | Redstone wire connection/support over lowered slabs. |
+| `com/slabbed/mixin/RedstoneWireEvaluatorVisualStepMixin` | A wire beside a lowered half-step also reads the wire drawn on the slab next to it, in both wire evaluators' shared incoming-signal read (maintainer ruling, 2026-09-28). |
 | `com/slabbed/mixin/PaintingRememberedSeatMixin` | Painting remembered seat persisted in save data. |
 | `com/slabbed/mixin/ScaffoldingLoweredStandMixin` | Scaffolding standing layer gated at the lowered drawn top. |
 | `com/slabbed/mixin/ServerInteractBlockHitToleranceMixin` | Server-side hit tolerance for offset targeting. |
@@ -188,6 +189,7 @@ anything. The split above puts the fine granularity only where a leak has actual
 | `com/slabbed/util/MinecartRailFrame` | Physical/logical frame conversion for a minecart seated on a lowered rail; the single place the conversion is written, shared by the behaviour mixins and the renderer. |
 | `com/slabbed/util/HangingSeatDyHolder` | Duck interface exposing a hung decoration's remembered seat. |
 | `com/slabbed/util/RailSeatDyHolder` | Duck interface exposing a minecart's bound rail seat offset. |
+| `com/slabbed/util/WireVisualSignal` | The wire drawn inside a neighbouring cell and the one-block reach of a wire's read — the read the wire evaluator hook uses. |
 | `com/slabbed/util/RailVisualSignal` | The cell a lowered rail is drawn in and the redstone arriving at that row — the read the powered-rail hooks share. |
 | `com/slabbed/util/RailSlopeProfile` | The drawn profile of a straight rail — each end fitted to the seat of the rail it connects to; the one rule the client shear and the outline box are both computed from. |
 | `com/slabbed/util/ManualDyEnvelope` | The manual-nudge step size and legal height envelope. Lives in this package so MIN_DY is derived from the package-private `SlabbedOffsetColliderClip.OWNER_REACH` rather than restated as a literal: the clip supplement's owner search depth and the deepest authorable height cannot drift apart. Pure constants and two static predicates; no state, no I/O. |

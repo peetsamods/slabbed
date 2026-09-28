@@ -29,6 +29,15 @@ See LAW.md — this changelog does not redefine the law.
   block — both for its own power and when it passes power along a chain of powered rails, and a
   change beside the slab reaches the rail. A rail drawn in its own cell behaves exactly as before.
 
+- **Redstone dust now carries power down a lowered half-step.** A wire on a slab sits one grid cell
+  above the slab but is drawn inside the slab's cell, half a block above the wire beside the slab.
+  The two looked joined, and power climbed from the lower wire onto the slab, but it never came back
+  down: the game only steps down past a full block, so the lower wire looked under the slab and never
+  at the wire drawn on top of it. A wire now also reads the wire drawn in the cell beside it, so a
+  line of dust runs down a staircase of slabs as well as up it. A wire on a top slab or on glowstone
+  keeps vanilla's one-way step, and two wires drawn more than a block apart stay unconnected
+  (maintainer ruling, 2026-09-28).
+
 - **Minecarts no longer stop dead on the first lowered rail.** A cart crossing onto a rail on a slab
   was dropped half a block the moment its centre entered the cell, and its body then jammed against
   the next rail's full-height support, stopping it even on a powered track. The cart now rides the

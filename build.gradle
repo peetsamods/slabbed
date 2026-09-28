@@ -418,6 +418,7 @@ sourceSets {
             include("com/slabbed/test/MinecartRailSeatDepthTest.java")
             include("com/slabbed/test/RailSlopeProfileTest.java")
             include("com/slabbed/test/RailVisualSignalTest.java")
+            include("com/slabbed/test/RedstoneWireVisualStepTest.java")
             include("com/slabbed/test/ArmorStandVisibleTopPlacementTest.java")
             include("com/slabbed/test/BoatVisibleSurfacePlacementTest.java")
             include("com/slabbed/config/SlabbedConfigFileTest.java")

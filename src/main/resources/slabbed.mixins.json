@@ -37,6 +37,7 @@
     "PaintingRememberedSeatMixin",
     "ProjectileBlockClipOffsetMixin",
     "RedstoneWireBlockMixin",
+    "RedstoneWireEvaluatorVisualStepMixin",
     "ScaffoldingLoweredStandMixin",
     "ServerExplosionOcclusionOffsetClipMixin",
     "ServerInteractBlockHitToleranceMixin",
