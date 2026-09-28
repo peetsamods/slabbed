@@ -37,17 +37,20 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
  * needs: the rail-cell derivation. The two behaviour solvers and the renderer convert at their own
  * boundaries.
  *
- * <p>INVARIANT: the seat is a property of the ENTITY, re-read each tick from the rail cell's STORED
- * placement fact. Nothing here re-derives the rail block's own height, so LAW.md is untouched — a
- * neighbour edit still cannot move a placed block.
+ * <p>INVARIANT: the seat is a property of the ENTITY: the rail cell's STORED placement fact plus the
+ * fitted slope's lift at the cart's place along the rail ({@code MinecartRailFrame.seatAt},
+ * maintainer ruling, 2026-09-28). Nothing here re-derives the rail block's own height, so LAW.md is
+ * untouched — a neighbour edit still cannot move a placed block.
  *
  * <p>INVARIANT: the seat is SYNCED, not a server field. {@code NewMinecartBehavior.tick} calls
  * {@code getCurrentBlockPosOrRailBelow()} on the CLIENT, so the client must see the same seat or it
  * resolves the support cell instead of the rail.
  *
- * <p>INVARIANT: the seat is re-read at tick HEAD, before the behaviour runs, so the frame is
- * constant for the whole of a tick's rail work. A mid-tick seat change would convert one side of a
- * delta and drift the cart.
+ * <p>INVARIANT: the seat is re-read at tick HEAD, before the behaviour runs, so the tick's first
+ * reads convert with the seat the cart's position carries. The default rail solver then re-binds it
+ * at each of its own position writes ({@code slabbed$bindRailSeatDy}), so every read that follows a
+ * write is in that write's frame; a seat that changed without a matching write would convert one
+ * side of a delta and drift the cart.
  */
 @Mixin(AbstractMinecart.class)
 public abstract class MinecartRailSeatMixin extends Entity implements RailSeatDyHolder {
@@ -82,11 +85,21 @@ public abstract class MinecartRailSeatMixin extends Entity implements RailSeatDy
                 Double.doubleToRawLongBits(Double.isFinite(dy) ? dy : 0.0d));
     }
 
-    /** The seat a cart standing in {@code cell} would take, or NaN when {@code cell} holds no rail. */
+    @Override
+    public void slabbed$bindRailSeatDy(double dy) {
+        slabbed$setRailSeatDy(dy);
+    }
+
+    /**
+     * The seat a cart standing in {@code cell} at its current place along the rail would take, or
+     * NaN when {@code cell} holds no rail.
+     */
     @Unique
     private double slabbed$seatAt(Level level, BlockPos cell) {
         BlockState state = level.getBlockState(cell);
-        return BaseRailBlock.isRail(state) ? MinecartRailFrame.seatOf(level, cell, state) : Double.NaN;
+        return BaseRailBlock.isRail(state)
+                ? MinecartRailFrame.seatAt(level, cell, state, this.getX(), this.getZ())
+                : Double.NaN;
     }
 
     @Inject(method = "defineSynchedData(Lnet/minecraft/network/syncher/SynchedEntityData$Builder;)V",

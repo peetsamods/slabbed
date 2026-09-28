@@ -118,6 +118,7 @@
       "com.slabbed.test.FrozenDyModePayloadTest",
       "com.slabbed.test.MinecartRailSeatDepthTest",
       "com.slabbed.test.RailSlopeProfileTest",
+      "com.slabbed.test.RailVisualSignalTest",
       "com.slabbed.test.ArmorStandVisibleTopPlacementTest",
       "com.slabbed.test.BoatVisibleSurfacePlacementTest",
       "com.slabbed.config.SlabbedConfigFileTest",

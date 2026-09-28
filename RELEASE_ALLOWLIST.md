@@ -117,6 +117,7 @@ anything. The split above puts the fine granularity only where a leak has actual
 | `com/slabbed/mixin/MinecartRailSeatMixin` | A minecart's real position follows a lowered rail: synced seat offset, spawn seat, per-tick rebind, save data, and the rail-cell derivation (maintainer ruling, 2026-09-06). |
 | `com/slabbed/mixin/OldMinecartBehaviorRailFrameMixin` | Default rail solver computes in the logical grid frame while the cart stays physical. |
 | `com/slabbed/mixin/NewMinecartBehaviorRailFrameMixin` | Experimental-movement rail solver computes in the logical grid frame; the synced interpolation step stays physical. |
+| `com/slabbed/mixin/PoweredRailVisualSignalMixin` | A powered rail seated on a lowered block is also powered by what touches the row it is drawn in, in its own update and in the rail-to-rail chain check (maintainer ruling, 2026-09-28). |
 | `com/slabbed/mixin/PistonMoveDyTransferMixin` | A pushed or pulled block keeps the height it was placed at when a piston moves it (maintainer ruling, 2026-09-06). |
 | `com/slabbed/mixin/RedstoneWireBlockMixin` | Redstone wire connection/support over lowered slabs. |
 | `com/slabbed/mixin/PaintingRememberedSeatMixin` | Painting remembered seat persisted in save data. |
@@ -127,6 +128,7 @@ anything. The split above puts the fine granularity only where a leak has actual
 | `com/slabbed/mixin/AbstractArrowOffsetClipMixin` | Arrows/tridents hit a lowered block where it is drawn. |
 | `com/slabbed/mixin/ArmorStandItemVisibleTopMixin` | An armor stand's free-space check reads the band the stand will actually occupy over a lowered support (maintainer ruling, 2026-09-06). |
 | `com/slabbed/mixin/ClipContextBlockAccessor` | Reads a clip's block mode so the collider-clip supplement only answers COLLIDER queries. |
+| `com/slabbed/mixin/LoweredRailSupportNeighborMixin` | A neighbour change delivered to the cell a lowered powered rail is drawn in is forwarded to the rail, so a lever or repeater beside the slab reaches it (maintainer ruling, 2026-09-28). |
 | `com/slabbed/mixin/LivingEntitySightOffsetClipMixin` | Mob sight is blocked by a lowered block's drawn body. |
 | `com/slabbed/mixin/ProjectileBlockClipOffsetMixin` | Projectiles hit a lowered block where it is drawn. |
 | `com/slabbed/mixin/ServerExplosionOcclusionOffsetClipMixin` | Explosions are sheltered by a lowered block's drawn body. |
@@ -186,6 +188,7 @@ anything. The split above puts the fine granularity only where a leak has actual
 | `com/slabbed/util/MinecartRailFrame` | Physical/logical frame conversion for a minecart seated on a lowered rail; the single place the conversion is written, shared by the behaviour mixins and the renderer. |
 | `com/slabbed/util/HangingSeatDyHolder` | Duck interface exposing a hung decoration's remembered seat. |
 | `com/slabbed/util/RailSeatDyHolder` | Duck interface exposing a minecart's bound rail seat offset. |
+| `com/slabbed/util/RailVisualSignal` | The cell a lowered rail is drawn in and the redstone arriving at that row — the read the powered-rail hooks share. |
 | `com/slabbed/util/RailSlopeProfile` | The drawn profile of a straight rail — each end fitted to the seat of the rail it connects to; the one rule the client shear and the outline box are both computed from. |
 | `com/slabbed/util/ManualDyEnvelope` | The manual-nudge step size and legal height envelope. Lives in this package so MIN_DY is derived from the package-private `SlabbedOffsetColliderClip.OWNER_REACH` rather than restated as a literal: the clip supplement's owner search depth and the deepest authorable height cannot drift apart. Pure constants and two static predicates; no state, no I/O. |
 

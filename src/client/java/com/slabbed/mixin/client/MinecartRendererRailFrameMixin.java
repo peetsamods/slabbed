@@ -24,7 +24,9 @@ import org.spongepowered.asm.mixin.injection.At;
  *
  * <p>INVARIANT: convert at the CALL SITES only. {@code getPos} and {@code getPosOffs} must stay
  * unconverted internally — the server solver already hands them a logical Y, and a conversion inside
- * them would double-apply the seat.
+ * them would double-apply the seat. Each result is converted with the seat the rail is drawn at AT
+ * THAT POINT ({@code MinecartRailFrame.toPhysicalAt}), so the front and back probes land on the
+ * drawn slope and the cart tilts along a fitted rail (maintainer ruling, 2026-09-28).
  *
  * <p>Null-safe in both directions: an unresolved probe stays null so the renderer's own guard and
  * its front/back fallbacks behave exactly as vanilla.
@@ -47,7 +49,7 @@ public abstract class MinecartRendererRailFrameMixin {
         if (dy == 0.0d) {
             return original.call(behavior, x, y, z);
         }
-        return MinecartRailFrame.toPhysical(cart, original.call(behavior, x, y - dy, z));
+        return MinecartRailFrame.toPhysicalAt(cart, cart.level(), original.call(behavior, x, y - dy, z));
     }
 
     /** Two call sites — the front and back slope probes. One handler covers both; no ordinal. */
@@ -66,6 +68,6 @@ public abstract class MinecartRendererRailFrameMixin {
         if (dy == 0.0d) {
             return original.call(behavior, x, y, z, offs);
         }
-        return MinecartRailFrame.toPhysical(cart, original.call(behavior, x, y - dy, z, offs));
+        return MinecartRailFrame.toPhysicalAt(cart, cart.level(), original.call(behavior, x, y - dy, z, offs));
     }
 }

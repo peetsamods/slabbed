@@ -245,6 +245,45 @@ public final class MinecartRailSeatDepthTest {
     }
 
     /**
+     * A cart on a lowered rail between two flush rails rides the drawn V (maintainer ruling,
+     * 2026-09-28): at the middle of the cell it sits on the slab, near either edge it is nearly
+     * flush — the seat follows the fitted slope at the cart's place along the rail, not one number
+     * per cell. At rest on plain rails, so nothing but the seat moves it.
+     *
+     * <p>MUTATION that must redden this row: make {@code MinecartRailFrame.seatAt} return the stored
+     * seat regardless of position.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void aCartAtRestRidesTheDrawnVBetweenFlushRails(GameTestHelper helper) {
+        withFrozen(() -> {
+            railRun(helper, new BlockPos(1, 3, 2), 1, 0.0d);
+            BlockPos dip = railRun(helper, new BlockPos(2, 3, 2), 1, LOWERED);
+            railRun(helper, new BlockPos(3, 3, 2), 1, 0.0d);
+
+            AbstractMinecart cart = spawnCartOn(helper, dip);
+            requireOldBehaviour(helper, cart);
+            double base = dip.getY() + RAIL_LIFT;
+
+            double[][] places = {{0.5d, LOWERED}, {0.1d, LOWERED + 0.4d}, {0.9d, LOWERED + 0.4d}, {0.3d, LOWERED + 0.2d}};
+            for (double[] place : places) {
+                cart.setPos(dip.getX() + place[0], cart.getY(), cart.getZ());
+                cart.setDeltaMovement(Vec3.ZERO);
+                cart.tick();
+                double expected = base + place[1];
+                if (Math.abs(cart.getY() - expected) > EPS) {
+                    throw helper.assertionException("at " + place[0] + " along the dip the cart must ride the drawn"
+                            + " V at " + expected + ", got " + cart.getY() + " (seat " + seatOf(cart) + ")");
+                }
+                if (cart.getCurrentBlockPosOrRailBelow().getY() != dip.getY()) {
+                    throw helper.assertionException("at " + place[0] + " the cart must still resolve the RAIL cell,"
+                            + " got " + cart.getCurrentBlockPosOrRailBelow());
+                }
+            }
+        });
+        helper.succeed();
+    }
+
+    /**
      * Crossing a lowered/flush seam re-binds the seat in BOTH directions, holding the logical height
      * fixed so the cart steps onto the rail it arrives at.
      *
