@@ -47,7 +47,8 @@
       "com.slabbed.anchor.FrozenFlatAttachmentCapacityTest",
       "com.slabbed.anchor.PlacementDyAttachmentCapacityTest",
       "com.slabbed.test.PlacementLandingRegressionTest",
-      "com.slabbed.test.HangingLoadDeferralTest"
+      "com.slabbed.test.HangingLoadDeferralTest",
+      "com.slabbed.test.RailSlopeProfileTest"
     ]
   },
   "depends": {

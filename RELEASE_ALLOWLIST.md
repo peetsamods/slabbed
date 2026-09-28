@@ -98,7 +98,7 @@ exclusion can leave a manifest advertising a class the archive no longer has. Th
 | `com/slabbed/compat/*` | Compat dispatch and the slab-surface-kind enum consumed by third-party slab mods. Dispatch is documented subtractive-only and unreachable when the target mod is absent. |
 | `com/slabbed/compat/terrainslabs/*` | Terrain Slabs compat, mod-id gated. |
 | `com/slabbed/placement/*` | Placement-law decision helpers: `LandingResolver` (one immutable server height from the player's root aim), `LandingHitValidationPolicy` (server-side interact/use validation against a deeply-lowered cell), `ConnectorPlacementSettle` (settles fence/wall/pane/bars connections after a placement's height is published). None does file I/O, registration, rendering or diagnostics. |
-| `com/slabbed/client/model/*` | Offset block-state model, the Y-offset emitter, and the alternate chain-ceiling geometry — the lowering render path. |
+| `com/slabbed/client/model/*` | Offset block-state model, the Y-offset emitter, the alternate chain-ceiling geometry, and the fitted rail geometry that draws a rail on its seat-fitted slope — the lowering render path. |
 | `com/slabbed/client/runtime/PistonMovingRenderScope` | Prevents nested piston models from applying the destination height twice. |
 | `com/slabbed/mixin/client/*` | Client mixins declared in `slabbed.client.mixins.json`. Non-recursive on purpose. |
 | `com/slabbed/mixin/torch/*` | `TorchBlockMixin` — torch attachment geometry. |
@@ -129,6 +129,7 @@ before this line's behaviour work closes — see the note beneath the table.
 
 | Entry | Reason |
 | --- | --- |
+| `com/slabbed/mixin/AbstractRailBlockSlopeShapeMixin` | A rail's outline and raycast box are sized from the slope it is drawn with, so a rail fitted to a neighbour at another seat can be targeted where it is drawn. A read of seats only (maintainer ruling, 2026-09-28). |
 | `com/slabbed/mixin/ArmorStandItemOffsetPlacementMixin` | Places armor stands against the stored visible support plane while retaining vanilla item collision and entity-data handling. |
 | `com/slabbed/mixin/BlockItemPlacementIntentMixin` | Captures placement intent for the placement law. |
 | `com/slabbed/mixin/BlockOnPlacedAnchorMixin` | Writes the dy anchor on placement. |
@@ -180,6 +181,7 @@ before this line's behaviour work closes — see the note beneath the table.
 | Entry | Reason |
 | --- | --- |
 | `com/slabbed/util/HangingSeatDyHolder` | Duck interface exposing a hung decoration's remembered seat. |
+| `com/slabbed/util/RailSlopeProfile` | The drawn profile of a straight rail: each end fitted to the seat of the rail it connects to. Pure; the one rule the client rail geometry and the outline box are both computed from. Reads seats, writes nothing (maintainer ruling, 2026-09-28). |
 | `com/slabbed/util/SlabSupport` | Support-surface resolution and the visual Y offset — the core of the feature. |
 | `com/slabbed/util/SlabbedOffsetRaycast` | Offset-aware nearest-hit raycast — the targeting overhaul. |
 | `com/slabbed/util/RuntimeDiagnostics` | The release-safe diagnostics boundary: every method is gated behind a `System.getProperty` flag (default off) or an `isEnabled()` check, and is the sole caller shipped code uses to reach recording/inspection behaviour. Architecture keeping diagnostics gated, not diagnostics leaking in — analogous in role to the donor line's `SlabbedAuditBridge`, though this line has not yet consolidated onto that class; see the dev-tooling port phase. |

@@ -4,6 +4,7 @@
   "compatibilityLevel": "JAVA_21",
   "mixins": [
     "ArmorStandItemOffsetPlacementMixin",
+    "AbstractRailBlockSlopeShapeMixin",
     "HangingSignAttachedMixin",
     "CarpetBlockMixin",
     "torch.TorchBlockMixin",

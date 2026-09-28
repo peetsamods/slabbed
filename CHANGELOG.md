@@ -18,6 +18,21 @@ See LAW.md — this changelog does not redefine the law.
   block skipped the server's own checks, so it could work inside a spawn-protected area, past the
   world border, above or below the build limits, and in adventure mode. It now asks the same questions
   the game asks before any other block you place, and refuses the same way.
+- **Rails now slope to meet the rail next to them.** A rail's slope used to come from the grid alone:
+  flat, or a full-block ramp toward the rail one cell up. A rail on a lowered block kept that same
+  slope, so where a lowered rail met a flush one the two did not line up, and a ramp climbing onto a
+  lowered rail was drawn at the full vanilla angle and floated half a block above it. Each straight
+  rail now fits its slope to the rail it actually connects to: a lowered rail rises half a block to
+  meet a flush neighbour, a ramp onto a lowered rail is only half as steep, and a lowered ramp onto a
+  flush rail climbs a block and a half. The rail's outline and targeting box follow the same slope,
+  so it can be selected where it is drawn. Each end of a rail answers only to the rail on its own
+  side: the lower rail of a pair rises to the higher one, and a rail sitting half a block below both
+  of its neighbours becomes a shallow V resting on its block in the middle. Curves are unchanged, a
+  ramp's foot never lifts off its block, and a rail is never bent more than a block and a half in
+  one cell, so those seams keep the small step vanilla always drew. No stored height moves: only
+  the drawn slope between two heights follows the neighbour, the way vanilla's own rail shape
+  already does (maintainer ruling, 2026-09-28). Minecarts still ride the grid and re-seat cell by
+  cell; following the drawn slope is a separate change.
 
 ## [0.5.2-alpha.22] — Minecraft 1.21.1 (Fabric) — 2026-09-27
 

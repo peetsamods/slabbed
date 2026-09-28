@@ -286,6 +286,16 @@ public final class OffsetBlockStateModel extends ForwardingBakedModel {
             }
         }
 
+        // A straight rail whose connected neighbour sits at another seat is drawn on its fitted
+        // profile so the two drawn rails meet (RailSlopeGeometry). It applies the seat itself and
+        // emits through the context's own emitter, so it runs BEFORE the seat translate is pushed
+        // and before the dy == 0 fast path (a flush ramp onto a lowered rail must still be fitted);
+        // false for every other block and for a profile vanilla already draws, which then take the
+        // ordinary path below.
+        if (RailSlopeGeometry.emitIfFitted(wrapped, view, state, pos, randomSupplier, context, dy)) {
+            return;
+        }
+
         // Slab-height step-face cull relaxation (renderer-agnostic — works under Indigo AND
         // Sodium because it edits the emitted quad's OWN cullFace, which every renderer
         // honours, rather than a per-renderer cull gate). Clear cullFace on faces that sit at
