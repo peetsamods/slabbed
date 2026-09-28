@@ -117,6 +117,7 @@
       "com.slabbed.test.PistonPlacementDyTransferTest",
       "com.slabbed.test.FrozenDyModePayloadTest",
       "com.slabbed.test.MinecartRailSeatDepthTest",
+      "com.slabbed.test.RailSlopeProfileTest",
       "com.slabbed.test.ArmorStandVisibleTopPlacementTest",
       "com.slabbed.test.BoatVisibleSurfacePlacementTest",
       "com.slabbed.config.SlabbedConfigFileTest",
@@ -134,6 +135,7 @@
       "com.slabbed.test.DevDiagnosticsCompanionLoadsClientGameTest",
       "com.slabbed.test.AmbientParticleFrozenDyClientGameTest",
       "com.slabbed.test.MinecartRenderRailSnapClientGameTest",
+      "com.slabbed.test.RailSlopeRenderClientGameTest",
       "com.slabbed.test.SlabbedSettingsScreenClientGameTest",
       "com.slabbed.test.PistonMovingRenderDyOwnerClientGameTest"
     ]

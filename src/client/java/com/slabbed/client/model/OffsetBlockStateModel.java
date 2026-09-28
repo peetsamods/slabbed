@@ -114,7 +114,21 @@ public final class OffsetBlockStateModel implements BlockStateModel {
         SeamState seam = new SeamState(view, pos, state, dy, cullTest);
         boolean stepSeam = dy != 0.0f || seam.anyMismatchedNeighborDy();
         QuadEmitter out = stepSeam ? YOffsetEmitter.wrapWithTransform(emitter, dy, seam) : emitter;
-        fabricWrapped.emitQuads(out, view, pos, state, random, seam);
+        // A straight rail whose connected neighbour sits at another seat is sheared to the fitted
+        // profile so the two drawn rails meet (RailSlopeShear); null for every other block and for a
+        // profile vanilla already draws. Pushed on the emitter rather than folded into the seat
+        // translate: it is a per-vertex lift, the seat is a constant, and they commute.
+        QuadTransform railShear = RailSlopeShear.forRail(view, pos, state);
+        if (railShear != null) {
+            out.pushTransform(railShear);
+        }
+        try {
+            fabricWrapped.emitQuads(out, view, pos, state, random, seam);
+        } finally {
+            if (railShear != null) {
+                out.popTransform();
+            }
+        }
         // Phase 3a band emission PULLED after live rejection (TEST (9), 2026-07-07): BAKE_LOCK_UV
         // derives UVs from vertex positions, and band tops exceed the unit square — the UVs walk off
         // the block's sprite into NEIGHBORING ATLAS SPRITES, painting alien texture strips on every

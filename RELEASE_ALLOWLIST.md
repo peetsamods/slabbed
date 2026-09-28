@@ -94,6 +94,7 @@ anything. The split above puts the fine granularity only where a leak has actual
 
 | Entry | Reason |
 | --- | --- |
+| `com/slabbed/mixin/BaseRailBlockSlopeShapeMixin` | A rail's outline and raycast box are sized from the slope it is drawn with, so a lowered rail rising to its neighbour can be targeted where it is drawn (maintainer ruling, 2026-09-28). |
 | `com/slabbed/mixin/BlockCollisionsLoweredAboveMixin` | Collision against a lowered slab above. |
 | `com/slabbed/mixin/BlockItemPlacementIntentMixin` | Captures placement intent for the WYSIWYG placement law. |
 | `com/slabbed/mixin/BlockOnPlacedAnchorMixin` | Writes the anchor on placement. |
@@ -185,6 +186,7 @@ anything. The split above puts the fine granularity only where a leak has actual
 | `com/slabbed/util/MinecartRailFrame` | Physical/logical frame conversion for a minecart seated on a lowered rail; the single place the conversion is written, shared by the behaviour mixins and the renderer. |
 | `com/slabbed/util/HangingSeatDyHolder` | Duck interface exposing a hung decoration's remembered seat. |
 | `com/slabbed/util/RailSeatDyHolder` | Duck interface exposing a minecart's bound rail seat offset. |
+| `com/slabbed/util/RailSlopeProfile` | The drawn profile of a straight rail — each end fitted to the seat of the rail it connects to; the one rule the client shear and the outline box are both computed from. |
 | `com/slabbed/util/ManualDyEnvelope` | The manual-nudge step size and legal height envelope. Lives in this package so MIN_DY is derived from the package-private `SlabbedOffsetColliderClip.OWNER_REACH` rather than restated as a literal: the clip supplement's owner search depth and the deepest authorable height cannot drift apart. Pure constants and two static predicates; no state, no I/O. |
 
 ## Ruling executed (2026-08-07)
