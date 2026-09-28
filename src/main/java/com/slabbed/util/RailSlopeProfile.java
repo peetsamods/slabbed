@@ -21,25 +21,43 @@ import net.minecraft.world.phys.shapes.VoxelShape;
  *
  * <p>INVARIANT (LAW.md): this is a READ of stored seats, never a write, and never a re-derivation of
  * any rail's own height. A rail's seat is its placed height and stays; only the SLOPE drawn between
- * two seats follows the neighbour — exactly as vanilla's own {@link RailShape} already follows the
- * neighbour under LAW 1's "genuine vanilla mechanism" clause.
+ * two seats follows the neighbour — the same class of neighbour-driven shape as vanilla's own
+ * {@link RailShape}, which vanilla rewrites on the rail already in place when a new rail connects to
+ * it (LAW 1's "genuine vanilla mechanism" clause).
+ *
+ * <p>INVARIANT: EACH END IS LOCAL TO ITS OWN SEAM. An end's height depends on this rail's seat and
+ * shape and on the rail at that end, and on nothing else — never on the rail at the opposite end.
+ * So an edit at one end of a placed rail can move only the end that faces it. A rail whose two flat
+ * ends both lift is drawn as a V: each half rises from the support at the middle, and each seam
+ * still closes on its own. Do not re-add a cross-end rule (a dip that flattens both ends, a
+ * precedence between ends): that is exactly the coupling this invariant forbids.
  *
  * <p>THE RULE. For each end of a straight rail, find the rail vanilla connects it to, then:
  * <ul>
- *   <li>A vanilla RAMP is refitted to meet the rail it climbs to, shorter or longer as needed. Its
- *       other end stays on the support.</li>
- *   <li>A FLAT end lifts toward a connected neighbour at the same grid level that is drawn higher.
- *       A neighbour drawn lower lifts from its own side, so every seam is closed exactly once.</li>
- *   <li>A rail keeps at least one end on its support: if both flat ends would lift (a dip), neither
- *       does — the two seams stay as steps, the way vanilla leaves one seam of a grid dip unjoined.</li>
+ *   <li>A vanilla RAMP is refitted to meet the rail it climbs to, shorter or longer as needed, but
+ *       never below its own support (a rail it "climbs" to that is drawn lower stays a step) and
+ *       never past {@link #MAX_RISE}. Its other end stays on the support.</li>
+ *   <li>A FLAT end lifts, up to {@link #MAX_RISE}, toward a connected neighbour at the same grid
+ *       level that is drawn higher. A neighbour drawn lower lifts from its own side when it can.</li>
  *   <li>Curves keep vanilla geometry; a curve cannot slope in vanilla either.</li>
  * </ul>
  *
- * <p>Pure and server-loadable: the client shears the rail's quads to this profile and the shared
- * outline mixin sizes the rail's box from it, so the drawn rail, its outline and its raycast box
- * can never disagree about the slope.
+ * <p>SEAMS THAT STAY STEPS, by design: a ramp's low end and a curve never lift, so a flat rail drawn
+ * higher than either keeps its step (as vanilla drew it); a rise past {@link #MAX_RISE} in one cell
+ * would be a wall, not a rail, and keeps the remaining step.
+ *
+ * <p>Pure and server-loadable: the client draws the rail from this profile and the shared outline
+ * mixin sizes the rail's box from it, so the drawn rail, its outline and its raycast box can never
+ * disagree about the slope.
  */
 public final class RailSlopeProfile {
+
+    /**
+     * The most a rail may rise across one cell, in blocks: the lowered-ramp-onto-flush-rail case
+     * (one block plus a half-block seat). Beyond that the drawn rail would be a near-vertical wall
+     * no cart could follow, so the seam keeps a step instead.
+     */
+    public static final double MAX_RISE = 1.5d;
 
     private static final double EPS = 1.0e-6d;
     /** Vanilla's flat rail box height (2/16) and its ramp box height (8/16, for a 1.0 rise). */
@@ -53,6 +71,10 @@ public final class RailSlopeProfile {
      * End heights of a straight rail relative to its own seated base. {@code negativeEnd} is the
      * north (Z axis) or west (X axis) edge; {@code positiveEnd} the south or east edge. The vanilla
      * pair is what the unmodified model draws: 0 for a flat end, 1 for the high end of a ramp.
+     *
+     * <p>The drawn height along the rail is {@link #heightAt}: one plane from end to end, except a
+     * {@link #kinked} profile (both flat ends lifted), which is two planes meeting on the support at
+     * the middle of the cell.
      */
     public record Profile(Direction.Axis axis,
                           double negativeEnd, double positiveEnd,
@@ -64,14 +86,35 @@ public final class RailSlopeProfile {
                     && Math.abs(positiveEnd - vanillaPositiveEnd) <= EPS;
         }
 
-        /** How far the negative-axis edge moves from where vanilla draws it. */
-        public double negativeDelta() {
-            return negativeEnd - vanillaNegativeEnd;
+        /**
+         * True when both ends of a flat rail lift: the rail is drawn as a V resting on its support
+         * at the middle of the cell, so that each seam closes without depending on the other. Only
+         * a flat rail can kink — a ramp always keeps one end on the support.
+         */
+        public boolean kinked() {
+            return vanillaNegativeEnd == 0.0d && vanillaPositiveEnd == 0.0d
+                    && negativeEnd > EPS && positiveEnd > EPS;
         }
 
-        /** How far the positive-axis edge moves from where vanilla draws it. */
-        public double positiveDelta() {
-            return positiveEnd - vanillaPositiveEnd;
+        /**
+         * The drawn height above the seated base at fraction {@code t} along the axis, from the
+         * negative edge ({@code t = 0}) to the positive edge ({@code t = 1}).
+         */
+        public double heightAt(double t) {
+            if (kinked()) {
+                return t <= 0.5d ? negativeEnd * (1.0d - 2.0d * t) : positiveEnd * (2.0d * t - 1.0d);
+            }
+            return negativeEnd * (1.0d - t) + positiveEnd * t;
+        }
+
+        /** What vanilla's own model draws at fraction {@code t}: a plane between its two ends. */
+        public double vanillaHeightAt(double t) {
+            return vanillaNegativeEnd * (1.0d - t) + vanillaPositiveEnd * t;
+        }
+
+        /** How far a vanilla vertex at fraction {@code t} moves to land on the fitted profile. */
+        public double liftAt(double t) {
+            return heightAt(t) - vanillaHeightAt(t);
         }
 
         public double highestEnd() {
@@ -115,13 +158,9 @@ public final class RailSlopeProfile {
             negativeEnd = rampNegative ? refitRamp(world, pos, seat, negative) : 0.0d;
             positiveEnd = rampPositive ? refitRamp(world, pos, seat, positive) : 0.0d;
         } else {
+            // Each flat end decides for itself; two lifted ends make a V (see the class invariant).
             negativeEnd = flatLift(world, pos, seat, negative);
             positiveEnd = flatLift(world, pos, seat, positive);
-            if (negativeEnd > EPS && positiveEnd > EPS) {
-                // A rail in a dip keeps both ends on its support.
-                negativeEnd = 0.0d;
-                positiveEnd = 0.0d;
-            }
         }
         return new Profile(axis, negativeEnd, positiveEnd, vanillaNegative, vanillaPositive);
     }
@@ -129,7 +168,7 @@ public final class RailSlopeProfile {
     /**
      * The outline box for a fitted profile, in the rail's own cell before its seat is applied.
      * Interpolates vanilla's own two boxes — 2/16 tall for a flat rail, 8/16 for a full ramp — so a
-     * vanilla ramp yields exactly vanilla's box, and reaches down when an end is drawn below the base.
+     * vanilla ramp yields exactly vanilla's box.
      */
     public static VoxelShape outlineShape(Profile profile) {
         double top = FLAT_BOX_TOP + (RAMP_BOX_TOP - FLAT_BOX_TOP) * Math.max(0.0d, profile.highestEnd());
@@ -137,7 +176,10 @@ public final class RailSlopeProfile {
         return Shapes.box(0.0d, bottom, 0.0d, 1.0d, top, 1.0d);
     }
 
-    /** The rail's own vanilla ramp toward {@code toward}, refitted to the seat of the rail it climbs to. */
+    /**
+     * The rail's own vanilla ramp toward {@code toward}, refitted to the seat of the rail it climbs
+     * to: never below the support it rests on, never past {@link #MAX_RISE}.
+     */
     private static double refitRamp(BlockGetter world, BlockPos pos, double seat, Direction toward) {
         // Vanilla makes a rail a ramp on the mere PRESENCE of a rail one cell up in that direction,
         // so presence is also the test here; the neighbour's own shape does not enter into it.
@@ -146,13 +188,14 @@ public final class RailSlopeProfile {
         if (!isRail(upState)) {
             return 1.0d;
         }
-        return 1.0d + (seatOf(world, up, upState) - seat);
+        double rise = 1.0d + (seatOf(world, up, upState) - seat);
+        return Math.min(MAX_RISE, Math.max(0.0d, rise));
     }
 
     /**
      * How far a flat end lifts to meet a connected neighbour at the same grid level that is drawn
      * higher: 0 when there is no such neighbour, when it is drawn level or lower, or when the
-     * neighbour's own shape does not reach back flat toward this rail.
+     * neighbour's own shape does not reach back flat toward this rail; at most {@link #MAX_RISE}.
      */
     private static double flatLift(BlockGetter world, BlockPos pos, double seat, Direction toward) {
         BlockPos same = pos.relative(toward);
@@ -165,7 +208,7 @@ public final class RailSlopeProfile {
             return 0.0d;
         }
         double lift = seatOf(world, same, sameState) - seat;
-        return lift > EPS ? lift : 0.0d;
+        return lift > EPS ? Math.min(MAX_RISE, lift) : 0.0d;
     }
 
     /** A cell's stored seat, exactly as the minecart seat and the model read it. */

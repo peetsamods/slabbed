@@ -8,6 +8,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.RailBlock;
 import net.minecraft.world.level.block.state.BlockState;
@@ -25,9 +26,11 @@ import net.minecraft.world.phys.AABB;
  * shaped differently fails loudly instead of proving the wrong thing.
  *
  * <p>MUTATIONS that must redden this class: make {@code flatLift} ignore the neighbour's seat
- * (rows 1, 9, 13 and the outline row), make {@code refitRamp} return 1.0 unconditionally (rows 2, 3,
- * 8 and the ramp outline row), drop the dip guard (row 5), drop the flat-reach test (row 7), let a
- * ramp's flat end lift (row 10), or withhold {@code BaseRailBlockSlopeShapeMixin} (outline rows).
+ * (rows 1, 5, 9, 11, 13, 14, 16, 17), make {@code refitRamp} return 1.0 unconditionally (rows 2, 3,
+ * 8, 12, 15, 16), make {@code kinked} answer false (rows 5, 13), drop the flat-reach test (row 7),
+ * let a ramp's flat end lift (row 10), drop the ramp floor (row 15), drop the rise cap (row 16),
+ * narrow {@code isRail} to the plain rail (row 17), or withhold
+ * {@code BaseRailBlockSlopeShapeMixin} (rows 9, 11, 12, 15).
  */
 public final class RailSlopeProfileTest {
 
@@ -62,9 +65,13 @@ public final class RailSlopeProfileTest {
      * @return the ABSOLUTE rail position
      */
     private static BlockPos rail(GameTestHelper helper, BlockPos rel, double dy) {
+        return rail(helper, rel, dy, Blocks.RAIL);
+    }
+
+    private static BlockPos rail(GameTestHelper helper, BlockPos rel, double dy, Block kind) {
         ServerLevel level = helper.getLevel();
         helper.setBlock(rel.below(), Blocks.STONE.defaultBlockState());
-        helper.setBlock(rel, Blocks.RAIL.defaultBlockState());
+        helper.setBlock(rel, kind.defaultBlockState());
         BlockPos abs = helper.absolutePos(rel);
         if (dy != 0.0d) {
             SlabAnchorAttachment.writePlacementDy(level, abs.below(), dy);
@@ -75,10 +82,11 @@ public final class RailSlopeProfileTest {
 
     private static RailShape shapeAt(GameTestHelper helper, BlockPos abs) {
         BlockState state = helper.getLevel().getBlockState(abs);
-        if (!(state.getBlock() instanceof RailBlock)) {
+        RailShape shape = RailSlopeProfile.shapeOf(state);
+        if (shape == null) {
             throw helper.assertionException("premise: expected a rail at " + abs + ", found " + state);
         }
-        return state.getValue(RailBlock.SHAPE);
+        return shape;
     }
 
     private static void requireShape(GameTestHelper helper, BlockPos abs, RailShape expected) {
@@ -117,6 +125,14 @@ public final class RailSlopeProfileTest {
         if (profile == null || !profile.isVanilla()) {
             throw helper.assertionException("the rail at " + abs + " must keep vanilla geometry, got "
                     + profile);
+        }
+    }
+
+    private static void expectKinked(GameTestHelper helper, BlockPos abs, boolean kinked) {
+        RailSlopeProfile.Profile profile = profileAt(helper, abs);
+        if (profile == null || profile.kinked() != kinked) {
+            throw helper.assertionException("the rail at " + abs + (kinked ? " must" : " must not")
+                    + " be drawn as a V, got " + profile);
         }
     }
 
@@ -192,16 +208,22 @@ public final class RailSlopeProfileTest {
         });
     }
 
-    // ── row 5: a rail in a dip keeps both ends on its support ───────────────────────────────────
+    // ── row 5: a rail in a dip rises to both neighbours as a V — each seam is its own ──────────
 
     @GameTest(structure = "fabric-gametest-api-v1:empty")
-    public void aRailInADipKeepsBothEndsOnItsSupport(GameTestHelper helper) {
+    public void aRailInADipRisesToBothNeighboursAsAV(GameTestHelper helper) {
         withFrozen(() -> {
             BlockPos a = rail(helper, A, LOWERED);
             BlockPos n = rail(helper, A.north(), 0.0d);
             BlockPos s = rail(helper, A.south(), 0.0d);
             requireShape(helper, a, RailShape.NORTH_SOUTH);
-            expectProfile(helper, a, Direction.Axis.Z, 0.0d, 0.0d, 0.0d, 0.0d);
+            expectProfile(helper, a, Direction.Axis.Z, 0.5d, 0.5d, 0.0d, 0.0d);
+            expectKinked(helper, a, true);
+            // The middle of the V rests on the support; a single lifted end is one plane, not a V.
+            RailSlopeProfile.Profile profile = profileAt(helper, a);
+            if (Math.abs(profile.heightAt(0.5d)) > EPS || Math.abs(profile.heightAt(0.25d) - 0.25d) > EPS) {
+                throw helper.assertionException("a V must rest on its support at the middle, got " + profile);
+            }
             expectVanilla(helper, n);
             expectVanilla(helper, s);
             helper.succeed();
@@ -275,7 +297,7 @@ public final class RailSlopeProfileTest {
         });
     }
 
-    // ── row 10: a ramp's flat end never lifts, even toward a higher neighbour ────────────────────
+    // ── row 10: a ramp's flat end never lifts, and the flush rail above its foot keeps its step ─
 
     @GameTest(structure = "fabric-gametest-api-v1:empty")
     public void aRampsFlatEndNeverLifts(GameTestHelper helper) {
@@ -287,6 +309,9 @@ public final class RailSlopeProfileTest {
             requireShape(helper, c, RailShape.NORTH_SOUTH);
             expectProfile(helper, a, Direction.Axis.Z, 0.0d, 1.0d, 0.0d, 1.0d);
             expectVanilla(helper, b);
+            // The higher flat rail cannot dip below its own support either: this seam stays a step,
+            // exactly as vanilla drew it (a documented exception, not a gap).
+            expectVanilla(helper, c);
             helper.succeed();
         });
     }
@@ -332,7 +357,63 @@ public final class RailSlopeProfileTest {
             expectProfile(helper, a, Direction.Axis.X, 0.0d, 0.5d, 0.0d, 0.0d);
             rail(helper, A.west(), 0.0d);
             requireShape(helper, a, RailShape.EAST_WEST);
-            expectProfile(helper, a, Direction.Axis.X, 0.0d, 0.0d, 0.0d, 0.0d);
+            expectProfile(helper, a, Direction.Axis.X, 0.5d, 0.5d, 0.0d, 0.0d);
+            expectKinked(helper, a, true);
+            helper.succeed();
+        });
+    }
+
+    // ── row 15: a ramp never sinks below its support ─────────────────────────────────────────────
+
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void aRampNeverSinksBelowItsSupport(GameTestHelper helper) {
+        withFrozen(() -> {
+            // The rail one cell up is seated a block and a half down: drawn BELOW this rail's base.
+            BlockPos b = rail(helper, A.south().above(), -1.5d);
+            BlockPos a = rail(helper, A, 0.0d);
+            requireShape(helper, a, RailShape.ASCENDING_SOUTH);
+            expectProfile(helper, a, Direction.Axis.Z, 0.0d, 0.0d, 0.0d, 1.0d);
+            expectOutlineY(helper, a, 0.0d, FLAT_BOX);
+            expectVanilla(helper, b);
+            helper.succeed();
+        });
+    }
+
+    // ── row 16: a rise is capped where a rail would become a wall ────────────────────────────────
+
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void aRiseIsCappedWhereARailWouldBeAWall(GameTestHelper helper) {
+        withFrozen(() -> {
+            BlockPos flat = rail(helper, A, -2.0d);
+            BlockPos flatNeighbour = rail(helper, A.south(), 0.0d);
+            requireShape(helper, flat, RailShape.NORTH_SOUTH);
+            expectProfile(helper, flat, Direction.Axis.Z, 0.0d, RailSlopeProfile.MAX_RISE, 0.0d, 0.0d);
+            expectVanilla(helper, flatNeighbour);
+
+            BlockPos rampTop = rail(helper, A.east(3).south().above(), 0.0d);
+            BlockPos ramp = rail(helper, A.east(3), -3.0d);
+            requireShape(helper, ramp, RailShape.ASCENDING_SOUTH);
+            expectProfile(helper, ramp, Direction.Axis.Z, 0.0d, RailSlopeProfile.MAX_RISE, 0.0d, 1.0d);
+            expectVanilla(helper, rampTop);
+            helper.succeed();
+        });
+    }
+
+    // ── row 17: every rail kind fits the same ────────────────────────────────────────────────────
+
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void everyRailKindFitsTheSame(GameTestHelper helper) {
+        withFrozen(() -> {
+            Block[] kinds = {Blocks.POWERED_RAIL, Blocks.DETECTOR_RAIL, Blocks.ACTIVATOR_RAIL};
+            for (int i = 0; i < kinds.length; i++) {
+                BlockPos at = A.east(i * 2);
+                BlockPos a = rail(helper, at, LOWERED, kinds[i]);
+                BlockPos b = rail(helper, at.south(), 0.0d, kinds[i]);
+                requireShape(helper, a, RailShape.NORTH_SOUTH);
+                requireShape(helper, b, RailShape.NORTH_SOUTH);
+                expectProfile(helper, a, Direction.Axis.Z, 0.0d, 0.5d, 0.0d, 0.0d);
+                expectVanilla(helper, b);
+            }
             helper.succeed();
         });
     }

@@ -43,7 +43,14 @@ public abstract class BaseRailBlockSlopeShapeMixin {
         if (world instanceof EmptyBlockGetter) {
             return;
         }
-        RailSlopeProfile.Profile profile = RailSlopeProfile.resolve(world, pos, state);
+        RailSlopeProfile.Profile profile;
+        try {
+            profile = RailSlopeProfile.resolve(world, pos, state);
+        } catch (IndexOutOfBoundsException boundedView) {
+            // A bounds-limited view that cannot answer for the neighbour gets vanilla's box, the
+            // same fallback the render path takes at a region border.
+            return;
+        }
         if (profile == null || profile.isVanilla()) {
             return;
         }

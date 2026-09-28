@@ -11,12 +11,14 @@ See LAW.md — this changelog does not redefine the law.
   rail now fits its slope to the rail it actually connects to: a lowered rail rises half a block to
   meet a flush neighbour, a ramp onto a lowered rail is only half as steep, and a lowered ramp onto a
   flush rail climbs a block and a half. The rail's outline and targeting box follow the same slope,
-  so it can be selected where it is drawn. The lower rail of each pair does the meeting; a rail in a
-  half-block dip stays flat on its block, as vanilla leaves one side of a grid dip unjoined; curves
-  are unchanged. No stored height moves: only the drawn slope between two heights follows the
-  neighbour, the way vanilla's own rail shape already does (maintainer ruling, 2026-09-28).
-  Minecarts still ride the grid and re-seat cell by cell; following the drawn slope is a separate
-  change.
+  so it can be selected where it is drawn. Each end of a rail answers only to the rail on its own
+  side: the lower rail of a pair rises to the higher one, and a rail sitting half a block below both
+  of its neighbours becomes a shallow V resting on its block in the middle. Curves are unchanged, a
+  ramp's foot never lifts off its block, and a rail is never bent more than a block and a half in
+  one cell, so those seams keep the small step vanilla always drew. No stored height moves: only
+  the drawn slope between two heights follows the neighbour, the way vanilla's own rail shape
+  already does (maintainer ruling, 2026-09-28). Minecarts still ride the grid and re-seat cell by
+  cell; following the drawn slope is a separate change.
 
 ## [0.6.0-alpha.2+26.3] — MC 26.3 alpha hotfix
 
