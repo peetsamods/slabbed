@@ -130,6 +130,8 @@ before this line's behaviour work closes — see the note beneath the table.
 | Entry | Reason |
 | --- | --- |
 | `com/slabbed/mixin/AbstractRailBlockSlopeShapeMixin` | A rail's outline and raycast box are sized from the slope it is drawn with, so a rail fitted to a neighbour at another seat can be targeted where it is drawn. A read of seats only (maintainer ruling, 2026-09-28). |
+| `com/slabbed/mixin/PoweredRailVisualSignalMixin` | A powered rail seated on a lowered block is also powered by what touches the row it is drawn in, in its own update and in the rail-to-rail chain check (maintainer ruling, 2026-09-28). |
+| `com/slabbed/mixin/LoweredRailSupportNeighborMixin` | A neighbour change delivered to the cell a lowered powered rail is drawn in is forwarded to the rail, so a lever or repeater beside the slab reaches it (maintainer ruling, 2026-09-28). |
 | `com/slabbed/mixin/ArmorStandItemOffsetPlacementMixin` | Places armor stands against the stored visible support plane while retaining vanilla item collision and entity-data handling. |
 | `com/slabbed/mixin/BlockItemPlacementIntentMixin` | Captures placement intent for the placement law. |
 | `com/slabbed/mixin/BlockOnPlacedAnchorMixin` | Writes the dy anchor on placement. |
@@ -146,7 +148,7 @@ before this line's behaviour work closes — see the note beneath the table.
 | `com/slabbed/mixin/ItemFramePhysicalOffsetMixin` | Saves and synchronizes frame height so the physical body and rendered position agree. |
 | `com/slabbed/mixin/PaintingRememberedSeatMixin` | A painting remembers the drawn face it was hung on: seat minted once, synced, saved, physical (maintainer ruling, 2026-09-13). |
 | `com/slabbed/mixin/HangingSurvivalOnGridMixin` | A seated painting judges attachment on the grid cells behind it, not its seated box. |
-| `com/slabbed/mixin/MinecartPhysicalOffsetMixin` | Keeps rail coordinates distinct from physical minecart movement, passengers and targeting. |
+| `com/slabbed/mixin/MinecartPhysicalOffsetMixin` | Keeps rail coordinates distinct from physical minecart movement, passengers and targeting; the cart's seat follows the rail's drawn slope, and the collision sweep runs at the top of it (maintainer ruling, 2026-09-28). |
 | `com/slabbed/mixin/PistonPlacementDyTransferMixin` | Carries stored heights through vanilla piston movement. |
 | `com/slabbed/mixin/PistonMovingBlockDyMixin` | Preserves moving-cell heights when their final block state is installed. |
 | `com/slabbed/mixin/SnowBlockStoredSupportMixin` | Preserves snow support-face checks on translated collision shapes. |
@@ -182,6 +184,7 @@ before this line's behaviour work closes — see the note beneath the table.
 | --- | --- |
 | `com/slabbed/util/HangingSeatDyHolder` | Duck interface exposing a hung decoration's remembered seat. |
 | `com/slabbed/util/RailSlopeProfile` | The drawn profile of a straight rail: each end fitted to the seat of the rail it connects to. Pure; the one rule the client rail geometry and the outline box are both computed from. Reads seats, writes nothing (maintainer ruling, 2026-09-28). |
+| `com/slabbed/util/RailVisualSignal` | The cell a lowered rail is drawn in and the redstone arriving at that row — the read the powered-rail hooks share. Reads seats, writes nothing (maintainer ruling, 2026-09-28). |
 | `com/slabbed/util/SlabSupport` | Support-surface resolution and the visual Y offset — the core of the feature. |
 | `com/slabbed/util/SlabbedOffsetRaycast` | Offset-aware nearest-hit raycast — the targeting overhaul. |
 | `com/slabbed/util/RuntimeDiagnostics` | The release-safe diagnostics boundary: every method is gated behind a `System.getProperty` flag (default off) or an `isEnabled()` check, and is the sole caller shipped code uses to reach recording/inspection behaviour. Architecture keeping diagnostics gated, not diagnostics leaking in — analogous in role to the donor line's `SlabbedAuditBridge`, though this line has not yet consolidated onto that class; see the dev-tooling port phase. |

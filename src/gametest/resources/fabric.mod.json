@@ -48,7 +48,8 @@
       "com.slabbed.anchor.PlacementDyAttachmentCapacityTest",
       "com.slabbed.test.PlacementLandingRegressionTest",
       "com.slabbed.test.HangingLoadDeferralTest",
-      "com.slabbed.test.RailSlopeProfileTest"
+      "com.slabbed.test.RailSlopeProfileTest",
+      "com.slabbed.test.RailVisualSignalTest"
     ]
   },
   "depends": {

@@ -5,6 +5,8 @@
   "mixins": [
     "ArmorStandItemOffsetPlacementMixin",
     "AbstractRailBlockSlopeShapeMixin",
+    "PoweredRailVisualSignalMixin",
+    "LoweredRailSupportNeighborMixin",
     "HangingSignAttachedMixin",
     "CarpetBlockMixin",
     "torch.TorchBlockMixin",

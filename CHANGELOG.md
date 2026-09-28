@@ -31,8 +31,20 @@ See LAW.md — this changelog does not redefine the law.
   ramp's foot never lifts off its block, and a rail is never bent more than a block and a half in
   one cell, so those seams keep the small step vanilla always drew. No stored height moves: only
   the drawn slope between two heights follows the neighbour, the way vanilla's own rail shape
-  already does (maintainer ruling, 2026-09-28). Minecarts still ride the grid and re-seat cell by
-  cell; following the drawn slope is a separate change.
+  already does (maintainer ruling, 2026-09-28). A minecart rides the drawn slope too: its height
+  follows the rail under it point by point instead of stepping half a block at the cell edge.
+- **Powered rails on lowered blocks take power from what touches them.** A powered rail on a slab
+  sits one grid cell above the slab but is drawn inside the slab's cell, so a torch, wire or lever
+  standing beside the slab, visibly touching the rail, was a diagonal to the game and never powered
+  it, and an unpowered powered rail is a brake. A lowered powered rail now also listens at the cell it
+  is drawn in — beside it and under it, so a torch under the slab works like a torch under a full
+  block — both for its own power and when it passes power along a chain of powered rails, and a
+  change beside the slab reaches the rail. A rail drawn in its own cell behaves exactly as before.
+- **Minecarts no longer stop dead on the first lowered rail.** A cart crossing onto a rail on a slab
+  was dropped half a block the moment its center entered the cell, and its body then jammed against
+  the next rail's full-height support, stopping it even on a powered track. The cart now rides the
+  drawn slope down and up, and while the game checks it against blocks it is held at the top of the
+  slope, exactly as vanilla does for a cart on a ramp (maintainer ruling, 2026-09-28).
 
 ## [0.5.2-alpha.22] — Minecraft 1.21.1 (Fabric) — 2026-09-27
 
