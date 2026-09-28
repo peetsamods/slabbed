@@ -140,6 +140,7 @@ before this line's behaviour work closes — see the note beneath the table.
 | `com/slabbed/mixin/FencePaneSlabConnectionMixin` | Fence and pane connection against a lowered slab. |
 | `com/slabbed/mixin/HangingSignAttachedMixin` | Hanging-sign attachment from above. |
 | `com/slabbed/mixin/RedstoneWireBlockMixin` | Redstone wire connection and support over lowered slabs. |
+| `com/slabbed/mixin/RedstoneWireVisualStepMixin` | A wire beside a lowered half-step also reads the wire drawn on the slab next to it, in the wire's incoming-signal read (maintainer ruling, 2026-09-28). |
 | `com/slabbed/mixin/ServerInteractBlockHitToleranceMixin` | Server-side hit tolerance for offset targeting. |
 | `com/slabbed/mixin/SlabSupportBlockMixin` | Slab support surface. |
 | `com/slabbed/mixin/SlabSupportStateMixin` | Slab support state. |
@@ -185,6 +186,7 @@ before this line's behaviour work closes — see the note beneath the table.
 | `com/slabbed/util/HangingSeatDyHolder` | Duck interface exposing a hung decoration's remembered seat. |
 | `com/slabbed/util/RailSlopeProfile` | The drawn profile of a straight rail: each end fitted to the seat of the rail it connects to. Pure; the one rule the client rail geometry and the outline box are both computed from. Reads seats, writes nothing (maintainer ruling, 2026-09-28). |
 | `com/slabbed/util/RailVisualSignal` | The cell a lowered rail is drawn in and the redstone arriving at that row — the read the powered-rail hooks share. Reads seats, writes nothing (maintainer ruling, 2026-09-28). |
+| `com/slabbed/util/WireVisualSignal` | The wire drawn inside a neighbouring cell and the one-block reach of a wire's read — the read the wire's incoming-signal hook uses. Reads seats, writes nothing (maintainer ruling, 2026-09-28). |
 | `com/slabbed/util/SlabSupport` | Support-surface resolution and the visual Y offset — the core of the feature. |
 | `com/slabbed/util/SlabbedOffsetRaycast` | Offset-aware nearest-hit raycast — the targeting overhaul. |
 | `com/slabbed/util/RuntimeDiagnostics` | The release-safe diagnostics boundary: every method is gated behind a `System.getProperty` flag (default off) or an `isEnabled()` check, and is the sole caller shipped code uses to reach recording/inspection behaviour. Architecture keeping diagnostics gated, not diagnostics leaking in — analogous in role to the donor line's `SlabbedAuditBridge`, though this line has not yet consolidated onto that class; see the dev-tooling port phase. |
