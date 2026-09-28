@@ -2,7 +2,7 @@
 
 Player-facing changes for the Fabric 1.21.1 line. See LAW.md — this doc does not redefine the law.
 
-## [Unreleased] — Minecraft 1.21.1 (Fabric)
+## [0.5.2-alpha.25] — Minecraft 1.21.1 (Fabric) — 2026-09-28
 
 See LAW.md — this changelog does not redefine the law.
 
