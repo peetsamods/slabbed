@@ -2,6 +2,7 @@ package com.slabbed.test;
 
 import com.slabbed.anchor.SlabAnchorAttachment;
 import com.slabbed.util.SlabSupport;
+import com.slabbed.util.SlabEnsembleCoherence;
 import it.unimi.dsi.fastutil.longs.Long2DoubleOpenHashMap;
 import net.fabricmc.fabric.api.gametest.v1.GameTest;
 import net.minecraft.core.BlockPos;
@@ -15,6 +16,7 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.context.UseOnContext;
 import net.minecraft.world.level.GameType;
+import net.minecraft.world.level.EmptyBlockGetter;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.SlabBlock;
@@ -53,7 +55,12 @@ public final class UndersideSeatClampTest {
         Player player = h.makeMockPlayer(GameType.SURVIVAL);
         ItemStack stack = new ItemStack(item);
         player.setItemInHand(InteractionHand.MAIN_HAND, stack);
-        Vec3 hit = Vec3.atCenterOf(owner).add(0.0, -0.5, 0.0);
+        BlockState ownerState = h.getLevel().getBlockState(owner);
+        double bottom = ownerState.getBlock() instanceof SlabBlock
+                && ownerState.getValue(SlabBlock.TYPE) == SlabType.TOP ? 0.5d : 0.0d;
+        Vec3 hit = new Vec3(owner.getX() + 0.5d,
+                owner.getY() + SlabSupport.getYOffset(h.getLevel(), owner, ownerState) + bottom,
+                owner.getZ() + 0.5d);
         stack.useOn(new UseOnContext(player, InteractionHand.MAIN_HAND,
                 new BlockHitResult(hit, Direction.DOWN, owner, false)));
     }
@@ -180,26 +187,106 @@ public final class UndersideSeatClampTest {
         h.succeed();
     }
 
-    /**
-     * The honest limit: the clamp never steps PAST grid height. Under a lowered TOP slab the underside
-     * landing is already 0.0, the slab's body sits inside the post's 1.5-high span, and nothing short of
-     * sinking the post could make that physical — so the gate keeps refusing.
-     */
+    /** The visible post meets the lowered slab; its above-cell movement barrier cannot veto contact. */
     @GameTest(structure = "fabric-gametest-api-v1:empty")
-    public void fenceUnderLoweredTopSlabStaysRefused(GameTestHelper h) {
+    public void fenceConnectsStackToLoweredCantileverTopSlab(GameTestHelper h) {
         ServerLevel w = h.getLevel();
         BlockPos owner = h.absolutePos(OWNER);
         withFrozen(() -> {
             w.setBlock(owner, slab(Blocks.BIRCH_SLAB, SlabType.TOP), 2);
             forceStore(w, owner, -0.5d);
-            placeUnder(h, Items.BIRCH_FENCE, owner);
-            BlockState placed = w.getBlockState(owner.below());
-            if (!placed.isAir()) {
-                throw h.assertionException(owner.below(),
-                        "the clamp must not sink a post below grid height to fit under a lowered TOP slab; got "
-                                + placed);
+            BlockPos target = owner.below();
+            w.setBlock(target.below(), Blocks.OAK_FENCE.defaultBlockState(), 2);
+            w.setBlock(owner.east(), Blocks.OAK_PLANKS.defaultBlockState(), 2);
+            w.setBlock(target.east(), Blocks.OAK_PLANKS.defaultBlockState(), 2);
+            BlockState post = Blocks.OAK_FENCE.defaultBlockState();
+            double postTop = target.getY() + post.getShape(EmptyBlockGetter.INSTANCE, BlockPos.ZERO)
+                    .max(Direction.Axis.Y);
+            double underside = owner.getY() - 0.5d + 0.5d;
+            if (Math.abs(postTop - underside) > EPS) {
+                throw h.assertionException(target, "premise: visible fence top must meet the slab underside");
+            }
+            if (SlabEnsembleCoherence.relativeTranslationIncreasesPlacementBodyOverlap(
+                    post, target, 0.0d, w.getBlockState(owner), owner, -0.5d)) {
+                throw h.assertionException(target,
+                        "a visible fence/slab contact is refused by the fence's above-cell movement barrier");
+            }
+            if (!SlabEnsembleCoherence.relativeTranslationIncreasesBodyOverlap(
+                    post, target, 0.0d, w.getBlockState(owner), owner, -0.5d)) {
+                throw h.assertionException(target, "the landing clamp must retain the full collision envelope");
+            }
+            placeUnder(h, Items.OAK_FENCE, owner);
+            assertPlacedAt(h, w, target, Blocks.OAK_FENCE, 0.0d,
+                    "a fence must bridge the existing stack and the cantilevered slab");
+            w.setBlock(owner.east(), Blocks.AIR.defaultBlockState(), 2);
+            w.setBlock(target.east(), Blocks.AIR.defaultBlockState(), 2);
+            w.setBlock(target.below(), Blocks.AIR.defaultBlockState(), 2);
+            assertPlacedAt(h, w, target, Blocks.OAK_FENCE, 0.0d,
+                    "neighbor and support removal must preserve the placed fence height");
+            if (Math.abs(post.getCollisionShape(EmptyBlockGetter.INSTANCE, BlockPos.ZERO)
+                    .max(Direction.Axis.Y) - 1.5d) > EPS) {
+                throw h.assertionException(target, "the fence's movement barrier must remain 1.5 blocks high");
             }
         });
+        h.succeed();
+    }
+
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void wallBarsAndChainKeepLegalUnderSlabContact(GameTestHelper h) {
+        ServerLevel w = h.getLevel();
+        BlockPos owner = h.absolutePos(OWNER);
+        withFrozen(() -> {
+            for (Block body : new Block[] {Blocks.COBBLESTONE_WALL, Blocks.IRON_BARS, Blocks.IRON_CHAIN}) {
+                w.setBlock(owner.below(), Blocks.AIR.defaultBlockState(), 2);
+                w.setBlock(owner.below(2), body.defaultBlockState(), 2);
+                w.setBlock(owner, slab(Blocks.STONE_SLAB, SlabType.TOP), 2);
+                forceStore(w, owner, -0.5d);
+                if (SlabEnsembleCoherence.relativeTranslationIncreasesPlacementBodyOverlap(
+                        body.defaultBlockState(), owner.below(), 0.0d,
+                        w.getBlockState(owner), owner, -0.5d)) {
+                    throw h.assertionException(owner.below(), "legal under-slab contact was refused for " + body);
+                }
+                placeUnder(h, body.asItem(), owner);
+                assertPlacedAt(h, w, owner.below(), body, 0.0d, "legal under-slab contact");
+            }
+        });
+        h.succeed();
+    }
+
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void fenceStillRefusesAVisiblyTooShortGap(GameTestHelper h) {
+        ServerLevel w = h.getLevel();
+        BlockPos owner = h.absolutePos(OWNER);
+        withFrozen(() -> {
+            BlockPos target = owner.below();
+            w.setBlock(target.below(), Blocks.OAK_FENCE.defaultBlockState(), 2);
+            w.setBlock(owner, slab(Blocks.OAK_SLAB, SlabType.TOP), 2);
+            forceStore(w, owner, -1.0d);
+            if (!SlabEnsembleCoherence.relativeTranslationIncreasesPlacementBodyOverlap(
+                    Blocks.OAK_FENCE.defaultBlockState(), target, 0.0d,
+                    w.getBlockState(owner), owner, -1.0d)) {
+                throw h.assertionException(target, "a post's visible body must not enter the slab");
+            }
+            placeUnder(h, Items.OAK_FENCE, owner);
+            if (!w.getBlockState(target).isAir()) {
+                throw h.assertionException(target, "a full fence cannot fit a half-block gap");
+            }
+        });
+        h.succeed();
+    }
+
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void visibleFloorAndCeilingOverlapRemainUnsafe(GameTestHelper h) {
+        BlockPos lower = BlockPos.ZERO;
+        BlockPos upper = lower.above();
+        if (!SlabEnsembleCoherence.relativeTranslationIncreasesPlacementBodyOverlap(
+                Blocks.STONE.defaultBlockState(), lower, 0.0d,
+                Blocks.OAK_FENCE.defaultBlockState(), upper, -0.5d)
+                || !SlabEnsembleCoherence.relativeTranslationIncreasesPlacementBodyOverlap(
+                        Blocks.STONE.defaultBlockState(), lower, 0.0d,
+                        Blocks.STONE.defaultBlockState(), upper, -0.5d)) {
+            throw h.assertionException("visible placement bodies must not sink into solid floors");
+        }
         h.succeed();
     }
 }

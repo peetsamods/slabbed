@@ -10,6 +10,7 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.shapes.CollisionContext;
+import net.minecraft.world.phys.shapes.BooleanOp;
 import net.minecraft.world.phys.shapes.Shapes;
 import net.minecraft.world.phys.shapes.VoxelShape;
 
@@ -177,6 +178,36 @@ public final class SlabEnsembleCoherence {
             return false;
         }
 
+        return relativeTranslationIncreasesOverlap(
+                firstBody, firstPos, firstDy, secondBody, secondPos, secondDy);
+    }
+
+    /**
+     * Placement admission may ignore an above-cell entity barrier when both visible bodies fit.
+     * Landing-height clamps retain the full collision envelope through the sibling predicate.
+     */
+    public static boolean relativeTranslationIncreasesPlacementBodyOverlap(
+            BlockState firstState, BlockPos firstPos, double firstDy,
+            BlockState secondState, BlockPos secondPos, double secondDy) {
+        if (!relativeTranslationIncreasesBodyOverlap(
+                firstState, firstPos, firstDy, secondState, secondPos, secondDy)) {
+            return false;
+        }
+        VoxelShape firstBody = vanillaCollisionShape(firstState);
+        VoxelShape secondBody = vanillaCollisionShape(secondState);
+        VoxelShape firstPlacementBody = placementBodyShape(firstState, firstBody);
+        VoxelShape secondPlacementBody = placementBodyShape(secondState, secondBody);
+        if (firstPlacementBody == firstBody && secondPlacementBody == secondBody) {
+            return true;
+        }
+        return relativeTranslationIncreasesOverlap(
+                firstPlacementBody, firstPos, firstDy, secondPlacementBody, secondPos, secondDy);
+    }
+
+    private static boolean relativeTranslationIncreasesOverlap(
+            VoxelShape firstBody, BlockPos firstPos, double firstDy,
+            VoxelShape secondBody, BlockPos secondPos, double secondDy) {
+
         for (AABB firstBox : firstBody.toAabbs()) {
             for (AABB secondBox : secondBody.toAabbs()) {
                 double xDepth = Math.min(
@@ -311,6 +342,26 @@ public final class SlabEnsembleCoherence {
     private static VoxelShape vanillaCollisionShape(BlockState state) {
         return state.getCollisionShape(
                 EmptyBlockGetter.INSTANCE, BlockPos.ZERO, CollisionContext.empty());
+    }
+
+    /**
+     * Above-cell collision with no matching outline geometry is an entity barrier, not occupied
+     * build volume. Admission measures the in-cell body when the outline is contained in that cell.
+     * Movement collision remains unchanged; visible bodies extending outside the cell remain whole.
+     */
+    private static VoxelShape placementBodyShape(BlockState state, VoxelShape collision) {
+        if (collision.isEmpty() || collision.max(Direction.Axis.Y) <= 1.0d + EPS) {
+            return collision;
+        }
+        VoxelShape outline = vanillaShape(state);
+        if (outline.isEmpty() || outline.min(Direction.Axis.Y) < -EPS
+                || outline.max(Direction.Axis.Y) > 1.0d + EPS) {
+            return collision;
+        }
+        VoxelShape cellBody = Shapes.box(
+                collision.min(Direction.Axis.X), collision.min(Direction.Axis.Y), collision.min(Direction.Axis.Z),
+                collision.max(Direction.Axis.X), 1.0d, collision.max(Direction.Axis.Z));
+        return Shapes.join(collision, cellBody, BooleanOp.AND);
     }
 
     /**

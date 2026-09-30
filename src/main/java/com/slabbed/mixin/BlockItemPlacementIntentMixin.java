@@ -1856,14 +1856,14 @@ public abstract class BlockItemPlacementIntentMixin {
         BlockPos belowPos = candidatePos.below();
         BlockState belowState = world.getBlockState(belowPos);
         double belowDy = SlabSupport.getYOffset(world, belowPos, belowState);
-        boolean overlapsBelow = SlabEnsembleCoherence.relativeTranslationIncreasesBodyOverlap(
+        boolean overlapsBelow = SlabEnsembleCoherence.relativeTranslationIncreasesPlacementBodyOverlap(
                 belowState, belowPos, belowDy,
                 candidateState, candidatePos, candidateDy);
 
         BlockPos abovePos = candidatePos.above();
         BlockState aboveState = world.getBlockState(abovePos);
         double aboveDy = SlabSupport.getYOffset(world, abovePos, aboveState);
-        boolean overlapsAbove = SlabEnsembleCoherence.relativeTranslationIncreasesBodyOverlap(
+        boolean overlapsAbove = SlabEnsembleCoherence.relativeTranslationIncreasesPlacementBodyOverlap(
                 candidateState, candidatePos, candidateDy,
                 aboveState, abovePos, aboveDy);
 
