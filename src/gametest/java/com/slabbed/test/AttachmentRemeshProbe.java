@@ -41,6 +41,7 @@ public final class AttachmentRemeshProbe implements ClientModInitializer {
 
     public void onInitializeClient() {
         if (!Boolean.getBoolean("slabbed.attachmentRemeshProbe")
+                && !Boolean.getBoolean("slabbed.fenceCeilingProbe")
                 && !net.fabricmc.loader.api.FabricLoader.getInstance().isModLoaded("slabbed_attachment_proof")) return;
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
             try { tick(client); }
@@ -52,6 +53,7 @@ public final class AttachmentRemeshProbe implements ClientModInitializer {
     }
 
     private void tick(MinecraftClient client) throws Exception {
+        if (Boolean.getBoolean("slabbed.fenceCeilingProbe")) { tickFence(client);return; }
         if (phase == 99) return;
         if (++ticks > 2400) throw new AssertionError("bounded client proof timed out");
         if (!requested && client.isFinishedLoading()) {
@@ -180,6 +182,73 @@ public final class AttachmentRemeshProbe implements ClientModInitializer {
                     if (red > 60 && red > green * 1.4 && red > blue * 1.4) count++;
                 }
             System.out.println("[ATTACHMENT_REMESH] frame=" + name + " red-pixels=" + count);
+            return count;
+        }
+    }
+    private void tickFence(MinecraftClient client) throws Exception {
+        if (phase==99) return;
+        if (++ticks>2400) throw new AssertionError("bounded fence proof timed out");
+        if (!requested && client.isFinishedLoading()) {
+            if (client.world!=null) throw new AssertionError("existing world is protected");
+            requested=true;
+            client.createIntegratedServerLoader().createAndStart("fence-ceiling-proof",
+                    new LevelInfo("Fence Ceiling Proof",GameMode.CREATIVE,false,Difficulty.PEACEFUL,true,
+                            new GameRules(),DataConfiguration.SAFE_MODE),new GeneratorOptions(0L,false,false),
+                    registries -> registries.get(RegistryKeys.WORLD_PRESET).getOrThrow(WorldPresets.FLAT)
+                            .createDimensionsRegistryHolder(),null);
+            return;
+        }
+        if (client.world==null || client.player==null || client.getServer()==null) return;
+        client.options.pauseOnLostFocus=false;client.options.hudHidden=true;
+        if (client.currentScreen!=null) client.setScreen(null);
+        client.player.getAbilities().flying=true;client.player.setVelocity(Vec3d.ZERO);
+        client.player.refreshPositionAndAngles(TARGET.getX()+0.5,TARGET.getY()+1.25-client.player.getStandingEyeHeight(),
+                TARGET.getZ()-5.0,0,0);
+        client.player.setStackInHand(Hand.MAIN_HAND,ItemStack.EMPTY);
+        if (phase==0) {
+            phase=1;since=ticks;
+            client.getServer().execute(() -> {
+                var world=client.getServer().getOverworld();var player=world.getPlayers().getFirst();
+                world.setBlockState(TARGET.down(),Blocks.STONE.getDefaultState(),Block.NOTIFY_ALL);
+                var stack=new ItemStack(Items.OAK_FENCE);player.setStackInHand(Hand.MAIN_HAND,stack);
+                stack.useOnBlock(new ItemUsageContext(player,Hand.MAIN_HAND,new BlockHitResult(
+                        new Vec3d(TARGET.getX()+0.5,TARGET.getY(),TARGET.getZ()+0.5),Direction.UP,TARGET.down(),false)));
+                world.setBlockState(TARGET.up(),Blocks.OAK_SLAB.getDefaultState().with(SlabBlock.TYPE,SlabType.TOP),Block.NOTIFY_ALL);
+                SlabAnchorAttachment.writePlacementDyBatch(world,java.util.Map.of(TARGET,0L,TARGET.up(),0L));
+                player.setStackInHand(Hand.MAIN_HAND,ItemStack.EMPTY);prepared=true;
+            });
+            return;
+        }
+        if (!prepared || ticks-since<80 || !client.world.getBlockState(TARGET).isOf(Blocks.OAK_FENCE)
+                || SlabAnchorAttachment.storedPlacementDy(client.world,TARGET)!=0.0d) return;
+        var start=new Vec3d(TARGET.getX()+0.5,TARGET.getY()+1.25,TARGET.getZ()-5.0);
+        var hit=com.slabbed.util.SlabbedOffsetRaycast.raycast(client.world,start,
+                start.add(0,0,7),net.minecraft.block.ShapeContext.absent());
+        boolean targetsPost=hit.getType()==net.minecraft.util.hit.HitResult.Type.BLOCK && hit.getBlockPos().equals(TARGET);
+        if (phase==1) {
+            if (!client.world.getBlockState(TARGET.up()).isOf(Blocks.OAK_SLAB)) return;
+            if (!targetsPost || fencePixels(client,"connected")<9) throw new AssertionError("drawn connection or targeting missing");
+            phase=2;since=ticks;
+            client.getServer().execute(() -> client.getServer().getOverworld()
+                    .setBlockState(TARGET.up(),Blocks.AIR.getDefaultState(),Block.NOTIFY_ALL));
+            return;
+        }
+        if (!client.world.getBlockState(TARGET.up()).isAir()) return;
+        if (targetsPost || fencePixels(client,"removed")>2) throw new AssertionError("removed connection retained phantom geometry or targeting");
+        System.out.println("[FENCE_CEILING_PROBE] GREEN connected=true removed=true targeting=true saved_seat=true");
+        phase=99;client.scheduleStop();
+    }
+
+    private static int fencePixels(MinecraftClient client,String name) throws Exception {
+        try (var image=ScreenshotRecorder.takeScreenshot(client.getFramebuffer())) {
+            image.writeTo(client.runDirectory.toPath().resolve("fence-"+name+".png"));
+            int count=0;
+            for (int x=image.getWidth()/2-2;x<=image.getWidth()/2+2;x++)
+                for (int y=image.getHeight()/2-2;y<=image.getHeight()/2+2;y++) {
+                    int rgb=image.getColor(x,y),red=rgb&255,green=(rgb>>8)&255,blue=(rgb>>16)&255;
+                    if (red>blue+15 && green>blue+5) count++;
+                }
+            System.out.println("[FENCE_CEILING_PROBE] frame="+name+" post_pixels="+count);
             return count;
         }
     }

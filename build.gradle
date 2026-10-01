@@ -73,6 +73,14 @@ loom {
             source sourceSets.gametest
             runDir "build/run/depth-client-probe"
         }
+        fenceClientProbe {
+            client()
+            name = "Slabbed Fence Ceiling Client Probe"
+            source sourceSets.gametest
+            runDir "build/run/fence-client-probe"
+            property "slabbed.fenceCeilingProbe", "true"
+            property "slabbed.frozenDy", "true"
+        }
         attachmentClientProbe {
             client()
             name = "Slabbed Attachment Render Probe"
@@ -721,5 +729,18 @@ publishing {
         // Notice: This block does NOT have the same function as the block in the top level.
         // The repositories here will be used for publishing your artifact, not for
         // fetching dependencies.
+    }
+}
+
+// Require this invocation's native proof marker; ordinary client exit is not proof.
+tasks.named("runFenceClientProbe").configure {
+    long startedAt=0L
+    doFirst { startedAt=System.currentTimeMillis() }
+    doLast {
+        File log=new File(workingDir,"logs/latest.log")
+        if (!log.exists() || log.lastModified()<startedAt
+                || !log.text.contains("[FENCE_CEILING_PROBE] GREEN connected=true removed=true targeting=true saved_seat=true")) {
+            throw new GradleException("Fence ceiling client proof did not report a fresh passing result.")
+        }
     }
 }

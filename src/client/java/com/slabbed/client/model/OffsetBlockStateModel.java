@@ -305,6 +305,9 @@ public final class OffsetBlockStateModel extends ForwardingBakedModel {
         // Mirrors the 1.21.11 model-path fix; see docs/CULL-WINDOW-FIX-DESIGN.md.
         // Reuse the self dy already computed above (sourceDy is getYOffset for non-carpet) so the
         // step-cull check below does not recompute this block's own offset 4 more times per block.
+        if (FenceCeilingGeometry.emitIfConnected(wrapped,view,state,pos,randomSupplier,context,dy)) {
+            return;
+        }
         final double selfStepDy = (state.getBlock() instanceof CarpetBlock)
                 ? SlabSupport.getYOffset(view, pos, state)
                 : sourceDy;

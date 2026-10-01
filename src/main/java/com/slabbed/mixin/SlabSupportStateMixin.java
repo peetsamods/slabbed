@@ -6,6 +6,7 @@ import com.slabbed.anchor.SlabAnchorAttachment;
 import com.slabbed.compat.CompatHooks;
 import com.slabbed.compat.CompatSlabSurfaceKind;
 import com.slabbed.util.SlabSupport;
+import com.slabbed.util.FenceCeilingConnection;
 import net.minecraft.block.AbstractBlock;
 import net.minecraft.block.Block;
 import net.minecraft.block.BlockState;
@@ -479,6 +480,9 @@ public abstract class SlabSupportStateMixin {
 
         // A vertical chain bridged under a ceiling support renders the elongated 0..1.5 geometry;
         // its outline must span the same range so the visual triad (model/outline/raycast) agrees.
+        VoxelShape connected=FenceCeilingConnection.outline(world,pos,self,yOff,shape);
+        if (connected!=shape) { shape=connected;changed=true; }
+
         if (SlabSupport.isVerticalChainDirectlyUnderCeilingSupport(world, pos, self)) {
             shape = SlabSupport.ceilingBridgedVerticalChainSelectionShape(world, pos, self, shape);
             changed = true;

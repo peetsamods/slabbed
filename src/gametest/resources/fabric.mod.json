@@ -49,6 +49,7 @@
       "com.slabbed.test.PlacementLandingRegressionTest",
       "com.slabbed.test.HangingLoadDeferralTest",
       "com.slabbed.test.RailSlopeProfileTest",
+      "com.slabbed.test.FenceCeilingConnectionTest",
       "com.slabbed.test.RailVisualSignalTest",
       "com.slabbed.test.RedstoneWireVisualStepTest"
     ]

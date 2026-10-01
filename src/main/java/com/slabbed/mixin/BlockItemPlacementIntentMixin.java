@@ -348,7 +348,7 @@ public abstract class BlockItemPlacementIntentMixin {
             LandingResolver.PlacementResolution resolution = frame.rootAim == null
                     || family == LandingResolver.Family.UNSUPPORTED
                     ? null
-                    : LandingResolver.resolve(frame.rootAim, primary, finalState, family);
+                    : LandingResolver.resolve(world, frame.rootAim, primary, finalState, family);
             if (family == LandingResolver.Family.PAIRED_FLOOR_SEAT && resolution == null) {
                 // A reciprocal pair whose aim the resolver declined is not a pair to guess at: publish
                 // NOTHING rather than seat two cells from a lane reading that never saw the aim.

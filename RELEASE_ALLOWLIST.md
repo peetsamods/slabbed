@@ -184,6 +184,7 @@ before this line's behaviour work closes — see the note beneath the table.
 | Entry | Reason |
 | --- | --- |
 | `com/slabbed/util/HangingSeatDyHolder` | Duck interface exposing a hung decoration's remembered seat. |
+| `com/slabbed/util/FenceCeilingConnection` | Central-post ceiling connection geometry without changing stored placement seats. |
 | `com/slabbed/util/RailSlopeProfile` | The drawn profile of a straight rail: each end fitted to the seat of the rail it connects to. Pure; the one rule the client rail geometry and the outline box are both computed from. Reads seats, writes nothing (maintainer ruling, 2026-09-28). |
 | `com/slabbed/util/RailVisualSignal` | The cell a lowered rail is drawn in and the redstone arriving at that row — the read the powered-rail hooks share. Reads seats, writes nothing (maintainer ruling, 2026-09-28). |
 | `com/slabbed/util/WireVisualSignal` | The wire drawn inside a neighbouring cell and the one-block reach of a wire's read — the read the wire's incoming-signal hook uses. Reads seats, writes nothing (maintainer ruling, 2026-09-28). |
