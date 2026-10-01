@@ -119,6 +119,9 @@ public final class OffsetBlockStateModel implements BlockStateModel {
         if (RailSlopeGeometry.emitIfFitted(fabricWrapped, emitter, view, pos, state, dy, random, seam)) {
             return;
         }
+        if (FenceCeilingGeometry.emitIfConnected(fabricWrapped, emitter, view, pos, state, dy, random, seam)) {
+            return;
+        }
         boolean stepSeam = dy != 0.0f || seam.anyMismatchedNeighborDy();
         QuadEmitter out = stepSeam ? YOffsetEmitter.wrapWithTransform(emitter, dy, seam) : emitter;
         fabricWrapped.emitQuads(out, view, pos, state, random, seam);

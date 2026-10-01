@@ -2,6 +2,7 @@ package com.slabbed.mixin;
 
 import com.slabbed.anchor.SlabAnchorAttachment;
 import com.slabbed.util.SlabSupport;
+import com.slabbed.util.FenceCeilingConnection;
 import net.minecraft.world.level.block.state.BlockBehaviour;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockState;
@@ -481,6 +482,12 @@ public abstract class SlabSupportStateMixin {
                 shape = SLABBED$COMFORT_TORCH_SHAPE;
             }
             shape = shape.move(0.0, yOff, 0.0);
+            changed = true;
+        }
+
+        VoxelShape connected = FenceCeilingConnection.outline(world, pos, self, yOff, shape);
+        if (connected != shape) {
+            shape = connected;
             changed = true;
         }
 

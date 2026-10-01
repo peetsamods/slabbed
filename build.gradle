@@ -455,6 +455,7 @@ sourceSets {
             include("com/slabbed/test/AmbientParticleFrozenDyClientGameTest.java")
             include("com/slabbed/test/MinecartRenderRailSnapClientGameTest.java")
             include("com/slabbed/test/RailSlopeRenderClientGameTest.java")
+            include("com/slabbed/test/FenceCeilingRenderClientGameTest.java")
             include("com/slabbed/test/SlabbedSettingsScreenClientGameTest.java")
             include("com/slabbed/test/LoweredBandEntityLightClientGameTest.java")
             include("com/slabbed/test/DevDiagnosticsCompanionLoadsClientGameTest.java")

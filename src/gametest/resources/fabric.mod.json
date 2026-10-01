@@ -138,6 +138,7 @@
       "com.slabbed.test.AmbientParticleFrozenDyClientGameTest",
       "com.slabbed.test.MinecartRenderRailSnapClientGameTest",
       "com.slabbed.test.RailSlopeRenderClientGameTest",
+      "com.slabbed.test.FenceCeilingRenderClientGameTest",
       "com.slabbed.test.SlabbedSettingsScreenClientGameTest",
       "com.slabbed.test.PistonMovingRenderDyOwnerClientGameTest"
     ]

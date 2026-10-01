@@ -289,4 +289,53 @@ public final class UndersideSeatClampTest {
         }
         h.succeed();
     }
+
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void topFencePostReachesTheSlabAcrossAHalfCell(GameTestHelper h) {
+        ServerLevel w = h.getLevel();
+        BlockPos owner = h.absolutePos(OWNER);
+        withFrozen(() -> {
+            w.setBlock(owner, slab(Blocks.OAK_SLAB, SlabType.TOP), 2);
+            forceStore(w, owner, 0.0d);
+            placeUnder(h, Items.OAK_FENCE, owner);
+            BlockPos post = owner.below();
+            assertPlacedAt(h, w, post, Blocks.OAK_FENCE, 0.0d, "connected post keeps its placed seat");
+            var shape = w.getBlockState(post).getShape(w, post);
+            double top = post.getY() + shape.max(Direction.Axis.Y);
+            double underside = owner.getY() + 0.5d;
+            if (Math.abs(top - underside) > EPS) {
+                throw h.assertionException(post, "post outline must meet the slab underside; gap=" + (underside-top));
+            }
+            Vec3 start = new Vec3(post.getX()-1.0d, post.getY()+1.25d, post.getZ()+0.5d);
+            Vec3 end = new Vec3(post.getX()+1.0d, post.getY()+1.25d, post.getZ()+0.5d);
+            if (shape.clip(start, end, post) == null) {
+                throw h.assertionException(post, "the connecting post must be targetable in the half-cell gap");
+            }
+            w.setBlock(owner, Blocks.AIR.defaultBlockState(), 2);
+            assertPlacedAt(h, w, post, Blocks.OAK_FENCE, 0.0d, "removing the ceiling never moves the post");
+            if (Math.abs(w.getBlockState(post).getShape(w, post).max(Direction.Axis.Y)-1.0d)>EPS) {
+                throw h.assertionException(post, "a post with no ceiling keeps its normal outline");
+            }
+        });
+        h.succeed();
+    }
+
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void fenceCeilingConnectionDoesNotSpanLargerOpenings(GameTestHelper h) {
+        ServerLevel w = h.getLevel();
+        BlockPos owner = h.absolutePos(OWNER);
+        withFrozen(() -> {
+            w.setBlock(owner, slab(Blocks.OAK_SLAB, SlabType.TOP), 2);
+            forceStore(w, owner, 0.0d);
+            BlockPos post = owner.below();
+            w.setBlock(post, Blocks.OAK_FENCE.defaultBlockState(), 2);
+            forceStore(w, post, -0.5d);
+            double top = w.getBlockState(post).getShape(w, post).max(Direction.Axis.Y);
+            if (Math.abs(top-0.5d)>EPS) {
+                throw h.assertionException(post, "a full-cell opening must not stretch the post");
+            }
+            assertPlacedAt(h, w, post, Blocks.OAK_FENCE, -0.5d, "the control keeps its frozen height");
+        });
+        h.succeed();
+    }
 }

@@ -176,6 +176,7 @@ anything. The split above puts the fine granularity only where a leak has actual
 | --- | --- |
 | `com/slabbed/util/BuildStamp` | Reads the manifest identity stamp at runtime; release infrastructure, not diagnostics. |
 | `com/slabbed/util/SlabbedDiagnosticsBridge` | The deliberate release-safe no-op boundary: the public mod ships THIS bridge and none of the recorder/overlay/Sentinel implementations behind it. Dev and GameTest runtimes install the real provider; in release every call is a cheap no-op. That is architecture keeping diagnostics OUT of the jar, not diagnostics leaking in. |
+| `com/slabbed/util/FenceCeilingConnection` | Shared fence ceiling-post geometry without changing stored seats. |
 | `com/slabbed/util/ChainBridgeTextureVariant` | Chain ceiling-bridge texture selection. |
 | `com/slabbed/util/PlacementIntentState` | Placement intent carried across the use-on path. |
 | `com/slabbed/util/PlacementVerificationVerdict` | Placement verification result type. |
