@@ -4,7 +4,7 @@ on:
   pull_request:
   push:
     branches:
-      - "port/mc-26.2-**"
+      - "port/mc-26.3-**"
   workflow_dispatch:
 
 permissions:
