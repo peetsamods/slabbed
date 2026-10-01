@@ -4,7 +4,7 @@ on:
   pull_request:
   push:
     branches:
-      - main
+      - "port/fabric-1.21.1-**"
   workflow_dispatch:
 
 permissions:
