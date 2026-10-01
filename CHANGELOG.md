@@ -1,3 +1,12 @@
+## [0.6.1-alpha+26.3]
+
+See LAW.md — this changelog does not redefine the law.
+
+- Fence posts now meet a nearby slab ceiling across a half-block gap. The post keeps its placed height, and its visible connection can be targeted correctly.
+- Placing a fitting post beneath a lowered slab now uses the available space correctly.
+
+Release labels now use major.minor.patch plus a maturity label, without numbered alpha or beta counters.
+
 ## [0.6.0-alpha.3+26.3] — MC 26.3 alpha
 
 See LAW.md — this changelog does not redefine the law.
