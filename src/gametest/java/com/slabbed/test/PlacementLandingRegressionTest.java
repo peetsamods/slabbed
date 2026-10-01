@@ -80,7 +80,7 @@ public final class PlacementLandingRegressionTest {
     }
 
     /** The "TS-VB-TS" stack: a Terrain Slabs slab, a vanilla block on it, and pieces placed on or beside that block. */
-    @GameTest(templateName = "fabric-gametest-api-v1:empty")
+    @GameTest(templateName = "slabbed:empty_16")
     public void terrainSlabsStackMatrix(TestContext h) {
         ServerWorld world = h.getWorld();
         boolean previousFrozen = SlabAnchorAttachment.FROZEN_DY_ENABLED;
@@ -173,7 +173,7 @@ public final class PlacementLandingRegressionTest {
             world.setBlockState(logG.up(), tsBottom().with(TerrainSlabsTestShim.GENERATED, true), Block.NOTIFY_ALL);
             h.assertTrue(same(world, logG, -0.5d) && same(world, logG.east(), 0.0d) && !SlabAnchorAttachment.isModernPlacement(world, logG.east())
                             && same(world, logG.up(), 0.0d),
-                    "G: legacy and natural Terrain Slabs slabs stay un-offset: " + cell(world, logG.east()) + " / " + cell(world, logG.up()));
+                    "G: placement="+cell(world,logG)+"; legacy and natural Terrain Slabs slabs stay un-offset: " + cell(world, logG.east()) + " / " + cell(world, logG.up()));
         } finally {
             SlabAnchorAttachment.FROZEN_DY_ENABLED = previousFrozen;
         }

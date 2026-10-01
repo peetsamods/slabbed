@@ -51,4 +51,17 @@ public final class StateChangeAnchorTest {
         }
         ctx.complete();
     }
+
+    @GameTest(templateName="fabric-gametest-api-v1:empty")
+    public void directChunkDepartureClearsTheStoredFact(TestContext ctx) {
+        var world=ctx.getWorld();var pos=ctx.getAbsolutePos(new BlockPos(2,2,2));
+        world.setBlockState(pos,Blocks.OAK_PLANKS.getDefaultState(),3);
+        SlabAnchorAttachment.writePlacementDyBatch(world,java.util.Map.of(pos,Double.doubleToRawLongBits(-0.5d)));
+        ctx.assertTrue(SlabAnchorAttachment.storedPlacementDy(world,pos)==-0.5d,"premise: stored lowered fact");
+        world.getWorldChunk(pos).setBlockState(pos,Blocks.AIR.getDefaultState(),false);
+        ctx.assertTrue(Double.isNaN(SlabAnchorAttachment.storedPlacementDy(world,pos)),"direct departure must clear the fact");
+        world.getWorldChunk(pos).setBlockState(pos,Blocks.STONE.getDefaultState(),false);
+        ctx.assertTrue(Double.isNaN(SlabAnchorAttachment.storedPlacementDy(world,pos)),"replacement must not inherit the fact");
+        ctx.complete();
+    }
 }
