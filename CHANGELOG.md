@@ -1,3 +1,12 @@
+## [0.6.1-alpha+1.21.1-fabric]
+
+See LAW.md — this changelog does not redefine the law.
+
+- Fence posts now meet a nearby slab ceiling across a half-block gap. The post keeps its placed height, and its visible connection can be targeted correctly.
+- Placing a fitting post beneath a lowered slab now uses the available space correctly.
+
+Release labels now use major.minor.patch plus a maturity label, without numbered alpha or beta counters.
+
 # Changelog
 
 Player-facing changes for the Fabric 1.21.1 line. See LAW.md — this doc does not redefine the law.
