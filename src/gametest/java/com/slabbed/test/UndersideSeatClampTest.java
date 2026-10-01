@@ -308,7 +308,9 @@ public final class UndersideSeatClampTest {
             }
             Vec3 start = new Vec3(post.getX()-1.0d, post.getY()+1.25d, post.getZ()+0.5d);
             Vec3 end = new Vec3(post.getX()+1.0d, post.getY()+1.25d, post.getZ()+0.5d);
-            if (shape.clip(start, end, post) == null) {
+            var hit=com.slabbed.util.SlabbedOffsetRaycast.raycast(w,start,end,
+                    net.minecraft.world.phys.shapes.CollisionContext.empty());
+            if (hit.getType()!=net.minecraft.world.phys.HitResult.Type.BLOCK || !hit.getBlockPos().equals(post)) {
                 throw h.assertionException(post, "the connecting post must be targetable in the half-cell gap");
             }
             w.setBlock(owner, Blocks.AIR.defaultBlockState(), 2);

@@ -235,8 +235,9 @@ public final class SlabbedOffsetRaycast {
                 dy = SlabSupport.getYOffset(world, pos, state);
                 dyMemo.put(key, dy);
             }
-            if (dy == 0.0) {
-                return; // covered when the DDA visits this position as a primary cell
+            // A ceiling-connected post can enter the next cell without moving its stored seat.
+            if (dy == 0.0 && FenceCeilingConnection.postTop(world,pos,state,dy)<=1.0d) {
+                return; // ordinary flush geometry is covered by its primary cell
             }
             shapeTested.add(key);
             accumulate(pos, state, false);

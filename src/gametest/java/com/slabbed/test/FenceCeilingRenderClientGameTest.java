@@ -70,6 +70,13 @@ public final class FenceCeilingRenderClientGameTest implements FabricClientGameT
         if (Math.abs(minMax[0])>1.0e-5d || Math.abs(minMax[1]-expectedTop)>1.0e-5d) {
             throw new AssertionError("post vertices must span 0 to "+expectedTop+", got "+minMax[0]+" to "+minMax[1]);
         }
+        var start=new net.minecraft.world.phys.Vec3(post.getX()-1.0d,post.getY()+1.25d,post.getZ()+0.5d);
+        var hit=com.slabbed.util.SlabbedOffsetRaycast.raycast(client.level,start,start.add(2.0d,0.0d,0.0d),
+                net.minecraft.world.phys.shapes.CollisionContext.empty());
+        boolean targetsPost=hit.getType()==net.minecraft.world.phys.HitResult.Type.BLOCK && hit.getBlockPos().equals(post);
+        if (targetsPost!=(expectedTop>1.0d)) {
+            throw new AssertionError("extended-post targeting must follow the actual ceiling connection");
+        }
         double stored = SlabAnchorAttachment.storedPlacementDy(client.level, post);
         if (Double.isFinite(stored) && stored!=0.0d) {
             throw new AssertionError("connecting geometry must not move the saved post");
