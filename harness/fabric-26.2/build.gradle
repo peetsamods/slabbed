@@ -1,0 +1,211 @@
+// Minecraft 26.2 proof leg for the 26.2 + 26.3 release jar.
+//
+// The release jar is compiled against 26.3. This build compiles the SAME gametest suite against
+// 26.2 and its Fabric API, loads the exact release jar (plus the test kit of dev-only classes and the
+// diagnostics companion) as mods, and runs the server GameTest suite and the client GameTest
+// entrypoints on a 26.2 runtime. What it cannot cover is listed in harness/README.md.
+plugins {
+    id 'net.fabricmc.fabric-loom' version '1.17.20'
+}
+
+repositories {
+    maven { url "https://maven.fabricmc.net/" }
+}
+
+// The suite is copied, not referenced, so version-specific files can be left out or replaced:
+//   * the /slabrig rig rows pin exact per-version content goldens (item universe, route index) and
+//     are proofs of the dev rig, not of shipped behaviour; they stay on the 26.3 line's native run,
+//     as do the test-kit command rows (their /slabrig mega fixture writes signs through a 26.3 type);
+//   * CushionOnLoweredBlockTest needs a block that does not exist before 26.3;
+//   * support/TestConnections is replaced by the API-5 copy under src/overrides;
+//   * slabbed.rig.mixins.json (the rig's own dev mixin) goes with the rig rows, see below.
+def excludedTests = [
+        "com/slabbed/test/CushionOnLoweredBlockTest.java",
+        "com/slabbed/test/SlabRigCaseCatalogTest.java",
+        "com/slabbed/test/SlabRigCommandSmokeTest.java",
+        "com/slabbed/test/SlabRigHangingCatalogTest.java",
+        "com/slabbed/test/SlabRigHangingDirectActionsTest.java",
+        "com/slabbed/test/SlabRigHangingDirectEntityGateTest.java",
+        "com/slabbed/test/SlabRigHangingDirectExecutorTest.java",
+        "com/slabbed/test/SlabRigHangingDirectFixtureTest.java",
+        "com/slabbed/test/SlabRigHangingDirectStateStoreTest.java",
+        "com/slabbed/test/SlabRigHangingKernelArtifactsTest.java",
+        "com/slabbed/test/SlabRigHangingPaintingKernelTest.java",
+        "com/slabbed/test/SlabRigHangingPaintingPlanTest.java",
+        "com/slabbed/test/SlabTestKitCommandsTest.java",
+        "com/slabbed/test/support/TestConnections.java",
+]
+def excludedClassPrefixes = excludedTests.collect { it.replace(".java", "").replace("/", ".") }
+
+def sharedJava = layout.projectDirectory.dir("../../src/gametest/java")
+def sharedResources = layout.projectDirectory.dir("../../src/gametest/resources")
+def preparedJava = layout.buildDirectory.dir("gametest-src/java")
+def preparedResources = layout.buildDirectory.dir("gametest-src/resources")
+
+// The line's own build compiles an explicit include list of the gametest tree (older Yarn-named
+// sources in the same directory are deliberately left out there); this leg follows that list exactly.
+def rootBuildScript = layout.projectDirectory.file("../../build.gradle")
+def rootIncludes = (rootBuildScript.asFile.text =~ /include\("(com\/slabbed\/[^"]+)"\)/).collect { it[1] }
+if (rootIncludes.isEmpty()) throw new GradleException("no gametest include list found in the root build.gradle")
+
+tasks.register("prepareGametestJava", Sync) {
+    inputs.file(rootBuildScript)
+    from(sharedJava) {
+        rootIncludes.each { include(it) }
+        excludedTests.each { exclude(it) }
+    }
+    from(layout.projectDirectory.dir("src/overrides/java"))
+    into(preparedJava)
+}
+// slabbed.rig.mixins.json carries the one dev-only mixin the rig rows need (it hooks a painting drop
+// path whose signature is 26.3's); with the rig rows left out it has no reader here and is dropped
+// from the descriptor's mixin list as well.
+def excludedMixinConfigs = ["slabbed.rig.mixins.json"]
+
+tasks.register("prepareGametestResources", Sync) {
+    from(sharedResources) {
+        exclude("fabric.mod.json")
+        excludedMixinConfigs.each { exclude(it) }
+    }
+    into(preparedResources)
+    def descriptor = sharedResources.file("fabric.mod.json")
+    inputs.file(descriptor)
+    inputs.property("excluded", excludedClassPrefixes)
+    doLast {
+        def json = new groovy.json.JsonSlurper().parse(descriptor.asFile)
+        def dropped = []
+        json.entrypoints.each { key, list ->
+            def kept = list.findAll { entry ->
+                def cls = entry instanceof Map ? entry.value : entry
+                def top = cls.contains('$') ? cls.substring(0, cls.indexOf('$')) : cls
+                boolean out = excludedClassPrefixes.contains(top)
+                if (out) dropped << "${key}: ${cls}"
+                !out
+            }
+            json.entrypoints[key] = kept
+        }
+        json.mixins = json.mixins.findAll { m -> !excludedMixinConfigs.contains(m instanceof Map ? m.config : m) }
+        new File(preparedResources.get().asFile, "fabric.mod.json").text =
+                groovy.json.JsonOutput.prettyPrint(groovy.json.JsonOutput.toJson(json)) + "\n"
+        logger.lifecycle("prepareGametestResources: dropped ${dropped.size()} entrypoints that belong to excluded sources")
+    }
+}
+
+fabricApi {
+    configureTests {
+        createSourceSet = true
+        // The gametest source set's descriptor is generated into build/ by prepareGametestResources,
+        // so Loom cannot read the mod id from it at configuration time; it is the shared suite's id.
+        modId = "slabbed_gametest"
+    }
+}
+
+sourceSets {
+    gametest {
+        java.srcDirs = [preparedJava]
+        resources.srcDirs = [preparedResources]
+    }
+}
+tasks.named("compileGametestJava").configure { dependsOn("prepareGametestJava") }
+tasks.named("processGametestResources").configure { dependsOn("prepareGametestResources") }
+
+dependencies {
+    minecraft "com.mojang:minecraft:${project.minecraft_version}"
+    implementation "net.fabricmc:fabric-loader:${project.loader_version}"
+    implementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
+    // The artifacts under proof. The suite compiles against the release jar and the test kit; at run
+    // time Fabric Loader discovers each jar's fabric.mod.json on the classpath and loads it as a mod
+    // (26.x Loom does no remapping, so plain configurations are the mod configurations).
+    implementation files(project.slabbed_release_jar, project.slabbed_testkit, project.slabbed_diagnostics)
+}
+
+tasks.withType(JavaCompile).configureEach {
+    it.options.release = 21
+}
+
+java {
+    sourceCompatibility = JavaVersion.VERSION_21
+    targetCompatibility = JavaVersion.VERSION_21
+}
+
+// Same JVM properties as the 26.3 line's own runs (its build.gradle): the server suite at the
+// frozen-OFF compatibility floor, the client suite frozen-ON, and the sweep opt-in forwarded.
+loom {
+    runs {
+        configureEach {
+            if (name == "clientGameTest") {
+                property "slabbed.sweep", System.getProperty("slabbed.sweep", "false")
+                property "slabbed.frozenDy", System.getProperty("slabbed.frozenDy", "true")
+                vmArg "-Dmixin.debug.verify=true"
+            }
+        }
+        gameTest {
+            property "slabbed.sweep", System.getProperty("slabbed.sweep", "false")
+            property "slabbed.frozenDy", System.getProperty("slabbed.frozenDy", "false")
+            vmArg "-Dmixin.debug.verify=true"
+        }
+    }
+}
+
+// A stale run dir silently drops tests and still prints green: start every server leg clean.
+tasks.matching { it.name == "runGameTest" }.configureEach {
+    doFirst { delete(layout.buildDirectory.dir("run/gameTest")) }
+}
+
+// Expected suite count, computed the way tools/expected-gametest-count.py does: every '@GameTest'
+// outside comments in each class the PREPARED descriptor registers under fabric-gametest, plus the
+// one harness-contributed test. Compared against the run's own "All N required tests passed" line.
+def expectedSuiteCount = {
+    def json = new groovy.json.JsonSlurper().parse(new File(preparedResources.get().asFile, "fabric.mod.json"))
+    int count = 0
+    json.entrypoints["fabric-gametest"].each { entry ->
+        def cls = (entry instanceof Map ? entry.value : entry)
+        def top = cls.contains('$') ? cls.substring(0, cls.indexOf('$')) : cls
+        def file = new File(preparedJava.get().asFile, top.replace('.', '/') + ".java")
+        if (!file.exists()) throw new GradleException("registered test source missing: " + file)
+        def text = file.text.replaceAll("(?s)/\\*.*?\\*/", "").replaceAll("//[^\\n]*", "")
+        count += (text =~ /@GameTest\b/).count
+    }
+    count + 1
+}
+
+tasks.register("verifyHarnessGameTestCount") {
+    mustRunAfter("runGameTest")
+    doLast {
+        int expected = expectedSuiteCount()
+        def log = layout.buildDirectory.file("run/gameTest/logs/latest.log").get().asFile
+        if (!log.exists()) throw new GradleException("no build/run/gameTest/logs/latest.log — runGameTest did not run.")
+        def text = log.text
+        def mm = (text =~ /All (\d+) required tests passed/)
+        if (!mm.find()) throw new GradleException("no 'required tests passed' line — the suite did not complete.")
+        int reported = mm.group(1) as int
+        if (reported != expected) throw new GradleException("FALSE GREEN — reported ${reported}, expected ${expected}.")
+        if (text.contains("Mixin apply failed") || text.contains("MixinApplyError") || text.contains("InjectionError")) {
+            throw new GradleException("mixin apply/injection errors in build/run/gameTest/logs/latest.log.")
+        }
+        def receipts = file("build/harness-receipts"); receipts.mkdirs()
+        new File(receipts, "server.txt").text = "minecraft=${project.minecraft_version}\nreported=${reported}\nexpected=${expected}\njar=${file(project.slabbed_release_jar).name}\n"
+        logger.lifecycle("verifyHarnessGameTestCount (${project.minecraft_version}): OK — ${reported}/${expected}")
+    }
+}
+
+// The client leg has no count of its own: it is proof only when the log carries one
+// 'CLIENT_GAMETEST | <class> | PASS' line per registered client entrypoint.
+tasks.register("verifyHarnessClientLeg") {
+    mustRunAfter("runClientGameTest")
+    doLast {
+        def json = new groovy.json.JsonSlurper().parse(new File(preparedResources.get().asFile, "fabric.mod.json"))
+        def expected = json.entrypoints["fabric-client-gametest"].collect { e -> (e instanceof Map ? e.value : e).tokenize('.').last() }
+        def log = layout.buildDirectory.file("run/clientGameTest/logs/latest.log").get().asFile
+        if (!log.exists()) throw new GradleException("no build/run/clientGameTest/logs/latest.log — runClientGameTest did not run.")
+        def text = log.text
+        def missing = expected.findAll { !text.contains("CLIENT_GAMETEST | ${it} | PASS") }
+        if (!missing.isEmpty()) throw new GradleException("client entrypoints without a PASS line: ${missing}")
+        if (text.contains("Mixin apply failed") || text.contains("MixinApplyError") || text.contains("InjectionError")) {
+            throw new GradleException("mixin apply/injection errors in build/run/clientGameTest/logs/latest.log.")
+        }
+        def receipts = file("build/harness-receipts"); receipts.mkdirs()
+        new File(receipts, "client.txt").text = "minecraft=${project.minecraft_version}\nentrypoints=${expected.size()}\njar=${file(project.slabbed_release_jar).name}\n"
+        logger.lifecycle("verifyHarnessClientLeg (${project.minecraft_version}): OK — ${expected.size()}/${expected.size()} entrypoints PASS")
+    }
+}

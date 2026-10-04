@@ -1,5 +1,6 @@
 package com.slabbed.test;
 
+import com.slabbed.test.support.TestConnections;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.slabbed.Slabbed;
@@ -343,7 +344,7 @@ public final class SlabbedLabLiveCursorIntentRecorderContractClientGameTest impl
         try (TestSingleplayerContext singleplayer = ctx.worldBuilder()
                 .setUseConsistentSettings(true)
                 .create()) {
-            singleplayer.getConnection().waitForChunksDownload();
+            TestConnections.waitForChunksDownload(singleplayer);
             ctx.waitFor(client -> client.level != null
                     && client.player != null
                     && client.gameMode != null, 400);
@@ -477,7 +478,7 @@ public final class SlabbedLabLiveCursorIntentRecorderContractClientGameTest impl
         try (TestSingleplayerContext singleplayer = ctx.worldBuilder()
                 .setUseConsistentSettings(true)
                 .create()) {
-            singleplayer.getConnection().waitForChunksDownload();
+            TestConnections.waitForChunksDownload(singleplayer);
             ctx.waitFor(client -> client.level != null
                     && client.player != null
                     && client.gameMode != null, 400);
@@ -626,7 +627,7 @@ public final class SlabbedLabLiveCursorIntentRecorderContractClientGameTest impl
         try (TestSingleplayerContext singleplayer = ctx.worldBuilder()
                 .setUseConsistentSettings(true)
                 .create()) {
-            singleplayer.getConnection().waitForChunksDownload();
+            TestConnections.waitForChunksDownload(singleplayer);
             ctx.waitFor(client -> client.level != null && client.player != null, 400);
 
             BlockPos target = singleplayer.getServer().computeOnServer(server -> {
@@ -673,7 +674,7 @@ public final class SlabbedLabLiveCursorIntentRecorderContractClientGameTest impl
                     + " hit=" + picked.getLocation());
 
             if (requireRenderedOutline) {
-                singleplayer.getConnection().waitForChunksRender();
+                TestConnections.waitForChunksRender(singleplayer);
                 ctx.waitFor(client -> {
                     BlockOutlineRenderState outline = renderedOutlineState(client);
                     return outline != null && outline.pos().equals(target);

@@ -75,7 +75,8 @@ public final class BoatVisibleSurfacePlacementTest {
 
             // PREMISE, so the row's meaning stays honest: the aim itself already answers the drawn top.
             Vec3 eye = player.getEyePosition();
-            Vec3 end = eye.add(Player.calculateViewVector(player.getXRot(), player.getYRot())
+            // Through the instance: static on 26.3, an instance method on 26.2; both compile this way.
+            Vec3 end = eye.add(player.calculateViewVector(player.getXRot(), player.getYRot())
                     .scale(player.blockInteractionRange()));
             BlockHitResult aim = helper.getLevel().clip(new ClipContext(
                     eye, end, ClipContext.Block.OUTLINE, ClipContext.Fluid.ANY, player));

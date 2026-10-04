@@ -26,7 +26,7 @@ jobs:
         with:
           persist-credentials: false
 
-      # MC 26.2's named jar is class-file version 69, so javac must run under JDK 25 even though
+      # The MC 26.x named jars are class-file version 69, so javac must run under JDK 25 even though
       # this project still targets release 21 bytecode. The repo's ./gradlew25 wrapper resolves 25
       # through the macOS-only /usr/libexec/java_home, so CI uses plain ./gradlew and lets
       # setup-java provide the JDK instead.
@@ -59,3 +59,31 @@ jobs:
       # silently truncated suite fails here instead of printing a green.
       - name: Build and run server GameTests
         run: ./gradlew --no-daemon --stacktrace --console=plain build runGameTest
+
+      # One jar serves 26.2 and 26.3 and is compiled against 26.3. The 26.2 leg compiles the same suite
+      # against 26.2 and runs it on a 26.2 runtime with the exact release jar loaded; its count gate
+      # compares the run against the classes the prepared descriptor registers (harness/README.md).
+      - name: Run the 26.2 server GameTest leg against the release jar
+        run: ./gradlew --no-daemon --stacktrace --console=plain -p harness/fabric-26.2 runGameTest verifyHarnessGameTestCount
+
+      # Every Minecraft and Fabric API reference in the jar, and every mixin target string in the
+      # registered mixins, must resolve on BOTH versions (the shipped client jars are in Loom's cache
+      # after the builds above; the Fabric API bundles in Gradle's module cache).
+      - name: Linkage and mixin-target scans on both game versions
+        shell: bash
+        run: |
+          set -euo pipefail
+          GUH="${GRADLE_USER_HOME:-$HOME/.gradle}"
+          JAR=$(ls build/libs/slabbed-*+26.2-26.3.jar)
+          FA262=$(find "$GUH/caches/modules-2" -name 'fabric-api-0.152.2+26.2.jar' | head -1)
+          FA263=$(find "$GUH/caches/modules-2" -name "fabric-api-$(grep '^fabric_version=' gradle.properties | cut -d= -f2).jar" | head -1)
+          test -n "$FA262" && test -n "$FA263"
+          python3 tools/linkage-scan.py "$JAR" - "$GUH/caches/fabric-loom/26.3/minecraft-client.jar" --lib "$FA263" \
+            --allow-class 'com/slabbed/compat/mc262/'
+          python3 tools/linkage-scan.py "$JAR" - "$GUH/caches/fabric-loom/26.2/minecraft-client.jar" --lib "$FA262" \
+            --allow-class 'com/slabbed/compat/PlayerSwing$Modern' --allow-class 'com/slabbed/client/model/YOffsetEmitter'
+          CFG="--config src/main/resources/slabbed.mixins.json --config src/client/resources/slabbed.client.mixins.json --config src/diagnostics/resources/slabbed.diagnostics.client.mixins.json"
+          python3 tools/mixin-target-scan.py "$GUH/caches/fabric-loom/26.3/minecraft-client.jar" src/main/java src/client/java src/diagnostics/java $CFG \
+            --skip LegacyRedStoneWireBlockMixin
+          python3 tools/mixin-target-scan.py "$GUH/caches/fabric-loom/26.2/minecraft-client.jar" src/main/java src/client/java src/diagnostics/java $CFG \
+            --skip RedstoneWireBlockMixin --skip CushionRestsOnDrawnTopMixin

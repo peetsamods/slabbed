@@ -1,5 +1,6 @@
 package com.slabbed.test;
 
+import com.slabbed.test.support.TestConnections;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.slabbed.Slabbed;
 import com.slabbed.anchor.SlabAnchorAttachment;
@@ -150,7 +151,7 @@ public final class PistonMovingRenderDyOwnerClientGameTest implements FabricClie
         try (TestSingleplayerContext singleplayer = ctx.worldBuilder()
                 .setUseConsistentSettings(true)
                 .create()) {
-            singleplayer.getConnection().waitForChunksDownload();
+            TestConnections.waitForChunksDownload(singleplayer);
             ctx.waitFor(client -> client.level != null && client.player != null, 400);
 
             Fixture fixture = singleplayer.getServer().computeOnServer(server -> {

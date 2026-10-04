@@ -9,7 +9,7 @@ import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
-import net.minecraft.world.level.block.RedstoneWireBlock;
+import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 import net.minecraft.world.level.block.SlabBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.RedstoneSide;
@@ -118,7 +118,7 @@ public final class RedstoneWireVisualStepTest {
         level.setBlock(abs, Block.updateFromNeighbourShapes(level.getBlockState(abs), level, abs), 3);
         seat(level, abs, seat);
         BlockState placed = level.getBlockState(abs);
-        if (!(placed.getBlock() instanceof RedstoneWireBlock)) {
+        if (!placed.is(Blocks.REDSTONE_WIRE)) {
             throw helper.assertionException("premise: the wire at " + abs + " did not survive placement, found " + placed);
         }
         double read = SlabSupport.getYOffset(level, abs, placed);
@@ -136,22 +136,33 @@ public final class RedstoneWireVisualStepTest {
 
     private static BlockState wireState(GameTestHelper helper, BlockPos abs) {
         BlockState state = helper.getLevel().getBlockState(abs);
-        if (!(state.getBlock() instanceof RedstoneWireBlock)) {
+        if (!state.is(Blocks.REDSTONE_WIRE)) {
             throw helper.assertionException("premise: expected a wire at " + abs + ", found " + state);
         }
         return state;
     }
 
     private static void expectPower(GameTestHelper helper, BlockPos abs, int expected, String why) {
-        int power = wireState(helper, abs).getValue(RedstoneWireBlock.POWER);
+        int power = wireState(helper, abs).getValue(BlockStateProperties.POWER);
         if (power != expected) {
             throw helper.assertionException("the wire at " + abs + " must carry power " + expected + ", got " + power
                     + ": " + why);
         }
     }
 
+    /** The wire's per-side connection property, by name: the wire class itself is spelled differently on 26.2 and 26.3. */
+    private static net.minecraft.world.level.block.state.properties.EnumProperty<RedstoneSide> sideProperty(Direction toward) {
+        return switch (toward) {
+            case NORTH -> BlockStateProperties.NORTH_REDSTONE;
+            case SOUTH -> BlockStateProperties.SOUTH_REDSTONE;
+            case EAST -> BlockStateProperties.EAST_REDSTONE;
+            case WEST -> BlockStateProperties.WEST_REDSTONE;
+            default -> throw new IllegalArgumentException("redstone wire has no side toward " + toward);
+        };
+    }
+
     private static void expectSide(GameTestHelper helper, BlockPos abs, Direction toward, RedstoneSide expected, String why) {
-        RedstoneSide side = wireState(helper, abs).getValue(RedstoneWireBlock.PROPERTY_BY_DIRECTION.get(toward));
+        RedstoneSide side = wireState(helper, abs).getValue(sideProperty(toward));
         if (side != expected) {
             throw helper.assertionException("the wire at " + abs + " must connect " + expected + " toward " + toward
                     + ", got " + side + ": " + why);

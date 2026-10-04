@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 1,
+  "id": "slabbed_harness_262",
+  "version": "1.0.0",
+  "name": "Slabbed 26.2 proof harness (empty host mod)",
+  "environment": "*"
+}

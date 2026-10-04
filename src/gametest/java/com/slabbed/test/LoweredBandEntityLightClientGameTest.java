@@ -1,5 +1,6 @@
 package com.slabbed.test;
 
+import com.slabbed.test.support.TestConnections;
 import com.slabbed.Slabbed;
 import com.slabbed.anchor.SlabAnchorAttachment;
 import com.slabbed.util.SlabSupport;
@@ -12,7 +13,8 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.util.LightCoordsUtil;
 import net.minecraft.world.entity.EntitySpawnReason;
 import net.minecraft.world.entity.EntityTypes;
-import net.minecraft.world.entity.decoration.Cushion;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.decoration.ArmorStand;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.SlabBlock;
@@ -27,8 +29,9 @@ import java.util.UUID;
  * An entity resting on a lowered block's drawn top is lit like the open air it visibly sits in
  * (maintainer ruling, 2026-09-03). Vanilla samples entity light at the cell containing the light
  * probe; a lowered opaque block keeps its state in that cell, so a cushion or dropped item on its
- * drawn top rendered black (live, 26.3-pre-1). The renderer's packed light for a cushion on a
- * lowered stone must equal the packed light of the same cushion on a flush stone beside it.
+ * drawn top rendered black (live, 26.3-pre-1). The probe entity here is an armor stand, which every
+ * version this jar serves has: the renderer's packed light for a stand on a lowered stone must equal
+ * the packed light of the same stand on a flush stone beside it.
  *
  * <p>MUTATION that must redden this test: withhold {@code EntityLightProbeLoweredBandMixin}.
  */
@@ -39,7 +42,7 @@ public final class LoweredBandEntityLightClientGameTest implements FabricClientG
     private static final double LOWERED_DY = -0.5d;
     private static final double EPSILON = 1.0e-9d;
 
-    private record Fixture(BlockPos loweredStone, BlockPos flushStone, UUID loweredCushion, UUID flushCushion) {
+    private record Fixture(BlockPos loweredStone, BlockPos flushStone, UUID loweredProbe, UUID flushProbe) {
     }
 
     @Override
@@ -47,7 +50,7 @@ public final class LoweredBandEntityLightClientGameTest implements FabricClientG
         try (TestSingleplayerContext singleplayer = ctx.worldBuilder()
                 .setUseConsistentSettings(true)
                 .create()) {
-            singleplayer.getConnection().waitForChunksDownload();
+            TestConnections.waitForChunksDownload(singleplayer);
             ctx.waitFor(client -> client.level != null && client.player != null, 400);
 
             Fixture fixture = singleplayer.getServer().computeOnServer(server -> {
@@ -58,18 +61,18 @@ public final class LoweredBandEntityLightClientGameTest implements FabricClientG
             });
 
             ctx.waitFor(client -> client.level != null
-                    && findCushion(client.level, fixture.loweredCushion()) != null
-                    && findCushion(client.level, fixture.flushCushion()) != null, 400);
+                    && findProbe(client.level, fixture.loweredProbe()) != null
+                    && findProbe(client.level, fixture.flushProbe()) != null, 400);
             ctx.waitTicks(5);
             ctx.runOnClient(client -> {
-                Cushion lowered = findCushion(client.level, fixture.loweredCushion());
-                Cushion flush = findCushion(client.level, fixture.flushCushion());
+                Entity lowered = findProbe(client.level, fixture.loweredProbe());
+                Entity flush = findProbe(client.level, fixture.flushProbe());
                 int loweredLight = packedLight(client, lowered);
                 int flushLight = packedLight(client, flush);
                 int loweredSky = LightCoordsUtil.sky(loweredLight);
                 int flushSky = LightCoordsUtil.sky(flushLight);
                 if (flushSky == 0) {
-                    throw new AssertionError("control: a cushion on a flush stone in the open must see sky light, got "
+                    throw new AssertionError("control: a probe on a flush stone in the open must see sky light, got "
                             + describe(flushLight));
                 }
                 if (loweredLight != flushLight) {
@@ -101,30 +104,33 @@ public final class LoweredBandEntityLightClientGameTest implements FabricClientG
         level.setBlock(flushStone.below(), Blocks.STONE.defaultBlockState(), Block.UPDATE_ALL);
         level.setBlock(flushStone, Blocks.STONE.defaultBlockState(), Block.UPDATE_ALL);
 
-        UUID lowered = spawnCushion(level, Vec3.atCenterOfWithY(loweredStone.above(), loweredStone.getY() + 1.0 + LOWERED_DY));
-        UUID flush = spawnCushion(level, Vec3.atCenterOfWithY(flushStone.above(), flushStone.getY() + 1.0));
+        UUID lowered = spawnProbe(level, centerAtY(loweredStone.above(), loweredStone.getY() + 1.0 + LOWERED_DY));
+        UUID flush = spawnProbe(level, centerAtY(flushStone.above(), flushStone.getY() + 1.0));
         return new Fixture(loweredStone, flushStone, lowered, flush);
     }
 
-    private static UUID spawnCushion(ServerLevel level, Vec3 pos) {
-        Cushion cushion = EntityTypes.CUSHION.create(level, EntitySpawnReason.COMMAND);
-        if (cushion == null) {
-            throw new AssertionError("could not create a cushion");
-        }
-        cushion.snapTo(pos, 0.0f, 0.0f);
-        if (!cushion.survives()) {
-            throw new AssertionError("server fixture: cushion at " + pos + " must survive its own support check");
-        }
-        level.addFreshEntity(cushion);
-        return cushion.getUUID();
+    /** The cell's horizontal centre at an exact height (26.3's {@code Vec3.atCenterOfWithY}, spelled out for 26.2). */
+    private static Vec3 centerAtY(BlockPos cell, double y) {
+        return new Vec3(cell.getX() + 0.5, y, cell.getZ() + 0.5);
     }
 
-    private static Cushion findCushion(net.minecraft.world.level.Level level, UUID id) {
+    private static UUID spawnProbe(ServerLevel level, Vec3 pos) {
+        ArmorStand probe = EntityTypes.ARMOR_STAND.create(level, EntitySpawnReason.COMMAND);
+        if (probe == null) {
+            throw new AssertionError("could not create the probe entity");
+        }
+        probe.setNoGravity(true);
+        probe.snapTo(pos, 0.0f, 0.0f);
+        level.addFreshEntity(probe);
+        return probe.getUUID();
+    }
+
+    private static Entity findProbe(net.minecraft.world.level.Level level, UUID id) {
         if (level == null) {
             return null;
         }
-        List<Cushion> all = level.getEntitiesOfClass(Cushion.class, new AABB(-3.0e7, -256, -3.0e7, 3.0e7, 512, 3.0e7));
-        for (Cushion c : all) {
+        List<ArmorStand> all = level.getEntitiesOfClass(ArmorStand.class, new AABB(-3.0e7, -256, -3.0e7, 3.0e7, 512, 3.0e7));
+        for (ArmorStand c : all) {
             if (c.getUUID().equals(id)) {
                 return c;
             }
@@ -132,9 +138,9 @@ public final class LoweredBandEntityLightClientGameTest implements FabricClientG
         return null;
     }
 
-    private static int packedLight(Minecraft client, Cushion cushion) {
-        var renderer = client.getEntityRenderDispatcher().getRenderer(cushion);
-        return renderer.getPackedLightCoords(cushion, 1.0f);
+    private static int packedLight(Minecraft client, Entity probe) {
+        var renderer = client.getEntityRenderDispatcher().getRenderer(probe);
+        return renderer.getPackedLightCoords(probe, 1.0f);
     }
 
     private static String describe(int packed) {

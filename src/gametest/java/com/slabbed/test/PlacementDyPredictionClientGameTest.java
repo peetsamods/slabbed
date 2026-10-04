@@ -1,5 +1,6 @@
 package com.slabbed.test;
 
+import com.slabbed.test.support.TestConnections;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.slabbed.Slabbed;
@@ -125,7 +126,7 @@ public final class PlacementDyPredictionClientGameTest implements FabricClientGa
                 .setUseConsistentSettings(true)
                 .create();
         try {
-            singleplayer.getConnection().waitForChunksDownload();
+            TestConnections.waitForChunksDownload(singleplayer);
             context.waitFor(client -> client.level != null
                     && client.player != null
                     && client.gameMode != null, 400);

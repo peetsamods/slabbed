@@ -516,7 +516,9 @@ public final class PistonPlacementDyTransferTest {
         BlockState destructible = null;
         for (Block candidate : List.of(Blocks.TORCH, Blocks.SHORT_GRASS, Blocks.DEAD_BUSH)) {
             BlockState state = candidate.defaultBlockState();
-            if (state.getPistonPushReaction() == PushReaction.POPPED) {
+            // By name: the "destroyed when pushed" constant is POPPED on 26.3 and DESTROY on 26.2.
+            String reaction = state.getPistonPushReaction().name();
+            if (reaction.equals("POPPED") || reaction.equals("DESTROY")) {
                 destructible = state;
                 break;
             }

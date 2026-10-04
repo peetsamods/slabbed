@@ -1,5 +1,6 @@
 package com.slabbed.test;
 
+import com.slabbed.test.support.TestConnections;
 import com.slabbed.Slabbed;
 import com.slabbed.anchor.SlabAnchorAttachment;
 import com.slabbed.util.SlabSupport;
@@ -16,7 +17,6 @@ import net.minecraft.world.level.BlockGetter;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.LeverBlock;
-import net.minecraft.world.level.block.RedstoneWireBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.AttachFace;
 import net.minecraft.world.level.block.state.properties.BlockStateProperties;
@@ -75,7 +75,7 @@ public final class LeverParticleFrozenAnchorClientGameTest implements FabricClie
         try (TestSingleplayerContext singleplayer = ctx.worldBuilder()
                 .setUseConsistentSettings(true)
                 .create()) {
-            singleplayer.getConnection().waitForChunksDownload();
+            TestConnections.waitForChunksDownload(singleplayer);
             ctx.waitFor(client -> client.level != null && client.player != null, 400);
 
             List<LeverFixture> fixtures = singleplayer.getServer().computeOnServer(server -> {
@@ -271,7 +271,7 @@ public final class LeverParticleFrozenAnchorClientGameTest implements FabricClie
         assertWireParticleParity(baseline, lowered, paired.seed());
 
         List<ParticleSample> unpoweredSamples = captureAll("TEST33 unpowered control", () ->
-                ((RedstoneWireBlock) unpoweredState.getBlock()).animateTick(
+                unpoweredState.getBlock().animateTick(
                         unpoweredState, level, unpoweredFixture.pos(), RandomSource.create(paired.seed())));
         if (!unpoweredSamples.isEmpty()) {
             throw new AssertionError("TEST33_WRONG_RED_UNPOWERED_EMISSION: powered dust emitted for power=0; "
@@ -302,10 +302,10 @@ public final class LeverParticleFrozenAnchorClientGameTest implements FabricClie
         for (long seed = 0L; seed < TEST33_MAX_SEED; seed++) {
             final long candidateSeed = seed;
             List<ParticleSample> baseline = captureAll("TEST33 baseline seed=" + candidateSeed, () ->
-                    ((RedstoneWireBlock) baselineState.getBlock()).animateTick(
+                    baselineState.getBlock().animateTick(
                             baselineState, level, baselineFixture.pos(), RandomSource.create(candidateSeed)));
             List<ParticleSample> lowered = captureAll("TEST33 lowered seed=" + candidateSeed, () ->
-                    ((RedstoneWireBlock) loweredState.getBlock()).animateTick(
+                    loweredState.getBlock().animateTick(
                             loweredState, level, loweredFixture.pos(), RandomSource.create(candidateSeed)));
             if (baseline.size() == 1 && lowered.size() == 1) {
                 return new WireParticleRun(seed, baseline.getFirst(), lowered.getFirst(), (seed + 1L) * 2L);

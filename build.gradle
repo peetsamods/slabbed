@@ -468,6 +468,7 @@ sourceSets {
             include("com/slabbed/anchor/PlacementDyAttachmentCapacityTest.java")
             include("com/slabbed/test/SlabRigGameTestSeams.java")
             include("com/slabbed/client/PlacementDyPredictionJournalGameTestAccess.java")
+            include("com/slabbed/test/support/TestConnections.java")
             include("com/slabbed/test/mixin/SlabRigCommandGameTestMixin.java")
             include("com/slabbed/test/mixin/BlockItemFixtureGameTestMixin.java")
             include("com/slabbed/test/mixin/TerrainSlabsCompatGameTestMixin.java")

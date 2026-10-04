@@ -1,5 +1,6 @@
 package com.slabbed.test;
 
+import com.slabbed.test.support.TestConnections;
 import com.slabbed.Slabbed;
 import com.slabbed.anchor.SlabAnchorAttachment;
 import com.slabbed.util.RailSeatDyHolder;
@@ -59,7 +60,7 @@ public final class MinecartRenderRailSnapClientGameTest implements FabricClientG
         try (TestSingleplayerContext singleplayer = ctx.worldBuilder()
                 .setUseConsistentSettings(true)
                 .create()) {
-            singleplayer.getConnection().waitForChunksDownload();
+            TestConnections.waitForChunksDownload(singleplayer);
             ctx.waitFor(client -> client.level != null && client.player != null, 400);
 
             Fixture fixture = singleplayer.getServer().computeOnServer(server -> {
