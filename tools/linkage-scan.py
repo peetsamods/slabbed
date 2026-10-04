@@ -12,7 +12,8 @@ Usage:
     python3 tools/linkage-scan.py <release-jar> <intermediary-tiny|-> <official-game-jar> [--allow-class PREFIX ...]
                                   [--lib <jar> ...]
 
-  intermediary-tiny: mappings/<version>.tiny from the FabricMC intermediary repository, or "-" for a
+  intermediary-tiny: mappings/<version>.tiny from the FabricMC intermediary repository (v1), or Loom's
+                     cached intermediary-v2.tiny for the version, or "-" for a
                      game version that ships under the names the mod was compiled against (Minecraft
                      26.1 and newer carry Mojang names in the shipped jar, so no mapping is needed)
   official-game-jar: the shipped client jar for the version (Loom keeps one under its cache)
@@ -87,6 +88,21 @@ def load_tiny(path):
     if path == '-':
         return cls_map, methods, fields, (lambda d: d)
     lines = open(path, encoding='utf-8').read().splitlines()
+    if lines and lines[0].startswith('tiny\t2\t'):
+        # Tiny v2 (Loom's cached intermediary-v2.tiny): class rows `c <official> <intermediary>`, then
+        # indented member rows `m <desc> <official> <intermediary>` / `f <desc> <official> <intermediary>`
+        # under their class. Normalised to the v1 row shape the rest of this loader reads.
+        cols = lines[0].split('\t'); oi, ii = cols.index('official') - 3, cols.index('intermediary') - 3
+        v1 = ['v1\tofficial\tintermediary']; cur = None
+        for ln in lines[1:]:
+            if not ln or ln.startswith('\t\t'): continue
+            p = ln.split('\t')
+            if p[0] == 'c':
+                cur = p[1 + oi]; v1.append('CLASS\t' + p[1 + oi] + '\t' + p[1 + ii])
+            elif p[0] == '' and len(p) > 2 and p[1] in ('m', 'f') and cur is not None:
+                kind = 'METHOD' if p[1] == 'm' else 'FIELD'
+                v1.append(kind + '\t' + cur + '\t' + p[2] + '\t' + p[3 + oi] + '\t' + p[3 + ii])
+        lines = v1
     for ln in lines[1:]:
         p = ln.split('\t')
         if p[0] == 'CLASS': cls_map[p[1]] = p[2]
