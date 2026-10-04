@@ -1,13 +1,17 @@
 # Slabbed
 
-Slabbed is a Fabric mod for Minecraft 26.3 that makes slab-supported placement, stored height,
+Slabbed is a Fabric mod for Minecraft 26.2 and 26.3 that makes slab-supported placement, stored height,
 targeting, and rendering agree. Its governing invariant is simple: a placed block keeps the height
 chosen when it was placed; a later neighbour edit must not move it. See `LAW.md` for the exact rule.
 
 ## This line
 
-- Minecraft 26.3 on Fabric. Fabric Loader and Fabric API are required. Java 25 builds and runs it.
-- Version: see `gradle.properties`; the current cycle is `0.6.0-alpha.3+26.3`.
+- Minecraft 26.2 and 26.3 on Fabric, from one jar. Fabric Loader and Fabric API (0.152.2 or newer
+  on 26.2) are required. Java 25 builds and runs it.
+- Version: see `gradle.properties`; the current cycle is `0.6.2-alpha+26.2-26.3`.
+- The jar is compiled against 26.3; the few places where 26.2 differs are chosen when the game starts
+  (`com.slabbed.compat`, and `shim/mc-26.2` for classes that must be compiled against 26.2). Every
+  release is proven on both versions with the `harness/fabric-26.2` leg and the two scanners in `tools/`.
 - Other Minecraft versions and loaders live on their own branches (`port/...`) and reach the same
   features when they are ported; this branch is where 0.6 is developed first.
 - `CHANGELOG.md` describes what the current build changes for players, including its known

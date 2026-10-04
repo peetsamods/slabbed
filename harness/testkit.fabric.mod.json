@@ -1,0 +1,8 @@
+{
+  "schemaVersion": 1,
+  "id": "slabbed_testkit",
+  "version": "1.0.0",
+  "name": "Slabbed test kit (dev-only classes the release jar strips)",
+  "environment": "*",
+  "depends": { "slabbed": "*" }
+}

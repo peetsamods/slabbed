@@ -63,12 +63,53 @@ public final class DyFingerprintDump {
                 keyDownLastTick = false;
                 return;
             }
-            boolean down = InputConstants.isKeyDown(DUMP_KEY);
+            boolean down = isKeyDown(client, DUMP_KEY);
             if (down && !keyDownLastTick) {
                 dump(client);
             }
             keyDownLastTick = down;
         });
+    }
+
+    /**
+     * The raw key probe differs between the game versions one jar serves: 26.3 asks the input layer
+     * directly ({@code isKeyDown(int)}), 26.2 asks through the window ({@code isKeyDown(Window, int)}).
+     * Resolved once by name; this is a dev tool, read once per client tick.
+     */
+    private static final java.lang.invoke.MethodHandle IS_KEY_DOWN;
+    private static final boolean IS_KEY_DOWN_TAKES_WINDOW;
+
+    static {
+        java.lang.invoke.MethodHandles.Lookup lookup = java.lang.invoke.MethodHandles.publicLookup();
+        java.lang.invoke.MethodHandle direct = null;
+        boolean takesWindow = false;
+        try {
+            direct = lookup.findStatic(InputConstants.class, "isKeyDown",
+                    java.lang.invoke.MethodType.methodType(boolean.class, int.class));
+        } catch (NoSuchMethodException | IllegalAccessException e) {
+            try {
+                direct = lookup.findStatic(InputConstants.class, "isKeyDown",
+                        java.lang.invoke.MethodType.methodType(boolean.class,
+                                com.mojang.blaze3d.platform.Window.class, int.class));
+                takesWindow = true;
+            } catch (NoSuchMethodException | IllegalAccessException e2) {
+                throw new IllegalStateException("InputConstants.isKeyDown is missing in both known shapes", e2);
+            }
+        }
+        IS_KEY_DOWN = direct;
+        IS_KEY_DOWN_TAKES_WINDOW = takesWindow;
+    }
+
+    private static boolean isKeyDown(Minecraft client, int key) {
+        try {
+            return IS_KEY_DOWN_TAKES_WINDOW
+                    ? (boolean) IS_KEY_DOWN.invokeExact(client.getWindow(), key)
+                    : (boolean) IS_KEY_DOWN.invokeExact(key);
+        } catch (RuntimeException | Error e) {
+            throw e;
+        } catch (Throwable t) {
+            throw new IllegalStateException(t);
+        }
     }
 
     private static void dump(Minecraft client) {

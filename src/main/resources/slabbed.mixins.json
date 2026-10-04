@@ -36,6 +36,7 @@
     "PoweredRailVisualSignalMixin",
     "PaintingRememberedSeatMixin",
     "ProjectileBlockClipOffsetMixin",
+    "LegacyRedStoneWireBlockMixin",
     "RedstoneWireBlockMixin",
     "RedstoneWireEvaluatorVisualStepMixin",
     "ScaffoldingLoweredStandMixin",

@@ -2,7 +2,7 @@ package com.slabbed.util;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.BlockGetter;
-import net.minecraft.world.level.block.RedstoneWireBlock;
+import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 
 /**
@@ -33,7 +33,8 @@ public final class WireVisualSignal {
     }
 
     public static boolean isWire(BlockState state) {
-        return state != null && state.getBlock() instanceof RedstoneWireBlock;
+        // Block identity, not class: the wire class is named differently on 26.2 and 26.3.
+        return state != null && state.is(Blocks.REDSTONE_WIRE);
     }
 
     /** The drawn height of the block at {@code pos}: its grid row plus its seat (0 when it has none). */

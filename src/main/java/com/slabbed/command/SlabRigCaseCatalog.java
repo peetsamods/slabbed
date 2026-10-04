@@ -43,7 +43,6 @@ import net.minecraft.world.level.block.HangingSignBlock;
 import net.minecraft.world.level.block.IronBarsBlock;
 import net.minecraft.world.level.block.LadderBlock;
 import net.minecraft.world.level.block.LanternBlock;
-import net.minecraft.world.level.block.RedstoneWireBlock;
 import net.minecraft.world.level.block.SignBlock;
 import net.minecraft.world.level.block.SlabBlock;
 import net.minecraft.world.level.block.StairBlock;
@@ -343,7 +342,7 @@ public final class SlabRigCaseCatalog {
         addFamily(families, block instanceof LadderBlock, "wall_attached");
         addFamily(families, block instanceof BushBlock, "plant");
         addFamily(families, block instanceof FallingBlock, "falling_block");
-        addFamily(families, block instanceof DiodeBlock || block instanceof RedstoneWireBlock
+        addFamily(families, block instanceof DiodeBlock || block == net.minecraft.world.level.block.Blocks.REDSTONE_WIRE
                 || block instanceof BasePressurePlateBlock || block instanceof ButtonBlock
                 || block instanceof TripWireBlock || block instanceof TripWireHookBlock, "redstone");
         addFamily(families, block instanceof EntityBlock, "block_entity");

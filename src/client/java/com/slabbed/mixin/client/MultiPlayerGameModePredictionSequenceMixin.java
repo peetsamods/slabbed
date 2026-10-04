@@ -1,5 +1,6 @@
 package com.slabbed.mixin.client;
 
+import com.slabbed.compat.UseItemOnPacketAccess;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import com.slabbed.anchor.SlabAnchorAttachment;
@@ -86,10 +87,10 @@ public abstract class MultiPlayerGameModePredictionSequenceMixin {
         if (minecraft == null || minecraft.player == null || minecraft.level == null) {
             return;
         }
-        BlockHitResult hit = packet.hitResult();
+        BlockHitResult hit = UseItemOnPacketAccess.hitResult(packet);
         BlockPos target = hit.getBlockPos();
         BlockState afterState = minecraft.level.getBlockState(target);
-        ItemStack heldStack = minecraft.player.getItemInHand(packet.hand());
+        ItemStack heldStack = minecraft.player.getItemInHand(UseItemOnPacketAccess.hand(packet));
         double afterDy = SlabSupport.getYOffset(minecraft.level, target, afterState);
         double afterStoredDy =
                 SlabAnchorAttachment.storedPlacementDy(minecraft.level, target);

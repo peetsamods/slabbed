@@ -1,0 +1,42 @@
+// Minecraft 26.2 shim for the 26.2 + 26.3 release jar.
+//
+// Minecraft 26.x ships under its real names and Fabric does not remap mods there, so one source set
+// compiles against exactly one game version. The release jar is compiled against 26.3; the handful
+// of classes that must be compiled against 26.2 (today: the Y-offset quad emitter, whose Fabric
+// renderer API interface differs between the two versions) live here, compile against 26.2 and its
+// Fabric API, and are merged into the release jar by the root build's `jar` task. Nothing here is
+// a mod on its own: the output has no fabric.mod.json and is never published separately.
+plugins {
+    id 'net.fabricmc.fabric-loom' version '1.17.20'
+}
+
+loom {
+    splitEnvironmentSourceSets()
+}
+
+repositories {
+    maven { url "https://maven.fabricmc.net/" }
+}
+
+dependencies {
+    minecraft "com.mojang:minecraft:${project.minecraft_version}"
+    implementation "net.fabricmc:fabric-loader:${project.loader_version}"
+    implementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
+    implementation "net.fabricmc.fabric-api:fabric-renderer-api-v1:${project.fabric_version}"
+}
+
+tasks.withType(JavaCompile).configureEach {
+    it.options.release = 21
+}
+
+java {
+    sourceCompatibility = JavaVersion.VERSION_21
+    targetCompatibility = JavaVersion.VERSION_21
+}
+
+jar {
+    archiveBaseName = "slabbed-shim-mc262"
+    archiveVersion = ""
+    // Only the shim classes travel: no manifest stamps, no resources.
+    include("com/slabbed/compat/mc262/**")
+}

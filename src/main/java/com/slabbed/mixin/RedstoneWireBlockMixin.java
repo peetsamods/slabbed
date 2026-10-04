@@ -9,9 +9,9 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.particles.ParticleOptions;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.LevelReader;
-import net.minecraft.world.level.block.RedstoneWireBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Pseudo;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
@@ -20,7 +20,14 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
  * Redstone wire: allow slab top faces to count as valid ground for placement/survival, and keep
  * powered dust on the wire's frozen visual height.
  */
-@Mixin(RedstoneWireBlock.class)
+/**
+ * Minecraft 26.3 names the wire class {@code RedstoneWireBlock}; 26.2 named it {@code RedStoneWireBlock}.
+ * One jar serves both, so this mixin names its target as a string, is marked pseudo so the absent
+ * spelling is not a load error, and {@link SlabbedMixinConfigPlugin} applies exactly one of this class
+ * and {@link LegacyRedStoneWireBlockMixin} per running version. The two bodies are kept identical.
+ */
+@Pseudo
+@Mixin(targets = "net.minecraft.world.level.block.RedstoneWireBlock")
 public abstract class RedstoneWireBlockMixin {
 
     @Inject(method = "canSurvive",

@@ -310,6 +310,10 @@ def releaseArtifactExclusions = [
 ]
 
 tasks.named("sourcesJar", Jar).configure {
+    dependsOn("verifyEmitterShimParity")
+    from(layout.projectDirectory.dir("shim/mc-26.2/src/client/java")) {
+        include("com/slabbed/compat/mc262/**")
+    }
     // Keep generated release source artifacts aligned with the public runtime jar: SAME list.
     releaseArtifactExclusions.each { pattern -> exclude(pattern) }
 }
@@ -659,7 +663,85 @@ def slabbedGitSha = { ->
 }()
 def slabbedBuildTime = java.time.Instant.now().toString()
 
+// ---------------------------------------------------------------------------------------------
+// Test kit for the per-version proof harness (harness/, NOT a release artifact).
+// One jar serves 26.2 and 26.3, and each version must run the suite against the EXACT release jar.
+// The suite depends on the dev-only classes the release exclusions strip (the /slabrig rig, the
+// test-kit commands, the audit bridge, ...), so those classes are packaged here as a separate jar
+// the harness loads beside the release jar. Nothing in build/testkit/ is published; the release
+// allowlist gate reads only jar/sourcesJar.
+tasks.register("testkitJar", Jar) {
+    archiveClassifier = "testkit"
+    destinationDirectory = layout.buildDirectory.dir("testkit")
+    dependsOn(tasks.named("classes"), tasks.named("clientClasses"))
+    from(sourceSets.main.output) { releaseArtifactExclusions.each { pattern -> include(pattern) } }
+    from(sourceSets.client.output) { releaseArtifactExclusions.each { pattern -> include(pattern) } }
+    from(layout.projectDirectory.file("harness/testkit.fabric.mod.json")) {
+        rename { "fabric.mod.json" }
+    }
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+}
+tasks.named("build").configure { dependsOn("testkitJar", "diagnosticsJar") }
+
+// ---------------------------------------------------------------------------------------------
+// Minecraft 26.2 shim (shim/mc-26.2): classes that must be compiled against 26.2 rather than 26.3.
+// Built as its own Loom build (one source set compiles against one game version) and merged into
+// BOTH release artifacts here, so one jar serves 26.2 and 26.3. The 26.3 side of each shimmed seam
+// lives in the ordinary source sets; the loader-version check in com.slabbed.compat picks one.
+def shim262Dir = layout.projectDirectory.dir("shim/mc-26.2")
+def shim262Jar = shim262Dir.file("build/libs/slabbed-shim-mc262.jar")
+tasks.register("buildShim262", GradleBuild) {
+    description = "Compiles the Minecraft 26.2 shim classes against 26.2 (shim/mc-26.2)."
+    dir = shim262Dir.asFile
+    tasks = ["jar"]
+    inputs.dir(shim262Dir.dir("src"))
+    inputs.file(shim262Dir.file("build.gradle"))
+    inputs.file(shim262Dir.file("gradle.properties"))
+    outputs.file(shim262Jar)
+}
+
+// The shim's emitter must stay a member-for-member twin of the 26.3 class (only the API-17 trio
+// removed and the API-14 diffuseShade pair added). Compared as text so a fix to one wrapper
+// cannot quietly miss the other.
+tasks.register("verifyEmitterShimParity") {
+    def modern = layout.projectDirectory.file("src/client/java/com/slabbed/client/model/YOffsetEmitter.java")
+    def legacy = shim262Dir.file("src/client/java/com/slabbed/compat/mc262/YOffsetEmitter262.java")
+    inputs.files(modern, legacy)
+    doLast {
+        def methodBodies = { File f, String self ->
+            def text = f.text.replace(self, "YOffsetEmitter")
+            def out = [:]
+            def m = (text =~ /(?s)\n    @Override\n    public ([^\n(]*?)([A-Za-z0-9_\$]+)\(([^\n]*)\)\s*\{\n(.*?)\n    \}\n/)
+            while (m.find()) { out[m.group(2) + "(" + m.group(3) + ")"] = m.group(4) }
+            out
+        }
+        def a = methodBodies(modern.asFile, "YOffsetEmitter")
+        def b = methodBodies(legacy.asFile, "YOffsetEmitter262")
+        def api17 = ["shadeDirectionOverride", "itemGlintRenderType", "itemGlintSpecialRenderType"]
+        def api14 = ["diffuseShade"]
+        def problems = []
+        a.each { sig, body ->
+            def name = sig.substring(0, sig.indexOf('('))
+            if (api17.contains(name)) { if (b.containsKey(sig)) problems << "API-17 member present in the 26.2 shim: ${sig}" ; return }
+            if (!b.containsKey(sig)) { problems << "missing in the 26.2 shim: ${sig}"; return }
+            if (b[sig] != body) problems << "body differs: ${sig}"
+        }
+        b.each { sig, body ->
+            def name = sig.substring(0, sig.indexOf('('))
+            if (!a.containsKey(sig) && !api14.contains(name)) problems << "only in the 26.2 shim: ${sig}"
+        }
+        if (api14.any { n -> !b.keySet().any { it.startsWith(n + "(") } }) problems << "the 26.2 shim lacks diffuseShade"
+        if (!problems.isEmpty()) throw new GradleException("Y-offset emitter shim drifted from the 26.3 class:\n  " + problems.join("\n  "))
+        logger.lifecycle("verifyEmitterShimParity: ${a.size() - api17.size()} shared members identical; API-17 trio / API-14 pair as expected")
+    }
+}
+tasks.named("check").configure { dependsOn("verifyEmitterShimParity") }
+
 jar {
+    dependsOn("buildShim262", "verifyEmitterShimParity")
+    from(zipTree(shim262Jar)) {
+        include("com/slabbed/compat/mc262/**")
+    }
     from("LICENSE") {
         rename { "${it}_${project.base.archivesName.get()}"}
     }

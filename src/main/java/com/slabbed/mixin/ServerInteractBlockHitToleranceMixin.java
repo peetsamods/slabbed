@@ -1,5 +1,6 @@
 package com.slabbed.mixin;
 
+import com.slabbed.compat.UseItemOnPacketAccess;
 import com.llamalad7.mixinextras.injector.wrapmethod.WrapMethod;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
@@ -14,7 +15,7 @@ import net.minecraft.core.Direction;
 import net.minecraft.core.Vec3i;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.protocol.game.ServerboundUseItemOnPacket;
-import net.minecraft.world.item.component.SwingAnimation;
+import com.slabbed.compat.PlayerSwing;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.network.ServerGamePacketListenerImpl;
@@ -67,7 +68,7 @@ public abstract class ServerInteractBlockHitToleranceMixin {
                         ? null
                         : SlabbedDiagnosticsBridge.openUsePacketScope(
                                 "server",
-                                packet.sequence(),
+                                UseItemOnPacketAccess.sequence(packet),
                                 player.getUUID().toString(),
                                 world.dimension().identifier().toString());
         boolean handlerReturned = false;
@@ -95,13 +96,13 @@ public abstract class ServerInteractBlockHitToleranceMixin {
     private ServerUseSnapshot slabbed$captureUseSnapshot(
             ServerLevel world,
             ServerboundUseItemOnPacket packet) {
-        BlockHitResult hit = packet == null ? null : packet.hitResult();
+        BlockHitResult hit = packet == null ? null : UseItemOnPacketAccess.hitResult(packet);
         if (hit == null) {
             return null;
         }
         BlockPos target = hit.getBlockPos();
         BlockState state = world.getBlockState(target);
-        ItemStack heldStack = player.getItemInHand(packet.hand());
+        ItemStack heldStack = player.getItemInHand(UseItemOnPacketAccess.hand(packet));
         return new ServerUseSnapshot(
                 state,
                 SlabSupport.getYOffset(world, target, state),
@@ -116,7 +117,7 @@ public abstract class ServerInteractBlockHitToleranceMixin {
             ServerboundUseItemOnPacket packet,
             ServerUseSnapshot before,
             boolean handlerReturned) {
-        BlockHitResult hit = packet.hitResult();
+        BlockHitResult hit = UseItemOnPacketAccess.hitResult(packet);
         BlockPos target = hit.getBlockPos();
         BlockState afterState = world.getBlockState(target);
         double afterDy = SlabSupport.getYOffset(world, target, afterState);
@@ -193,7 +194,7 @@ public abstract class ServerInteractBlockHitToleranceMixin {
         if (player == null || packet == null) {
             return;
         }
-        BlockHitResult hit = packet.hitResult();
+        BlockHitResult hit = UseItemOnPacketAccess.hitResult(packet);
         if (hit == null) {
             return;
         }
@@ -227,7 +228,7 @@ public abstract class ServerInteractBlockHitToleranceMixin {
                     + " incomingHit=" + hit.getLocation()
                     + " incomingState=" + state
                     + " incomingDy=" + SlabSupport.getYOffset(world, pos, state)
-                    + " heldItem=" + BuiltInRegistries.ITEM.getKey(player.getItemInHand(packet.hand()).getItem())
+                    + " heldItem=" + BuiltInRegistries.ITEM.getKey(player.getItemInHand(UseItemOnPacketAccess.hand(packet)).getItem())
                     + " decision=LOWERED_SAME_CELL_SLAB_MERGE");
         }
         double beforeDy = traceEnabled ? SlabSupport.getYOffset(world, pos, state) : 0.0;
@@ -255,13 +256,8 @@ public abstract class ServerInteractBlockHitToleranceMixin {
         if (!changed) {
             return;
         }
-        // Swing exactly as vanilla's 26.3 use-item path does: the held item's own interact animation
-        // (read before the consume empties a last stack) and the attack-strength reset that came with it.
-        SwingAnimation swingAnimation = player.getItemInHand(packet.hand()).getInteractAnimation();
-        if (!player.isCreative()) {
-            player.getItemInHand(packet.hand()).consume(1, player);
-        }
-        player.swingAndResetAttackStrength(packet.hand(), swingAnimation, true);
+        // Consume and swing exactly as the running version's own use-item path does (PlayerSwing).
+        PlayerSwing.consumeAndSwing(player, UseItemOnPacketAccess.hand(packet));
         ci.cancel();
     }
 
@@ -316,7 +312,7 @@ public abstract class ServerInteractBlockHitToleranceMixin {
             Vec3 center
     ) {
         ServerLevel world = player.level();
-        BlockHitResult hit = packet.hitResult();
+        BlockHitResult hit = UseItemOnPacketAccess.hitResult(packet);
         if (world == null || hit == null || center == null || !pos.equals(hit.getBlockPos())) {
             return null;
         }
@@ -340,7 +336,7 @@ public abstract class ServerInteractBlockHitToleranceMixin {
     ) {
         BlockState targetState = world.getBlockState(pos);
         BlockState objectState = world.getBlockState(pos.above());
-        ItemStack heldStack = player.getItemInHand(packet.hand());
+        ItemStack heldStack = player.getItemInHand(UseItemOnPacketAccess.hand(packet));
         if (SlabSupport.isBeta35FenceWallVariantContactObject(targetState) || targetState.is(Blocks.ANVIL)) {
             return true;
         }
@@ -377,9 +373,9 @@ public abstract class ServerInteractBlockHitToleranceMixin {
             return;
         }
         ServerLevel world = player.level();
-        BlockHitResult hit = packet.hitResult();
+        BlockHitResult hit = UseItemOnPacketAccess.hitResult(packet);
         BlockState state = world == null ? null : world.getBlockState(pos);
-        ItemStack heldStack = player.getItemInHand(packet.hand());
+        ItemStack heldStack = player.getItemInHand(UseItemOnPacketAccess.hand(packet));
         boolean legalLoweredSameCellMerge = loweredSameCellSlabMergeCenter != null;
         Slabbed.LOGGER.info(
                 "[SLABBED_BETA4_REPEAT_SEAM_SERVER_TOLERANCE] packetBlockPos={} state={} dy={} face={} hitVec={} heldItem={} legalLoweredSameCellMerge={} action={} centerBefore={} centerAfter={} reason={}",
@@ -401,9 +397,9 @@ public abstract class ServerInteractBlockHitToleranceMixin {
             ServerboundUseItemOnPacket packet
     ) {
         ServerLevel world = player.level();
-        BlockHitResult hit = packet.hitResult();
+        BlockHitResult hit = UseItemOnPacketAccess.hitResult(packet);
         BlockState state = world == null ? null : world.getBlockState(pos);
-        ItemStack heldStack = player.getItemInHand(packet.hand());
+        ItemStack heldStack = player.getItemInHand(UseItemOnPacketAccess.hand(packet));
         if (world == null
                 || pos == null
                 || state == null
@@ -451,7 +447,7 @@ public abstract class ServerInteractBlockHitToleranceMixin {
      */
     private double slabbed$legalCompoundFullBlockVisualHitDy(BlockPos pos, ServerboundUseItemOnPacket packet) {
         ServerLevel world = player.level();
-        BlockHitResult hit = packet.hitResult();
+        BlockHitResult hit = UseItemOnPacketAccess.hitResult(packet);
         if (world == null || hit == null || !pos.equals(hit.getBlockPos())) {
             return Double.NaN;
         }
@@ -465,7 +461,7 @@ public abstract class ServerInteractBlockHitToleranceMixin {
         if (!(ownerDy < -EPSILON)) {
             return Double.NaN;
         }
-        ItemStack heldStack = player.getItemInHand(packet.hand());
+        ItemStack heldStack = player.getItemInHand(UseItemOnPacketAccess.hand(packet));
         boolean ordinaryTargetUse = heldStack != null
                 && (heldStack.isEmpty() || !(heldStack.getItem() instanceof BlockItem));
         BlockState heldState = heldStack != null && heldStack.getItem() instanceof BlockItem blockItem

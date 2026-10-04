@@ -1,5 +1,6 @@
 package com.slabbed.network;
 
+import com.slabbed.compat.UseItemOnPacketAccess;
 import com.slabbed.Slabbed;
 import com.slabbed.anchor.SlabAnchorAttachment;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
@@ -87,15 +88,15 @@ public final class PlacementDyCorrectionServer {
         if (player == null || packet == null || ACTIVE_SCOPE.get() != null) {
             return;
         }
-        ItemStack held = player.getItemInHand(packet.hand());
+        ItemStack held = player.getItemInHand(UseItemOnPacketAccess.hand(packet));
         if (held == null || !(held.getItem() instanceof BlockItem)) {
             return;
         }
-        BlockHitResult hit = packet.hitResult();
+        BlockHitResult hit = UseItemOnPacketAccess.hitResult(packet);
         PlacementDyPredictionBridge.GroupSignature signature = new PlacementDyPredictionBridge.GroupSignature(
                 player.level().dimension().toString(),
-                packet.sequence(),
-                packet.hand(),
+                UseItemOnPacketAccess.sequence(packet),
+                UseItemOnPacketAccess.hand(packet),
                 BuiltInRegistries.ITEM.getKey(held.getItem()).toString(),
                 hit.getBlockPos().asLong(),
                 hit.getDirection());

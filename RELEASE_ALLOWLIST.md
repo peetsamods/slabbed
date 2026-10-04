@@ -85,7 +85,8 @@ anything. The split above puts the fine granularity only where a leak has actual
 | `com/slabbed/config/*` | The mod's persistent settings file (`config/slabbed.json`) and its enums: read once at init, consulted only inside the placement transaction (maintainer ruling, 2026-09-06). Package-level and non-recursive. |
 | `com/slabbed/client/model/*` | Offset block-state model, Y-offset emitter, chain-ceiling geometry — the lowering render path. |
 | `com/slabbed/client/runtime/*` | Lowered side-slab retargeter — client targeting. |
-| `com/slabbed/compat/*` | Compat hooks and the slab-surface-kind enum consumed by third-party slab mods. |
+| `com/slabbed/compat/*` | Compat hooks and the slab-surface-kind enum consumed by third-party slab mods, plus the running-version seams one jar needs to serve 26.2 and 26.3 (`MinecraftVersions`, `UseItemOnPacketAccess`, `PlayerSwing`). |
+| `com/slabbed/compat/mc262/*` | The Minecraft 26.2 shim classes, compiled against 26.2 in `shim/mc-26.2` and merged here; loaded only when 26.2 is running (today: the Y-offset emitter for Fabric renderer API 14). |
 | `com/slabbed/compat/terrainslabs/*` | Terrain Slabs compat (dual mod-id gate). |
 | `com/slabbed/mixin/client/*` | The 14 client render/interaction mixins declared in `slabbed.client.mixins.json`; every member handles render offset, emitted-effect alignment, remesh, entity light or offset raycast behavior. |
 | `com/slabbed/mixin/torch/*` | `TorchBlockMixin` — torch attachment geometry. |
@@ -120,6 +121,7 @@ anything. The split above puts the fine granularity only where a leak has actual
 | `com/slabbed/mixin/PoweredRailVisualSignalMixin` | A powered rail seated on a lowered block is also powered by what touches the row it is drawn in, in its own update and in the rail-to-rail chain check (maintainer ruling, 2026-09-28). |
 | `com/slabbed/mixin/PistonMoveDyTransferMixin` | A pushed or pulled block keeps the height it was placed at when a piston moves it (maintainer ruling, 2026-09-06). |
 | `com/slabbed/mixin/RedstoneWireBlockMixin` | Redstone wire connection/support over lowered slabs. |
+| `com/slabbed/mixin/LegacyRedStoneWireBlockMixin` | The 26.2 twin of `RedstoneWireBlockMixin` (pre-26.3 class spelling); the config plugin applies exactly one of the two. |
 | `com/slabbed/mixin/RedstoneWireEvaluatorVisualStepMixin` | A wire beside a lowered half-step also reads the wire drawn on the slab next to it, in both wire evaluators' shared incoming-signal read (maintainer ruling, 2026-09-28). |
 | `com/slabbed/mixin/PaintingRememberedSeatMixin` | Painting remembered seat persisted in save data. |
 | `com/slabbed/mixin/ScaffoldingLoweredStandMixin` | Scaffolding standing layer gated at the lowered drawn top. |

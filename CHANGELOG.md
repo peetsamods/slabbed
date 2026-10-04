@@ -1,3 +1,23 @@
+## [0.6.2-alpha+26.2-26.3]
+
+See LAW.md — this changelog does not redefine the law.
+
+One file now covers Minecraft 26.2 and 26.3 on Fabric. Behaviour on 26.3 is unchanged from
+0.6.1-alpha; on 26.2 this is the first build with everything the 26.3 line gained since the two
+versions split.
+
+- Minecraft 26.2 players get the full 0.6 feature set in this one download: the settings file and
+  `/slabdy settings` screen, the two height-nudge key bindings, pistons carrying stored heights,
+  minecarts and armor stands seated on lowered blocks, ambient and event particles at the drawn
+  height, the lowered-band lighting fix, the rail and redstone work, and every fix listed under the
+  26.3 entries below.
+- The handful of places where the two game versions differ (the redstone wire and dirt path class
+  names, the use-item packet fields, the arm swing after a placement, the Fabric renderer API the
+  height-offset model emitter implements, the chain ceiling-support model files) are chosen when the
+  game starts; nothing is read per frame.
+- Cushions exist only on 26.3, so the cushion seat fix applies there alone.
+- Requires Fabric API 0.152.2 or newer on 26.2 and the current Fabric API on 26.3.
+
 ## [0.6.1-alpha+26.3]
 
 See LAW.md — this changelog does not redefine the law.

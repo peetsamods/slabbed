@@ -40,6 +40,12 @@ Keep the "do not re-add X" guard comments — they are anti-regression tripwires
   JDK 21 default fails to read the MC named jar.
 - The reported count MUST match `python3 tools/expected-gametest-count.py`. A green with the
   wrong count is a false green.
+- This line ships ONE jar for Minecraft 26.2 and 26.3, compiled against 26.3. A green here is not
+  a green on 26.2: run the 26.2 leg in `harness/fabric-26.2` (server suite with its count gate, then
+  the client entrypoints), `tools/linkage-scan.py` with each version's game jar and Fabric API, and
+  `tools/mixin-target-scan.py` against each version's game jar, before any parity or release claim.
+  See `harness/README.md`. The 26.2-only classes live in `shim/mc-26.2` and must stay member-for-member
+  twins of their 26.3 originals (`verifyEmitterShimParity`).
 - Keep the literal `@GameTest` token out of comments in registered test classes as hygiene, but the
   count script strips comments before counting and no longer depends on it. (It once did: five
   `{@code @GameTest}` javadoc mentions inflated the expected total to 575 against a true 570, so the

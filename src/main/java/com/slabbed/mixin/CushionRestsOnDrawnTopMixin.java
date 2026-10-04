@@ -1,13 +1,13 @@
 package com.slabbed.mixin;
 
 import net.minecraft.core.BlockPos;
-import net.minecraft.world.entity.decoration.Cushion;
 import net.minecraft.world.level.BlockGetter;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.shapes.VoxelShape;
 import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Pseudo;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Redirect;
 
@@ -25,7 +25,13 @@ import org.spongepowered.asm.mixin.injection.Redirect;
  *
  * <p>The plain collision overload deliberately stays unshifted on this line; do not judge this on it.
  */
-@Mixin(Cushion.class)
+/**
+ * Cushions exist from 26.3 on. The target is named as a string and the mixin marked pseudo so a 26.2
+ * runtime, which has no such class, loads the jar cleanly; {@link SlabbedMixinConfigPlugin} withholds
+ * it there.
+ */
+@Pseudo
+@Mixin(targets = "net.minecraft.world.entity.decoration.Cushion")
 public abstract class CushionRestsOnDrawnTopMixin {
 
     @Redirect(

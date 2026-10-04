@@ -1,5 +1,6 @@
 package com.slabbed.client;
 
+import com.slabbed.compat.UseItemOnPacketAccess;
 import com.slabbed.Slabbed;
 import com.slabbed.anchor.SlabAnchorAttachment;
 import com.slabbed.network.PlacementDyCorrectionPayload;
@@ -457,10 +458,10 @@ public final class PlacementDyPredictionJournal {
             return false;
         }
         PlacementDyPredictionBridge.GroupSignature signature = batch.signature();
-        return signature.sequence() == useItemOn.sequence()
-                && signature.hand() == useItemOn.hand()
-                && signature.originalHitBlockPos() == useItemOn.hitResult().getBlockPos().asLong()
-                && signature.originalHitFace() == useItemOn.hitResult().getDirection()
+        return signature.sequence() == UseItemOnPacketAccess.sequence(useItemOn)
+                && signature.hand() == UseItemOnPacketAccess.hand(useItemOn)
+                && signature.originalHitBlockPos() == UseItemOnPacketAccess.hitResult(useItemOn).getBlockPos().asLong()
+                && signature.originalHitFace() == UseItemOnPacketAccess.hitResult(useItemOn).getDirection()
                 && signature.dimension().equals(level.dimension().toString());
     }
 

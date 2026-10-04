@@ -123,7 +123,7 @@ public final class OffsetBlockStateModel implements BlockStateModel {
             return;
         }
         boolean stepSeam = dy != 0.0f || seam.anyMismatchedNeighborDy();
-        QuadEmitter out = stepSeam ? YOffsetEmitter.wrapWithTransform(emitter, dy, seam) : emitter;
+        QuadEmitter out = stepSeam ? YOffsetEmitters.wrapWithTransform(emitter, dy, seam) : emitter;
         fabricWrapped.emitQuads(out, view, pos, state, random, seam);
         // Phase 3a band emission PULLED after live rejection (TEST (9), 2026-07-07): BAKE_LOCK_UV
         // derives UVs from vertex positions, and band tops exceed the unit square — the UVs walk off

@@ -49,16 +49,17 @@ public final class ManualDyKeybind {
      * options object exists, so this cannot be deferred to the first tick.
      */
     public static void init() {
-        // The unbound key code on this line is InputConstants.UNKNOWN, which is the KEYBOARD key 0 —
-        // not the -1 older lines used. Read it from the constant; never write a literal.
+        // Unbound means InputConstants.UNKNOWN: its type AND value are read from the constant, never
+        // written as literals. The keyboard type's own name differs between game versions this jar
+        // serves (26.2 KEYSYM, 26.3 KEYBOARD) and the unbound value is not -1 on every line.
         lower = KeyMappingHelper.registerKeyMapping(new KeyMapping(
                 "key.slabbed.manual_dy_lower",
-                InputConstants.Type.KEYBOARD,
+                InputConstants.UNKNOWN.getType(),
                 InputConstants.UNKNOWN.getValue(),
                 CATEGORY));
         raise = KeyMappingHelper.registerKeyMapping(new KeyMapping(
                 "key.slabbed.manual_dy_raise",
-                InputConstants.Type.KEYBOARD,
+                InputConstants.UNKNOWN.getType(),
                 InputConstants.UNKNOWN.getValue(),
                 CATEGORY));
         ClientTickEvents.END_CLIENT_TICK.register(ManualDyKeybind::tick);

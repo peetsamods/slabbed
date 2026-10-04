@@ -63,6 +63,10 @@ public final class SlabbedMixinConfigPlugin implements IMixinConfigPlugin {
             "com.slabbed.mixin.LithiumBlockCollisionSweeperShapeLoweredAboveMixin";
     static final String LITHIUM_SWEEPER_POS_MIXIN =
             "com.slabbed.mixin.LithiumBlockCollisionSweeperPosLoweredAboveMixin";
+    /** Mixins that exist only for one of the two Minecraft versions this jar serves (26.2 / 26.3). */
+    static final String MODERN_WIRE_MIXIN = "com.slabbed.mixin.RedstoneWireBlockMixin";
+    static final String LEGACY_WIRE_MIXIN = "com.slabbed.mixin.LegacyRedStoneWireBlockMixin";
+    static final String CUSHION_MIXIN = "com.slabbed.mixin.CushionRestsOnDrawnTopMixin";
     /** Lithium's two block-collision sweepers, as resource paths — never class literals. */
     static final String LITHIUM_SWEEPER_SHAPE_CLASS =
             "net/caffeinemc/mods/lithium/common/entity/movement/ChunkAwareBlockCollisionSweeperVoxelShape";
@@ -89,12 +93,15 @@ public final class SlabbedMixinConfigPlugin implements IMixinConfigPlugin {
 
     private static final Logger LOGGER = LoggerFactory.getLogger("slabbed/mixin");
 
+    private boolean modernMinecraft;
+
     private boolean lithiumPresent;
     /** Decided by the byte probe on every startup; without Lithium the resource miss is a no-op. */
     private boolean lithiumSweeperSupported;
 
     @Override
     public void onLoad(String mixinPackage) {
+        this.modernMinecraft = com.slabbed.compat.MinecraftVersions.AT_LEAST_26_3;
         this.lithiumPresent = FabricLoader.getInstance().isModLoaded(LITHIUM_MOD_ID);
         this.lithiumSweeperSupported =
                 sweeperAsksCollisionContext(LITHIUM_SWEEPER_SHAPE_CLASS, SWEEPER_SHAPE_ENTRY)
@@ -121,7 +128,12 @@ public final class SlabbedMixinConfigPlugin implements IMixinConfigPlugin {
 
     @Override
     public boolean shouldApplyMixin(String targetClassName, String mixinClassName) {
-        return !withheld(mixinClassName, this.lithiumPresent, this.lithiumSweeperSupported);
+        return !withheld(mixinClassName, this.lithiumPresent, this.lithiumSweeperSupported, this.modernMinecraft);
+    }
+
+    /** The Lithium decisions alone, as before the jar served two Minecraft versions (26.3 assumed). */
+    static boolean withheld(String mixinClassName, boolean lithiumPresent, boolean lithiumSweeperSupported) {
+        return withheld(mixinClassName, lithiumPresent, lithiumSweeperSupported, true);
     }
 
     /**
@@ -130,7 +142,14 @@ public final class SlabbedMixinConfigPlugin implements IMixinConfigPlugin {
      * the redirected call in Lithium's sweepers (the mod id plays no part); everything else always
      * applies.
      */
-    static boolean withheld(String mixinClassName, boolean lithiumPresent, boolean lithiumSweeperSupported) {
+    static boolean withheld(String mixinClassName, boolean lithiumPresent, boolean lithiumSweeperSupported,
+                            boolean modernMinecraft) {
+        if (MODERN_WIRE_MIXIN.equals(mixinClassName) || CUSHION_MIXIN.equals(mixinClassName)) {
+            return !modernMinecraft;
+        }
+        if (LEGACY_WIRE_MIXIN.equals(mixinClassName)) {
+            return modernMinecraft;
+        }
         if (EXPLOSION_OCCLUSION_MIXIN.equals(mixinClassName)) {
             return lithiumPresent;
         }
