@@ -173,7 +173,7 @@ public final class ExtendedDepthChainContactTest {
                         && hit.getSide() == Direction.DOWN,
                 "placement ray did not own underside: hit=" + hit.getType()
                         + " pos=" + hit.getBlockPos() + " face=" + hit.getSide());
-        PlayerEntity player = h.createMockPlayer(GameMode.SURVIVAL);
+        PlayerEntity player = h.createMockSurvivalPlayer();
         positionPlayerAway(player, rayStart(world, owner, Direction.DOWN));
         ItemStack stack = new ItemStack(item);
         player.setStackInHand(Hand.MAIN_HAND, stack);

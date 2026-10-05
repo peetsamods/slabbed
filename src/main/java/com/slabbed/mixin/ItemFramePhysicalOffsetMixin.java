@@ -66,13 +66,14 @@ public abstract class ItemFramePhysicalOffsetMixin extends AbstractDecorationEnt
     }
 
     @Inject(method = "initDataTracker", at = @At("TAIL"))
-    private void slabbed$initFrameDy(DataTracker.Builder builder, CallbackInfo ci) {
-        builder.add(SLABBED_FRAME_DY, Double.doubleToRawLongBits(Double.NaN));
+    private void slabbed$initFrameDy(CallbackInfo ci) {
+        this.dataTracker.startTracking(SLABBED_FRAME_DY, Double.doubleToRawLongBits(Double.NaN));
     }
 
-    @Inject(method = "calculateBoundingBox", at = @At("RETURN"), cancellable = true)
-    private void slabbed$physicalFrameBox(BlockPos attached, Direction facing,
-                                         CallbackInfoReturnable<Box> cir) {
+    // 1.20.1 lays the frame out in updateAttachmentPosition (position, then box); the seat is applied
+    // to both at its tail. Later versions compute the box in calculateBoundingBox instead.
+    @Inject(method = "updateAttachmentPosition", at = @At("TAIL"))
+    private void slabbed$physicalFrameBox(CallbackInfo ci) {
         double dy = Double.longBitsToDouble(dataTracker.get(SLABBED_FRAME_DY));
         if (!Double.isFinite(dy)) {
             // The server decides once, from the backing cell's provenance; the client only applies the
@@ -80,10 +81,11 @@ public abstract class ItemFramePhysicalOffsetMixin extends AbstractDecorationEnt
             if (getWorld().isClient) {
                 return;
             }
-            dy = slabbed$tryMintSeat(attached, facing);
+            dy = slabbed$tryMintSeat(attachmentPos, facing);
         }
         if (Double.isFinite(dy) && dy != 0.0d) {
-            cir.setReturnValue(cir.getReturnValue().offset(0.0d, dy, 0.0d));
+            setPos(getX(), getY() + dy, getZ());
+            setBoundingBox(getBoundingBox().offset(0.0d, dy, 0.0d));
         }
     }
 
@@ -145,7 +147,7 @@ public abstract class ItemFramePhysicalOffsetMixin extends AbstractDecorationEnt
         BlockPos entityPos = getBlockPos();
         if (getWorld() instanceof ServerWorld world && world.getServer().isOnThread()
                 && world.getChunkManager().getWorldChunk(entityPos.getX() >> 4, entityPos.getZ() >> 4) != null
-                && Double.isFinite(slabbed$tryMintSeat(attachedBlockPos, facing))) {
+                && Double.isFinite(slabbed$tryMintSeat(attachmentPos, facing))) {
             updateAttachmentPosition();
         }
     }
@@ -153,7 +155,7 @@ public abstract class ItemFramePhysicalOffsetMixin extends AbstractDecorationEnt
     /** Retries only a deferred mint; a legacy cell that was evaluated keeps the vanilla box. */
     @Override
     public void tick() {
-        if (slabbed$seatPending && Double.isFinite(slabbed$tryMintSeat(attachedBlockPos, facing))) {
+        if (slabbed$seatPending && Double.isFinite(slabbed$tryMintSeat(attachmentPos, facing))) {
             updateAttachmentPosition();
         }
         super.tick();
@@ -165,7 +167,7 @@ public abstract class ItemFramePhysicalOffsetMixin extends AbstractDecorationEnt
      */
     @Override
     public Vec3d getSyncedPos() {
-        return Vec3d.of(attachedBlockPos);
+        return Vec3d.of(attachmentPos);
     }
 
     @Inject(method = "onTrackedDataSet", at = @At("TAIL"))

@@ -153,16 +153,17 @@ public final class KeepOnlyReopenProbe implements ClientModInitializer {
             finish(client, "RED_EXISTING_WORLD_OPEN");
             return;
         }
-        if (!worldRequested && client != null && client.isFinishedLoading()) {
+        if (!worldRequested && client != null && client.getOverlay() == null) {
             worldRequested = true;
             if ("author".equals(mode)) {
                 LevelInfo info = new LevelInfo("Slabbed Keep Fixture", GameMode.CREATIVE, false,
                         Difficulty.PEACEFUL, true, new GameRules(), DataConfiguration.SAFE_MODE);
                 client.createIntegratedServerLoader().createAndStart(worldName, info,
-                        new GeneratorOptions(0L, false, false), KeepOnlyReopenProbe::flat, null);
+                        new GeneratorOptions(0L, false, false), KeepOnlyReopenProbe::flat);
                 append("WORLD\t" + mode + "\t" + worldName + "\t-\t-\t-\t-\t-\t-\t-\t-\t-\t-\tcreate_requested");
             } else {
-                client.createIntegratedServerLoader().start(worldName, () -> finish(client, "RED_WORLD_OPEN_CANCELLED"));
+                // 1.20.1 opens an existing world from a parent screen and has no cancel callback.
+                client.createIntegratedServerLoader().start(client.currentScreen, worldName);
                 append("WORLD\t" + mode + "\t" + worldName + "\t-\t-\t-\t-\t-\t-\t-\t-\t-\t-\treopen_requested");
             }
             return;
@@ -421,7 +422,7 @@ public final class KeepOnlyReopenProbe implements ClientModInitializer {
             return;
         }
         if (ticks - phaseTick < 20) return;
-        client.gameRenderer.updateCrosshairTarget(0.0f);
+        client.gameRenderer.updateTargetedEntity(0.0f);
         HitResult hit = client.crosshairTarget;
         if (hit instanceof BlockHitResult blockHit && hit.getType() == HitResult.Type.BLOCK
                 && blockHit.getBlockPos().equals(placedSupport) && blockHit.getSide() == Direction.UP) {

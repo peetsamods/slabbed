@@ -95,7 +95,7 @@ public final class ExtendedDepthOperationTest {
                     seed(world, support, Blocks.STONE.getDefaultState(), DEEP_DY);
                     BlockHitResult placementHit = rayAtFace(world, support, Direction.UP);
                     requireOwnedHit(placementHit, support, Direction.UP, "placement");
-                    PlayerEntity player = h.createMockPlayer(GameMode.SURVIVAL);
+                    PlayerEntity player = h.createMockSurvivalPlayer();
                     positionAway(player, rayStart(world, support, Direction.UP));
                     ActionResult placement = useItem(player, toggle.item(), placementHit);
                     BlockPos target = support.up();
@@ -117,7 +117,7 @@ public final class ExtendedDepthOperationTest {
                     boolean propertyBefore = toggle.openProperty()
                             ? before.get(Properties.OPEN)
                             : before.get(Properties.POWERED);
-                    ActionResult operation = before.onUse(world, player, operationHit);
+                    ActionResult operation = before.onUse(world, player, net.minecraft.util.Hand.MAIN_HAND, operationHit);
                     BlockState after = world.getBlockState(target);
                     boolean propertyAfter = toggle.openProperty()
                             ? after.get(Properties.OPEN)

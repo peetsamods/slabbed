@@ -36,7 +36,7 @@ import org.spongepowered.asm.mixin.injection.Redirect;
 public abstract class GameRendererPickOffsetRaycastMixin {
 
     @Redirect(
-            method = "findCrosshairTarget",
+            method = "updateTargetedEntity", // 1.20.1: the pick (and its single block raycast) lives here
             at = @At(
                     value = "INVOKE",
                     target = "Lnet/minecraft/entity/Entity;raycast(DFZ)Lnet/minecraft/util/hit/HitResult;"

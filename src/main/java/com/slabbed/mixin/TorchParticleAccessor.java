@@ -1,7 +1,7 @@
 package com.slabbed.mixin;
 
 import net.minecraft.block.TorchBlock;
-import net.minecraft.particle.SimpleParticleType;
+import net.minecraft.particle.ParticleEffect;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.gen.Accessor;
 
@@ -15,5 +15,5 @@ import org.spongepowered.asm.mixin.gen.Accessor;
 @Mixin(TorchBlock.class)
 public interface TorchParticleAccessor {
     @Accessor("particle")
-    SimpleParticleType slabbed$getParticle();
+    ParticleEffect slabbed$getParticle();
 }

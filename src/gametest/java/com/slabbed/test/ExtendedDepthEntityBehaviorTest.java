@@ -107,7 +107,7 @@ public final class ExtendedDepthEntityBehaviorTest {
     @GameTest(templateName = "fabric-gametest-api-v1:empty", batchId = BATCH)
     public void itemFramesPlaceTargetAndSurviveAtRenderedDepth(TestContext context) {
         ServerWorld world = context.getWorld();
-        PlayerEntity player = context.createMockPlayer(GameMode.SURVIVAL);
+        PlayerEntity player = context.createMockSurvivalPlayer();
         List<String> failures = new ArrayList<>();
         BlockPos origin = context.getAbsolutePos(new BlockPos(4, 16, 4));
         FramePair regular = placeFramePair(
@@ -141,7 +141,7 @@ public final class ExtendedDepthEntityBehaviorTest {
     @GameTest(templateName = "fabric-gametest-api-v1:empty", batchId = BATCH)
     public void minecartMovesSeatsTargetsAndInteractsAtRenderedDepth(TestContext context) {
         ServerWorld world = context.getWorld();
-        PlayerEntity player = context.createMockPlayer(GameMode.SURVIVAL);
+        PlayerEntity player = context.createMockSurvivalPlayer();
         List<String> failures = new ArrayList<>();
         BlockPos flatRail = context.getAbsolutePos(new BlockPos(4, 16, 4));
         BlockPos deepRail = context.getAbsolutePos(new BlockPos(4, 16, 12));
@@ -248,10 +248,10 @@ public final class ExtendedDepthEntityBehaviorTest {
         });
     }
 
-    @GameTest(templateName = "fabric-gametest-api-v1:empty", batchId = BOAT_BATCH)
+    @GameTest(templateName = "slabbed:empty_16", batchId = BOAT_BATCH)
     public void boatsUseVisibleSurfaceAndRemainSupportedAtRenderedDepth(TestContext context) {
         ServerWorld world = context.getWorld();
-        PlayerEntity player = context.createMockPlayer(GameMode.SURVIVAL);
+        PlayerEntity player = context.createMockSurvivalPlayer();
         List<String> failures = new ArrayList<>();
         BlockPos origin = context.getAbsolutePos(new BlockPos(4, 16, 4));
 
@@ -306,10 +306,10 @@ public final class ExtendedDepthEntityBehaviorTest {
         }, regular.flat(), regular.deep(), chest.flat(), chest.deep());
     }
 
-    @GameTest(templateName = "fabric-gametest-api-v1:empty", batchId = BOAT_BATCH)
+    @GameTest(templateName = "slabbed:empty_16", batchId = BOAT_BATCH)
     public void boatsPreserveVanillaFluidAndOcclusionRayRules(TestContext context) {
         ServerWorld world = context.getWorld();
-        PlayerEntity player = context.createMockPlayer(GameMode.SURVIVAL);
+        PlayerEntity player = context.createMockSurvivalPlayer();
         BlockPos water = context.getAbsolutePos(new BlockPos(4, 16, 4));
         world.setBlockState(water.down(), Blocks.STONE.getDefaultState(), Block.NOTIFY_ALL);
         world.setBlockState(water, Blocks.WATER.getDefaultState(), Block.NOTIFY_ALL);
@@ -323,7 +323,7 @@ public final class ExtendedDepthEntityBehaviorTest {
                     + fluidResult.getResult() + " boats=" + fluidBoats.size());
             return;
         }
-        fluidBoats.getFirst().discard();
+        fluidBoats.get(0).discard();
 
         BlockPos hiddenSupport = water.south(8);
         if (!seedForEntityProof(context, world, hiddenSupport, DEEP_DY, "occluded deep boat")) return;
@@ -337,8 +337,8 @@ public final class ExtendedDepthEntityBehaviorTest {
         Vec3d eye = player.getEyePos();
         BlockHitResult vanillaOccluder = world.raycast(new RaycastContext(
                 eye,
-                eye.add(player.getRotationVector(player.getPitch(), player.getYaw())
-                        .multiply(player.getBlockInteractionRange())),
+                eye.add(player.getRotationVec(1.0f)
+                        .multiply(5.0)),
                 RaycastContext.ShapeType.OUTLINE,
                 RaycastContext.FluidHandling.ANY,
                 player));
@@ -352,9 +352,11 @@ public final class ExtendedDepthEntityBehaviorTest {
         List<BoatEntity> occludedBoats = world.getEntitiesByClass(
                 BoatEntity.class, new Box(hiddenSupport).expand(3.0d, 5.0d, 3.0d), Entity::isAlive);
         if (!occludedResult.getResult().isAccepted() || occludedBoats.size() != 1
-                || occludedBoats.getFirst().getPos().squaredDistanceTo(vanillaOccluder.getPos()) > EPSILON) {
+                || occludedBoats.get(0).getPos().squaredDistanceTo(vanillaOccluder.getPos()) > EPSILON) {
             context.throwGameTestException("boat use did not preserve the nearer vanilla hit result="
-                    + occludedResult.getResult() + " boats=" + occludedBoats.size());
+                    + occludedResult.getResult() + " boats=" + occludedBoats.size()
+                    + " at=" + occludedBoats.stream().map(b -> b.getPos().toString()).toList()
+                    + " vanillaHit=" + vanillaOccluder.getPos() + " support=" + hiddenSupport);
             return;
         }
         context.complete();
@@ -363,7 +365,7 @@ public final class ExtendedDepthEntityBehaviorTest {
     @GameTest(templateName = "fabric-gametest-api-v1:empty", batchId = ARMOR_STAND_BATCH)
     public void armorStandsPlaceAndRemainSupportedAtRenderedDepth(TestContext context) {
         ServerWorld world = context.getWorld();
-        PlayerEntity player = context.createMockPlayer(GameMode.SURVIVAL);
+        PlayerEntity player = context.createMockSurvivalPlayer();
         List<String> failures = new ArrayList<>();
         BlockPos flatSupport = context.getAbsolutePos(new BlockPos(4, 16, 4));
         BlockPos deepSupport = flatSupport.south(8);
@@ -516,7 +518,7 @@ public final class ExtendedDepthEntityBehaviorTest {
         }
         if (!failures.isEmpty()) {
             System.out.println("MINECART_RAIL_QUERY_FAILURES " + String.join("; ", failures));
-            context.throwGameTestException(failures.getFirst());
+            context.throwGameTestException(failures.get(0));
         }
         railShape(world, deepRail, RailShape.EAST_WEST, DEEP_DY);
         List<EntityTickingTicket> taskForcedChunks = forceEntityTickingChunks(world, deepRail, deepRail.south(4));
@@ -732,12 +734,12 @@ public final class ExtendedDepthEntityBehaviorTest {
         List<ItemFrameEntity> frames = world.getEntitiesByClass(
                 ItemFrameEntity.class,
                 new Box(attached).expand(4.0d),
-                frame -> frame.getAttachedBlockPos().equals(attached)
+                frame -> frame.getDecorationBlockPos().equals(attached)
                         && (glow == (frame instanceof GlowItemFrameEntity)));
         if (frames.size() != 1) {
             throw new AssertionError(label + " expected exactly one placed frame, found=" + frames.size());
         }
-        return frames.getFirst();
+        return frames.get(0);
     }
 
     private static void inspectFramePair(
@@ -790,7 +792,7 @@ public final class ExtendedDepthEntityBehaviorTest {
                 : new ItemFrameEntity(EntityType.ITEM_FRAME, world);
         restored.readNbt(saved);
         requireBox("reloaded frame", original.getBoundingBox(), restored.getBoundingBox(), failures);
-        if (!original.getAttachedBlockPos().equals(restored.getAttachedBlockPos())
+        if (!original.getDecorationBlockPos().equals(restored.getDecorationBlockPos())
                 || !original.getPos().equals(restored.getPos())) {
             failures.add("frame reload changed its logical attachment or physical position");
         }
@@ -833,7 +835,7 @@ public final class ExtendedDepthEntityBehaviorTest {
         if (carts.size() != 1) {
             throw new AssertionError(label + " expected exactly one spawned minecart, found=" + carts.size());
         }
-        return carts.getFirst();
+        return carts.get(0);
     }
 
     private static BoatPair placeBoatPair(
@@ -883,7 +885,7 @@ public final class ExtendedDepthEntityBehaviorTest {
             context.throwGameTestException(label + " expected exactly one placed boat, found=" + boats.size());
             return null;
         }
-        return boats.getFirst();
+        return boats.get(0);
     }
 
     private static ArmorStandEntity placeArmorStand(
@@ -928,7 +930,7 @@ public final class ExtendedDepthEntityBehaviorTest {
             context.throwGameTestException(label + " expected exactly one placed stand, found=" + stands.size());
             return null;
         }
-        return stands.getFirst();
+        return stands.get(0);
     }
 
     private static boolean seedForEntityProof(

@@ -139,7 +139,7 @@ public final class ExtendedDepthPlacementTest {
                         prepareFloorFixture(world, owner, placementCase);
                         BlockHitResult hit = rayAtFace(world, owner, Direction.UP);
                         requireHit(hit, owner, Direction.UP, "support");
-                        PlayerEntity player = h.createMockPlayer(GameMode.SURVIVAL);
+                        PlayerEntity player = h.createMockSurvivalPlayer();
                         positionPlayer(player, rayStart(world, owner, Direction.UP));
                         ActionResult result = use(player, placementCase.item(), hit);
                         BlockPos placed = owner.up();
@@ -168,7 +168,7 @@ public final class ExtendedDepthPlacementTest {
                         seedOwner(world, owner, Blocks.STONE.getDefaultState(), depth);
                         BlockHitResult hit = rayAtFace(world, owner, Direction.EAST);
                         requireHit(hit, owner, Direction.EAST, "support");
-                        PlayerEntity player = h.createMockPlayer(GameMode.SURVIVAL);
+                        PlayerEntity player = h.createMockSurvivalPlayer();
                         positionPlayer(player, rayStart(world, owner, Direction.EAST));
                         ActionResult result = use(player, placementCase.item(), hit);
                         BlockPos placed = owner.east();
@@ -184,7 +184,7 @@ public final class ExtendedDepthPlacementTest {
                         seedOwner(world, owner, Blocks.STONE.getDefaultState(), depth);
                         BlockHitResult hit = rayAtFace(world, owner, Direction.DOWN);
                         requireHit(hit, owner, Direction.DOWN, "support");
-                        PlayerEntity player = h.createMockPlayer(GameMode.SURVIVAL);
+                        PlayerEntity player = h.createMockSurvivalPlayer();
                         positionPlayer(player, rayStart(world, owner, Direction.DOWN));
                         ActionResult result = use(player, placementCase.item(), hit);
                         BlockPos placed = owner.down();
@@ -209,7 +209,7 @@ public final class ExtendedDepthPlacementTest {
                 runCase(failures, "door@" + depth, () -> {
                     clearArena(world, owner);
                     seedOwner(world, owner, Blocks.STONE.getDefaultState(), depth);
-                    PlayerEntity player = h.createMockPlayer(GameMode.SURVIVAL);
+                    PlayerEntity player = h.createMockSurvivalPlayer();
                     BlockHitResult hit = rayAtFace(world, owner, Direction.UP);
                     positionPlayer(player, rayStart(world, owner, Direction.UP));
                     ActionResult result = use(player, Items.OAK_DOOR, hit);
@@ -222,7 +222,7 @@ public final class ExtendedDepthPlacementTest {
                     for (Direction direction : Direction.Type.HORIZONTAL) {
                         seedOwner(world, owner.offset(direction), Blocks.STONE.getDefaultState(), depth);
                     }
-                    PlayerEntity player = h.createMockPlayer(GameMode.SURVIVAL);
+                    PlayerEntity player = h.createMockSurvivalPlayer();
                     player.setYaw(0.0f);
                     BlockHitResult hit = rayAtFace(world, owner, Direction.UP);
                     positionPlayer(player, rayStart(world, owner, Direction.UP));
@@ -237,7 +237,7 @@ public final class ExtendedDepthPlacementTest {
                 runCase(failures, "sunflower_tall_pair@" + depth, () -> {
                     clearArena(world, owner);
                     seedOwner(world, owner, Blocks.DIRT.getDefaultState(), depth);
-                    PlayerEntity player = h.createMockPlayer(GameMode.SURVIVAL);
+                    PlayerEntity player = h.createMockSurvivalPlayer();
                     BlockHitResult hit = rayAtFace(world, owner, Direction.UP);
                     positionPlayer(player, rayStart(world, owner, Direction.UP));
                     ActionResult result = use(player, Items.SUNFLOWER, hit);
@@ -312,7 +312,7 @@ public final class ExtendedDepthPlacementTest {
             TestContext h, ServerWorld world, BlockPos owner, Direction face, Item item, double expectedDy) {
         BlockHitResult hit = rayAtFace(world, owner, face);
         requireHit(hit, owner, face, "extension owner");
-        PlayerEntity player = h.createMockPlayer(GameMode.SURVIVAL);
+        PlayerEntity player = h.createMockSurvivalPlayer();
         positionPlayer(player, rayStart(world, owner, face));
         ActionResult result = use(player, item, hit);
         BlockPos placed = owner.offset(face);
@@ -334,7 +334,7 @@ public final class ExtendedDepthPlacementTest {
     ) {
         BlockHitResult hit = rayAtHorizontalBand(world, owner, face, band);
         requireHit(hit, owner, face, "cantilever owner " + band);
-        PlayerEntity player = h.createMockPlayer(GameMode.SURVIVAL);
+        PlayerEntity player = h.createMockSurvivalPlayer();
         positionPlayer(player, rayStartAtHorizontalBand(world, owner, face, band));
         ActionResult result = use(player, item, hit);
         BlockPos placed = owner.offset(face);

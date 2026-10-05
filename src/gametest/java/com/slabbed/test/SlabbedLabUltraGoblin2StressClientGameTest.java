@@ -88,7 +88,7 @@ public final class SlabbedLabUltraGoblin2StressClientGameTest implements FabricC
             }
             mc.player.setStackInHand(Hand.MAIN_HAND, new ItemStack(Items.STONE_SLAB, 8));
             HitResult vanillaTarget = mc.player.raycast(5.0d, 0.0f, false);
-            mc.gameRenderer.updateCrosshairTarget(0.0f);
+            mc.gameRenderer.updateTargetedEntity(0.0f);
             HitResult finalTarget = mc.crosshairTarget;
 
             System.out.println(PREFIX + "[LIVE_RETARGET_REPRO] phase=PHASE_19_LIVE_RECORDER_SLAB_HELD_RETARGET_OVERREACH_REPRO"
@@ -613,7 +613,7 @@ public final class SlabbedLabUltraGoblin2StressClientGameTest implements FabricC
             }
             mc.player.setStackInHand(Hand.MAIN_HAND, new ItemStack(Items.STONE, 8));
             HitResult initial = mc.player.raycast(6.0d, 0.0f, false);
-            mc.gameRenderer.updateCrosshairTarget(0.0f);
+            mc.gameRenderer.updateTargetedEntity(0.0f);
             HitResult finalTarget = mc.crosshairTarget;
             targetView.set("initial=" + describeHit(initial) + " final=" + describeHit(finalTarget));
             targetStyleClientView.set(snapshotView(

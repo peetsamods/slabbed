@@ -36,7 +36,7 @@ import net.minecraft.block.WallSignBlock;
 import net.minecraft.block.WallTorchBlock;
 import net.minecraft.block.enums.Attachment;
 import net.minecraft.block.enums.BedPart;
-import net.minecraft.block.enums.BlockFace;
+import net.minecraft.block.enums.WallMountLocation;
 import net.minecraft.block.enums.DoubleBlockHalf;
 import net.minecraft.block.enums.BlockHalf;
 import net.minecraft.block.enums.SlabType;
@@ -82,7 +82,7 @@ public final class SlabSupport {
     }
 
     private static boolean isPaleMossCarpet(Block block) {
-        return block == Registries.BLOCK.get(Identifier.of("minecraft", "pale_moss_carpet"));
+        return block == Registries.BLOCK.get(new Identifier("minecraft", "pale_moss_carpet"));
     }
 
     /**
@@ -196,7 +196,10 @@ public final class SlabSupport {
             return false;
         }
         Block block = state.getBlock();
-        return block instanceof net.minecraft.block.TorchBlock && !(block instanceof WallTorchBlock);
+        // RedstoneTorchBlock extends TorchBlock on this version (no AbstractTorchBlock);
+        // redstone torches are never floor torches for Slabbed's purposes.
+        return block instanceof net.minecraft.block.TorchBlock && !(block instanceof WallTorchBlock)
+                && !(block instanceof net.minecraft.block.RedstoneTorchBlock);
     }
 
     private static boolean isBeta35FloorTopContactObject(BlockState state) {
@@ -206,8 +209,8 @@ public final class SlabSupport {
     public static boolean isBeta35FloorButtonContactObject(BlockState state) {
         return state != null
                 && state.getBlock() instanceof ButtonBlock
-                && state.contains(Properties.BLOCK_FACE)
-                && state.get(Properties.BLOCK_FACE) == BlockFace.FLOOR;
+                && state.contains(Properties.WALL_MOUNT_LOCATION)
+                && state.get(Properties.WALL_MOUNT_LOCATION) == WallMountLocation.FLOOR;
     }
 
     public static boolean isBeta35BottomTrapdoorVisibleOwnerObject(BlockState state) {
@@ -1036,7 +1039,7 @@ public final class SlabSupport {
                     && state.get(Properties.VERTICAL_DIRECTION) == Direction.DOWN;
         }
         // lever / button: CEILING face hangs; FLOOR / WALL stand
-        if (state.contains(Properties.BLOCK_FACE) && state.get(Properties.BLOCK_FACE) == BlockFace.CEILING) {
+        if (state.contains(Properties.WALL_MOUNT_LOCATION) && state.get(Properties.WALL_MOUNT_LOCATION) == WallMountLocation.CEILING) {
             return true;
         }
         // bell: CEILING attachment hangs; FLOOR / WALL stand
@@ -2493,7 +2496,8 @@ public final class SlabSupport {
         }
         Block block = state.getBlock();
         if (!(block instanceof net.minecraft.block.TorchBlock
-                || block instanceof net.minecraft.block.WallTorchBlock)) {
+                || block instanceof net.minecraft.block.WallTorchBlock)
+                || block instanceof net.minecraft.block.RedstoneTorchBlock) {
             return false;
         }
         // compound dy (-1.0) also qualifies: torch above an adjacent-lowered bottom slab

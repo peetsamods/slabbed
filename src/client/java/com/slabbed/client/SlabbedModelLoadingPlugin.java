@@ -9,6 +9,7 @@ import net.minecraft.client.render.model.BakedModel;
 import net.minecraft.client.render.model.MultipartBakedModel;
 import net.minecraft.client.render.model.WeightedBakedModel;
 import net.minecraft.client.util.ModelIdentifier;
+import net.minecraft.util.Identifier;
 
 public final class SlabbedModelLoadingPlugin {
     private SlabbedModelLoadingPlugin() {
@@ -23,13 +24,15 @@ public final class SlabbedModelLoadingPlugin {
             plugin.addModels(ChainCeilingGeometry.MODEL_ID);
 
             plugin.modifyModelAfterBake().register(ModelModifier.WRAP_PHASE,
-                    (model, context) -> wrapModel(context.topLevelId(), model));
+                    (model, context) -> wrapModel(context.id(), model));
         });
     }
 
-    static BakedModel wrapModel(ModelIdentifier topLevelId, BakedModel model) {
+    static BakedModel wrapModel(Identifier topLevelId, BakedModel model) {
+        // 1.20.1: the context hands back a plain Identifier that is a ModelIdentifier for block-state
+        // variants; the inventory variant is the literal "inventory" there.
         if (model == null
-                || (topLevelId != null && ModelIdentifier.INVENTORY_VARIANT.equals(topLevelId.getVariant()))
+                || (topLevelId instanceof ModelIdentifier variantId && "inventory".equals(variantId.getVariant()))
                 || model instanceof OffsetBlockStateModel
                 || model instanceof MultipartBakedModel
                 || model instanceof WeightedBakedModel) {

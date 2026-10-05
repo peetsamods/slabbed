@@ -31,7 +31,10 @@ import net.minecraft.world.level.LevelInfo;
 
 /** Controlled delayed-attachment probe using the ordinary client renderer. */
 public final class AttachmentRemeshProbe implements ClientModInitializer {
-    private static final BlockPos TARGET = new BlockPos(8, 200, 8);
+    // The superflat ground is at y=-61 on this version. The scene sits just above it: blocks placed far
+    // up in empty sky sections render unlit here (a vanilla light quirk on this version, not a Slabbed
+    // behaviour), and the cloud layer at y=192 would fill the frame.
+    private static final BlockPos TARGET = new BlockPos(8, -56, 8);
     private int ticks, phase, since;
     private boolean requested;
     private volatile boolean prepared;
@@ -56,7 +59,7 @@ public final class AttachmentRemeshProbe implements ClientModInitializer {
         if (Boolean.getBoolean("slabbed.fenceCeilingProbe")) { tickFence(client);return; }
         if (phase == 99) return;
         if (++ticks > 2400) throw new AssertionError("bounded client proof timed out");
-        if (!requested && client.isFinishedLoading()) {
+        if (!requested && client.getOverlay() == null) {
             if (client.world != null) throw new AssertionError("existing world is protected");
             requested = true;
             String worldName = "attachment-remesh-proof-" + Long.toUnsignedString(System.nanoTime());
@@ -65,7 +68,7 @@ public final class AttachmentRemeshProbe implements ClientModInitializer {
                             Difficulty.PEACEFUL, true, new GameRules(), DataConfiguration.SAFE_MODE),
                     new GeneratorOptions(0L, false, false),
                     registries -> registries.get(RegistryKeys.WORLD_PRESET).getOrThrow(WorldPresets.FLAT)
-                            .createDimensionsRegistryHolder(), null);
+                            .createDimensionsRegistryHolder());
             return;
         }
         if (client.world == null || client.player == null || client.getServer() == null) return;
@@ -74,19 +77,19 @@ public final class AttachmentRemeshProbe implements ClientModInitializer {
         if (client.currentScreen != null) client.setScreen(null);
         client.player.getAbilities().flying = true;
         client.player.setVelocity(Vec3d.ZERO);
-        client.player.refreshPositionAndAngles(8.5, 199.75 - client.player.getStandingEyeHeight(), 3.0, 0, 0);
+        client.player.refreshPositionAndAngles(TARGET.getX() + 0.5, TARGET.getY() - 0.25 - client.player.getStandingEyeHeight(), TARGET.getZ() - 5.0, 0, 0);
         client.player.setStackInHand(Hand.MAIN_HAND, ItemStack.EMPTY);
         if (phase == 0) {
             phase = 1; since = ticks;
             client.getServer().execute(() -> {
                 var world = client.getServer().getOverworld();
-                var player = world.getPlayers().getFirst();
+                var player = world.getPlayers().get(0);
                 BlockPos support = TARGET.down();
                 world.setBlockState(support, Blocks.STONE_SLAB.getDefaultState()
                         .with(SlabBlock.TYPE, SlabType.BOTTOM), Block.NOTIFY_ALL);
                 var stack = new ItemStack(Items.RED_CONCRETE);
                 player.setStackInHand(Hand.MAIN_HAND, stack);
-                var hit = new BlockHitResult(new Vec3d(8.5, 199.5, 8.5), Direction.UP, support, false);
+                var hit = new BlockHitResult(new Vec3d(TARGET.getX() + 0.5, TARGET.getY() - 0.5, TARGET.getZ() + 0.5), Direction.UP, support, false);
                 var result = stack.useOnBlock(new ItemUsageContext(player, Hand.MAIN_HAND, hit));
                 if (!result.isAccepted() || !world.getBlockState(TARGET).isOf(Blocks.RED_CONCRETE))
                     throw new AssertionError("real placement failed");
@@ -188,14 +191,14 @@ public final class AttachmentRemeshProbe implements ClientModInitializer {
     private void tickFence(MinecraftClient client) throws Exception {
         if (phase==99) return;
         if (++ticks>2400) throw new AssertionError("bounded fence proof timed out");
-        if (!requested && client.isFinishedLoading()) {
+        if (!requested && client.getOverlay() == null) {
             if (client.world!=null) throw new AssertionError("existing world is protected");
             requested=true;
             client.createIntegratedServerLoader().createAndStart("fence-ceiling-proof",
                     new LevelInfo("Fence Ceiling Proof",GameMode.CREATIVE,false,Difficulty.PEACEFUL,true,
                             new GameRules(),DataConfiguration.SAFE_MODE),new GeneratorOptions(0L,false,false),
                     registries -> registries.get(RegistryKeys.WORLD_PRESET).getOrThrow(WorldPresets.FLAT)
-                            .createDimensionsRegistryHolder(),null);
+                            .createDimensionsRegistryHolder());
             return;
         }
         if (client.world==null || client.player==null || client.getServer()==null) return;
@@ -208,7 +211,7 @@ public final class AttachmentRemeshProbe implements ClientModInitializer {
         if (phase==0) {
             phase=1;since=ticks;
             client.getServer().execute(() -> {
-                var world=client.getServer().getOverworld();var player=world.getPlayers().getFirst();
+                var world=client.getServer().getOverworld();var player=world.getPlayers().get(0);
                 world.setBlockState(TARGET.down(),Blocks.STONE.getDefaultState(),Block.NOTIFY_ALL);
                 var stack=new ItemStack(Items.OAK_FENCE);player.setStackInHand(Hand.MAIN_HAND,stack);
                 stack.useOnBlock(new ItemUsageContext(player,Hand.MAIN_HAND,new BlockHitResult(

@@ -13,7 +13,7 @@ import net.minecraft.entity.data.DataTracker;
 import net.minecraft.entity.data.TrackedData;
 import net.minecraft.entity.data.TrackedDataHandlerRegistry;
 import net.minecraft.entity.vehicle.AbstractMinecartEntity;
-import net.minecraft.entity.vehicle.VehicleEntity;
+import net.minecraft.entity.Entity;
 import net.minecraft.nbt.NbtCompound;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.util.math.BlockPos;
@@ -51,7 +51,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
  * rail's own height. A rail with no modern provenance keeps the cart at its vanilla height.
  */
 @Mixin(AbstractMinecartEntity.class)
-public abstract class MinecartPhysicalOffsetMixin extends VehicleEntity {
+public abstract class MinecartPhysicalOffsetMixin extends Entity {
     @Unique
     private static final TrackedData<Long> SLABBED_RAIL_DY = DataTracker.registerData(
             AbstractMinecartEntity.class, TrackedDataHandlerRegistry.LONG);
@@ -68,8 +68,8 @@ public abstract class MinecartPhysicalOffsetMixin extends VehicleEntity {
     }
 
     @Inject(method = "initDataTracker", at = @At("TAIL"))
-    private void slabbed$initRailDy(DataTracker.Builder builder, CallbackInfo ci) {
-        builder.add(SLABBED_RAIL_DY, Double.doubleToRawLongBits(0.0d));
+    private void slabbed$initRailDy(CallbackInfo ci) {
+        this.dataTracker.startTracking(SLABBED_RAIL_DY, Double.doubleToRawLongBits(0.0d));
     }
 
     @Inject(method = "<init>(Lnet/minecraft/entity/EntityType;Lnet/minecraft/world/World;DDD)V", at = @At("TAIL"))

@@ -259,7 +259,7 @@ public final class SlabbedLabVerticalChainHitboxOwnershipClientGameTest implemen
                     RaycastContext.ShapeType.OUTLINE,
                     RaycastContext.FluidHandling.NONE,
                     mc.player));
-            mc.gameRenderer.updateCrosshairTarget(0.0f);
+            mc.gameRenderer.updateTargetedEntity(0.0f);
             HitResult actual = mc.crosshairTarget;
             BlockPos actualOwner = owner(actual);
             String verdict = expectedOwner.equals(actualOwner)

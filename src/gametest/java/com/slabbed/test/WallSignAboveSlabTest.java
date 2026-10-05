@@ -62,7 +62,7 @@ public final class WallSignAboveSlabTest {
     @GameTest(templateName = "fabric-gametest-api-v1:empty")
     public void aWallSignIsCarriedByItsWallNotTheSlabUnderItsCell(TestContext ctx) {
         ServerWorld world = ctx.getWorld();
-        PlayerEntity player = ctx.createMockPlayer(GameMode.SURVIVAL);
+        PlayerEntity player = ctx.createMockSurvivalPlayer();
         BlockState bottomSlab = Blocks.STONE_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.BOTTOM);
         // Scene A (the report): flush wall, bottom slab under the sign cell.
         column(ctx, 1, 6, bottomSlab);
@@ -74,7 +74,7 @@ public final class WallSignAboveSlabTest {
         ctx.setBlockState(new BlockPos(7, 15, 6), Blocks.STONE.getDefaultState());
         ctx.setBlockState(new BlockPos(7, 16, 6), bottomSlab);
         BlockPos slabC = ctx.getAbsolutePos(new BlockPos(7, 16, 6));
-        PlayerEntity builder = ctx.createMockPlayer(GameMode.SURVIVAL);
+        PlayerEntity builder = ctx.createMockSurvivalPlayer();
         builder.setPosition(slabC.getX() + 0.5d, slabC.getY(), slabC.getZ() + 2.5d);
         ActionResult rc = PlacementCaptureBoundaryGameTest.useOn(builder, new ItemStack(Items.STONE, 16),
                 new BlockHitResult(Vec3d.ofBottomCenter(slabC).add(0.0d, 0.5d, 0.0d), Direction.UP, slabC, false));

@@ -7,7 +7,7 @@ import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientChunkEvents;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
-import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientWorldEvents;
+import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.world.ClientWorld;
 import net.minecraft.util.math.BlockPos;
@@ -51,8 +51,10 @@ public final class PlacementDyPredictionClient {
             return mc == null ? null : PlacementDyOverlay.overlayFact(mc.world, pos.asLong());
         };
 
-        ClientWorldEvents.AFTER_CLIENT_WORLD_CHANGE.register((client, world) ->
-                PlacementDyOverlay.resetForLevel(world));
+        // 1.20.1 has no client-world-change event; the join of a play connection is the moment the
+        // client has its new world. Leaving a world is covered by the tick path below.
+        ClientPlayConnectionEvents.JOIN.register((handler, sender, client) ->
+                PlacementDyOverlay.resetForLevel(client.world));
         ClientChunkEvents.CHUNK_UNLOAD.register((world, chunk) ->
                 PlacementDyOverlay.onChunkUnload(world, chunk.getPos().x, chunk.getPos().z));
         // Drives lazy retirement and its timeout. It is also the disconnect path: once the client has

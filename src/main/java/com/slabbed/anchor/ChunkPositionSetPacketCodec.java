@@ -3,8 +3,7 @@ package com.slabbed.anchor;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 import java.util.Map;
 import java.util.TreeMap;
-import net.minecraft.network.RegistryByteBuf;
-import net.minecraft.network.codec.PacketCodec;
+import net.minecraft.network.PacketByteBuf;
 import net.minecraft.util.math.BlockPos;
 
 /**
@@ -28,13 +27,11 @@ final class ChunkPositionSetPacketCodec {
     private static final int WORDS_PER_SECTION = 64;
     private static final int MAX_SECTION_GROUPS = 4_096;
 
-    static final PacketCodec<RegistryByteBuf, LongOpenHashSet> INSTANCE =
-            PacketCodec.of(ChunkPositionSetPacketCodec::encode, ChunkPositionSetPacketCodec::decode);
 
     private ChunkPositionSetPacketCodec() {
     }
 
-    private static void encode(LongOpenHashSet positions, RegistryByteBuf buf) {
+    static void encode(LongOpenHashSet positions, PacketByteBuf buf) {
         TreeMap<SectionKey, long[]> sections = new TreeMap<>();
         for (long packed : positions) {
             int x = BlockPos.unpackLongX(packed);
@@ -70,7 +67,7 @@ final class ChunkPositionSetPacketCodec {
         }
     }
 
-    private static LongOpenHashSet decode(RegistryByteBuf buf) {
+    static LongOpenHashSet decode(PacketByteBuf buf) {
         int markerOrLegacyCount = buf.readVarInt();
         if (markerOrLegacyCount >= 0) {
             return decodeLegacy(buf, markerOrLegacyCount);
@@ -115,7 +112,7 @@ final class ChunkPositionSetPacketCodec {
         return positions;
     }
 
-    private static LongOpenHashSet decodeLegacy(RegistryByteBuf buf, int count) {
+    private static LongOpenHashSet decodeLegacy(PacketByteBuf buf, int count) {
         if (count > buf.readableBytes() / Long.BYTES) {
             throw new IllegalArgumentException(
                     "Legacy chunk-position attachment count " + count

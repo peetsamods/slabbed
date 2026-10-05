@@ -52,11 +52,12 @@ public abstract class ArmorStandItemOffsetPlacementMixin {
     }
 
     @WrapOperation(method = "useOnBlock", at = @At(value = "INVOKE",
-            target = "Lnet/minecraft/entity/EntityType;create(Lnet/minecraft/server/world/ServerWorld;Ljava/util/function/Consumer;Lnet/minecraft/util/math/BlockPos;Lnet/minecraft/entity/SpawnReason;ZZ)Lnet/minecraft/entity/Entity;"))
+            target = "Lnet/minecraft/entity/EntityType;create(Lnet/minecraft/server/world/ServerWorld;Lnet/minecraft/nbt/NbtCompound;Ljava/util/function/Consumer;Lnet/minecraft/util/math/BlockPos;Lnet/minecraft/entity/SpawnReason;ZZ)Lnet/minecraft/entity/Entity;"))
     @SuppressWarnings({"rawtypes", "unchecked"})
     private Entity slabbed$createAtVisiblePlacementY(
             EntityType type,
             ServerWorld world,
+            net.minecraft.nbt.NbtCompound nbt,
             Consumer copier,
             BlockPos pos,
             SpawnReason reason,
@@ -74,7 +75,7 @@ public abstract class ArmorStandItemOffsetPlacementMixin {
             };
         }
         return original.call(
-                type, world, adjustedCopier, pos, reason,
+                type, world, nbt, adjustedCopier, pos, reason,
                 Double.isFinite(visibleY) ? false : alignPosition,
                 Double.isFinite(visibleY) ? false : invertY);
     }

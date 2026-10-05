@@ -70,23 +70,26 @@ public abstract class PaintingRememberedSeatMixin extends AbstractDecorationEnti
     }
 
     @Inject(method = "initDataTracker", at = @At("TAIL"))
-    private void slabbed$initHangDy(DataTracker.Builder builder, CallbackInfo ci) {
-        builder.add(SLABBED_HANG_DY, Double.doubleToRawLongBits(Double.NaN));
+    private void slabbed$initHangDy(CallbackInfo ci) {
+        this.dataTracker.startTracking(SLABBED_HANG_DY, Double.doubleToRawLongBits(Double.NaN));
     }
 
     /** The ONE derivation, then the remembered number forever after. */
-    @Inject(method = "calculateBoundingBox", at = @At("RETURN"), cancellable = true)
-    private void slabbed$physicalPaintingBox(BlockPos attached, Direction facing,
-                                            CallbackInfoReturnable<Box> cir) {
+    // 1.20.1: paintings do not override the base layout, so the seat rides on a plain override that
+    // lets vanilla place position and box first. Later versions hook calculateBoundingBox instead.
+    @Override
+    protected void updateAttachmentPosition() {
+        super.updateAttachmentPosition();
         double dy = Double.longBitsToDouble(dataTracker.get(SLABBED_HANG_DY));
         if (!Double.isFinite(dy)) {
             if (getWorld().isClient) {
                 return;
             }
-            dy = slabbed$tryMintSeat(attached, facing);
+            dy = slabbed$tryMintSeat(attachmentPos, facing);
         }
         if (Double.isFinite(dy) && dy != 0.0d) {
-            cir.setReturnValue(cir.getReturnValue().offset(0.0d, dy, 0.0d));
+            setPos(getX(), getY() + dy, getZ());
+            setBoundingBox(getBoundingBox().offset(0.0d, dy, 0.0d));
         }
     }
 
@@ -148,7 +151,7 @@ public abstract class PaintingRememberedSeatMixin extends AbstractDecorationEnti
         BlockPos entityPos = getBlockPos();
         if (getWorld() instanceof ServerWorld world && world.getServer().isOnThread()
                 && world.getChunkManager().getWorldChunk(entityPos.getX() >> 4, entityPos.getZ() >> 4) != null
-                && Double.isFinite(slabbed$tryMintSeat(attachedBlockPos, facing))) {
+                && Double.isFinite(slabbed$tryMintSeat(attachmentPos, facing))) {
             updateAttachmentPosition();
         }
     }
@@ -156,7 +159,7 @@ public abstract class PaintingRememberedSeatMixin extends AbstractDecorationEnti
     /** Retries only a deferred mint; a legacy cell that was evaluated keeps the vanilla box. */
     @Override
     public void tick() {
-        if (slabbed$seatPending && Double.isFinite(slabbed$tryMintSeat(attachedBlockPos, facing))) {
+        if (slabbed$seatPending && Double.isFinite(slabbed$tryMintSeat(attachmentPos, facing))) {
             updateAttachmentPosition();
         }
         super.tick();

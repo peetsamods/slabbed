@@ -26,7 +26,6 @@ import net.minecraft.item.ItemUsageContext;
 import net.minecraft.item.Items;
 import net.minecraft.nbt.NbtCompound;
 import net.minecraft.nbt.NbtIo;
-import net.minecraft.nbt.NbtSizeTracker;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.test.GameTest;
 import net.minecraft.test.TestContext;
@@ -86,7 +85,7 @@ public final class PlacementCaptureBoundaryGameTest {
         world.setBlockState(clicked, Blocks.SCAFFOLDING.getDefaultState(), Block.NOTIFY_ALL);
         world.setBlockState(clicked.south(), Blocks.SCAFFOLDING.getDefaultState(), Block.NOTIFY_ALL);
         BlockPos actual = clicked.south(2);
-        PlayerEntity player = h.createMockPlayer(GameMode.SURVIVAL);
+        PlayerEntity player = h.createMockSurvivalPlayer();
         player.setYaw(0.0f);
         ActionResult result = useOn(player, new ItemStack(Items.SCAFFOLDING), clicked, Direction.UP);
         h.assertTrue(result.isAccepted()
@@ -138,7 +137,7 @@ public final class PlacementCaptureBoundaryGameTest {
         BlockPos owner = flatOwner(h);
         BlockPos blocked = owner.up();
         world.setBlockState(blocked, Blocks.OBSIDIAN.getDefaultState(), Block.NOTIFY_ALL);
-        ActionResult result = useOn(h.createMockPlayer(GameMode.SURVIVAL),
+        ActionResult result = useOn(h.createMockSurvivalPlayer(),
                 new ItemStack(Items.STONE), owner, Direction.UP);
         h.assertTrue(!result.isAccepted() && Double.isNaN(stored(world, blocked)),
                 "failed placement authored a height; result=" + result + " dy=" + stored(world, blocked));
@@ -172,7 +171,7 @@ public final class PlacementCaptureBoundaryGameTest {
                 Block.NOTIFY_ALL);
         BlockPos target = owner.up();
         forceStore(world, target, 0.25d);
-        useOn(h.createMockPlayer(GameMode.SURVIVAL), new ItemStack(Items.STONE), owner, Direction.UP);
+        useOn(h.createMockSurvivalPlayer(), new ItemStack(Items.STONE), owner, Direction.UP);
         h.assertTrue(world.getBlockState(target).isOf(Blocks.STONE),
                 "premise: stone failed to place on the bottom slab at " + target);
         double expected = SlabSupport.getUnstoredYOffset(world, target, world.getBlockState(target));
@@ -183,6 +182,40 @@ public final class PlacementCaptureBoundaryGameTest {
                 "real placement did not overwrite the haunted store bit-exactly; stored=" + actual
                         + " expected=" + expected);
         pass(h, "haunted_store_overwritten");
+    }
+
+    /**
+     * A creative player's placement authors the same height as a survival player's. On this version
+     * vanilla skips the stack consume for creative players at the call site, so a capture hook on the
+     * consume call would leave every creative placement without a height (found by the attachment
+     * render probe, maintainer ruling 2026-10-04). The stack staying full is the premise that the
+     * creative branch was taken.
+     */
+    @GameTest(templateName = "fabric-gametest-api-v1:empty")
+    public void creativePlacementAuthorsTheSameHeight(TestContext h) {
+        ServerWorld world = h.getWorld();
+        BlockPos owner = h.getAbsolutePos(new BlockPos(3, 3, 3));
+        world.setBlockState(owner.down(), Blocks.STONE.getDefaultState(), Block.NOTIFY_ALL);
+        world.setBlockState(owner,
+                Blocks.STONE_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.BOTTOM),
+                Block.NOTIFY_ALL);
+        BlockPos target = owner.up();
+        PlayerEntity creative = h.createMockCreativePlayer();
+        creative.getAbilities().creativeMode = true;
+        ItemStack stack = new ItemStack(Items.STONE);
+        ActionResult result = useOn(creative, stack, owner, Direction.UP);
+        h.assertTrue(result.isAccepted() && world.getBlockState(target).isOf(Blocks.STONE),
+                "premise: creative stone failed to place on the bottom slab at " + target + " result=" + result);
+        h.assertTrue(stack.getCount() == 1,
+                "premise: the creative branch must leave the stack full, count=" + stack.getCount());
+        double expected = SlabSupport.getUnstoredYOffset(world, target, world.getBlockState(target));
+        double actual = stored(world, target);
+        h.assertTrue(Math.abs(expected + 0.5d) <= 1.0e-9d,
+                "premise: placement on a bottom slab should read -0.5, got " + expected);
+        h.assertTrue(Double.doubleToRawLongBits(actual) == Double.doubleToRawLongBits(expected),
+                "creative placement authored no height or a different one; stored=" + actual
+                        + " expected=" + expected);
+        pass(h, "creative_placement_authors_the_same_height");
     }
 
     /**
@@ -197,7 +230,7 @@ public final class PlacementCaptureBoundaryGameTest {
         Predicate<BlockState> previous = CompatHooks.shouldSkipSlabSupportTestOverride;
         try {
             CompatHooks.shouldSkipSlabSupportTestOverride = state -> state.isOf(Blocks.GOLD_BLOCK);
-            useOn(h.createMockPlayer(GameMode.SURVIVAL),
+            useOn(h.createMockSurvivalPlayer(),
                     new ItemStack(Items.GOLD_BLOCK), owner, Direction.UP);
         } finally {
             CompatHooks.shouldSkipSlabSupportTestOverride = previous;
@@ -211,7 +244,7 @@ public final class PlacementCaptureBoundaryGameTest {
         // proves the compat bail rather than a broken capture.
         BlockPos controlOwner = h.getAbsolutePos(new BlockPos(5, 3, 5));
         world.setBlockState(controlOwner, Blocks.STONE.getDefaultState(), Block.NOTIFY_ALL);
-        useOn(h.createMockPlayer(GameMode.SURVIVAL),
+        useOn(h.createMockSurvivalPlayer(),
                 new ItemStack(Items.GOLD_BLOCK), controlOwner, Direction.UP);
         h.assertTrue(Double.isFinite(stored(world, controlOwner.up())),
                 "control: an un-owned placement must still author a fact");
@@ -235,7 +268,7 @@ public final class PlacementCaptureBoundaryGameTest {
         C3TestPhaseTrace.beginTestPhaseTrace();
         List<String> trace;
         try {
-            useOn(h.createMockPlayer(GameMode.SURVIVAL), new ItemStack(Items.STONE), owner, Direction.UP);
+            useOn(h.createMockSurvivalPlayer(), new ItemStack(Items.STONE), owner, Direction.UP);
             trace = C3TestPhaseTrace.snapshotTestPhaseTrace();
         } finally {
             C3TestPhaseTrace.endTestPhaseTrace();
@@ -369,7 +402,7 @@ public final class PlacementCaptureBoundaryGameTest {
                     java.util.Map.of(legacy, Double.doubleToRawLongBits(-1.5d)));
 
             WorldUpgradeRuntimePolicy.activate(world, WorldUpgradeDecision.Mode.KEEP_EXISTING);
-            ActionResult placed = useOn(h.createMockPlayer(GameMode.SURVIVAL),
+            ActionResult placed = useOn(h.createMockSurvivalPlayer(),
                     new ItemStack(Items.STONE), modernOwner, Direction.UP);
 
             world.setBlockState(missingFact, Blocks.STONE.getDefaultState(), Block.NOTIFY_LISTENERS);
@@ -432,7 +465,7 @@ public final class PlacementCaptureBoundaryGameTest {
             world.setBlockState(legacyOwner,
                     Blocks.STONE_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.BOTTOM),
                     Block.NOTIFY_ALL);
-            PlayerEntity player = h.createMockPlayer(GameMode.SURVIVAL);
+            PlayerEntity player = h.createMockSurvivalPlayer();
             player.setPosition(legacyOwner.getX() + 3.5d, legacyOwner.getY(), legacyOwner.getZ() + 0.5d);
             // A pre-policy block as a legacy world carries it: set directly and anchored, with no
             // provenance. An item placement would receive provenance — the policy is unconditional.
@@ -661,7 +694,7 @@ public final class PlacementCaptureBoundaryGameTest {
             h.assertTrue(modern == null || !modern.contains(conflictingLegacy.asLong()),
                     "fixture premise: the conflicting legacy cell must carry no provenance");
 
-            PlayerEntity player = h.createMockPlayer(GameMode.SURVIVAL);
+            PlayerEntity player = h.createMockSurvivalPlayer();
             player.setPosition(alphaOwner.getX() + 3.5d, alphaOwner.getY(), alphaOwner.getZ() + 0.5d);
             ActionResult placed = useOn(player, new ItemStack(Items.STONE), alphaOwner, Direction.UP);
             double legacyHalfBefore = SlabSupport.getYOffset(world, legacyHalf, world.getBlockState(legacyHalf));
@@ -702,19 +735,19 @@ public final class PlacementCaptureBoundaryGameTest {
                             && serializedAttachments.contains("slabbed:modern_placements"),
                     "production chunk serializer omitted required attachment payloads: keys="
                             + serializedAttachments.getKeys());
-            NbtIo.writeCompressed(serialized, chunkFile);
-            NbtCompound reloadedNbt = NbtIo.readCompressed(chunkFile, NbtSizeTracker.ofUnlimitedBytes());
+            NbtIo.writeCompressed(serialized, chunkFile.toFile());
+            NbtCompound reloadedNbt = NbtIo.readCompressed(chunkFile.toFile());
 
             // Exact attachment reload seam used by Fabric's ChunkSerializer mixin. Reading an empty
             // payload first proves the observations below come from the bytes just read from disk.
             AttachmentTargetImpl target = (AttachmentTargetImpl) chunk;
-            target.fabric_readAttachmentsFromNbt(new NbtCompound(), world.getRegistryManager());
+            target.fabric_readAttachmentsFromNbt(new NbtCompound());
             h.assertTrue(chunk.getAttached(SlabAnchorAttachment.ANCHOR_TYPE) == null
                             && chunk.getAttached(SlabAnchorAttachment.COMPOUND_FULL_BLOCK_ANCHOR_TYPE) == null
                             && chunk.getAttached(SlabAnchorAttachment.PLACEMENT_DY_TYPE) == null
                             && chunk.getAttached(SlabAnchorAttachment.MODERN_PLACEMENT_TYPE) == null,
                     "fixture failed to clear in-memory attachments before disk reload");
-            target.fabric_readAttachmentsFromNbt(reloadedNbt, world.getRegistryManager());
+            target.fabric_readAttachmentsFromNbt(reloadedNbt);
 
             double legacyHalfAfter = SlabSupport.getYOffset(world, legacyHalf, world.getBlockState(legacyHalf));
             double legacyCompoundAfter = SlabSupport.getYOffset(world, legacyCompound,

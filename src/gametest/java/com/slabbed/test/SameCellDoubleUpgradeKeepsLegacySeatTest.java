@@ -68,7 +68,7 @@ public final class SameCellDoubleUpgradeKeepsLegacySeatTest {
         }
 
         // The upgrade, through the real placement path: a matching slab item on the cell's up face.
-        PlayerEntity player = ctx.createMockPlayer(GameMode.SURVIVAL);
+        PlayerEntity player = ctx.createMockSurvivalPlayer();
         ActionResult result = PlacementCaptureBoundaryGameTest.useOn(
                 player, new ItemStack(Items.STONE_SLAB), cell, Direction.UP);
         BlockState upgraded = world.getBlockState(cell);

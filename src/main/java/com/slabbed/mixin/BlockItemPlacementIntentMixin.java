@@ -41,6 +41,7 @@ import net.minecraft.util.math.Vec3d;
 import net.minecraft.util.shape.VoxelShape;
 import net.minecraft.util.shape.VoxelShapes;
 import net.minecraft.world.World;
+import net.minecraft.world.event.GameEvent;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
@@ -233,20 +234,27 @@ public abstract class BlockItemPlacementIntentMixin {
     }
 
     /**
-     * The height is computed here, immediately before vanilla consumes the stack: the block is in the
-     * world, the placement-time markers authored at {@code Block.onPlaced} exist, and {@code place}
-     * has not yet returned. Fails CLOSED — any throwable leaves an empty batch, so a capture bug can
-     * never author a wrong height.
+     * The height is computed here, at the block-place game event: the block is in the world, the
+     * placement-time markers authored at {@code Block.onPlaced} exist, and {@code place} has not yet
+     * returned. Fails CLOSED — any throwable leaves an empty batch, so a capture bug can never author
+     * a wrong height.
+     *
+     * <p>This version consumes the stack with {@code ItemStack.decrement(int)} behind a creative-mode
+     * check at the call site, so the consume call is NOT reached for creative players. The game event
+     * is emitted unconditionally on every accepted placement and is the last call before that check;
+     * hooking anything later would leave creative placements with no recorded height. Do not move
+     * this hook back onto the stack consume.
      */
     @WrapOperation(
             method = "place(Lnet/minecraft/item/ItemPlacementContext;)Lnet/minecraft/util/ActionResult;",
             at = @At(value = "INVOKE",
-                    target = "Lnet/minecraft/item/ItemStack;decrementUnlessCreative(ILnet/minecraft/entity/LivingEntity;)V")
+                    target = "Lnet/minecraft/world/World;emitGameEvent(Lnet/minecraft/world/event/GameEvent;Lnet/minecraft/util/math/BlockPos;Lnet/minecraft/world/event/GameEvent$Emitter;)V")
     )
     private void slabbed$c3ComputeBeforeConsume(
-            ItemStack stack,
-            int amount,
-            LivingEntity entity,
+            World world,
+            GameEvent event,
+            BlockPos pos,
+            GameEvent.Emitter emitter,
             Operation<Void> original
     ) {
         PlacementFrame frame = slabbed$c3Frame();
@@ -259,7 +267,7 @@ public abstract class BlockItemPlacementIntentMixin {
                 Slabbed.LOGGER.warn("[C3] capture computation failed closed", t);
             }
         }
-        original.call(stack, amount, entity);
+        original.call(world, event, pos, emitter);
     }
 
     private static void slabbed$c3SnapshotCandidates(

@@ -8,7 +8,6 @@ import net.minecraft.block.SlabBlock;
 import net.minecraft.block.enums.SlabType;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.DrawContext;
-import net.minecraft.client.render.RenderTickCounter;
 import net.minecraft.registry.Registries;
 import net.minecraft.util.hit.BlockHitResult;
 import net.minecraft.util.hit.HitResult;
@@ -42,7 +41,7 @@ public final class TargetDyOverlay {
         return enabled;
     }
 
-    private static void render(DrawContext context, RenderTickCounter tickCounter) {
+    private static void render(DrawContext context, float tickDelta) {
         if (!enabled) {
             return;
         }

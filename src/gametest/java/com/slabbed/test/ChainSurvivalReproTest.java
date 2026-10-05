@@ -47,8 +47,8 @@ import net.minecraft.util.math.Direction;
  * suite rather than being faked by direct state replacement.
  */
 public final class ChainSurvivalReproTest {
-    private static final Block CHAIN_BLOCK = Registries.BLOCK.get(Identifier.of("minecraft", "chain"));
-    private static final Block COPPER_CHAIN_BLOCK = Registries.BLOCK.get(Identifier.of("minecraft", "copper_chain"));
+    private static final Block CHAIN_BLOCK = Registries.BLOCK.get(new Identifier("minecraft", "chain"));
+    private static final Block COPPER_CHAIN_BLOCK = Registries.BLOCK.get(new Identifier("minecraft", "copper_chain"));
 
     private static Block preferredChainBlock() {
         return COPPER_CHAIN_BLOCK == Blocks.AIR ? CHAIN_BLOCK : COPPER_CHAIN_BLOCK;

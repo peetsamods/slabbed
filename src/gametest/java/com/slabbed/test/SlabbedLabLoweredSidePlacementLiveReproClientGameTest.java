@@ -1094,7 +1094,7 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
             if (mc.world == null || mc.player == null || mc.interactionManager == null || mc.gameRenderer == null) {
                 throw new RuntimeException("client not ready for adjacent-double break proof");
             }
-            mc.gameRenderer.updateCrosshairTarget(0.0f);
+            mc.gameRenderer.updateTargetedEntity(0.0f);
         });
 
         ctx.runOnClient(mc -> {
@@ -2768,7 +2768,7 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                 throw new RuntimeException("[" + proof + "] client not ready");
             }
 
-            mc.gameRenderer.updateCrosshairTarget(0.0f);
+            mc.gameRenderer.updateTargetedEntity(0.0f);
             BlockState targetState = mc.world.getBlockState(targetPos);
             BlockState placeBefore = mc.world.getBlockState(placePos);
             BlockState downState = mc.world.getBlockState(downPos);
@@ -3571,7 +3571,7 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
             if (mc.gameRenderer == null) {
                 throw new RuntimeException("vertical seam baseline expected game renderer for crosshair ownership check");
             }
-            mc.gameRenderer.updateCrosshairTarget(0.0f);
+            mc.gameRenderer.updateTargetedEntity(0.0f);
             if (!(mc.crosshairTarget instanceof BlockHitResult baselineHit)) {
                 throw new RuntimeException("vertical seam baseline expected crosshair target while aligned to seam");
             }
@@ -3718,7 +3718,7 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                     throw new RuntimeException("client not ready for lowered-DOUBLE lower-half ownership case on " + face);
                 }
 
-                mc.gameRenderer.updateCrosshairTarget(0.0f);
+                mc.gameRenderer.updateTargetedEntity(0.0f);
                 if (!(mc.crosshairTarget instanceof BlockHitResult blockHit)) {
                     throw new RuntimeException("attempt " + attemptNumber + " missing block hit on lowered DOUBLE lower-half target");
                 }
@@ -4162,7 +4162,7 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
             net.minecraft.client.MinecraftClient mc, Vec3d eye, Vec3d target
     ) {
         playerRaycastFromEye(mc, eye, target, 6.0);
-        mc.gameRenderer.updateCrosshairTarget(0.0f);
+        mc.gameRenderer.updateTargetedEntity(0.0f);
         return mc.crosshairTarget instanceof BlockHitResult blockHit ? blockHit : null;
     }
 
@@ -5159,7 +5159,7 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
             mc.player.refreshPositionAndAngles(eye.x, feetY, eye.z, yaw, pitch);
             mc.player.setVelocity(Vec3d.ZERO);
 
-            mc.gameRenderer.updateCrosshairTarget(0.0f);
+            mc.gameRenderer.updateTargetedEntity(0.0f);
             Vec3d rayStart = mc.player.getCameraPosVec(0.0f);
             Vec3d rayDir = mc.player.getRotationVec(0.0f);
             Vec3d rayEnd = rayStart.add(rayDir.multiply(reach));
@@ -5356,7 +5356,7 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                 throw new RuntimeException("[MAINTAINER_BETA4_TARGETING_RED] client not ready");
             }
 
-            mc.gameRenderer.updateCrosshairTarget(0.0f);
+            mc.gameRenderer.updateTargetedEntity(0.0f);
             Vec3d rayStart = mc.player.getCameraPosVec(0.0f);
             Vec3d rayDir = mc.player.getRotationVec(0.0f);
             Vec3d rayEnd = rayStart.add(rayDir.multiply(6.0d));
@@ -5593,7 +5593,7 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                 throw new RuntimeException("[MAINTAINER_BETA4_ABOVE_ANGLE_RED] angle=" + angle + " client not ready");
             }
 
-            mc.gameRenderer.updateCrosshairTarget(0.0f);
+            mc.gameRenderer.updateTargetedEntity(0.0f);
             Vec3d rayStart = mc.player.getCameraPosVec(0.0f);
             Vec3d rayDir = mc.player.getRotationVec(0.0f);
             Vec3d rayEnd = rayStart.add(rayDir.multiply(6.0d));
@@ -5798,7 +5798,7 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                 throw new RuntimeException("[MAINTAINER_BETA4_ADJACENT_VISIBLE_RED] client not ready");
             }
 
-            mc.gameRenderer.updateCrosshairTarget(0.0f);
+            mc.gameRenderer.updateTargetedEntity(0.0f);
             Vec3d rayStart = mc.player.getCameraPosVec(0.0f);
             Vec3d rayDir = mc.player.getRotationVec(0.0f);
             Vec3d rayEnd = rayStart.add(rayDir.multiply(6.0d));
@@ -5944,7 +5944,7 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                         + " anchoredFacts=" + describeOwnerFacts(mc.world, anchoredOwnerPos));
             }
 
-            mc.gameRenderer.updateCrosshairTarget(0.0f);
+            mc.gameRenderer.updateTargetedEntity(0.0f);
             Vec3d rayStart = mc.player.getCameraPosVec(0.0f);
             Vec3d rayDir = mc.player.getRotationVec(0.0f);
             Vec3d rayEnd = rayStart.add(rayDir.multiply(6.0d));
@@ -6129,7 +6129,7 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                             mc.player.refreshPositionAndAngles(eye.x, feetY, eye.z, yaw, pitch);
                             mc.player.setVelocity(Vec3d.ZERO);
 
-                            mc.gameRenderer.updateCrosshairTarget(0.0f);
+                            mc.gameRenderer.updateTargetedEntity(0.0f);
                             Vec3d rayStart = mc.player.getCameraPosVec(0.0f);
                             Vec3d rayDir = mc.player.getRotationVec(0.0f);
                             Vec3d rayEnd = rayStart.add(rayDir.multiply(6.0d));
@@ -6327,7 +6327,7 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                         + " anchoredFacts=" + describeOwnerFacts(mc.world, anchoredOwnerPos));
             }
 
-            mc.gameRenderer.updateCrosshairTarget(0.0f);
+            mc.gameRenderer.updateTargetedEntity(0.0f);
             Vec3d rayStart = mc.player.getCameraPosVec(0.0f);
             Vec3d rayDir = mc.player.getRotationVec(0.0f);
             Vec3d rayEnd = rayStart.add(rayDir.multiply(6.0d));
@@ -6423,7 +6423,7 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
             mc.player.refreshPositionAndAngles(eye.x, feetY, eye.z, yaw, pitch);
             mc.player.setVelocity(Vec3d.ZERO);
 
-            mc.gameRenderer.updateCrosshairTarget(0.0f);
+            mc.gameRenderer.updateTargetedEntity(0.0f);
             Vec3d rayStart = mc.player.getCameraPosVec(0.0f);
             Vec3d rayDir = mc.player.getRotationVec(0.0f);
             Vec3d rayEnd = rayStart.add(rayDir.multiply(reach));
@@ -6646,7 +6646,7 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
             mc.player.refreshPositionAndAngles(eye.x, feetY, eye.z, yaw, pitch);
             mc.player.setVelocity(Vec3d.ZERO);
 
-            mc.gameRenderer.updateCrosshairTarget(0.0f);
+            mc.gameRenderer.updateTargetedEntity(0.0f);
             Vec3d rayStart = mc.player.getCameraPosVec(0.0f);
             Vec3d rayDir = mc.player.getRotationVec(0.0f);
             Vec3d rayEnd = rayStart.add(rayDir.multiply(reach));
@@ -6786,7 +6786,7 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
             if (mc.player == null || mc.world == null || mc.interactionManager == null) {
                 throw new RuntimeException("client not ready for dynamic bridge left support slab");
             }
-            mc.gameRenderer.updateCrosshairTarget(0.0f);
+            mc.gameRenderer.updateTargetedEntity(0.0f);
             BlockPos hitPos = placeLeftSupportHit.getBlockPos();
             Direction hitFace = placeLeftSupportHit.getSide();
             BlockPos intendedPlacePos = hitPos.offset(hitFace);
@@ -7087,7 +7087,7 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
             mc.player.refreshPositionAndAngles(eye.x, feetY, eye.z, yaw, pitch);
             mc.player.setVelocity(Vec3d.ZERO);
 
-            mc.gameRenderer.updateCrosshairTarget(0.0f);
+            mc.gameRenderer.updateTargetedEntity(0.0f);
             Vec3d rayStart = mc.player.getCameraPosVec(0.0f);
             Vec3d rayDir = mc.player.getRotationVec(0.0f);
             Vec3d rayEnd = rayStart.add(rayDir.multiply(reach));
@@ -7187,7 +7187,7 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                 throw new RuntimeException("[BETA4_OUTLINE_HIT_RAYCAST_MISS_RED] client not ready");
             }
 
-            mc.gameRenderer.updateCrosshairTarget(0.0f);
+            mc.gameRenderer.updateTargetedEntity(0.0f);
             Vec3d rayStart = mc.player.getCameraPosVec(0.0f);
             Vec3d rayDir = mc.player.getRotationVec(0.0f);
             Vec3d rayEnd = rayStart.add(rayDir.multiply(6.0d));
@@ -14065,7 +14065,7 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                     RaycastContext.ShapeType.OUTLINE,
                     RaycastContext.FluidHandling.NONE,
                     mc.player));
-            mc.gameRenderer.updateCrosshairTarget(0.0f);
+            mc.gameRenderer.updateTargetedEntity(0.0f);
             HitResult finalHit = mc.crosshairTarget;
             boolean ownerGreen = finalHit instanceof BlockHitResult finalBlock
                     && finalHit.getType() == HitResult.Type.BLOCK
@@ -14265,7 +14265,7 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                     RaycastContext.ShapeType.OUTLINE,
                     RaycastContext.FluidHandling.NONE,
                     mc.player));
-            mc.gameRenderer.updateCrosshairTarget(0.0f);
+            mc.gameRenderer.updateTargetedEntity(0.0f);
             HitResult finalHit = mc.crosshairTarget;
             boolean ownerGreen = finalHit instanceof BlockHitResult finalBlock
                     && finalHit.getType() == HitResult.Type.BLOCK
@@ -14543,7 +14543,7 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
             Vec3d aim = beta35BoxCenter(modelBox, objectPos);
             Vec3d eye = new Vec3d(aim.x, aim.y, aim.z + 4.0d);
             playerRaycastFromEye(mc, eye, aim, 6.0d);
-            mc.gameRenderer.updateCrosshairTarget(0.0f);
+            mc.gameRenderer.updateTargetedEntity(0.0f);
             HitResult finalHit = mc.crosshairTarget;
             boolean ownerGreen = finalHit instanceof BlockHitResult finalBlock
                     && finalHit.getType() == HitResult.Type.BLOCK
@@ -18789,7 +18789,7 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                     RaycastContext.ShapeType.OUTLINE,
                     RaycastContext.FluidHandling.NONE,
                     mc.player));
-            mc.gameRenderer.updateCrosshairTarget(0.0f);
+            mc.gameRenderer.updateTargetedEntity(0.0f);
             HitResult finalHit = mc.crosshairTarget;
             boolean finalTargetsObject = finalHit instanceof BlockHitResult finalBlock
                     && finalHit.getType() == HitResult.Type.BLOCK
@@ -18991,7 +18991,7 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                 RaycastContext.ShapeType.OUTLINE,
                 RaycastContext.FluidHandling.NONE,
                 mc.player));
-        mc.gameRenderer.updateCrosshairTarget(0.0f);
+        mc.gameRenderer.updateTargetedEntity(0.0f);
         HitResult finalHit = mc.crosshairTarget;
         boolean finalTargetsObject = finalHit instanceof BlockHitResult finalBlock
                 && finalHit.getType() == HitResult.Type.BLOCK
@@ -19421,7 +19421,7 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
             Vec3d eye = new Vec3d(aim.x, aim.y, aim.z + 4.0d);
 
             playerRaycastFromEye(mc, eye, aim, 6.0d);
-            mc.gameRenderer.updateCrosshairTarget(0.0f);
+            mc.gameRenderer.updateTargetedEntity(0.0f);
             Vec3d rayStart = mc.player.getCameraPosVec(0.0f);
             Vec3d rayDir = mc.player.getRotationVec(0.0f);
             Vec3d rayEnd = rayStart.add(rayDir.multiply(6.0d));
@@ -22012,7 +22012,7 @@ public final class SlabbedLabLoweredSidePlacementLiveReproClientGameTest impleme
                     RaycastContext.ShapeType.OUTLINE,
                     RaycastContext.FluidHandling.NONE,
                     mc.player));
-            mc.gameRenderer.updateCrosshairTarget(0.0f);
+            mc.gameRenderer.updateTargetedEntity(0.0f);
             HitResult finalHit = mc.crosshairTarget;
             String initialTarget = beta35DescribeHitWithType(initialHit);
             String finalTarget = beta35DescribeHitWithType(finalHit);

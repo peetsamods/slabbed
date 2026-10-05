@@ -58,7 +58,7 @@ public final class PlacementLandingRegressionTest {
             world.setBlockState(ground, Blocks.STONE.getDefaultState(), Block.NOTIFY_ALL);
             world.setBlockState(ts, TerrainSlabsTestShim.TEST_TS_SLAB.getDefaultState()
                     .with(SlabBlock.TYPE, SlabType.BOTTOM).with(TerrainSlabsTestShim.GENERATED, false), Block.NOTIFY_ALL);
-            PlayerEntity player = h.createMockPlayer(GameMode.SURVIVAL);
+            PlayerEntity player = h.createMockSurvivalPlayer();
             player.setPosition(ts.getX() + 3.5d, ts.getY(), ts.getZ() + 0.5d);
             ActionResult result = PlacementCaptureBoundaryGameTest.useOn(player, new ItemStack(Items.DIRT), ts, Direction.UP);
             String report = "result=" + result + " | TS " + cell(world, ts) + " | placed " + cell(world, placed);
@@ -86,7 +86,7 @@ public final class PlacementLandingRegressionTest {
         boolean previousFrozen = SlabAnchorAttachment.FROZEN_DY_ENABLED;
         SlabAnchorAttachment.FROZEN_DY_ENABLED = false;
         try {
-            PlayerEntity player = h.createMockPlayer(GameMode.SURVIVAL);
+            PlayerEntity player = h.createMockSurvivalPlayer();
             // Column A: TS slab -> log placed on it (lowered) -> TS slab placed on the log's top face.
             BlockPos gA = h.getAbsolutePos(new BlockPos(1, 1, 1));
             world.setBlockState(gA, Blocks.STONE.getDefaultState(), Block.NOTIFY_ALL);
@@ -196,7 +196,7 @@ public final class PlacementLandingRegressionTest {
         boolean previousFrozen = SlabAnchorAttachment.FROZEN_DY_ENABLED;
         SlabAnchorAttachment.FROZEN_DY_ENABLED = false;
         try {
-            PlayerEntity player = h.createMockPlayer(GameMode.SURVIVAL);
+            PlayerEntity player = h.createMockSurvivalPlayer();
             Object[][] cases = {
                 {"cube_on_generated_bottom", ts(SlabType.BOTTOM, true), Items.DIRT, 0.0d},
                 {"cube_on_placed_bottom", ts(SlabType.BOTTOM, false), Items.DIRT, -0.5d},
@@ -247,15 +247,15 @@ public final class PlacementLandingRegressionTest {
         boolean previousFrozen = SlabAnchorAttachment.FROZEN_DY_ENABLED;
         SlabAnchorAttachment.FROZEN_DY_ENABLED = false;
         try {
-            PlayerEntity player = h.createMockPlayer(GameMode.SURVIVAL);
+            PlayerEntity player = h.createMockSurvivalPlayer();
             // {name, pedestal (null = a real dirt placement onto a bottom slab, -0.5), cell content, item, expected}
             Object[][] cases = {
-                {"dirt_into_grass_on_dirt", Blocks.DIRT.getDefaultState(), Blocks.SHORT_GRASS.getDefaultState(), Items.DIRT, 0.0d},
+                {"dirt_into_grass_on_dirt", Blocks.DIRT.getDefaultState(), Blocks.GRASS.getDefaultState(), Items.DIRT, 0.0d},
                 {"dirt_into_snow_layer_on_stone", Blocks.STONE.getDefaultState(), Blocks.SNOW.getDefaultState(), Items.DIRT, 0.0d},
                 {"snow_onto_snow_layer_on_stone", Blocks.STONE.getDefaultState(), Blocks.SNOW.getDefaultState(), Items.SNOW, 0.0d},
                 {"candle_onto_candle_on_stone", Blocks.STONE.getDefaultState(), Blocks.CANDLE.getDefaultState(), Items.CANDLE, 0.0d},
-                {"torch_into_grass_on_dirt", Blocks.DIRT.getDefaultState(), Blocks.SHORT_GRASS.getDefaultState(), Items.TORCH, 0.0d},
-                {"dirt_into_grass_on_lowered_dirt", null, Blocks.SHORT_GRASS.getDefaultState(), Items.DIRT, -0.5d},
+                {"torch_into_grass_on_dirt", Blocks.DIRT.getDefaultState(), Blocks.GRASS.getDefaultState(), Items.TORCH, 0.0d},
+                {"dirt_into_grass_on_lowered_dirt", null, Blocks.GRASS.getDefaultState(), Items.DIRT, -0.5d},
                 {"candle_onto_candle_on_bottom_slab", Blocks.STONE_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.BOTTOM), Blocks.CANDLE.getDefaultState(), Items.CANDLE, -0.5d},
             };
             int i = 0;
@@ -297,7 +297,7 @@ public final class PlacementLandingRegressionTest {
         boolean previousFrozen = SlabAnchorAttachment.FROZEN_DY_ENABLED;
         SlabAnchorAttachment.FROZEN_DY_ENABLED = false;
         try {
-            PlayerEntity player = h.createMockPlayer(GameMode.SURVIVAL);
+            PlayerEntity player = h.createMockSurvivalPlayer();
             BlockPos g = h.getAbsolutePos(new BlockPos(2, 1, 2));
             world.setBlockState(g, Blocks.STONE.getDefaultState(), Block.NOTIFY_ALL);
             world.setBlockState(g.up(), Blocks.STONE_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.BOTTOM), Block.NOTIFY_ALL);
@@ -349,7 +349,7 @@ public final class PlacementLandingRegressionTest {
             BlockPos second = first.up();
             world.setBlockState(ground, Blocks.STONE.getDefaultState(), Block.NOTIFY_ALL);
             world.setBlockState(slab, Blocks.STONE_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.BOTTOM), Block.NOTIFY_ALL);
-            PlayerEntity player = h.createMockPlayer(GameMode.SURVIVAL);
+            PlayerEntity player = h.createMockSurvivalPlayer();
             player.setPosition(slab.getX() + 3.5d, slab.getY(), slab.getZ() + 0.5d);
             ActionResult r1 = PlacementCaptureBoundaryGameTest.useOn(player, new ItemStack(Items.SCAFFOLDING, 16), slab, Direction.UP);
             String after1 = "r1=" + r1 + " | slab " + cell(world, slab) + " | first " + cell(world, first);

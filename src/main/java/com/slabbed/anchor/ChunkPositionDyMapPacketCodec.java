@@ -4,8 +4,7 @@ import it.unimi.dsi.fastutil.longs.Long2ByteMap;
 import it.unimi.dsi.fastutil.longs.Long2ByteOpenHashMap;
 import java.util.Map;
 import java.util.TreeMap;
-import net.minecraft.network.RegistryByteBuf;
-import net.minecraft.network.codec.PacketCodec;
+import net.minecraft.network.PacketByteBuf;
 import net.minecraft.util.math.BlockPos;
 
 /**
@@ -65,15 +64,13 @@ final class ChunkPositionDyMapPacketCodec {
     private static final int MAX_SECTION_GROUPS = 4_096;
     private static final int MAX_PALETTE_ENTRIES = 256;
 
-    static final PacketCodec<RegistryByteBuf, Long2ByteOpenHashMap> INSTANCE =
-            PacketCodec.of(ChunkPositionDyMapPacketCodec::encode, ChunkPositionDyMapPacketCodec::decode);
 
     private ChunkPositionDyMapPacketCodec() {
     }
 
     // ── encode ────────────────────────────────────────────────────────
 
-    private static void encode(Long2ByteMap facts, RegistryByteBuf buf) {
+    static void encode(Long2ByteMap facts, PacketByteBuf buf) {
         TreeMap<SectionKey, long[]> sections = groupSections(facts);
         buf.writeVarInt(COMPACT_FORMAT_MARKER);
         buf.writeVarInt(sections.size());
@@ -141,7 +138,7 @@ final class ChunkPositionDyMapPacketCodec {
 
     // ── decode ────────────────────────────────────────────────────────
 
-    private static Long2ByteOpenHashMap decode(RegistryByteBuf buf) {
+    static Long2ByteOpenHashMap decode(PacketByteBuf buf) {
         int marker = buf.readVarInt();
         if (marker != COMPACT_FORMAT_MARKER) {
             throw new IllegalArgumentException(
@@ -310,12 +307,12 @@ final class ChunkPositionDyMapPacketCodec {
 
     /** Least-significant-bit-first packer for 1/2/4/8-bit palette indices. */
     private static final class BitWriter {
-        private final RegistryByteBuf buf;
+        private final PacketByteBuf buf;
         private final int bits;
         private int accumulator;
         private int filled;
 
-        BitWriter(RegistryByteBuf buf, int bits) {
+        BitWriter(PacketByteBuf buf, int bits) {
             this.buf = buf;
             this.bits = bits;
         }
@@ -341,12 +338,12 @@ final class ChunkPositionDyMapPacketCodec {
 
     /** The {@link BitWriter} mirror. */
     private static final class BitReader {
-        private final RegistryByteBuf buf;
+        private final PacketByteBuf buf;
         private final int bits;
         private int accumulator;
         private int remaining;
 
-        BitReader(RegistryByteBuf buf, int bits) {
+        BitReader(PacketByteBuf buf, int bits) {
             this.buf = buf;
             this.bits = bits;
         }

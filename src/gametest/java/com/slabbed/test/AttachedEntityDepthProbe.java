@@ -61,7 +61,7 @@ public final class AttachedEntityDepthProbe {
         if (frameIds.size() != Direction.values().length) return false;
         for (int[] ids : frameIds.values()) for (int id : ids) {
             if (!(client.world.getEntityById(id) instanceof ItemFrameEntity frame)) return false;
-            double canonicalY = Vec3d.ofCenter(frame.getAttachedBlockPos())
+            double canonicalY = Vec3d.ofCenter(frame.getDecorationBlockPos())
                     .offset(frame.getHorizontalFacing(), -0.46875d).y;
             if (Math.abs(frame.getY() - canonicalY - expectedDy) > EPSILON) return false;
         }
@@ -184,7 +184,7 @@ public final class AttachedEntityDepthProbe {
     }
 
     private static void renderPhysicalFrame(MinecraftClient client, ItemFrameEntity frame) {
-        BlockPos origin = frame.getAttachedBlockPos();
+        BlockPos origin = frame.getDecorationBlockPos();
         VertexBounds bounds = new VertexBounds();
         var delegate = client.getBufferBuilders().getEntityVertexConsumers();
         VertexConsumerProvider provider = layer -> new CapturingVertexConsumer(delegate.getBuffer(layer), bounds);

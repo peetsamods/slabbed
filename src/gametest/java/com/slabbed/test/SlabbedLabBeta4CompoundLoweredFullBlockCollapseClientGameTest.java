@@ -127,7 +127,7 @@ public final class SlabbedLabBeta4CompoundLoweredFullBlockCollapseClientGameTest
                 if (mc.world == null || mc.player == null || mc.gameRenderer == null) {
                     throw new RuntimeException("PROOF_GAP: " + TRIAD_PROOF + " client not ready");
                 }
-                mc.gameRenderer.updateCrosshairTarget(0.0f);
+                mc.gameRenderer.updateTargetedEntity(0.0f);
                 assertCompoundTriad(mc.world, mc.player, mc.crosshairTarget);
             });
         }

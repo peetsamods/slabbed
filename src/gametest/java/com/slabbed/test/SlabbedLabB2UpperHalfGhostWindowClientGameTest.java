@@ -270,7 +270,7 @@ public final class SlabbedLabB2UpperHalfGhostWindowClientGameTest implements Fab
             if (mc.world == null || mc.player == null) { out.set("null_world_or_player"); return; }
             mc.player.setStackInHand(Hand.MAIN_HAND, new ItemStack(Items.STONE_SLAB, 8));
             positionPlayer(mc, eye, target);
-            mc.gameRenderer.updateCrosshairTarget(0.0f);
+            mc.gameRenderer.updateTargetedEntity(0.0f);
             out.set(describeHit(mc.crosshairTarget));
         });
         return out.get();
@@ -285,7 +285,7 @@ public final class SlabbedLabB2UpperHalfGhostWindowClientGameTest implements Fab
             }
             mc.player.setStackInHand(Hand.MAIN_HAND, new ItemStack(Items.STONE_SLAB, 8));
             positionPlayer(mc, eye, target);
-            mc.gameRenderer.updateCrosshairTarget(0.0f);
+            mc.gameRenderer.updateTargetedEntity(0.0f);
             out.set(HitSnapshot.from(mc.crosshairTarget));
         });
         return out.get();

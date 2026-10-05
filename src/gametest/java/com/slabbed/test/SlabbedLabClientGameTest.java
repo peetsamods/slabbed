@@ -1352,7 +1352,7 @@ public final class SlabbedLabClientGameTest implements FabricClientGameTest {
                     fullPos.getZ() + 0.5);
 
             resolvePlayerRaycast(mc, centerLowerTarget, 6.0);
-            mc.gameRenderer.updateCrosshairTarget(0.0f);
+            mc.gameRenderer.updateTargetedEntity(0.0f);
             HitResult centerLowerHit = mc.crosshairTarget;
             String centerLowerActual = centerLowerHit == null || centerLowerHit.getType() == HitResult.Type.MISS
                     ? "MISS"
@@ -1367,7 +1367,7 @@ public final class SlabbedLabClientGameTest implements FabricClientGameTest {
             }
 
             resolvePlayerRaycast(mc, lowerEdgeTarget, 6.0);
-            mc.gameRenderer.updateCrosshairTarget(0.0f);
+            mc.gameRenderer.updateTargetedEntity(0.0f);
             HitResult lowerEdgeHit = mc.crosshairTarget;
             String lowerEdgeActual = lowerEdgeHit == null || lowerEdgeHit.getType() == HitResult.Type.MISS
                     ? "MISS"
@@ -1403,7 +1403,7 @@ public final class SlabbedLabClientGameTest implements FabricClientGameTest {
                     fullPos.getZ() + 0.5);
 
             resolvePlayerRaycast(mc, centerLowerTarget, 6.0);
-            mc.gameRenderer.updateCrosshairTarget(0.0f);
+            mc.gameRenderer.updateTargetedEntity(0.0f);
             HitResult centerLowerHit = mc.crosshairTarget;
             String centerLowerActual = centerLowerHit == null || centerLowerHit.getType() == HitResult.Type.MISS
                     ? "MISS"
@@ -1411,7 +1411,7 @@ public final class SlabbedLabClientGameTest implements FabricClientGameTest {
             caseFSlabHeldLowerCenterResolved.set(centerLowerActual);
 
             resolvePlayerRaycast(mc, lowerEdgeTarget, 6.0);
-            mc.gameRenderer.updateCrosshairTarget(0.0f);
+            mc.gameRenderer.updateTargetedEntity(0.0f);
             HitResult lowerEdgeHit = mc.crosshairTarget;
             String lowerEdgeActual = lowerEdgeHit == null || lowerEdgeHit.getType() == HitResult.Type.MISS
                     ? "MISS"
@@ -1459,7 +1459,7 @@ public final class SlabbedLabClientGameTest implements FabricClientGameTest {
                     slabPos.getZ() + 0.5);
 
             resolvePlayerRaycastFromEye(mc, eye, centerTarget, 6.0);
-            mc.gameRenderer.updateCrosshairTarget(0.0f);
+            mc.gameRenderer.updateTargetedEntity(0.0f);
             HitResult centerHit = mc.crosshairTarget;
             String centerActual = centerHit == null || centerHit.getType() == HitResult.Type.MISS
                     ? "MISS"
@@ -1469,7 +1469,7 @@ public final class SlabbedLabClientGameTest implements FabricClientGameTest {
                     ? "PASS" : "RED");
 
             resolvePlayerRaycastFromEye(mc, eye, lowerFrontTarget, 6.0);
-            mc.gameRenderer.updateCrosshairTarget(0.0f);
+            mc.gameRenderer.updateTargetedEntity(0.0f);
             HitResult lowerFrontHit = mc.crosshairTarget;
             String lowerFrontActual = lowerFrontHit == null || lowerFrontHit.getType() == HitResult.Type.MISS
                     ? "MISS"
@@ -1479,7 +1479,7 @@ public final class SlabbedLabClientGameTest implements FabricClientGameTest {
                     ? "PASS" : "RED");
 
             resolvePlayerRaycastFromEye(mc, eye, undersideTarget, 6.0);
-            mc.gameRenderer.updateCrosshairTarget(0.0f);
+            mc.gameRenderer.updateTargetedEntity(0.0f);
             HitResult undersideHit = mc.crosshairTarget;
             String undersideActual = undersideHit == null || undersideHit.getType() == HitResult.Type.MISS
                     ? "MISS"
@@ -4131,7 +4131,7 @@ public final class SlabbedLabClientGameTest implements FabricClientGameTest {
         Vec3d eye = new Vec3d(targetPos.getX() + 2.5d, y, targetPos.getZ() + 0.5d);
         Vec3d target = new Vec3d(targetPos.getX() + 0.5d, y, targetPos.getZ() + 0.5d);
         resolvePlayerRaycastFromEye(mc, eye, target, 6.0);
-        mc.gameRenderer.updateCrosshairTarget(0.0f);
+        mc.gameRenderer.updateTargetedEntity(0.0f);
         HitResult crosshair = mc.crosshairTarget;
         if (crosshair == null || crosshair.getType() == HitResult.Type.MISS) {
             return label + ":MISS y=" + String.format("%.4f", y);

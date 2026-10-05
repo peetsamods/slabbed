@@ -23,8 +23,8 @@ public abstract class BoatItemOffsetRaycastMixin {
     private BlockHitResult slabbed$raycastVisibleBoatSurface(
             World world, PlayerEntity player, RaycastContext.FluidHandling fluidHandling) {
         Vec3d start = player.getEyePos();
-        Vec3d end = start.add(player.getRotationVector(player.getPitch(), player.getYaw())
-                .multiply(player.getBlockInteractionRange()));
+        // 1.20.1 has no per-player block reach attribute; vanilla's own boat raycast uses 5.0 blocks.
+        Vec3d end = start.add(player.getRotationVec(1.0f).multiply(5.0));
         BlockHitResult vanilla = world.raycast(new RaycastContext(
                 start, end, RaycastContext.ShapeType.OUTLINE, fluidHandling, player));
         BlockHitResult offset = SlabbedOffsetRaycast.raycast(world, start, end, ShapeContext.of(player));

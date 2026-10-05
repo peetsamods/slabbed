@@ -217,7 +217,7 @@ public final class SlabbedLabBeta4CompoundContractMatrixClientGameTest
                     facts[0] = "client_not_ready";
                     return;
                 }
-                mc.gameRenderer.updateCrosshairTarget(0.0f);
+                mc.gameRenderer.updateTargetedEntity(0.0f);
                 BlockState compoundState = mc.world.getBlockState(COMPOUND);
                 BlockState sourceState = mc.world.getBlockState(LOWERED_BOTTOM_SLAB);
                 String selectedOwner = ownerOf(mc.crosshairTarget);

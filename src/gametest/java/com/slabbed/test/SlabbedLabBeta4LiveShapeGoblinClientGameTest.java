@@ -291,7 +291,7 @@ public final class SlabbedLabBeta4LiveShapeGoblinClientGameTest implements Fabri
                 action[0] = "CLIENT_NOT_READY";
                 return;
             }
-            mc.gameRenderer.updateCrosshairTarget(0.0f);
+            mc.gameRenderer.updateTargetedEntity(0.0f);
             HitResult beforeTarget = mc.crosshairTarget;
             action[0] = mc.interactionManager.interactBlock(mc.player, Hand.MAIN_HAND, hit).toString();
             System.out.println("[MAINTAINER_BETA4_COMPOUND_VISIBLE_SLAB_LANE_TRACE]"
@@ -330,7 +330,7 @@ public final class SlabbedLabBeta4LiveShapeGoblinClientGameTest implements Fabri
                 firstAction[0] = "CLIENT_NOT_READY";
                 return;
             }
-            mc.gameRenderer.updateCrosshairTarget(0.0f);
+            mc.gameRenderer.updateTargetedEntity(0.0f);
             firstAction[0] = mc.interactionManager.interactBlock(mc.player, Hand.MAIN_HAND, lowerHit).toString();
         });
         waitForClient(ctx, singleplayer, 4);
@@ -340,7 +340,7 @@ public final class SlabbedLabBeta4LiveShapeGoblinClientGameTest implements Fabri
                 secondAction[0] = "CLIENT_NOT_READY";
                 return;
             }
-            mc.gameRenderer.updateCrosshairTarget(0.0f);
+            mc.gameRenderer.updateTargetedEntity(0.0f);
             secondAction[0] = mc.interactionManager.interactBlock(mc.player, Hand.MAIN_HAND, upperHit).toString();
             System.out.println("[MAINTAINER_BETA4_COMPOUND_VISIBLE_SLAB_LANE_TRACE]"
                     + " row=MERGE phase=clicks"
@@ -381,7 +381,7 @@ public final class SlabbedLabBeta4LiveShapeGoblinClientGameTest implements Fabri
                 action[0] = "CLIENT_NOT_READY";
                 return;
             }
-            mc.gameRenderer.updateCrosshairTarget(0.0f);
+            mc.gameRenderer.updateTargetedEntity(0.0f);
             HitResult beforeTarget = mc.crosshairTarget;
             action[0] = mc.interactionManager.interactBlock(mc.player, Hand.MAIN_HAND, hit).toString();
             System.out.println("[MAINTAINER_BETA4_COMPOUND_VISIBLE_SLAB_LANE_TRACE]"
@@ -496,7 +496,7 @@ public final class SlabbedLabBeta4LiveShapeGoblinClientGameTest implements Fabri
                 action[0] = "CLIENT_NOT_READY";
                 return;
             }
-            mc.gameRenderer.updateCrosshairTarget(0.0f);
+            mc.gameRenderer.updateTargetedEntity(0.0f);
             action[0] = mc.interactionManager.interactBlock(mc.player, Hand.MAIN_HAND, hit).toString();
         });
         waitForClient(ctx, singleplayer, 4);
@@ -868,7 +868,7 @@ public final class SlabbedLabBeta4LiveShapeGoblinClientGameTest implements Fabri
                 action[0] = "CLIENT_NOT_READY";
                 return;
             }
-            mc.gameRenderer.updateCrosshairTarget(0.0f);
+            mc.gameRenderer.updateTargetedEntity(0.0f);
             action[0] = mc.interactionManager.interactBlock(mc.player, Hand.MAIN_HAND, hit).toString();
             System.out.println("[MAINTAINER_BETA4_COMPOUND_VISIBLE_SLAB_LANE_TRACE]"
                     + " row=" + label
@@ -895,7 +895,7 @@ public final class SlabbedLabBeta4LiveShapeGoblinClientGameTest implements Fabri
                 action[0] = "CLIENT_NOT_READY";
                 return;
             }
-            mc.gameRenderer.updateCrosshairTarget(0.0f);
+            mc.gameRenderer.updateTargetedEntity(0.0f);
             action[0] = mc.interactionManager.interactBlock(mc.player, Hand.MAIN_HAND, hit).toString();
             System.out.println("[MAINTAINER_BETA4_COMPOUND_VISIBLE_SLAB_LANE_TRACE]"
                     + " row=" + label
@@ -1323,7 +1323,7 @@ public final class SlabbedLabBeta4LiveShapeGoblinClientGameTest implements Fabri
                 return;
             }
             before[0] = snapshot(mc.world);
-            mc.gameRenderer.updateCrosshairTarget(0.0f);
+            mc.gameRenderer.updateTargetedEntity(0.0f);
             HitResult target = mc.crosshairTarget;
             AimFacts facts = AimFacts.from(mc.world, target);
             TargetingDiagnostic diagnostic = TargetingDiagnostic.from(mc.world, mc.player, UPPER_FULL,
@@ -1636,7 +1636,7 @@ public final class SlabbedLabBeta4LiveShapeGoblinClientGameTest implements Fabri
                 throw new RuntimeException("[MAINTAINER_BETA4_LIVE_GOBLIN_STRUCTURE_INVALID] case="
                         + caseName + " reason=client_not_ready");
             }
-            mc.gameRenderer.updateCrosshairTarget(0.0f);
+            mc.gameRenderer.updateTargetedEntity(0.0f);
             HitResult beforeTarget = mc.crosshairTarget;
             miss[0] = beforeTarget == null || beforeTarget.getType() == HitResult.Type.MISS;
             wrongOwner[0] = owner(beforeTarget) != null && !UPPER_FULL.equals(owner(beforeTarget));
@@ -1740,7 +1740,7 @@ public final class SlabbedLabBeta4LiveShapeGoblinClientGameTest implements Fabri
                 throw new RuntimeException("[MAINTAINER_BETA4_LIVE_GOBLIN_REPEAT_PLACEMENT_RED]"
                         + " reason=client_not_ready_before_first_click");
             }
-            mc.gameRenderer.updateCrosshairTarget(0.0f);
+            mc.gameRenderer.updateTargetedEntity(0.0f);
             firstAction[0] = mc.interactionManager.interactBlock(mc.player, Hand.MAIN_HAND, upperHit).toString();
         });
         waitForClient(ctx, singleplayer, 2);
@@ -1749,7 +1749,7 @@ public final class SlabbedLabBeta4LiveShapeGoblinClientGameTest implements Fabri
                 throw new RuntimeException("[MAINTAINER_BETA4_LIVE_GOBLIN_REPEAT_PLACEMENT_RED]"
                         + " reason=client_not_ready_before_second_click");
             }
-            mc.gameRenderer.updateCrosshairTarget(0.0f);
+            mc.gameRenderer.updateTargetedEntity(0.0f);
             secondAction[0] = mc.interactionManager.interactBlock(mc.player, Hand.MAIN_HAND, upperHit).toString();
         });
         waitForClient(ctx, singleplayer, 2);
@@ -1808,7 +1808,7 @@ public final class SlabbedLabBeta4LiveShapeGoblinClientGameTest implements Fabri
                 throw new RuntimeException("[MAINTAINER_BETA4_LIVE_GOBLIN_STRUCTURE_INVALID] case="
                         + caseName + " reason=client_not_ready");
             }
-            mc.gameRenderer.updateCrosshairTarget(0.0f);
+            mc.gameRenderer.updateTargetedEntity(0.0f);
             HitResult beforeTarget = mc.crosshairTarget;
             ActionResult action = mc.interactionManager.interactBlock(mc.player, Hand.MAIN_HAND, hit);
             System.out.println("[MAINTAINER_BETA4_LIVE_GOBLIN_TRACE]"
@@ -1895,7 +1895,7 @@ public final class SlabbedLabBeta4LiveShapeGoblinClientGameTest implements Fabri
                 throw new RuntimeException("[MAINTAINER_BETA4_LIVE_GOBLIN_" + caseName
                         + "_RED] reason=client_not_ready_before_side_place");
             }
-            mc.gameRenderer.updateCrosshairTarget(0.0f);
+            mc.gameRenderer.updateTargetedEntity(0.0f);
             HitResult beforeTarget = mc.crosshairTarget;
             miss[0] = beforeTarget == null || beforeTarget.getType() == HitResult.Type.MISS;
             wrongOwner[0] = owner(beforeTarget) != null && !UPPER_FULL.equals(owner(beforeTarget));
@@ -2279,7 +2279,7 @@ public final class SlabbedLabBeta4LiveShapeGoblinClientGameTest implements Fabri
                             + " reason=client_missing");
                     return;
                 }
-                mc.gameRenderer.updateCrosshairTarget(0.0f);
+                mc.gameRenderer.updateTargetedEntity(0.0f);
                 HitResult target = mc.crosshairTarget;
                 AimFacts facts = AimFacts.from(mc.world, target);
                 TargetingDiagnostic diagnostic = TargetingDiagnostic.from(mc.world, mc.player, UPPER_FULL,

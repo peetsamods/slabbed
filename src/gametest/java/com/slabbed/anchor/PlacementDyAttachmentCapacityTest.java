@@ -2,7 +2,7 @@ package com.slabbed.anchor;
 
 import it.unimi.dsi.fastutil.longs.Long2ByteOpenHashMap;
 import net.fabricmc.fabric.api.networking.v1.PacketByteBufs;
-import net.minecraft.network.RegistryByteBuf;
+import net.minecraft.network.PacketByteBuf;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.test.GameTest;
 import net.minecraft.test.TestContext;
@@ -87,12 +87,11 @@ public final class PlacementDyAttachmentCapacityTest {
         Long2ByteOpenHashMap dense = denseFacts(origin.getX() >> 4, origin.getZ() >> 4,
                 origin.getY(), REALISTIC_DENSE_BUILD_FACTS);
 
-        RegistryByteBuf buf =
-                new RegistryByteBuf(PacketByteBufs.create(), world.getRegistryManager());
+        PacketByteBuf buf = PacketByteBufs.create();
         // Mirrors AttachmentChange.create: one boolean of Fabric's own, then the codec, then the
         // Netty backing-array capacity — not the writer index — is what Fabric compares.
         buf.writeBoolean(true);
-        SlabAnchorAttachment.dyMapPacketCodecForTesting().encode(buf, dense);
+        ChunkPositionDyMapPacketCodec.encode(dense, buf);
         int fabricMeasuredBytes = buf.array().length;
 
         ctx.assertTrue(fabricMeasuredBytes <= FABRIC_ATTACHMENT_MAX_DATA_BYTES,
@@ -110,11 +109,10 @@ public final class PlacementDyAttachmentCapacityTest {
         Long2ByteOpenHashMap dense = denseFacts(origin.getX() >> 4, origin.getZ() >> 4,
                 origin.getY(), FACTS_PER_FULL_LAYER);
 
-        RegistryByteBuf buf =
-                new RegistryByteBuf(PacketByteBufs.create(), world.getRegistryManager());
-        SlabAnchorAttachment.dyMapPacketCodecForTesting().encode(buf, dense);
+        PacketByteBuf buf = PacketByteBufs.create();
+        ChunkPositionDyMapPacketCodec.encode(dense, buf);
         Long2ByteOpenHashMap decoded =
-                SlabAnchorAttachment.dyMapPacketCodecForTesting().decode(buf);
+                ChunkPositionDyMapPacketCodec.decode(buf);
 
         ctx.assertTrue(dense.size() == decoded.size(),
                 "round-trip changed the fact count: " + dense.size() + " -> " + decoded.size());
@@ -151,10 +149,9 @@ public final class PlacementDyAttachmentCapacityTest {
         for (int layers = 1; layers <= 384 / 16 * 16; layers++) {
             int facts = FACTS_PER_FULL_LAYER * layers;
             Long2ByteOpenHashMap dense = denseFacts(chunkX, chunkZ, origin.getY(), facts);
-            RegistryByteBuf buf =
-                    new RegistryByteBuf(PacketByteBufs.create(), world.getRegistryManager());
+            PacketByteBuf buf = PacketByteBufs.create();
             buf.writeBoolean(true);
-            SlabAnchorAttachment.dyMapPacketCodecForTesting().encode(buf, dense);
+            ChunkPositionDyMapPacketCodec.encode(dense, buf);
             int bytes = buf.array().length;
             if (bytes > FABRIC_ATTACHMENT_MAX_DATA_BYTES) {
                 break;

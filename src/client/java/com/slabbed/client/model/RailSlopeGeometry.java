@@ -87,7 +87,8 @@ public final class RailSlopeGeometry {
             return false;
         });
         try {
-            if (wrapped instanceof FabricBakedModel fabricWrapped) {
+            FabricBakedModel fabricWrapped = wrapped; // every BakedModel is one through interface injection
+            if (!fabricWrapped.isVanillaAdapter()) {
                 fabricWrapped.emitBlockQuads(view, state, pos, randomSupplier, context);
             } else {
                 context.bakedModelConsumer().accept(wrapped, state);

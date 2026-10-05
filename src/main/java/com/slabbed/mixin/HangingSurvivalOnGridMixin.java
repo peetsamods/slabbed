@@ -3,7 +3,7 @@ package com.slabbed.mixin;
 import com.slabbed.util.HangingSeatDyHolder;
 import net.minecraft.entity.EntityType;
 import net.minecraft.entity.decoration.AbstractDecorationEntity;
-import net.minecraft.entity.decoration.BlockAttachedEntity;
+import net.minecraft.entity.Entity;
 import net.minecraft.util.math.Box;
 import net.minecraft.world.World;
 import org.spongepowered.asm.mixin.Mixin;
@@ -19,12 +19,12 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
  * override the check on their own attachment cell and never reach this.
  */
 @Mixin(AbstractDecorationEntity.class)
-public abstract class HangingSurvivalOnGridMixin extends BlockAttachedEntity {
+public abstract class HangingSurvivalOnGridMixin extends Entity {
 
     @Unique
     private Box slabbed$seatedBoxDuringSurvival;
 
-    protected HangingSurvivalOnGridMixin(EntityType<? extends BlockAttachedEntity> type, World world) {
+    protected HangingSurvivalOnGridMixin(EntityType<?> type, World world) {
         super(type, world);
     }
 

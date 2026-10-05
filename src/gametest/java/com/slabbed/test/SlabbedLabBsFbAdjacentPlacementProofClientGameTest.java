@@ -599,7 +599,7 @@ public final class SlabbedLabBsFbAdjacentPlacementProofClientGameTest implements
                 throw new RuntimeException("client not ready for BSFB proof slab-held retarget audit");
             }
             mc.player.setStackInHand(Hand.MAIN_HAND, new ItemStack(Items.STONE_SLAB, 8));
-            mc.gameRenderer.updateCrosshairTarget(0.0f);
+            mc.gameRenderer.updateTargetedEntity(0.0f);
             HitResult finalTarget = mc.crosshairTarget;
             if (!(finalTarget instanceof BlockHitResult finalHit)) {
                 throw new RuntimeException("RED: slab-held click on lowered carrier should place at intended side position, but actual placement was no block target from target initial="
@@ -726,7 +726,7 @@ public final class SlabbedLabBsFbAdjacentPlacementProofClientGameTest implements
                 throw new RuntimeException("client camera missing for slab-held hijack audit");
             }
             HitResult vanillaTarget = cam.raycast(5.0d, 0.0f, false);
-            mc.gameRenderer.updateCrosshairTarget(0.0f);
+            mc.gameRenderer.updateTargetedEntity(0.0f);
             HitResult finalTarget = mc.crosshairTarget;
 
             BlockPos vanillaPos = vanillaTarget instanceof BlockHitResult vbh ? vbh.getBlockPos() : null;
@@ -819,7 +819,7 @@ public final class SlabbedLabBsFbAdjacentPlacementProofClientGameTest implements
                 throw new RuntimeException("client camera missing for live recursive carrier click audit");
             }
             HitResult vanillaTarget = cam.raycast(5.0d, 0.0f, false);
-            mc.gameRenderer.updateCrosshairTarget(0.0f);
+            mc.gameRenderer.updateTargetedEntity(0.0f);
             HitResult finalTarget = mc.crosshairTarget;
             if (!(vanillaTarget instanceof BlockHitResult vanillaHit)
                     || !vanillaHit.getBlockPos().equals(liveAnchorPos)

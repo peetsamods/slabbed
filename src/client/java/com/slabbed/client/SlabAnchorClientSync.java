@@ -2,6 +2,8 @@ package com.slabbed.client;
 
 import com.slabbed.Slabbed;
 import com.slabbed.anchor.SlabAnchorAttachment;
+import com.slabbed.anchor.SlabAnchorSync;
+import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import com.slabbed.util.SlabSupport;
 import it.unimi.dsi.fastutil.longs.Long2ByteOpenHashMap;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
@@ -14,6 +16,7 @@ import net.minecraft.block.BlockState;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.world.ClientWorld;
 import net.minecraft.util.math.BlockPos;
+import net.minecraft.util.math.ChunkPos;
 import net.minecraft.world.chunk.WorldChunk;
 
 import java.util.ArrayList;
@@ -133,6 +136,21 @@ public final class SlabAnchorClientSync {
                     : SlabAnchorAttachment.PlacementDyFact.absent();
         };
 
+        // 1.20.1: the server carries every attachment change itself (SlabAnchorSync); each message is
+        // installed on the client chunk here, and the change poll below sees it like any other write.
+        ClientPlayNetworking.registerGlobalReceiver(SlabAnchorSync.CHANNEL, (client, handler, buf, responseSender) -> {
+            SlabAnchorSync.Update update = SlabAnchorSync.decode(buf);
+            client.execute(() -> {
+                if (client.world == null) {
+                    return;
+                }
+                ChunkPos chunkPos = new ChunkPos(update.chunkPos());
+                WorldChunk chunk = client.world.getChunkManager().getWorldChunk(chunkPos.x, chunkPos.z);
+                if (chunk != null) {
+                    SlabAnchorSync.install(chunk, update);
+                }
+            });
+        });
         ClientChunkEvents.CHUNK_LOAD.register(SlabAnchorClientSync::onChunkLoad);
         ClientChunkEvents.CHUNK_UNLOAD.register(SlabAnchorClientSync::onChunkUnload);
         ClientTickEvents.END_CLIENT_TICK.register(SlabAnchorClientSync::pollAttachmentChanges);

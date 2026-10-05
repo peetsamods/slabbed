@@ -7,7 +7,7 @@ import net.minecraft.block.Blocks;
 import net.minecraft.block.LeverBlock;
 import net.minecraft.block.PoweredRailBlock;
 import net.minecraft.block.SlabBlock;
-import net.minecraft.block.enums.BlockFace;
+import net.minecraft.block.enums.WallMountLocation;
 import net.minecraft.block.enums.SlabType;
 import net.minecraft.entity.vehicle.AbstractMinecartEntity;
 import net.minecraft.item.ItemStack;
@@ -205,13 +205,13 @@ public final class RailVisualSignalTest {
             BlockPos rail = poweredRail(ctx, 2, 2, true);
             BlockPos leverRel = new BlockPos(3, SUPPORT_Y, 2);
             ctx.setBlockState(leverRel, Blocks.LEVER.getDefaultState()
-                    .with(LeverBlock.FACE, BlockFace.FLOOR)
+                    .with(LeverBlock.FACE, WallMountLocation.FLOOR)
                     .with(LeverBlock.FACING, Direction.NORTH));
             BlockPos lever = ctx.getAbsolutePos(leverRel);
             expectPowered(ctx, rail, false, "the lever is off");
-            ((LeverBlock) Blocks.LEVER).togglePower(world.getBlockState(lever), world, lever, null);
+            ((LeverBlock) Blocks.LEVER).togglePower(world.getBlockState(lever), world, lever);
             expectPowered(ctx, rail, true, "the lever beside the slab was pulled on");
-            ((LeverBlock) Blocks.LEVER).togglePower(world.getBlockState(lever), world, lever, null);
+            ((LeverBlock) Blocks.LEVER).togglePower(world.getBlockState(lever), world, lever);
             expectPowered(ctx, rail, false, "the lever beside the slab was pulled off again");
         });
         ctx.complete();
@@ -303,7 +303,7 @@ public final class RailVisualSignalTest {
             BlockPos dip = rails[2];
             AbstractMinecartEntity cart = AbstractMinecartEntity.create(world,
                     dip.getX() + 0.5d, dip.getY() + RAIL_LIFT, dip.getZ() + 0.5d,
-                    AbstractMinecartEntity.Type.RIDEABLE, ItemStack.EMPTY, null);
+                    AbstractMinecartEntity.Type.RIDEABLE);
             if (cart == null) {
                 throw failure("premise: could not create a minecart");
             }
@@ -338,7 +338,7 @@ public final class RailVisualSignalTest {
         ServerWorld world = ctx.getWorld();
         AbstractMinecartEntity cart = AbstractMinecartEntity.create(world,
                 start.getX() + 0.5d, start.getY() + RAIL_LIFT, start.getZ() + 0.5d,
-                AbstractMinecartEntity.Type.RIDEABLE, ItemStack.EMPTY, null);
+                AbstractMinecartEntity.Type.RIDEABLE);
         if (cart == null) {
             throw failure("premise: could not create a minecart");
         }

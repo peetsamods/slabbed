@@ -2,7 +2,7 @@ package com.slabbed.anchor;
 
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 import net.fabricmc.fabric.api.networking.v1.PacketByteBufs;
-import net.minecraft.network.RegistryByteBuf;
+import net.minecraft.network.PacketByteBuf;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.test.GameTest;
 import net.minecraft.test.TestContext;
@@ -83,12 +83,11 @@ public final class FrozenFlatAttachmentCapacityTest {
             }
         }
 
-        RegistryByteBuf buf =
-                new RegistryByteBuf(PacketByteBufs.create(), world.getRegistryManager());
+        PacketByteBuf buf = PacketByteBufs.create();
         // AttachmentChange.create prefixes one boolean and then compares the Netty backing-array
         // capacity—not only the writer index—to Fabric's 32,502-byte ceiling.
         buf.writeBoolean(true);
-        SlabAnchorAttachment.packetCodecForTesting().encode(buf, allBuiltInChunkPositions);
+        ChunkPositionSetPacketCodec.encode(allBuiltInChunkPositions, buf);
         int fabricMeasuredBytes = buf.array().length;
         ctx.assertTrue(
                 fabricMeasuredBytes <= FABRIC_ATTACHMENT_MAX_DATA_BYTES,
@@ -96,7 +95,7 @@ public final class FrozenFlatAttachmentCapacityTest {
                         + " bytes, over Fabric's " + FABRIC_ATTACHMENT_MAX_DATA_BYTES + "-byte limit");
 
         buf.readBoolean();
-        LongOpenHashSet decoded = SlabAnchorAttachment.packetCodecForTesting().decode(buf);
+        LongOpenHashSet decoded = ChunkPositionSetPacketCodec.decode(buf);
         ctx.assertTrue(
                 allBuiltInChunkPositions.equals(decoded),
                 "dense chunk packet round-trip must preserve every frozen-flat position");
@@ -109,15 +108,14 @@ public final class FrozenFlatAttachmentCapacityTest {
         BlockPos origin = ctx.getAbsolutePos(BlockPos.ORIGIN);
         LongOpenHashSet expected =
                 sectionPrefix(origin.getX() >> 4, origin.getY() >> 4, origin.getZ() >> 4, 513);
-        RegistryByteBuf legacy =
-                new RegistryByteBuf(PacketByteBufs.create(), world.getRegistryManager());
+        PacketByteBuf legacy = PacketByteBufs.create();
 
         legacy.writeVarInt(expected.size());
         for (long packed : expected) {
             legacy.writeLong(packed);
         }
 
-        LongOpenHashSet decoded = SlabAnchorAttachment.packetCodecForTesting().decode(legacy);
+        LongOpenHashSet decoded = ChunkPositionSetPacketCodec.decode(legacy);
         ctx.assertTrue(expected.equals(decoded),
                 "the compact codec must still read legacy raw-long packets");
         ctx.complete();
@@ -134,10 +132,9 @@ public final class FrozenFlatAttachmentCapacityTest {
         expected.add(BlockPos.asLong(15, 15, 15));
         expected.add(BlockPos.asLong(16, 16, 16));
 
-        RegistryByteBuf compact =
-                new RegistryByteBuf(PacketByteBufs.create(), world.getRegistryManager());
-        SlabAnchorAttachment.packetCodecForTesting().encode(compact, expected);
-        LongOpenHashSet decoded = SlabAnchorAttachment.packetCodecForTesting().decode(compact);
+        PacketByteBuf compact = PacketByteBufs.create();
+        ChunkPositionSetPacketCodec.encode(expected, compact);
+        LongOpenHashSet decoded = ChunkPositionSetPacketCodec.decode(compact);
 
         ctx.assertTrue(
                 expected.equals(decoded),

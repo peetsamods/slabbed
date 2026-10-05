@@ -27,7 +27,7 @@ public abstract class ItemFrameRenderOffsetMixin {
             return;
         }
 
-        BlockPos attachedPos = entity.getAttachedBlockPos();
+        BlockPos attachedPos = entity.getDecorationBlockPos();
         if (attachedPos == null) {
             return;
         }

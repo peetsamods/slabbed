@@ -13,7 +13,6 @@ import com.slabbed.upgrade.WorldUpgradeRuntimePolicy;
 import it.unimi.dsi.fastutil.longs.Long2ByteOpenHashMap;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 import net.fabricmc.fabric.api.attachment.v1.AttachmentRegistry;
-import net.fabricmc.fabric.api.attachment.v1.AttachmentSyncPredicate;
 import net.fabricmc.fabric.api.attachment.v1.AttachmentType;
 import net.minecraft.block.Block;
 import net.minecraft.block.BlockEntityProvider;
@@ -24,8 +23,6 @@ import net.minecraft.block.SlabBlock;
 import net.minecraft.block.enums.SlabType;
 import net.minecraft.registry.Registries;
 import net.minecraft.util.math.Direction;
-import net.minecraft.network.RegistryByteBuf;
-import net.minecraft.network.codec.PacketCodec;
 import net.minecraft.state.property.Properties;
 import net.minecraft.util.Identifier;
 import net.minecraft.util.math.Box;
@@ -106,22 +103,22 @@ public final class SlabAnchorAttachment {
      */
     public static ClientPlacementDyFactLookup clientEffectivePlacementDyLookup = null;
 
-    private static final Identifier ANCHOR_ID = Identifier.of(Slabbed.MOD_ID, "slab_anchors");
-    private static final Identifier FROZEN_FLAT_ID = Identifier.of(Slabbed.MOD_ID, "frozen_flat");
+    private static final Identifier ANCHOR_ID = new Identifier(Slabbed.MOD_ID, "slab_anchors");
+    private static final Identifier FROZEN_FLAT_ID = new Identifier(Slabbed.MOD_ID, "frozen_flat");
     private static final Identifier LOWERED_SLAB_CARRIER_ID =
-            Identifier.of(Slabbed.MOD_ID, "lowered_slab_carriers");
+            new Identifier(Slabbed.MOD_ID, "lowered_slab_carriers");
     private static final Identifier COMPOUND_FULL_BLOCK_ANCHOR_ID =
-            Identifier.of(Slabbed.MOD_ID, "compound_full_block_anchors");
+            new Identifier(Slabbed.MOD_ID, "compound_full_block_anchors");
     private static final Identifier COMPOUND_VISIBLE_SIDE_LOWER_SLAB_ID =
-            Identifier.of(Slabbed.MOD_ID, "compound_visible_side_lower_slabs");
+            new Identifier(Slabbed.MOD_ID, "compound_visible_side_lower_slabs");
     private static final Identifier COMPOUND_VISIBLE_SIDE_UPPER_SLAB_ID =
-            Identifier.of(Slabbed.MOD_ID, "compound_visible_side_upper_slabs");
+            new Identifier(Slabbed.MOD_ID, "compound_visible_side_upper_slabs");
     private static final Identifier COMPOUND_VISIBLE_SIDE_DOUBLE_SLAB_ID =
-            Identifier.of(Slabbed.MOD_ID, "compound_visible_side_double_slabs");
+            new Identifier(Slabbed.MOD_ID, "compound_visible_side_double_slabs");
     private static final Identifier COMPOUND_VISIBLE_OWNER_TOP_SLAB_ID =
-            Identifier.of(Slabbed.MOD_ID, "compound_visible_owner_top_slabs");
-    private static final Identifier PLACEMENT_DY_ID = Identifier.of(Slabbed.MOD_ID, "placement_dy");
-    private static final Identifier MODERN_PLACEMENT_ID = Identifier.of(Slabbed.MOD_ID, "modern_placements");
+            new Identifier(Slabbed.MOD_ID, "compound_visible_owner_top_slabs");
+    private static final Identifier PLACEMENT_DY_ID = new Identifier(Slabbed.MOD_ID, "placement_dy");
+    private static final Identifier MODERN_PLACEMENT_ID = new Identifier(Slabbed.MOD_ID, "modern_placements");
 
     /**
      * Codec for the anchor set.  Backed by {@code long[]} so the NBT representation is
@@ -140,8 +137,6 @@ public final class SlabAnchorAttachment {
      * for world compatibility. Only the synchronized representation is compacted (GH #38
      * parity, mirrors 1.21.11 commit 5817d264).
      */
-    private static final PacketCodec<RegistryByteBuf, LongOpenHashSet> PACKET_CODEC =
-            ChunkPositionSetPacketCodec.INSTANCE;
 
     /**
      * Package-private proof seam for the attachment-capacity regression tests.
@@ -149,9 +144,6 @@ public final class SlabAnchorAttachment {
      * <p>This returns the exact codec registered below, so the test cannot accidentally
      * exercise a duplicate approximation of the production sync path.
      */
-    static PacketCodec<RegistryByteBuf, LongOpenHashSet> packetCodecForTesting() {
-        return PACKET_CODEC;
-    }
 
     /**
      * Package-private proof seam for the placement-dy capacity regression test, mirroring
@@ -159,15 +151,11 @@ public final class SlabAnchorAttachment {
      * {@link #PLACEMENT_DY_TYPE}, so the test cannot exercise a duplicate approximation of the
      * production sync path.
      */
-    static PacketCodec<RegistryByteBuf, Long2ByteOpenHashMap> dyMapPacketCodecForTesting() {
-        return DY_MAP_PACKET_CODEC;
-    }
 
     public static final AttachmentType<LongOpenHashSet> ANCHOR_TYPE =
-            AttachmentRegistry.<LongOpenHashSet>create(ANCHOR_ID, builder -> builder
+            AttachmentRegistry.<LongOpenHashSet>builder()
                     .persistent(SET_CODEC)
-                    .syncWith(PACKET_CODEC, AttachmentSyncPredicate.all())
-            );
+                    .buildAndRegister(ANCHOR_ID);
     /**
      * FREEZE-ON-PLACE flat marker: a structural piece (full block / slab) placed at
      * dy=0 is recorded here so its flat height locks — support placed under or beside
@@ -176,15 +164,13 @@ public final class SlabAnchorAttachment {
      * {@code getYOffsetInner}; cleared when the piece is broken.
      */
     public static final AttachmentType<LongOpenHashSet> FROZEN_FLAT_TYPE =
-            AttachmentRegistry.<LongOpenHashSet>create(FROZEN_FLAT_ID, builder -> builder
+            AttachmentRegistry.<LongOpenHashSet>builder()
                     .persistent(SET_CODEC)
-                    .syncWith(PACKET_CODEC, AttachmentSyncPredicate.all())
-            );
+                    .buildAndRegister(FROZEN_FLAT_ID);
     public static final AttachmentType<LongOpenHashSet> LOWERED_SLAB_CARRIER_TYPE =
-            AttachmentRegistry.<LongOpenHashSet>create(LOWERED_SLAB_CARRIER_ID, builder -> builder
+            AttachmentRegistry.<LongOpenHashSet>builder()
                     .persistent(SET_CODEC)
-                    .syncWith(PACKET_CODEC, AttachmentSyncPredicate.all())
-            );
+                    .buildAndRegister(LOWERED_SLAB_CARRIER_ID);
     /**
      * Beta4 sidecar attachment that records authored compound ordinary full-block
      * anchors at lane {@code dy=-1.0}. Additive to {@link #ANCHOR_TYPE}: a position
@@ -196,35 +182,29 @@ public final class SlabAnchorAttachment {
      * {@code -1.0}. See {@code docs/beta4-compound-source-mode-design.md}.
      */
     public static final AttachmentType<LongOpenHashSet> COMPOUND_FULL_BLOCK_ANCHOR_TYPE =
-            AttachmentRegistry.<LongOpenHashSet>create(COMPOUND_FULL_BLOCK_ANCHOR_ID, builder -> builder
+            AttachmentRegistry.<LongOpenHashSet>builder()
                     .persistent(SET_CODEC)
-                    .syncWith(PACKET_CODEC, AttachmentSyncPredicate.all())
-            );
+                    .buildAndRegister(COMPOUND_FULL_BLOCK_ANCHOR_ID);
     public static final AttachmentType<LongOpenHashSet> COMPOUND_VISIBLE_SIDE_LOWER_SLAB_TYPE =
-            AttachmentRegistry.<LongOpenHashSet>create(COMPOUND_VISIBLE_SIDE_LOWER_SLAB_ID, builder -> builder
+            AttachmentRegistry.<LongOpenHashSet>builder()
                     .persistent(SET_CODEC)
-                    .syncWith(PACKET_CODEC, AttachmentSyncPredicate.all())
-            );
+                    .buildAndRegister(COMPOUND_VISIBLE_SIDE_LOWER_SLAB_ID);
     public static final AttachmentType<LongOpenHashSet> COMPOUND_VISIBLE_SIDE_UPPER_SLAB_TYPE =
-            AttachmentRegistry.<LongOpenHashSet>create(COMPOUND_VISIBLE_SIDE_UPPER_SLAB_ID, builder -> builder
+            AttachmentRegistry.<LongOpenHashSet>builder()
                     .persistent(SET_CODEC)
-                    .syncWith(PACKET_CODEC, AttachmentSyncPredicate.all())
-            );
+                    .buildAndRegister(COMPOUND_VISIBLE_SIDE_UPPER_SLAB_ID);
     public static final AttachmentType<LongOpenHashSet> COMPOUND_VISIBLE_SIDE_DOUBLE_SLAB_TYPE =
-            AttachmentRegistry.<LongOpenHashSet>create(COMPOUND_VISIBLE_SIDE_DOUBLE_SLAB_ID, builder -> builder
+            AttachmentRegistry.<LongOpenHashSet>builder()
                     .persistent(SET_CODEC)
-                    .syncWith(PACKET_CODEC, AttachmentSyncPredicate.all())
-            );
+                    .buildAndRegister(COMPOUND_VISIBLE_SIDE_DOUBLE_SLAB_ID);
     public static final AttachmentType<LongOpenHashSet> COMPOUND_VISIBLE_OWNER_TOP_SLAB_TYPE =
-            AttachmentRegistry.<LongOpenHashSet>create(COMPOUND_VISIBLE_OWNER_TOP_SLAB_ID, builder -> builder
+            AttachmentRegistry.<LongOpenHashSet>builder()
                     .persistent(SET_CODEC)
-                    .syncWith(PACKET_CODEC, AttachmentSyncPredicate.all())
-            );
+                    .buildAndRegister(COMPOUND_VISIBLE_OWNER_TOP_SLAB_ID);
     public static final AttachmentType<LongOpenHashSet> MODERN_PLACEMENT_TYPE =
-            AttachmentRegistry.<LongOpenHashSet>create(MODERN_PLACEMENT_ID, builder -> builder
+            AttachmentRegistry.<LongOpenHashSet>builder()
                     .persistent(SET_CODEC)
-                    .syncWith(PACKET_CODEC, AttachmentSyncPredicate.all())
-            );
+                    .buildAndRegister(MODERN_PLACEMENT_ID);
 
     // ── FROZEN-DY value store (LAW.md restoration, Slice 2b) ──────────────────────────
     // The law: a block's height is decided ONCE at placement and STAYS. Unlike the presence flags
@@ -372,14 +352,11 @@ public final class SlabAnchorAttachment {
      * alphabet a real build produces is tiny, so a section built on one lowered surface costs a
      * single palette byte for the whole section.
      */
-    private static final PacketCodec<RegistryByteBuf, Long2ByteOpenHashMap> DY_MAP_PACKET_CODEC =
-            ChunkPositionDyMapPacketCodec.INSTANCE;
 
     public static final AttachmentType<Long2ByteOpenHashMap> PLACEMENT_DY_TYPE =
-            AttachmentRegistry.<Long2ByteOpenHashMap>create(PLACEMENT_DY_ID, builder -> builder
+            AttachmentRegistry.<Long2ByteOpenHashMap>builder()
                     .persistent(DY_MAP_CODEC)
-                    .syncWith(DY_MAP_PACKET_CODEC, AttachmentSyncPredicate.all())
-            );
+                    .buildAndRegister(PLACEMENT_DY_ID);
 
     /**
      * Whole-world override for the stored-height reader (LAW.md restoration): when true, EVERY cell
@@ -494,6 +471,7 @@ public final class SlabAnchorAttachment {
         }
         for (WorldChunk chunk : changedChunks.keySet()) {
             chunk.setAttached(PLACEMENT_DY_TYPE, copies.get(chunk));
+            SlabAnchorSync.broadcast(world, chunk, PLACEMENT_DY_TYPE);
         }
         return writes;
     }
@@ -926,8 +904,9 @@ public final class SlabAnchorAttachment {
         BlockState stateBefore = RuntimeDiagnostics.beta35SlabJumpSourceTruthEnabled()
                 ? world.getBlockState(pos) : null;
         if (set.add(pos.asLong())) {
-            // setAttached triggers persistence + auto-sync for synced attachments.
+            // setAttached marks the chunk for saving; SlabAnchorSync carries the change to the watchers.
             chunk.setAttached(type, set);
+            SlabAnchorSync.broadcast(world, chunk, type);
             if (TRACE) {
                 Slabbed.LOGGER.info("[ANCHOR] {} add success pos={} chunk={} setSize={}",
                         label, pos.toShortString(), chunk.getPos(), set.size());
@@ -977,6 +956,7 @@ public final class SlabAnchorAttachment {
                     Long2ByteOpenHashMap copy = new Long2ByteOpenHashMap(dyMap);
                     copy.remove(pos.asLong());
                     dyChunk.setAttached(PLACEMENT_DY_TYPE, copy);
+                    SlabAnchorSync.broadcast(world, dyChunk, PLACEMENT_DY_TYPE);
                 }
             }
         }
@@ -1017,6 +997,7 @@ public final class SlabAnchorAttachment {
             } else {
                 chunk.setAttached(type, set);
             }
+            SlabAnchorSync.broadcast(world, chunk, type);
             logCompoundVisibleRenderTraceMarkerSet(world, pos, type, label, "remove", false);
             RuntimeDiagnostics.recordBeta35SlabJumpAnchorEvent(
                     world,
@@ -1357,7 +1338,7 @@ public final class SlabAnchorAttachment {
     }
 
     private static boolean isPaleMossCarpet(Block block) {
-        return block == Registries.BLOCK.get(Identifier.of("minecraft", "pale_moss_carpet"));
+        return block == Registries.BLOCK.get(new Identifier("minecraft", "pale_moss_carpet"));
     }
 
     public static boolean qualifiesForDirectAnchor(BlockView world, BlockPos pos, BlockState state) {

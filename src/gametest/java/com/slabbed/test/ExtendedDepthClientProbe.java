@@ -328,7 +328,7 @@ public final class ExtendedDepthClientProbe implements ClientModInitializer {
     private static void aim(MinecraftClient client) {
         syncPlayerAndItem(client);
         if (ticks - phaseTick < 3 || client.gameRenderer == null) return;
-        client.gameRenderer.updateCrosshairTarget(0.0f);
+        client.gameRenderer.updateTargetedEntity(0.0f);
         HitResult hit = client.crosshairTarget;
         if (serverSyncReady && hit instanceof BlockHitResult blockHit && hit.getType() == HitResult.Type.BLOCK
                 && blockHit.getBlockPos().equals(supportPos) && blockHit.getSide() == clickedFace()
@@ -344,7 +344,7 @@ public final class ExtendedDepthClientProbe implements ClientModInitializer {
     }
     private static void place(MinecraftClient client) {
         syncPlayerAndItem(client);
-        client.gameRenderer.updateCrosshairTarget(0.0f);
+        client.gameRenderer.updateTargetedEntity(0.0f);
         HitResult hit = client.crosshairTarget;
         if (!(hit instanceof BlockHitResult blockHit) || hit.getType() != HitResult.Type.BLOCK
                 || !blockHit.getBlockPos().equals(supportPos) || blockHit.getSide() != clickedFace()) {
@@ -430,7 +430,7 @@ public final class ExtendedDepthClientProbe implements ClientModInitializer {
         float yaw = (float) Math.toDegrees(Math.atan2(-delta.x, delta.z));
         float pitch = (float) -Math.toDegrees(Math.atan2(delta.y, Math.sqrt(delta.x * delta.x + delta.z * delta.z)));
         client.player.refreshPositionAndAngles(eye.x, eye.y - client.player.getStandingEyeHeight(), eye.z, yaw, pitch);
-        client.gameRenderer.updateCrosshairTarget(1.0f);
+        client.gameRenderer.updateTargetedEntity(1.0f);
         if (!(client.crosshairTarget instanceof BlockHitResult hit)
                 || hit.getType() != HitResult.Type.BLOCK || !hit.getBlockPos().equals(targetPos)) {
             completeCase(client, "RED_PANE_BREAK_VISIBLE_TARGET");

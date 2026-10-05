@@ -10,8 +10,6 @@ import net.minecraft.block.Blocks;
 import net.minecraft.block.SlabBlock;
 import net.minecraft.block.enums.BedPart;
 import net.minecraft.block.enums.SlabType;
-import net.minecraft.component.DataComponentTypes;
-import net.minecraft.component.type.BlockStateComponent;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
@@ -99,7 +97,7 @@ public final class NeighborUpdateInvarianceTest {
             Direction face,
             double yNudge
     ) {
-        PlayerEntity player = h.createMockPlayer(GameMode.SURVIVAL);
+        PlayerEntity player = h.createMockSurvivalPlayer();
         player.setStackInHand(Hand.MAIN_HAND, stack);
         Vec3d hit = Vec3d.ofCenter(clicked)
                 .add(face.getOffsetX() * 0.5, face.getOffsetY() * 0.5 + yNudge, face.getOffsetZ() * 0.5);
@@ -699,8 +697,8 @@ public final class NeighborUpdateInvarianceTest {
         world.setBlockState(support, Blocks.STONE.getDefaultState(), Block.NOTIFY_ALL);
         world.setBlockState(support.east(), Blocks.STONE.getDefaultState(), Block.NOTIFY_ALL);
         ItemStack bed = new ItemStack(Items.RED_BED);
-        bed.set(DataComponentTypes.BLOCK_STATE, BlockStateComponent.DEFAULT.with(
-                Properties.HORIZONTAL_FACING, Direction.EAST));
+        // 1.20.1 carries a placed-state override in the item's BlockStateTag.
+        bed.getOrCreateSubNbt("BlockStateTag").putString(Properties.HORIZONTAL_FACING.getName(), Direction.EAST.asString());
         placeStack(h, bed, support, Direction.UP, 0.0d);
         BlockPos foot = support.up();
         h.assertTrue(!world.getBlockState(foot).isAir()

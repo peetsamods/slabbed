@@ -14,6 +14,7 @@ import net.minecraft.block.enums.SlabType;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.state.property.Properties;
 import net.minecraft.util.ActionResult;
+import net.minecraft.util.Hand;
 import net.minecraft.util.hit.BlockHitResult;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Direction;
@@ -224,8 +225,8 @@ public final class LandingHitValidationPolicy {
      * Resolves the runtime-mapped name of Minecraft's no-item use hook by SIGNATURE rather than by a
      * hardcoded name. On Yarn 1.21.1 exactly one declared instance method of {@code AbstractBlock}
      * matches {@code ActionResult (BlockState, World, BlockPos, PlayerEntity, BlockHitResult)} —
-     * {@code onUse}; the sibling {@code onUseWithItem} returns {@code ItemActionResult} from seven
-     * parameters and cannot collide. Zero or two-or-more matches return null and the stateful-object
+     * {@code onUse} (on 1.20.1 the single six-parameter {@code onUse} with a {@code Hand}); any sibling
+     * item-use hook has a different return type or arity and cannot collide. Zero or two-or-more matches return null and the stateful-object
      * branch fails closed, leaving vanilla validation authoritative.
      */
     private static String directNoItemUseMethodName() {
@@ -274,15 +275,28 @@ public final class LandingHitValidationPolicy {
         return false;
     }
 
+    /**
+     * This version has a single use hook, {@code ActionResult (BlockState, World, BlockPos,
+     * PlayerEntity, Hand, BlockHitResult)}; item and no-item use are not split. That six-parameter
+     * shape is the direct use override here. The five-parameter no-item shape is kept so the probe
+     * stays correct if the method family is ever split on this line.
+     */
     private static boolean hasDirectNoItemUseSignature(Method method) {
         Class<?>[] parameterTypes = method.getParameterTypes();
-        return method.getReturnType() == ActionResult.class
-                && parameterTypes.length == 5
-                && parameterTypes[0] == BlockState.class
-                && parameterTypes[1] == World.class
-                && parameterTypes[2] == BlockPos.class
-                && parameterTypes[3] == PlayerEntity.class
-                && parameterTypes[4] == BlockHitResult.class;
+        if (method.getReturnType() != ActionResult.class
+                || parameterTypes.length < 5
+                || parameterTypes[0] != BlockState.class
+                || parameterTypes[1] != World.class
+                || parameterTypes[2] != BlockPos.class
+                || parameterTypes[3] != PlayerEntity.class) {
+            return false;
+        }
+        if (parameterTypes.length == 5) {
+            return parameterTypes[4] == BlockHitResult.class;
+        }
+        return parameterTypes.length == 6
+                && parameterTypes[4] == Hand.class
+                && parameterTypes[5] == BlockHitResult.class;
     }
 
     private static boolean insideTranslatedSlabShape(

@@ -20,9 +20,9 @@ Slabbed treats the **top face** of the following as valid ground:
 Other partial blocks (stairs, fences, walls, trapdoors, panes) are intentionally **not** affected.
 
 ## Compatibility
-- Minecraft: **1.21.1**
-- Loader: **Fabric**
-- Java: **21**
+- Minecraft: **1.20.1**
+- Loader: **Fabric** (Fabric Loader 0.16 or newer, Fabric API 0.92.x)
+- Java: **17** or newer
 - Environment: **Client and server** for multiplayer; singleplayer works through the local integrated server.
 
 ### Limitations

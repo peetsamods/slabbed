@@ -5,7 +5,7 @@ import com.slabbed.particle.BlockDisplayParticleContext;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.TorchBlock;
 import net.minecraft.particle.ParticleTypes;
-import net.minecraft.particle.SimpleParticleType;
+import net.minecraft.particle.ParticleEffect;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.random.Random;
 import net.minecraft.world.World;
@@ -24,7 +24,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 public abstract class TorchParticleMixin {
 
     @Shadow
-    private SimpleParticleType particle;
+    private ParticleEffect particle;
 
     @Inject(method = "randomDisplayTick", at = @At("HEAD"), cancellable = true)
     private void slabbed$offsetParticles(BlockState state, World world, BlockPos pos, Random random, CallbackInfo ci) {

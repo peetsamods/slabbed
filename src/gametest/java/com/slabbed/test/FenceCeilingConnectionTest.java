@@ -33,7 +33,7 @@ public final class FenceCeilingConnectionTest {
     }
     private static void place(TestContext h,BlockPos owner,Direction face,double y) {
         var stack=new ItemStack(Items.OAK_FENCE);
-        var player=h.createMockPlayer(net.minecraft.world.GameMode.SURVIVAL);
+        var player=h.createMockSurvivalPlayer();
         player.setStackInHand(net.minecraft.util.Hand.MAIN_HAND,stack);
         stack.useOnBlock(new net.minecraft.item.ItemUsageContext(player,net.minecraft.util.Hand.MAIN_HAND,
                 new net.minecraft.util.hit.BlockHitResult(new Vec3d(owner.getX()+0.5d,y,owner.getZ()+0.5d),face,owner,false)));

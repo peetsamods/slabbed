@@ -37,6 +37,16 @@ fabricApi {
 // not a hygiene change, and is out of scope here — see the plan's Phase 5/6 boundary. Excluded by
 // name, not by a silent glob, so the next reader sees exactly what is missing and why.
 def slabbedUnbuildableClientGameTests = [
+        // 1.20.1: these dev client probes name 1.21 rendering and loading APIs (integrated-server loader,
+        // crosshair pick, vertex-consumer shape, copper bulbs); they are dev-run tooling, not registered rows.
+        "com/slabbed/test/Mc1211GoblinRouteClientEntrypoint.java",
+        "com/slabbed/test/ExtendedDepthClientProbe.java",
+        "com/slabbed/test/AttachedEntityDepthProbe.java",
+        "com/slabbed/test/PistonMovingRenderAudit.java",
+        "com/slabbed/test/ParticleSinkAudit.java",
+        "com/slabbed/test/PistonLiveCycleProbe.java",
+        "com/slabbed/test/SurfaceEntityClientProbe.java",
+        "com/slabbed/test/mixin/ClientParticleSinkCaptureMixin.java",
         "com/slabbed/client/runtime/SlabbedRetargetTestHooks.java",
         "com/slabbed/test/SlabbedLabB2UpperHalfGhostWindowClientGameTest.java",
         "com/slabbed/test/SlabbedLabBeta4AuthoredCompoundAnchorDepthClientGameTest.java",
@@ -269,7 +279,7 @@ processResources {
 }
 
 tasks.withType(JavaCompile).configureEach {
-    it.options.release = 21
+    it.options.release = 17
 }
 
 java {
@@ -278,8 +288,8 @@ java {
     // If you remove this line, sources will not be generated.
     withSourcesJar()
 
-    sourceCompatibility = JavaVersion.VERSION_21
-    targetCompatibility = JavaVersion.VERSION_21
+    sourceCompatibility = JavaVersion.VERSION_17
+    targetCompatibility = JavaVersion.VERSION_17
 }
 
 // Every `-Dslabbed.*` on the Gradle command line is forwarded verbatim into the forked game JVM

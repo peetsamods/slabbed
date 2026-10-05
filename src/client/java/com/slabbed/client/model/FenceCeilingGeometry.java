@@ -33,7 +33,8 @@ public final class FenceCeilingGeometry {
         QuadEmitter capture=captured.getEmitter();
         context.pushTransform(quad -> { capture.copyFrom(quad);capture.emit();return false; });
         try {
-            if (wrapped instanceof FabricBakedModel fabric) {
+            FabricBakedModel fabric = wrapped; // every BakedModel is one through interface injection
+            if (!fabric.isVanillaAdapter()) {
                 fabric.emitBlockQuads(view,state,pos,randomSupplier,context);
             } else context.bakedModelConsumer().accept(wrapped,state);
         } finally { context.popTransform(); }

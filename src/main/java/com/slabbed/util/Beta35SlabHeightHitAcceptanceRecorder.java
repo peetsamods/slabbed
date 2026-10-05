@@ -12,7 +12,7 @@ import net.minecraft.block.SlabBlock;
 import net.minecraft.block.StairsBlock;
 import net.minecraft.block.TrapdoorBlock;
 import net.minecraft.block.WallBlock;
-import net.minecraft.block.enums.BlockFace;
+import net.minecraft.block.enums.WallMountLocation;
 import net.minecraft.block.enums.SlabType;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.player.PlayerEntity;
@@ -389,8 +389,8 @@ public final class Beta35SlabHeightHitAcceptanceRecorder {
         }
         String id = Registries.BLOCK.getId(state.getBlock()).toString();
         if (id.contains("button")) {
-            if (state.contains(Properties.BLOCK_FACE)
-                    && state.get(Properties.BLOCK_FACE) == BlockFace.FLOOR) {
+            if (state.contains(Properties.WALL_MOUNT_LOCATION)
+                    && state.get(Properties.WALL_MOUNT_LOCATION) == WallMountLocation.FLOOR) {
                 return "FLOOR_CONTACT";
             }
             return "SIDE_FACE_CONTACT";

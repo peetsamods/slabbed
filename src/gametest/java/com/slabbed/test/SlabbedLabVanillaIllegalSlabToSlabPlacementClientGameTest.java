@@ -276,7 +276,7 @@ public final class SlabbedLabVanillaIllegalSlabToSlabPlacementClientGameTest imp
                     RaycastContext.ShapeType.OUTLINE,
                     RaycastContext.FluidHandling.NONE,
                     mc.player));
-            mc.gameRenderer.updateCrosshairTarget(0.0f);
+            mc.gameRenderer.updateTargetedEntity(0.0f);
             out.set(HitSnapshot.from(mc.crosshairTarget, vanilla));
         });
         return out.get();
@@ -382,7 +382,7 @@ public final class SlabbedLabVanillaIllegalSlabToSlabPlacementClientGameTest imp
             if (players.isEmpty()) {
                 return;
             }
-            ServerPlayerEntity player = players.getFirst();
+            ServerPlayerEntity player = players.get(0);
             Vec3d delta = target.subtract(eye);
             double horiz = Math.sqrt(delta.x * delta.x + delta.z * delta.z);
             float yaw = (float) Math.toDegrees(Math.atan2(-delta.x, delta.z));

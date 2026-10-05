@@ -386,7 +386,8 @@ public final class OffsetBlockStateModel extends ForwardingBakedModel {
 
     private void emitWrappedBlockQuads(BlockRenderView view, BlockState state, BlockPos pos,
                                        Supplier<Random> randomSupplier, RenderContext context) {
-        if (wrapped instanceof FabricBakedModel fabricWrapped) {
+        FabricBakedModel fabricWrapped = wrapped; // every BakedModel is one through interface injection
+        if (!fabricWrapped.isVanillaAdapter()) {
             fabricWrapped.emitBlockQuads(view, state, pos, randomSupplier, context);
             return;
         }

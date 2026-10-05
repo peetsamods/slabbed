@@ -99,8 +99,8 @@ public abstract class ServerInteractBlockHitToleranceMixin {
         if (!changed) {
             return;
         }
-        if (!player.isInCreativeMode()) {
-            player.getStackInHand(packet.getHand()).decrementUnlessCreative(1, player);
+        if (!player.isCreative()) {
+            player.getStackInHand(packet.getHand()).decrement(1);
         }
         player.swingHand(packet.getHand(), true);
         ci.cancel();

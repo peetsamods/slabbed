@@ -57,7 +57,7 @@ public final class BottomSlabSpawnProofTest {
         BlockPos supportPos = ctx.getAbsolutePos(relativePos);
         BlockState support = world.getBlockState(supportPos);
         boolean allows = support.allowsSpawning(world, supportPos, entityType);
-        boolean onGround = SpawnRestriction.isSpawnPosAllowed(entityType, world, supportPos.up());
+        boolean onGround = net.minecraft.world.SpawnHelper.canSpawn(SpawnRestriction.getLocation(entityType), world, supportPos.up(), entityType);
         ctx.assertTrue(allows == expected && onGround == expected,
                 label + " expected allowsSpawning/ON_GROUND=" + expected + "/" + expected
                         + " but got " + allows + "/" + onGround);

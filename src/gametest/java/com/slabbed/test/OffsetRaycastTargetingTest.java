@@ -96,12 +96,14 @@ public final class OffsetRaycastTargetingTest {
         return SlabbedOffsetRaycast.raycast(world, eye, end, ShapeContext.absent());
     }
 
-    private static HitResult vanilla(ServerWorld world, Vec3d eye, Vec3d end) {
+    private static HitResult vanilla(TestContext ctx, ServerWorld world, Vec3d eye, Vec3d end) {
+        // 1.20.1's RaycastContext takes the entity whose shape context applies; a mock survival player
+        // stands in for the absent context the newer lines pass.
         return world.raycast(new RaycastContext(
                 eye, end,
                 RaycastContext.ShapeType.OUTLINE,
                 RaycastContext.FluidHandling.NONE,
-                ShapeContext.absent()));
+                ctx.createMockSurvivalPlayer()));
     }
 
     private static Vec3d v(BlockPos origin, double dx, double dy, double dz) {
@@ -149,7 +151,7 @@ public final class OffsetRaycastTargetingTest {
                 "offset-aware raycast should target the lowered full block, got " + hit.getType() + " " + hit.getBlockPos());
         ctx.assertTrue(hit.getSide() == Direction.NORTH, "expected NORTH face, got " + hit.getSide());
 
-        HitResult van = vanilla(world, eye, end);
+        HitResult van = vanilla(ctx, world, eye, end);
         boolean vanillaSawFull = van.getType() == HitResult.Type.BLOCK
                 && ((BlockHitResult) van).getBlockPos().equals(full);
         ctx.assertTrue(!vanillaSawFull, "control: vanilla DDA should not see the lowered block at mid-height");
@@ -176,7 +178,7 @@ public final class OffsetRaycastTargetingTest {
             Vec3d eye = eyes[i];
             Vec3d end = centre.add(centre.subtract(eye).normalize().multiply(0.5));
             BlockHitResult mine = slabbed(world, eye, end);
-            HitResult van = vanilla(world, eye, end);
+            HitResult van = vanilla(ctx, world, eye, end);
             ctx.assertTrue(van.getType() == HitResult.Type.BLOCK, "ray " + i + " control: vanilla should hit");
             ctx.assertTrue(mine.getType() == HitResult.Type.BLOCK, "ray " + i + ": offset raycast should hit");
             BlockHitResult vanBlock = (BlockHitResult) van;
@@ -303,7 +305,7 @@ public final class OffsetRaycastTargetingTest {
                 Vec3d eye = eyes[i];
                 Vec3d end = centre.add(centre.subtract(eye).normalize().multiply(0.5));
                 BlockHitResult mine = slabbed(world, eye, end);
-                HitResult van = vanilla(world, eye, end);
+                HitResult van = vanilla(ctx, world, eye, end);
                 if (van.getType() != HitResult.Type.BLOCK) {
                     ctx.assertTrue(mine.getType() != HitResult.Type.BLOCK || mine.getBlockPos().equals(t),
                             t + " ray " + i + ": unexpected hit " + mine.getBlockPos());

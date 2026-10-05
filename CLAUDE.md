@@ -44,3 +44,22 @@ Keep the "do not re-add X" guard comments — they are anti-regression tripwires
 vocabulary must reference LAW.md), S-4 (`LAW-PREFLIGHT: n|y` trailer on `src/main` commits), S-5
 (behavior commits require a fresh entry in the local out-of-repo ledger), S-6 (discretion — see
 above). S-3 (a keyword regex) was retired 2026-08-07; do not reintroduce it.
+
+## Line notes (Fabric 1.20.1)
+
+- Java 17 source and target; no unconditional `instanceof` patterns, no `List.getFirst()`.
+- Fabric data attachments cannot sync on this version. `anchor/SlabAnchorSync` carries every attachment
+  type to clients over the `slabbed:chunk_attachments` channel: a full send when a chunk is first sent
+  to a player (`ChunkWatchAttachmentSyncMixin`) and a re-send after each server write. Any new
+  attachment type must be added to its list or it will never reach clients.
+- `BlockItem.place` consumes the stack behind a creative check at the call site here, so the
+  placement-height capture hooks the block-place game event, which every accepted placement emits.
+  Do not move it back to the stack consume (the `creativePlacementAuthorsTheSameHeight` row guards it).
+- `RedstoneTorchBlock` extends `TorchBlock` on this version; the torch-family predicates exclude it
+  explicitly so the floor-torch set matches the other lines.
+- GameTest structures live under `data/<ns>/structures/` (plural) here; the test grid spaces cells by
+  template size, so rows that reach far from their origin use `slabbed:empty_16`.
+- The superflat ground is at y=-61; dev-client probes build their scene just above it. Blocks placed
+  high in empty sky sections render unlit on this version (vanilla), which breaks pixel-based proofs.
+- No Fabric client-GameTest API on this version: the dev-client proofs are the probe run
+  configurations in `build.gradle` (`runAttachmentClientProbe`, `runFenceClientProbe`).

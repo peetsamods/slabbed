@@ -163,7 +163,7 @@ public final class SurfaceEntityClientProbe {
         Vec3d target = visibleTarget(client.world, support);
         syncPlayer(client, probe, target);
         if (stageTick < 3) return;
-        client.gameRenderer.updateCrosshairTarget(0.0f);
+        client.gameRenderer.updateTargetedEntity(0.0f);
         if (!(client.crosshairTarget instanceof BlockHitResult hit)
                 || hit.getType() != HitResult.Type.BLOCK || !hit.getBlockPos().equals(support)
                 || hit.getSide() != Direction.UP) {
@@ -178,7 +178,7 @@ public final class SurfaceEntityClientProbe {
 
     private static void use(MinecraftClient client, Case probe, BlockPos support) {
         syncPlayer(client, probe, visibleTarget(client.world, support));
-        client.gameRenderer.updateCrosshairTarget(0.0f);
+        client.gameRenderer.updateTargetedEntity(0.0f);
         ActionResult result;
         if (probe.kind() == Kind.ARMOR_STAND) {
             result = client.interactionManager.interactBlock(
@@ -242,7 +242,7 @@ public final class SurfaceEntityClientProbe {
             compareDeep(probe, capture.withBody(clientBox, contactError), FLAT_BASELINES.get(baselineKey));
         }
         beginCapture(client, entity);
-        client.gameRenderer.updateCrosshairTarget(0.0f);
+        client.gameRenderer.updateTargetedEntity(0.0f);
         boolean targeted = client.crosshairTarget instanceof EntityHitResult hit
                 && hit.getEntity().getId() == entityId;
         row(probe, "ENTITY_TARGET", targeted ? "PASS" : "FAIL",
@@ -266,7 +266,7 @@ public final class SurfaceEntityClientProbe {
         boolean cameraBound = actual.present() && actual.frame() >= captureStartFrame + 2
                 && actual.pos().squaredDistanceTo(captureEye) <= 1.0e-4d
                 && angleNear(actual.yaw(), captureYaw) && Math.abs(actual.pitch() - capturePitch) <= 0.1f;
-        client.gameRenderer.updateCrosshairTarget(0.0f);
+        client.gameRenderer.updateTargetedEntity(0.0f);
         boolean targeted = client.crosshairTarget instanceof EntityHitResult hit
                 && hit.getEntity().getId() == entityId;
         boolean framed = cameraBound && framed(actual, entity.getBoundingBox(), support);
@@ -315,7 +315,7 @@ public final class SurfaceEntityClientProbe {
                     : world.getEntitiesByClass(BoatEntity.class, new Box(support).expand(3.0d, 6.0d, 3.0d),
                     entity -> entity.isAlive() && (probe.kind() == Kind.CHEST_BOAT) == (entity instanceof ChestBoatEntity));
             if (entities.size() == 1) {
-                Entity entity = entities.getFirst();
+                Entity entity = entities.get(0);
                 double error = entity.getBoundingBox().minY - visibleTop(world, support);
                 serverSample = new ServerSample(true, entities.size(), entity.getId(), entity.age,
                         entity.getBoundingBox(), error);
@@ -345,7 +345,7 @@ public final class SurfaceEntityClientProbe {
         MinecraftServer server = client.getServer();
         server.execute(() -> {
             if (server.getPlayerManager().getPlayerList().isEmpty()) return;
-            var player = server.getPlayerManager().getPlayerList().getFirst();
+            var player = server.getPlayerManager().getPlayerList().get(0);
             player.refreshPositionAndAngles(eye.x, feetY, eye.z, yaw, pitch);
             player.setVelocity(Vec3d.ZERO);
             player.changeGameMode(GameMode.CREATIVE);
@@ -382,7 +382,7 @@ public final class SurfaceEntityClientProbe {
         MinecraftServer server = client.getServer();
         server.execute(() -> {
             if (server.getPlayerManager().getPlayerList().isEmpty()) return;
-            var player = server.getPlayerManager().getPlayerList().getFirst();
+            var player = server.getPlayerManager().getPlayerList().get(0);
             player.refreshPositionAndAngles(eye.x, feetY, eye.z, yaw, pitch);
             player.setVelocity(Vec3d.ZERO);
             player.changeGameMode(GameMode.CREATIVE);

@@ -10,8 +10,7 @@
   "client": [
     "ItemFrameRenderMatrixCaptureMixin",
     "MinecartRenderMatrixCaptureMixin",
-    "BlockEntityRenderCaptureMixin",
-    "ClientParticleSinkCaptureMixin"
+    "BlockEntityRenderCaptureMixin"
   ],
   "injectors": {
     "defaultRequire": 1

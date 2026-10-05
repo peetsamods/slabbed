@@ -136,7 +136,10 @@ public abstract class SlabSupportStateMixin {
             return false;
         }
         Block block = state.getBlock();
-        return block instanceof TorchBlock && !(block instanceof WallTorchBlock);
+        // RedstoneTorchBlock (and RedstoneWallTorchBlock) extend TorchBlock on this version;
+        // keep the floor-torch set to torch/soul_torch as on the other lines.
+        return block instanceof TorchBlock && !(block instanceof WallTorchBlock)
+                && !(block instanceof net.minecraft.block.RedstoneTorchBlock);
     }
 
     /**
@@ -503,6 +506,6 @@ public abstract class SlabSupportStateMixin {
     }
 
     private static boolean isPaleMossCarpet(Block block) {
-        return block == Registries.BLOCK.get(Identifier.of("minecraft", "pale_moss_carpet"));
+        return block == Registries.BLOCK.get(new Identifier("minecraft", "pale_moss_carpet"));
     }
 }

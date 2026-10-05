@@ -2390,7 +2390,7 @@ public final class Mc1211GoblinRouteClientEntrypoint implements ClientModInitial
                 supportPos.getY() + 0.90d,
                 supportPos.getZ() + 0.5d);
         syncGoblinLoweredTrapdoorPlayer(client, hitVector, new Vec3d(1.75d, -0.35d, 0.0d), Items.OAK_TRAPDOOR);
-        client.gameRenderer.updateCrosshairTarget(0.0f);
+        client.gameRenderer.updateTargetedEntity(0.0f);
         // Deterministic authoring: click support east face so placement resolves into trapdoorPos.
         BlockHitResult fallback = new BlockHitResult(hitVector, Direction.EAST, supportPos, false);
         ActionResult result = client.interactionManager.interactBlock(client.player, Hand.MAIN_HAND, fallback);
@@ -2654,7 +2654,7 @@ public final class Mc1211GoblinRouteClientEntrypoint implements ClientModInitial
                 RaycastContext.FluidHandling.NONE,
                 client.player));
         String vanillaOwner = goblinLoweredTrapdoorTargetOwner(client.world, vanillaTarget, targetSlabPos, trapdoorPos);
-        client.gameRenderer.updateCrosshairTarget(0.0f);
+        client.gameRenderer.updateTargetedEntity(0.0f);
         HitResult finalTarget = client.crosshairTarget;
         String finalOwner = goblinLoweredTrapdoorTargetOwner(client.world, finalTarget, targetSlabPos, trapdoorPos);
         boolean wrongOwner = finalTarget instanceof BlockHitResult
@@ -2897,7 +2897,7 @@ public final class Mc1211GoblinRouteClientEntrypoint implements ClientModInitial
                 RaycastContext.FluidHandling.NONE,
                 client.player));
         trapdoorSeamVanillaTarget = formatHit(vanillaTarget);
-        client.gameRenderer.updateCrosshairTarget(0.0f);
+        client.gameRenderer.updateTargetedEntity(0.0f);
         HitResult finalTarget = client.crosshairTarget;
         trapdoorSeamFinalTarget = formatHit(finalTarget);
         trapdoorSeamFinalTargetOwner = trapdoorSeamTargetOwner(client.world, finalTarget);
@@ -3423,7 +3423,7 @@ public final class Mc1211GoblinRouteClientEntrypoint implements ClientModInitial
                 RaycastContext.FluidHandling.NONE,
                 client.player));
         trapdoorSeamVanillaTarget = formatHit(vanillaTarget);
-        client.gameRenderer.updateCrosshairTarget(0.0f);
+        client.gameRenderer.updateTargetedEntity(0.0f);
         HitResult finalTarget = client.crosshairTarget;
         trapdoorSeamFinalTarget = formatHit(finalTarget);
         trapdoorSeamFinalTargetOwner = trapdoorSeamTargetOwner(client.world, finalTarget);
@@ -3715,7 +3715,7 @@ public final class Mc1211GoblinRouteClientEntrypoint implements ClientModInitial
                 RaycastContext.ShapeType.OUTLINE,
                 RaycastContext.FluidHandling.NONE,
                 client.player));
-        client.gameRenderer.updateCrosshairTarget(0.0f);
+        client.gameRenderer.updateTargetedEntity(0.0f);
         HitResult finalTarget = client.crosshairTarget;
         String finalOwner = trapdoorSeamTargetOwner(client.world, finalTarget);
         boolean initialMiss = vanillaTarget == null || vanillaTarget.getType() == HitResult.Type.MISS;
@@ -3788,7 +3788,7 @@ public final class Mc1211GoblinRouteClientEntrypoint implements ClientModInitial
         // SlabbedOffsetRaycast) now handles this case geometrically. This sampler is
         // diagnostic-only, so the rescue candidate is always null (NO_CANDIDATE).
         BlockHitResult sideRescueCandidate = null;
-        client.gameRenderer.updateCrosshairTarget(0.0f);
+        client.gameRenderer.updateTargetedEntity(0.0f);
         HitResult finalTarget = client.crosshairTarget;
         boolean vanillaLoweredSlabFace = vanillaTarget instanceof BlockHitResult vanillaBlock
                 && vanillaBlock.getBlockPos().equals(trapdoorSeamMp4SideOwnerSlabPos)
@@ -4137,7 +4137,7 @@ public final class Mc1211GoblinRouteClientEntrypoint implements ClientModInitial
                 RaycastContext.FluidHandling.NONE,
                 client.player));
         trapdoorUnderBottomVanillaTarget = formatHit(vanillaTarget);
-        client.gameRenderer.updateCrosshairTarget(0.0f);
+        client.gameRenderer.updateTargetedEntity(0.0f);
         HitResult finalTarget = client.crosshairTarget;
         trapdoorUnderBottomFinalTarget = formatHit(finalTarget);
         if (finalTarget instanceof BlockHitResult blockHit && finalTarget.getType() == HitResult.Type.BLOCK) {
@@ -4467,7 +4467,7 @@ public final class Mc1211GoblinRouteClientEntrypoint implements ClientModInitial
                 RaycastContext.ShapeType.OUTLINE,
                 RaycastContext.FluidHandling.NONE,
                 client.player));
-        client.gameRenderer.updateCrosshairTarget(0.0f);
+        client.gameRenderer.updateTargetedEntity(0.0f);
         HitResult finalTarget = client.crosshairTarget;
         String vanillaOwner = sbbsFinalSlabTargetOwner(client.world, vanillaTarget);
         String finalOwner = sbbsFinalSlabTargetOwner(client.world, finalTarget);
@@ -5109,7 +5109,7 @@ public final class Mc1211GoblinRouteClientEntrypoint implements ClientModInitial
                 RaycastContext.ShapeType.OUTLINE,
                 RaycastContext.FluidHandling.NONE,
                 client.player));
-        client.gameRenderer.updateCrosshairTarget(0.0f);
+        client.gameRenderer.updateTargetedEntity(0.0f);
         HitResult finalTarget = client.crosshairTarget;
         if (!(finalTarget instanceof BlockHitResult blockHit) || finalTarget.getType() != HitResult.Type.BLOCK) {
             return "FAIL_LIVE_CROSSHAIR_NOT_BLOCK"
@@ -5524,7 +5524,7 @@ public final class Mc1211GoblinRouteClientEntrypoint implements ClientModInitial
                 RaycastContext.ShapeType.OUTLINE,
                 RaycastContext.FluidHandling.NONE,
                 client.player));
-        client.gameRenderer.updateCrosshairTarget(0.0f);
+        client.gameRenderer.updateTargetedEntity(0.0f);
         HitResult finalTarget = client.crosshairTarget;
         return "samplePhase=" + samplePhase
                 + "/vanillaTarget=" + formatHit(vanillaTarget)
@@ -8307,14 +8307,14 @@ public final class Mc1211GoblinRouteClientEntrypoint implements ClientModInitial
             case "minecraft:redstone_wire" -> new ItemStack(Items.REDSTONE, 8);
             case "minecraft:hopper" -> new ItemStack(Items.HOPPER, 8);
             default -> {
-                var item = Registries.ITEM.get(Identifier.of(blockId));
+                var item = Registries.ITEM.get(new Identifier(blockId));
                 yield item == null || item == Items.AIR ? null : new ItemStack(item, 8);
             }
         };
     }
 
     private static BlockState harnessStateForBlock(String blockId) {
-        var block = Registries.BLOCK.get(Identifier.of(blockId));
+        var block = Registries.BLOCK.get(new Identifier(blockId));
         return block == null ? Blocks.AIR.getDefaultState() : block.getDefaultState();
     }
 

@@ -23,10 +23,8 @@
     "SnowBlockStoredSupportMixin",
     "CampfireCookingParticleMixin",
     "CampfireSmokeParticleMixin",
-    "DecoratedPotParticleMixin",
     "LeverParticleMixin",
     "CandleExtinguishParticleMixin",
-    "ParticleUtilOffsetMixin",
     "TorchParticleAccessor",
     "TorchParticleMixin",
     "WallTorchParticleMixin",
@@ -38,7 +36,8 @@
     "BlockOnStateReplacedAnchorMixin",
     "FencePaneSlabConnectionMixin",
     "WallSlabConnectionMixin",
-    "ScaffoldingLoweredStandMixin"
+    "ScaffoldingLoweredStandMixin",
+    "ChunkWatchAttachmentSyncMixin"
   ],
   "client": [],
   "injectors": {

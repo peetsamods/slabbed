@@ -17,8 +17,6 @@
     ],
     "client": [
       "com.slabbed.test.AttachmentRemeshProbe",
-      "com.slabbed.test.ExtendedDepthClientProbe",
-      "com.slabbed.test.Mc1211GoblinRouteClientEntrypoint",
       "com.slabbed.test.KeepOnlyReopenProbe"
     ],
     "fabric-gametest": [
@@ -35,8 +33,6 @@
       "com.slabbed.test.ExtendedDepthChainContactTest",
       "com.slabbed.test.ExtendedDepthOperationTest",
       "com.slabbed.test.ParticleDisplayCoverageTest",
-      "com.slabbed.test.DecoratedPotParticleTest",
-      "com.slabbed.test.ParticleUtilParticleTest",
       "com.slabbed.test.RedstoneWireConnectionTest",
       "com.slabbed.test.BottomSlabSpawnProofTest",
       "com.slabbed.test.NeighborUpdateInvarianceTest",

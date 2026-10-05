@@ -24,7 +24,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 @Mixin(BlockModelRenderer.class)
 public class BlockModelDyTranslateMixin {
     private static boolean slabbed$fabricModelOwnsDy(BakedModel model) {
-        return model instanceof FabricBakedModel fabricModel && !fabricModel.isVanillaAdapter();
+        return !((FabricBakedModel) model).isVanillaAdapter();
     }
 
     private static void slabbed$recordTrace(

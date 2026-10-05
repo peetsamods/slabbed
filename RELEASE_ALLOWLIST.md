@@ -110,6 +110,7 @@ exclusion can leave a manifest advertising a class the archive no longer has. Th
 | `com/slabbed/anchor/SlabAnchorAttachment` | The dy anchor store — the feature's data model. Server-authoritative, persistent, synchronised; writes no file and reaches nothing outside the save. |
 | `com/slabbed/anchor/ChunkPositionSetPacketCodec` | Compact per-chunk network codec for packed block positions — the anchor set's sync wire. |
 | `com/slabbed/anchor/ChunkPositionDyMapPacketCodec` | Compact per-chunk network codec for the placement-height map — the store's sync wire, the sibling of the row above. Groups by 16-cubed section, stores occupancy as a non-empty-word mask, and stores heights as a per-section palette. Ported from the Fabric 1.21.11 line 2026-09-03 to replace a raw sixteen-bytes-per-height wire form that overflowed Fabric's attachment ceiling at 1,024 stored heights in one chunk; the same measurement now fits 64,000. Pure encoding: no world access, no file or network I/O of its own, no registration. |
+| `com/slabbed/anchor/SlabAnchorSync` | 1.20.1 server-to-client carrier for the chunk attachments (Fabric's attachments cannot sync here): one message per attachment type on chunk watch and after every server write; the client installs it on its chunk. |
 | `com/slabbed/anchor/PlacementDyOverlay` | The client-prediction overlay that sits above the authoritative store without writing it — the shared decision logic `PlacementDyPredictionClient` (client) supplies platform wiring for. No file or network access beyond the ordinary sync path. |
 | `com/slabbed/anchor/C3TestPhaseTrace` | Inert-by-default ordering sink for the placement-capture path, called from `BlockItemPlacementIntentMixin` at its two ordering-critical points. While no trace span is open — the shipped case — every call is a single boolean read and an immediate return. Production plumbing, not debug tooling, and lives in `src/main` because a `src/gametest` class is not visible to it. |
 
@@ -135,6 +136,7 @@ before this line's behaviour work closes — see the note beneath the table.
 | `com/slabbed/mixin/ArmorStandItemOffsetPlacementMixin` | Places armor stands against the stored visible support plane while retaining vanilla item collision and entity-data handling. |
 | `com/slabbed/mixin/BlockItemPlacementIntentMixin` | Captures placement intent for the placement law. |
 | `com/slabbed/mixin/BlockOnPlacedAnchorMixin` | Writes the dy anchor on placement. |
+| `com/slabbed/mixin/ChunkWatchAttachmentSyncMixin` | Sends the chunk's Slabbed attachments right after the chunk data when a player starts watching it (1.20.1 `ThreadedAnvilChunkStorage.sendChunkDataPackets`). |
 | `com/slabbed/mixin/BlockOnStateReplacedAnchorMixin` | Clears the dy anchor on state replacement; a same-shape kind change keeps it. |
 | `com/slabbed/mixin/CarpetBlockMixin` | Carpet support and shape over a lowered slab. |
 | `com/slabbed/mixin/FencePaneSlabConnectionMixin` | Fence and pane connection against a lowered slab. |
@@ -156,10 +158,8 @@ before this line's behaviour work closes — see the note beneath the table.
 | `com/slabbed/mixin/ScaffoldingLoweredStandMixin` | Measures scaffolding's "entity is above" test against the cell's stored height so a lowered column is stood on, climbed and descended like a flush one. |
 | `com/slabbed/mixin/CampfireCookingParticleMixin` | Translates cooking smoke to its stored campfire height. |
 | `com/slabbed/mixin/CampfireSmokeParticleMixin` | Translates campfire smoke outside the shared display-tick scope without double-shifting ambient smoke. |
-| `com/slabbed/mixin/DecoratedPotParticleMixin` | Translates pot feedback particles to the stored pot height. |
 | `com/slabbed/mixin/LeverParticleMixin` | Translates lever feedback particles to the stored lever height. |
 | `com/slabbed/mixin/CandleExtinguishParticleMixin` | Translates extinguish smoke to the stored candle height. |
-| `com/slabbed/mixin/ParticleUtilOffsetMixin` | Normalizes shape-distributed particle height and translates its origin once to stored dy. |
 | `com/slabbed/particle/*` | Shared display-particle height scope and coordinate translation. |
 | `com/slabbed/mixin/TorchParticleAccessor` | Accessor supporting the torch particle mixins. |
 | `com/slabbed/mixin/TorchParticleMixin` | Particle origin tracks the lowered block. |

@@ -162,7 +162,7 @@ public final class SlabbedLabModelDySingleOwnerAuditClientGameTest implements Fa
                     Vec3d eye = buildEyeForAttempt(pos, attemptIndex);
                     Vec3d target = buildTargetForState(pos, state);
                     positionPlayer(mc, eye, target);
-                    mc.gameRenderer.updateCrosshairTarget(0.0f);
+                    mc.gameRenderer.updateTargetedEntity(0.0f);
                     HitResult hit = mc.crosshairTarget;
                     if (hit instanceof BlockHitResult bhr
                             && hit.getType() == HitResult.Type.BLOCK

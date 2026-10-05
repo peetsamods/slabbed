@@ -27,7 +27,7 @@ import net.minecraft.world.BlockRenderView;
  */
 public final class ChainCeilingGeometry {
     /** Plain model identifier of the elongated chain asset (registered + retrieved by this id). */
-    public static final Identifier MODEL_ID = Identifier.of(Slabbed.MOD_ID, "block/chain_ceiling_support");
+    public static final Identifier MODEL_ID = new Identifier(Slabbed.MOD_ID, "block/chain_ceiling_support");
 
     private ChainCeilingGeometry() {
     }

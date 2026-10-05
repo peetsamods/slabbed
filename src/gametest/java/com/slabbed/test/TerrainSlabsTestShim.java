@@ -39,7 +39,7 @@ public final class TerrainSlabsTestShim implements ModInitializer {
     /** Mirrors real Terrain Slabs' worldgen marker; classifier matches it by name. */
     public static final BooleanProperty GENERATED = BooleanProperty.of("generated");
 
-    public static final Identifier TEST_TS_SLAB_ID = Identifier.of("terrain_slabs", "test_slab");
+    public static final Identifier TEST_TS_SLAB_ID = new Identifier("terrain_slabs", "test_slab");
 
     /** Namespace-matched stand-in for a real (modern) Terrain Slabs slab surface. */
     public static final Block TEST_TS_SLAB =
@@ -49,7 +49,7 @@ public final class TerrainSlabsTestShim implements ModInitializer {
      * Legacy-namespace stand-in ({@code terrainslabs:grass_slab}) confirming the dual mod-id
      * gate still recognises the legacy id.
      */
-    public static final Identifier LEGACY_TS_SLAB_ID = Identifier.of("terrainslabs", "grass_slab");
+    public static final Identifier LEGACY_TS_SLAB_ID = new Identifier("terrainslabs", "grass_slab");
 
     public static final Block LEGACY_TS_SLAB =
             new GeneratedCapableSlabBlock(AbstractBlock.Settings.create().strength(1.0f));

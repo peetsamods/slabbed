@@ -178,7 +178,7 @@ public final class PistonMovingRenderAudit {
             throw new AssertionError("outer HEAD callback fixture expected one exact match but found "
                     + matches.size());
         }
-        Method method = matches.getFirst();
+        Method method = matches.get(0);
         if (!method.trySetAccessible()) {
             throw new AssertionError("outer HEAD callback fixture was not accessible");
         }
