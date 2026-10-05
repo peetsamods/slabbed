@@ -17,6 +17,8 @@ Differences on this version:
   item" step for creative players, and the height is now recorded at the block-place event instead, which
   every placement passes through.
 - No decorated-pot insert particle offset (the particle does not exist on this version).
+- Bone-meal sparkles on a lowered block are not yet moved down with the block (the particle helper
+  Slabbed hooks for that does not exist on this version).
 
 ## [0.6.1-alpha+1.21.1-fabric]
 
