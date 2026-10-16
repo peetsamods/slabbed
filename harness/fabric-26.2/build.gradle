@@ -109,6 +109,36 @@ sourceSets {
 tasks.named("compileGametestJava").configure { dependsOn("prepareGametestJava") }
 tasks.named("processGametestResources").configure { dependsOn("prepareGametestResources") }
 
+// Follow the root build's artifact names; explicit paths still allow proof of frozen jars.
+def releaseProperties = new Properties()
+layout.projectDirectory.file("../../gradle.properties").asFile.withInputStream { releaseProperties.load(it) }
+def releaseBaseName = providers.gradleProperty("archives_base_name").getOrElse(releaseProperties.getProperty("archives_base_name"))
+def releaseVersion = providers.gradleProperty("mod_version").getOrElse(releaseProperties.getProperty("mod_version"))
+def releaseArtifactStem = "${releaseBaseName}-${releaseVersion}"
+def proofArtifactDefaults = [
+        slabbed_release_jar: "../../build/libs/${releaseArtifactStem}.jar",
+        slabbed_testkit: "../../build/testkit/${releaseArtifactStem}-testkit.jar",
+        slabbed_diagnostics: "../../build/test35/runtime-diagnostics/slabbed-diagnostics.jar",
+]
+def proofArtifacts = proofArtifactDefaults.collectEntries { name, defaultPath ->
+    [(name): file(providers.gradleProperty(name).getOrElse(defaultPath.toString()))]
+}
+
+def verifyHarnessArtifacts = tasks.register("verifyHarnessArtifacts") {
+    doLast {
+        def missing = proofArtifacts.findAll { name, artifact -> !artifact.isFile() }
+        if (!missing.isEmpty()) {
+            throw new GradleException("Missing Slabbed harness artifacts:\n"
+                    + missing.collect { name, artifact -> "  ${name}: ${project.relativePath(artifact)}" }.join("\n")
+                    + "\nRun ./gradlew build from the repository root, or supply existing jars with -Pslabbed_release_jar, -Pslabbed_testkit and -Pslabbed_diagnostics.")
+        }
+        proofArtifacts.each { name, artifact ->
+            logger.lifecycle("Harness artifact ${name}: ${project.relativePath(artifact)}")
+        }
+    }
+}
+tasks.named("compileGametestJava").configure { dependsOn(verifyHarnessArtifacts) }
+
 dependencies {
     minecraft "com.mojang:minecraft:${project.minecraft_version}"
     implementation "net.fabricmc:fabric-loader:${project.loader_version}"
@@ -116,7 +146,7 @@ dependencies {
     // The artifacts under proof. The suite compiles against the release jar and the test kit; at run
     // time Fabric Loader discovers each jar's fabric.mod.json on the classpath and loads it as a mod
     // (26.x Loom does no remapping, so plain configurations are the mod configurations).
-    implementation files(project.slabbed_release_jar, project.slabbed_testkit, project.slabbed_diagnostics)
+    implementation files(proofArtifacts.values())
 }
 
 tasks.withType(JavaCompile).configureEach {
@@ -184,7 +214,7 @@ tasks.register("verifyHarnessGameTestCount") {
             throw new GradleException("mixin apply/injection errors in build/run/gameTest/logs/latest.log.")
         }
         def receipts = file("build/harness-receipts"); receipts.mkdirs()
-        new File(receipts, "server.txt").text = "minecraft=${project.minecraft_version}\nreported=${reported}\nexpected=${expected}\njar=${file(project.slabbed_release_jar).name}\n"
+        new File(receipts, "server.txt").text = "minecraft=${project.minecraft_version}\nreported=${reported}\nexpected=${expected}\njar=${proofArtifacts.slabbed_release_jar.name}\n"
         logger.lifecycle("verifyHarnessGameTestCount (${project.minecraft_version}): OK — ${reported}/${expected}")
     }
 }
@@ -205,7 +235,7 @@ tasks.register("verifyHarnessClientLeg") {
             throw new GradleException("mixin apply/injection errors in build/run/clientGameTest/logs/latest.log.")
         }
         def receipts = file("build/harness-receipts"); receipts.mkdirs()
-        new File(receipts, "client.txt").text = "minecraft=${project.minecraft_version}\nentrypoints=${expected.size()}\njar=${file(project.slabbed_release_jar).name}\n"
+        new File(receipts, "client.txt").text = "minecraft=${project.minecraft_version}\nentrypoints=${expected.size()}\njar=${proofArtifacts.slabbed_release_jar.name}\n"
         logger.lifecycle("verifyHarnessClientLeg (${project.minecraft_version}): OK — ${expected.size()}/${expected.size()} entrypoints PASS")
     }
 }
