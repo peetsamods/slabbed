@@ -30,6 +30,7 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.context.UseOnContext;
 import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.EmptyBlockGetter;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 import net.minecraft.world.phys.BlockHitResult;
@@ -43,7 +44,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-/** One real entrypoint owning the frozen eighteen-case C3 client manifest. */
+/** One real entrypoint owning the C3 client manifest. */
 public final class PlacementDyPredictionClientGameTest implements FabricClientGameTest {
 
     /**
@@ -115,7 +116,9 @@ public final class PlacementDyPredictionClientGameTest implements FabricClientGa
             new ClientCase("same_chunk_unrelated_prediction_isolation",
                     PlacementDyPredictionClientGameTest::sameChunkUnrelatedPredictionIsolation),
             new ClientCase("third_state_authoritative_correction",
-                    PlacementDyPredictionClientGameTest::thirdStateAuthoritativeCorrection));
+                    PlacementDyPredictionClientGameTest::thirdStateAuthoritativeCorrection),
+            new ClientCase("render_backing_publication_and_retirement",
+                    PlacementDyPredictionClientGameTest::renderBackingPublicationAndRetirement));
 
     @Override
     public void runTest(ClientGameTestContext context) {
@@ -207,6 +210,97 @@ public final class PlacementDyPredictionClientGameTest implements FabricClientGa
     private static IllegalArgumentException rejectSelector(String reason) {
         Slabbed.LOGGER.error("C3_CLIENT_SELECTOR | REJECT | reason={}", reason);
         return new IllegalArgumentException("Rejected C3 client case selector: " + reason);
+    }
+
+    private static void renderBackingPublicationAndRetirement(
+            ClientGameTestContext context, TestSingleplayerContext ignored, int index) throws Exception {
+        context.runOnClient(client -> {
+            ClientLevel level = client.level;
+            BlockPos pos = testPos(client, index);
+            SlabAnchorAttachment.applyClientAuthoritativePlacementDy(level,
+                    Map.of(pos, PlacementDyFact.present(-0.5d)));
+            requirePublishedWorkerFact(level, pos, Double.doubleToRawLongBits(-0.5d));
+            PredictedBatch predicted = new PredictedBatch(
+                    batch(level, sequence(index, 0), List.of(pos), NEGATIVE_ONE).signature(),
+                    List.of(new PredictedCell(pos, level.getBlockState(pos),
+                            PlacementDyFact.present(-0.5d), Blocks.STONE.defaultBlockState(), NEGATIVE_ONE)));
+            PlacementDyPredictionJournalGameTestAccess.installBatchForTests(level, predicted);
+            expectFact(PlacementDyPredictionJournal.effectiveFact(EmptyBlockGetter.INSTANCE, pos),
+                    true, NEGATIVE_ONE, "render overlay");
+            PlacementDyPredictionJournal.onCorrection(level,
+                    correction(predicted, Map.of(pos, PlacementDyFact.present(+0.0d))));
+            PlacementDyPredictionJournal.onVanillaAcknowledgement(level, sequence(index, 0));
+            requirePublishedWorkerFact(level, pos, POSITIVE_ZERO);
+
+            int cancelledSequence = sequence(index, 1);
+            PlacementDyPredictionBridge.openSequence(cancelledSequence);
+            try {
+                expect(PlacementDyPredictionBridge.publishClientBatch(
+                                batch(level, cancelledSequence, List.of(pos), NEGATIVE_ONE)),
+                        "the cancellation fixture must stage through the installed bridge");
+            } finally {
+                PlacementDyPredictionBridge.closeSequence();
+            }
+            expect(PlacementDyPredictionJournalGameTestAccess.testSnapshot().stagedGroups() == 1,
+                    "the cancellation fixture must own one staged batch");
+            PlacementDyPredictionJournal.abortStaged(cancelledSequence);
+            expect(PlacementDyPredictionJournalGameTestAccess.testSnapshot().stagedGroups() == 0,
+                    "cancellation must remove the staged batch");
+            requirePublishedWorkerFact(level, pos, POSITIVE_ZERO);
+
+            PlacementDyPredictionJournal.beginRenderRead();
+            try {
+                PlacementDyPredictionJournal.beginRenderRead();
+                try {
+                    SlabAnchorAttachment.applyClientAuthoritativePlacementDy(level,
+                            Map.of(pos, PlacementDyFact.present(-0.5d)));
+                    expectFact(PlacementDyPredictionJournal.effectiveFact(EmptyBlockGetter.INSTANCE, pos),
+                            true, POSITIVE_ZERO, "nested emission must retain its captured backing");
+                } finally {
+                    PlacementDyPredictionJournal.endRenderRead();
+                }
+                expectFact(PlacementDyPredictionJournal.effectiveFact(level, pos),
+                        true, POSITIVE_ZERO, "ending a nested emission must retain the outer snapshot");
+            } finally {
+                PlacementDyPredictionJournal.endRenderRead();
+            }
+            requirePublishedWorkerFact(level, pos, Double.doubleToRawLongBits(-0.5d));
+            SlabAnchorAttachment.applyClientAuthoritativePlacementDy(level,
+                    Map.of(pos, PlacementDyFact.absent()));
+            expect(!PlacementDyPredictionJournal.effectiveFact(EmptyBlockGetter.INSTANCE, pos).present(),
+                    "attachment removal must publish absence");
+        });
+    }
+
+    private static void requirePublishedWorkerFact(ClientLevel level, BlockPos pos, long bits) {
+        boolean anchored = SlabAnchorAttachment.isAnchored(level, pos);
+        boolean frozenFlat = SlabAnchorAttachment.isFrozenFlat(level, pos);
+        boolean compound = SlabAnchorAttachment.isCompoundFullBlockAnchor(level, pos);
+        java.util.concurrent.atomic.AtomicReference<Throwable> error = new java.util.concurrent.atomic.AtomicReference<>();
+        Thread worker = new Thread(() -> {
+            RenderAttachmentReadProbe.begin();
+            try {
+                expectFact(PlacementDyPredictionJournal.backingFact(level, pos), true, bits, "worker backing");
+                expectFact(PlacementDyPredictionJournal.effectiveFact(EmptyBlockGetter.INSTANCE, pos),
+                        true, bits, "worker render view");
+                expect(SlabAnchorAttachment.isAnchored(level, pos) == anchored, "worker anchor marker");
+                expect(SlabAnchorAttachment.isFrozenFlat(level, pos) == frozenFlat, "worker frozen-flat marker");
+                expect(SlabAnchorAttachment.isCompoundFullBlockAnchor(level, pos) == compound, "worker compound marker");
+            } catch (Throwable failure) {
+                error.set(failure);
+            } finally {
+                RenderAttachmentReadProbe.end();
+            }
+        }, "slabbed-render-backing-test");
+        worker.setDaemon(true);
+        worker.start();
+        try {
+            worker.join(2_000);
+        } catch (InterruptedException interrupted) {
+            Thread.currentThread().interrupt();
+            throw new AssertionError("worker read interrupted", interrupted);
+        }
+        expect(!worker.isAlive() && error.get() == null, "worker backing read must complete: " + error.get());
     }
 
     private static void acceptedAndEquivalentAuthority(

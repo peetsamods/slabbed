@@ -90,6 +90,22 @@ public final class SlabAnchorAttachment {
     /** Non-overlaying client backing lookup used by CAS and effective-read fallback. */
     public static ClientPlacementDyFactLookup clientBackingPlacementDyLookup = null;
 
+    @FunctionalInterface
+    public interface ClientRenderMarkerLookup {
+        /** Null keeps the authoritative main-thread query; a Boolean is a published render fact. */
+        Boolean lookup(BlockGetter view, BlockPos pos, AttachmentType<LongOpenHashSet> type);
+    }
+
+    public static volatile ClientRenderMarkerLookup clientRenderMarkerLookup = null;
+
+    private static Boolean publishedClientMarker(
+            BlockGetter view, BlockPos pos, AttachmentType<LongOpenHashSet> type) {
+        if (view instanceof Level level && !level.isClientSide()) {
+            return null;
+        }
+        return clientRenderMarkerLookup == null ? null : clientRenderMarkerLookup.lookup(view, pos, type);
+    }
+
     private static long c3NextPublicationProbeToken = 1L;
     private static final Map<Long, Map<Long, Integer>> C3_PUBLICATION_PROBES = new HashMap<>();
 
@@ -743,6 +759,10 @@ public final class SlabAnchorAttachment {
         if (pos == null) {
             return false;
         }
+        Boolean published = publishedClientMarker(world, pos, FROZEN_FLAT_TYPE);
+        if (published != null) {
+            return published;
+        }
         if (!(world instanceof Level w)) {
             return clientFrozenFlatLookup != null && clientFrozenFlatLookup.test(pos);
         }
@@ -1359,6 +1379,10 @@ public final class SlabAnchorAttachment {
         if (pos == null) {
             return false;
         }
+        Boolean published = publishedClientMarker(world, pos, ANCHOR_TYPE);
+        if (published != null) {
+            return published;
+        }
         if (!(world instanceof Level w)) {
             // Chunk render paths (e.g. ChunkRendererRegion) are not Level instances and
             // cannot access chunk attachments directly.  Delegate to the client fallback
@@ -1392,6 +1416,10 @@ public final class SlabAnchorAttachment {
         if (pos == null) {
             return false;
         }
+        Boolean published = publishedClientMarker(world, pos, COMPOUND_FULL_BLOCK_ANCHOR_TYPE);
+        if (published != null) {
+            return published;
+        }
         if (!(world instanceof Level w)) {
             return clientCompoundFullBlockAnchorLookup != null
                     && clientCompoundFullBlockAnchorLookup.test(pos);
@@ -1412,6 +1440,10 @@ public final class SlabAnchorAttachment {
     public static boolean isCompoundVisibleSideLowerSlab(BlockGetter world, BlockPos pos, BlockState state) {
         if (!isCompoundVisibleSideLowerSlabState(state) || pos == null) {
             return false;
+        }
+        Boolean published = publishedClientMarker(world, pos, COMPOUND_VISIBLE_SIDE_LOWER_SLAB_TYPE);
+        if (published != null) {
+            return published;
         }
         if (!(world instanceof Level w)) {
             return clientCompoundVisibleSideLowerSlabLookup != null
@@ -1434,6 +1466,10 @@ public final class SlabAnchorAttachment {
         if (!isCompoundVisibleSideUpperSlabState(state) || pos == null) {
             return false;
         }
+        Boolean published = publishedClientMarker(world, pos, COMPOUND_VISIBLE_SIDE_UPPER_SLAB_TYPE);
+        if (published != null) {
+            return published;
+        }
         if (!(world instanceof Level w)) {
             return clientCompoundVisibleSideUpperSlabLookup != null
                     && clientCompoundVisibleSideUpperSlabLookup.test(pos);
@@ -1455,6 +1491,10 @@ public final class SlabAnchorAttachment {
         if (!isCompoundVisibleSideDoubleSlabState(state) || pos == null) {
             return false;
         }
+        Boolean published = publishedClientMarker(world, pos, COMPOUND_VISIBLE_SIDE_DOUBLE_SLAB_TYPE);
+        if (published != null) {
+            return published;
+        }
         if (!(world instanceof Level w)) {
             return clientCompoundVisibleSideDoubleSlabLookup != null
                     && clientCompoundVisibleSideDoubleSlabLookup.test(pos);
@@ -1475,6 +1515,10 @@ public final class SlabAnchorAttachment {
     public static boolean isCompoundVisibleOwnerTopSlab(BlockGetter world, BlockPos pos, BlockState state) {
         if (!isCompoundVisibleOwnerTopSlabState(state) || pos == null) {
             return false;
+        }
+        Boolean published = publishedClientMarker(world, pos, COMPOUND_VISIBLE_OWNER_TOP_SLAB_TYPE);
+        if (published != null) {
+            return published;
         }
         if (!(world instanceof Level w)) {
             return clientCompoundVisibleOwnerTopSlabLookup != null
@@ -1507,6 +1551,11 @@ public final class SlabAnchorAttachment {
         }
         if (isCompoundVisibleOwnerTopSlab(world, pos, state)) {
             return false;
+        }
+        Boolean published = publishedClientMarker(world, pos, LOWERED_SLAB_CARRIER_TYPE);
+        if (published != null) {
+            return published || (world instanceof Level
+                    && isPersistentLoweredBottomSlabCarrierNonRecursive(world, pos, state));
         }
         if (!(world instanceof Level w)) {
             return clientLoweredSlabCarrierLookup != null && clientLoweredSlabCarrierLookup.test(pos);
@@ -1544,7 +1593,11 @@ public final class SlabAnchorAttachment {
         if (isCompoundVisibleOwnerTopSlab(world, pos, state)) {
             return false;
         }
-        if (world instanceof Level w) {
+        Boolean published = publishedClientMarker(world, pos, LOWERED_SLAB_CARRIER_TYPE);
+        if (Boolean.TRUE.equals(published)) {
+            return true;
+        }
+        if (published == null && world instanceof Level w) {
             LevelChunk chunk = w.getChunk(pos.getX() >> 4, pos.getZ() >> 4);
             if (chunk != null) {
                 LongOpenHashSet set = chunk.getAttached(LOWERED_SLAB_CARRIER_TYPE);
@@ -1552,7 +1605,8 @@ public final class SlabAnchorAttachment {
                     return true;
                 }
             }
-        } else if (clientLoweredSlabCarrierLookup != null && clientLoweredSlabCarrierLookup.test(pos)) {
+        } else if (published == null && clientLoweredSlabCarrierLookup != null
+                && clientLoweredSlabCarrierLookup.test(pos)) {
             return true;
         }
         return qualifiesForPersistentLoweredBottomSlabOnLoweredFullBlockNonRecursive(world, pos, state)

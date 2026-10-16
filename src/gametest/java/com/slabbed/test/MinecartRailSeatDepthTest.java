@@ -110,6 +110,7 @@ public final class MinecartRailSeatDepthTest {
             throw new IllegalStateException("premise: could not create a minecart");
         }
         level.addFreshEntity(cart);
+        cart.tick();
         return cart;
     }
 
@@ -128,7 +129,7 @@ public final class MinecartRailSeatDepthTest {
 
     /**
      * A cart spawned on a lowered rail sits, is hittable, and carries its rider at the DRAWN rail
-     * top. Asserted synchronously so only the spawn seat is under test.
+     * top after its first normal tick. The fixture drives that tick synchronously.
      */
     @GameTest(structure = "fabric-gametest-api-v1:empty")
     public void aCartSpawnedOnALoweredRailSitsRidesAndCollidesAtTheDrawnRailTop(GameTestHelper helper) {
@@ -497,8 +498,7 @@ public final class MinecartRailSeatDepthTest {
      * world read from the worker times out deterministically. The seat is then bound by the first
      * server tick, exactly as the spawn hook would have bound it.
      *
-     * <p>MUTATION that must redden this row alone: remove the {@code isSameThread} early return from
-     * {@code MinecartRailSeatMixin.slabbed$seatOnSpawn}.
+     * <p>Restoring a world-reading initialization hook makes this row wait for the held server.
      */
     @GameTest(structure = "fabric-gametest-api-v1:empty")
     public void aCartPositionedOnAWorkerThreadNeverWaitsForTheServer(GameTestHelper helper) throws InterruptedException {
@@ -555,6 +555,46 @@ public final class MinecartRailSeatDepthTest {
         } finally {
             SlabAnchorAttachment.FROZEN_DY_ENABLED = previous;
         }
+    }
+
+    /** Restoring the spawn lookup enters the forbidden chunk API before its presence guard. */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void serverThreadInitializationDefersEveryChunkReadUntilTick(GameTestHelper helper) {
+        withFrozen(() -> {
+            ServerLevel level = helper.getLevel();
+            BlockPos rail = railRun(helper, new BlockPos(1, 3, 2), 3, LOWERED);
+            AbstractMinecart cart = EntityTypes.CHEST_MINECART.create(level, EntitySpawnReason.STRUCTURE);
+            if (cart == null || !level.getServer().isSameThread()) {
+                throw helper.assertionException("premise: a structure cart is positioned on the server thread");
+            }
+            double gridSeat = rail.getY() + RAIL_LIFT;
+            PendingHangChunkProbe.begin(level.getChunkSource());
+            PendingHangChunkProbe.failOnBlockingRead = true;
+            try {
+                cart.setInitialPos(rail.getX() + 0.5d, gridSeat, rail.getZ() + 0.5d);
+                if (PendingHangChunkProbe.blockingReads != 0
+                        || PendingHangChunkProbe.nonblockingReads != 0) {
+                    throw helper.assertionException("initialization must not inspect a pending chunk");
+                }
+                if (seatOf(cart) != 0.0d || Math.abs(cart.getY() - gridSeat) > EPS) {
+                    throw helper.assertionException("initialization must retain the unbound grid position");
+                }
+            } finally {
+                PendingHangChunkProbe.end();
+            }
+            level.addFreshEntity(cart);
+            cart.setDeltaMovement(Vec3.ZERO);
+            cart.tick();
+            double drawnSeat = gridSeat + LOWERED;
+            if (Math.abs(seatOf(cart) - LOWERED) > EPS || Math.abs(cart.getY() - drawnSeat) > EPS) {
+                throw helper.assertionException("the first ready tick must bind the deferred rail seat");
+            }
+            cart.tick();
+            if (Math.abs(seatOf(cart) - LOWERED) > EPS || Math.abs(cart.getY() - drawnSeat) > EPS) {
+                throw helper.assertionException("a second tick must not apply the seat twice");
+            }
+        });
+        helper.succeed();
     }
 
     private static AABB thinBandAt(AbstractMinecart cart, double minY, double maxY) {

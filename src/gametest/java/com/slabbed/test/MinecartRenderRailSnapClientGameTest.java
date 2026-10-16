@@ -119,6 +119,7 @@ public final class MinecartRenderRailSnapClientGameTest implements FabricClientG
         for (int i = 0; i < RUN_LENGTH; i++) {
             BlockPos rail = origin.east(i);
             level.setBlock(rail.below(), Blocks.STONE.defaultBlockState(), Block.UPDATE_ALL);
+            SlabAnchorAttachment.writePlacementDy(level, rail.below(), LOWERED_DY);
             level.setBlock(rail,
                     Blocks.RAIL.defaultBlockState().setValue(RailBlock.SHAPE, RailShape.EAST_WEST),
                     Block.UPDATE_ALL);
@@ -132,12 +133,13 @@ public final class MinecartRenderRailSnapClientGameTest implements FabricClientG
         if (cart == null) {
             throw new AssertionError("server fixture: could not create a minecart");
         }
+        level.addFreshEntity(cart);
+        cart.tick();
         double expected = seatRail.getY() + RAIL_LIFT + LOWERED_DY;
         if (Math.abs(cart.getY() - expected) > EPSILON) {
             throw new AssertionError("server fixture: the cart must be seated at " + expected
                     + " before the client is asked about it, got " + cart.getY());
         }
-        level.addFreshEntity(cart);
         return new Fixture(seatRail, cart.getUUID());
     }
 
