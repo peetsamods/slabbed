@@ -274,6 +274,8 @@ public final class SlabEnsembleCoherence {
      *
      * <p>This is a pure admission classifier: collision shapes are queried context-free at origin,
      * each cell position and dy are applied exactly once, and face/edge/corner contact remains legal.
+     * An above-cell collision barrier contributes only its visible placement body, just as in
+     * ordinary placement admission; an invisible entity barrier must not reserve build volume.
      * Air, compat-owned states, non-finite offsets, and empty resulting envelopes are ineligible.
      */
     public static boolean canonicalOpenTransitionEnvelopesOverlap(
@@ -332,10 +334,12 @@ public final class SlabEnsembleCoherence {
 
     private static VoxelShape canonicalOpenTransitionEnvelope(BlockState state) {
         if (!state.hasProperty(BlockStateProperties.OPEN)) {
-            return vanillaCollisionShape(state);
+            return placementBodyShape(state, vanillaCollisionShape(state));
         }
-        VoxelShape closed = vanillaCollisionShape(state.setValue(BlockStateProperties.OPEN, false));
-        VoxelShape open = vanillaCollisionShape(state.setValue(BlockStateProperties.OPEN, true));
+        BlockState closedState = state.setValue(BlockStateProperties.OPEN, false);
+        BlockState openState = state.setValue(BlockStateProperties.OPEN, true);
+        VoxelShape closed = placementBodyShape(closedState, vanillaCollisionShape(closedState));
+        VoxelShape open = placementBodyShape(openState, vanillaCollisionShape(openState));
         return Shapes.or(closed, open);
     }
 

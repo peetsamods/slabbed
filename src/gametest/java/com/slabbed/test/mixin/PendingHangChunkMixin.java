@@ -18,7 +18,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 public abstract class PendingHangChunkMixin {
     @Inject(method = "getChunkNow(II)Lnet/minecraft/world/level/chunk/LevelChunk;", at = @At("HEAD"), cancellable = true)
     private void slabbed$unavailable(int x, int z, CallbackInfoReturnable<LevelChunk> cir) {
-        if ((Object) this == PendingHangChunkProbe.manager) {
+        if (PendingHangChunkProbe.activeFor((ServerChunkCache) (Object) this)) {
             PendingHangChunkProbe.nonblockingReads++;
             cir.setReturnValue(null);
         }
@@ -26,8 +26,11 @@ public abstract class PendingHangChunkMixin {
 
     @Inject(method = "getChunk(IILnet/minecraft/world/level/chunk/status/ChunkStatus;Z)Lnet/minecraft/world/level/chunk/ChunkAccess;", at = @At("HEAD"))
     private void slabbed$countBlockingReads(int x, int z, ChunkStatus status, boolean create, CallbackInfoReturnable<ChunkAccess> cir) {
-        if ((Object) this == PendingHangChunkProbe.manager) {
+        if (PendingHangChunkProbe.activeFor((ServerChunkCache) (Object) this)) {
             PendingHangChunkProbe.blockingReads++;
+            if (PendingHangChunkProbe.failOnBlockingRead) {
+                throw new AssertionError("initialization entered the blocking chunk API");
+            }
         }
     }
 }

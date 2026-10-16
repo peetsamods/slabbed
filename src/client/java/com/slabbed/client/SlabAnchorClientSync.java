@@ -2,12 +2,20 @@ package com.slabbed.client;
 
 import com.slabbed.Slabbed;
 import com.slabbed.anchor.SlabAnchorAttachment;
+import com.slabbed.anchor.PublishedRenderAttachments;
+import it.unimi.dsi.fastutil.longs.Long2DoubleOpenHashMap;
 import com.slabbed.util.SlabSupport;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
 import net.fabricmc.fabric.api.attachment.v1.AttachmentType;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientChunkEvents;
+import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientLevelEvents;
+import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
+import net.minecraft.client.multiplayer.ClientLevel;
+import net.minecraft.world.level.BlockGetter;
+import net.minecraft.world.level.Level;
+import net.minecraft.world.level.ChunkPos;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.block.state.BlockState;
@@ -15,6 +23,7 @@ import net.minecraft.world.level.chunk.LevelChunk;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.List;
 
 /**
  * Schedules a client-side block rerender for every anchored/lowered-carrier
@@ -33,6 +42,17 @@ import java.util.Map;
 @Environment(EnvType.CLIENT)
 public final class SlabAnchorClientSync {
 
+    private static final PublishedRenderAttachments RENDER_ATTACHMENTS = new PublishedRenderAttachments();
+    private static final List<AttachmentType<LongOpenHashSet>> RENDER_MARKERS = List.of(
+            SlabAnchorAttachment.ANCHOR_TYPE,
+            SlabAnchorAttachment.FROZEN_FLAT_TYPE,
+            SlabAnchorAttachment.LOWERED_SLAB_CARRIER_TYPE,
+            SlabAnchorAttachment.COMPOUND_FULL_BLOCK_ANCHOR_TYPE,
+            SlabAnchorAttachment.COMPOUND_VISIBLE_SIDE_LOWER_SLAB_TYPE,
+            SlabAnchorAttachment.COMPOUND_VISIBLE_SIDE_UPPER_SLAB_TYPE,
+            SlabAnchorAttachment.COMPOUND_VISIBLE_SIDE_DOUBLE_SLAB_TYPE,
+            SlabAnchorAttachment.COMPOUND_VISIBLE_OWNER_TOP_SLAB_TYPE);
+
     private static final ThreadLocal<Integer> JOURNAL_AUTHORITATIVE_APPLY_DEPTH =
             ThreadLocal.withInitial(() -> 0);
     private static boolean c3RerenderProbeEnabled;
@@ -42,66 +62,35 @@ public final class SlabAnchorClientSync {
     }
 
     public static void init() {
-        // Bridge: chunk render paths receive ChunkRendererRegion (not a World) and cannot
-        // access chunk attachments.  Register a client-world fallback so anchor queries
-        // from the model render path resolve correctly after a supporting BS is broken.
-        SlabAnchorAttachment.clientAnchorLookup = pos -> {
-            Minecraft mc = Minecraft.getInstance();
-            if (mc == null || mc.level == null) {
-                return false;
-            }
-            LevelChunk chunk = mc.level.getChunk(pos.getX() >> 4, pos.getZ() >> 4);
-            if (chunk == null) {
-                return false;
-            }
-            LongOpenHashSet set = chunk.getAttached(SlabAnchorAttachment.ANCHOR_TYPE);
-            return set != null && set.contains(pos.asLong());
-        };
-        SlabAnchorAttachment.clientLoweredSlabCarrierLookup = pos -> {
-            Minecraft mc = Minecraft.getInstance();
-            if (mc == null || mc.level == null) {
-                return false;
-            }
-            LevelChunk chunk = mc.level.getChunk(pos.getX() >> 4, pos.getZ() >> 4);
-            if (chunk == null) {
-                return false;
-            }
-            LongOpenHashSet set = chunk.getAttached(SlabAnchorAttachment.LOWERED_SLAB_CARRIER_TYPE);
-            return set != null && set.contains(pos.asLong());
-        };
-        SlabAnchorAttachment.clientCompoundFullBlockAnchorLookup = pos -> {
-            LongOpenHashSet set = clientAttachmentSet(pos, SlabAnchorAttachment.COMPOUND_FULL_BLOCK_ANCHOR_TYPE);
-            return set != null && set.contains(pos.asLong());
-        };
-        SlabAnchorAttachment.clientCompoundVisibleSideLowerSlabLookup = pos -> {
-            LongOpenHashSet set = clientAttachmentSet(pos, SlabAnchorAttachment.COMPOUND_VISIBLE_SIDE_LOWER_SLAB_TYPE);
-            return set != null && set.contains(pos.asLong());
-        };
-        SlabAnchorAttachment.clientCompoundVisibleSideUpperSlabLookup = pos -> {
-            LongOpenHashSet set = clientAttachmentSet(pos, SlabAnchorAttachment.COMPOUND_VISIBLE_SIDE_UPPER_SLAB_TYPE);
-            return set != null && set.contains(pos.asLong());
-        };
-        SlabAnchorAttachment.clientCompoundVisibleSideDoubleSlabLookup = pos -> {
-            LongOpenHashSet set = clientAttachmentSet(pos, SlabAnchorAttachment.COMPOUND_VISIBLE_SIDE_DOUBLE_SLAB_TYPE);
-            return set != null && set.contains(pos.asLong());
-        };
-        SlabAnchorAttachment.clientCompoundVisibleOwnerTopSlabLookup = pos -> {
-            LongOpenHashSet set = clientAttachmentSet(pos, SlabAnchorAttachment.COMPOUND_VISIBLE_OWNER_TOP_SLAB_TYPE);
-            return set != null && set.contains(pos.asLong());
-        };
-        // Freeze-on-place FLAT marker: same client-world fallback so the model render path sees the
-        // frozen-flat state and keeps the piece at dy=0 (no autonomous lowering after reload).
-        SlabAnchorAttachment.clientFrozenFlatLookup = pos -> {
-            LongOpenHashSet set = clientAttachmentSet(pos, SlabAnchorAttachment.FROZEN_FLAT_TYPE);
-            return set != null && set.contains(pos.asLong());
-        };
+        // Render readers see only published copies, including legacy marker bridges.
+        SlabAnchorAttachment.clientAnchorLookup = pos -> renderMarker(0, pos);
+        SlabAnchorAttachment.clientFrozenFlatLookup = pos -> renderMarker(1, pos);
+        SlabAnchorAttachment.clientLoweredSlabCarrierLookup = pos -> renderMarker(2, pos);
+        SlabAnchorAttachment.clientCompoundFullBlockAnchorLookup = pos -> renderMarker(3, pos);
+        SlabAnchorAttachment.clientCompoundVisibleSideLowerSlabLookup = pos -> renderMarker(4, pos);
+        SlabAnchorAttachment.clientCompoundVisibleSideUpperSlabLookup = pos -> renderMarker(5, pos);
+        SlabAnchorAttachment.clientCompoundVisibleSideDoubleSlabLookup = pos -> renderMarker(6, pos);
+        SlabAnchorAttachment.clientCompoundVisibleOwnerTopSlabLookup = pos -> renderMarker(7, pos);
+        SlabAnchorAttachment.clientRenderMarkerLookup = SlabAnchorClientSync::renderMarker;
         SlabAnchorAttachment.clientBackingPlacementDyLookup = PlacementDyPredictionJournal::backingFact;
         SlabAnchorAttachment.clientEffectivePlacementDyLookup = PlacementDyPredictionJournal::effectiveFact;
 
+        RENDER_ATTACHMENTS.reset(Minecraft.getInstance().level);
+        ClientLevelEvents.AFTER_CLIENT_LEVEL_CHANGE.register((client, level) -> RENDER_ATTACHMENTS.activate(level));
+        ClientPlayConnectionEvents.INIT.register((handler, client) -> RENDER_ATTACHMENTS.reset(null));
+        ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> RENDER_ATTACHMENTS.reset(null));
+        ClientChunkEvents.CHUNK_UNLOAD.register((level, chunk) ->
+                RENDER_ATTACHMENTS.unload(level, ChunkPos.pack(chunk.getPos().x(), chunk.getPos().z()), chunk));
         ClientChunkEvents.CHUNK_LOAD.register(SlabAnchorClientSync::onChunkLoad);
     }
 
     private static void onChunkLoad(net.minecraft.client.multiplayer.ClientLevel world, LevelChunk chunk) {
+        if (RENDER_ATTACHMENTS.capture().level() != world) {
+            if (Minecraft.getInstance().level != world) {
+                return;
+            }
+            RENDER_ATTACHMENTS.activate(world);
+        }
         logReloadJumpSync("chunkLoad", chunk, SlabAnchorAttachment.ANCHOR_TYPE, null,
                 chunk.getAttached(SlabAnchorAttachment.ANCHOR_TYPE));
         logReloadJumpSync("chunkLoad", chunk, SlabAnchorAttachment.LOWERED_SLAB_CARRIER_TYPE, null,
@@ -118,15 +107,23 @@ public final class SlabAnchorClientSync {
                 chunk.getAttached(SlabAnchorAttachment.COMPOUND_VISIBLE_OWNER_TOP_SLAB_TYPE));
 
         // Register listener for future attachment changes (e.g. live anchor add/remove sync).
-        registerRerenderListener(chunk, SlabAnchorAttachment.ANCHOR_TYPE);
-        registerRerenderListener(chunk, SlabAnchorAttachment.FROZEN_FLAT_TYPE);
-        registerRerenderListener(chunk, SlabAnchorAttachment.LOWERED_SLAB_CARRIER_TYPE);
-        registerRerenderListener(chunk, SlabAnchorAttachment.COMPOUND_FULL_BLOCK_ANCHOR_TYPE);
-        registerRerenderListener(chunk, SlabAnchorAttachment.COMPOUND_VISIBLE_SIDE_LOWER_SLAB_TYPE);
-        registerRerenderListener(chunk, SlabAnchorAttachment.COMPOUND_VISIBLE_SIDE_UPPER_SLAB_TYPE);
-        registerRerenderListener(chunk, SlabAnchorAttachment.COMPOUND_VISIBLE_SIDE_DOUBLE_SLAB_TYPE);
-        registerRerenderListener(chunk, SlabAnchorAttachment.COMPOUND_VISIBLE_OWNER_TOP_SLAB_TYPE);
-        registerDyRerenderListener(chunk);
+        registerRerenderListener(world, chunk, SlabAnchorAttachment.ANCHOR_TYPE);
+        registerRerenderListener(world, chunk, SlabAnchorAttachment.FROZEN_FLAT_TYPE);
+        registerRerenderListener(world, chunk, SlabAnchorAttachment.LOWERED_SLAB_CARRIER_TYPE);
+        registerRerenderListener(world, chunk, SlabAnchorAttachment.COMPOUND_FULL_BLOCK_ANCHOR_TYPE);
+        registerRerenderListener(world, chunk, SlabAnchorAttachment.COMPOUND_VISIBLE_SIDE_LOWER_SLAB_TYPE);
+        registerRerenderListener(world, chunk, SlabAnchorAttachment.COMPOUND_VISIBLE_SIDE_UPPER_SLAB_TYPE);
+        registerRerenderListener(world, chunk, SlabAnchorAttachment.COMPOUND_VISIBLE_SIDE_DOUBLE_SLAB_TYPE);
+        registerRerenderListener(world, chunk, SlabAnchorAttachment.COMPOUND_VISIBLE_OWNER_TOP_SLAB_TYPE);
+        registerDyRerenderListener(world, chunk);
+        Long2DoubleOpenHashMap initialDy = chunk.getAttached(SlabAnchorAttachment.PLACEMENT_DY_TYPE);
+        long[] positions = dyPositions(initialDy);
+        long[][] markers = new long[RENDER_MARKERS.size()][];
+        for (int i = 0; i < markers.length; i++) {
+            markers[i] = markerPositions(chunk.getAttached(RENDER_MARKERS.get(i)));
+        }
+        RENDER_ATTACHMENTS.load(world, ChunkPos.pack(chunk.getPos().x(), chunk.getPos().z()), chunk,
+                positions, dyBits(initialDy, positions), markers);
 
         // Also handle any attachment value already present at chunk-load time.
         // This covers the case where the chunk attachment sync packet arrived before
@@ -146,23 +143,63 @@ public final class SlabAnchorClientSync {
         }
     }
 
-    private static LongOpenHashSet clientAttachmentSet(
-            BlockPos pos,
-            AttachmentType<LongOpenHashSet> attachmentType
-    ) {
-        Minecraft mc = Minecraft.getInstance();
-        if (mc == null || mc.level == null || pos == null) {
+    static PublishedRenderAttachments.View captureRenderAttachments() {
+        return RENDER_ATTACHMENTS.capture();
+    }
+
+    static SlabAnchorAttachment.PlacementDyFact renderBackingFact(
+            PublishedRenderAttachments.View snapshot, BlockGetter view, BlockPos pos) {
+        Object level = view instanceof Level ? view : snapshot.level();
+        return snapshot.fact(level, ChunkPos.pack(pos.getX() >> 4, pos.getZ() >> 4), pos.asLong());
+    }
+
+    private static boolean renderMarker(int marker, BlockPos pos) {
+        if (pos == null) {
+            return false;
+        }
+        PublishedRenderAttachments.View snapshot = PlacementDyPredictionJournal.capturedRenderBacking();
+        return snapshot.contains(snapshot.level(),
+                ChunkPos.pack(pos.getX() >> 4, pos.getZ() >> 4), marker, pos.asLong());
+    }
+
+    private static Boolean renderMarker(BlockGetter view, BlockPos pos,
+                                        AttachmentType<LongOpenHashSet> type) {
+        if (view instanceof Level && Minecraft.getInstance().isSameThread()
+                && !PlacementDyPredictionJournal.isRenderReadActive()) {
             return null;
         }
-        LevelChunk chunk = mc.level.getChunk(pos.getX() >> 4, pos.getZ() >> 4);
-        return chunk == null ? null : chunk.getAttached(attachmentType);
+        PublishedRenderAttachments.View snapshot = PlacementDyPredictionJournal.capturedRenderBacking();
+        Object level = view instanceof Level ? view : snapshot.level();
+        return snapshot.contains(level, ChunkPos.pack(pos.getX() >> 4, pos.getZ() >> 4),
+                RENDER_MARKERS.indexOf(type), pos.asLong());
+    }
+
+    private static long[] markerPositions(LongOpenHashSet set) {
+        return set == null ? new long[0] : set.toLongArray();
+    }
+
+    private static long[] dyPositions(Long2DoubleOpenHashMap map) {
+        return map == null ? new long[0] : map.keySet().toLongArray();
+    }
+
+    private static long[] dyBits(Long2DoubleOpenHashMap map, long[] positions) {
+        long[] bits = new long[positions.length];
+        for (int i = 0; i < positions.length; i++) {
+            bits[i] = Double.doubleToRawLongBits(map.get(positions[i]));
+        }
+        return bits;
     }
 
     private static void registerRerenderListener(
-            LevelChunk chunk,
+            ClientLevel world, LevelChunk chunk,
             AttachmentType<LongOpenHashSet> attachmentType
     ) {
+        int marker = RENDER_MARKERS.indexOf(attachmentType);
         chunk.<LongOpenHashSet>onAttachedSet(attachmentType).register((oldSet, newSet) -> {
+            if (!RENDER_ATTACHMENTS.updateMarker(world, ChunkPos.pack(chunk.getPos().x(), chunk.getPos().z()), chunk,
+                    marker, markerPositions(newSet))) {
+                return;
+            }
             Minecraft mc = Minecraft.getInstance();
             if (mc.levelRenderer == null) {
                 return;
@@ -174,9 +211,15 @@ public final class SlabAnchorClientSync {
     }
 
     /** FROZEN-DY (Step 0): re-mesh a section when its stored placement heights sync, like the flags. */
-    private static void registerDyRerenderListener(LevelChunk chunk) {
+    private static void registerDyRerenderListener(ClientLevel world, LevelChunk chunk) {
         chunk.<it.unimi.dsi.fastutil.longs.Long2DoubleOpenHashMap>onAttachedSet(SlabAnchorAttachment.PLACEMENT_DY_TYPE)
                 .register((oldMap, newMap) -> {
+                    // Publication also runs during journal apply, before its overlay is retired.
+                    long[] positions = dyPositions(newMap);
+                    if (!RENDER_ATTACHMENTS.updateDy(world, ChunkPos.pack(chunk.getPos().x(), chunk.getPos().z()), chunk,
+                            positions, dyBits(newMap, positions))) {
+                        return;
+                    }
                     if (JOURNAL_AUTHORITATIVE_APPLY_DEPTH.get() > 0) {
                         return;
                     }

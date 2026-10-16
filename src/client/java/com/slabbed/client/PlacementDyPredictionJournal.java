@@ -3,6 +3,7 @@ package com.slabbed.client;
 import com.slabbed.compat.UseItemOnPacketAccess;
 import com.slabbed.Slabbed;
 import com.slabbed.anchor.SlabAnchorAttachment;
+import com.slabbed.anchor.PublishedRenderAttachments;
 import com.slabbed.network.PlacementDyCorrectionPayload;
 import com.slabbed.network.PlacementDyPredictionBridge;
 import com.slabbed.network.PlacementDyPredictionEnvelopePayload;
@@ -21,6 +22,7 @@ import net.minecraft.network.protocol.Packet;
 import net.minecraft.network.protocol.game.ServerGamePacketListener;
 import net.minecraft.network.protocol.game.ServerboundUseItemOnPacket;
 import net.minecraft.world.level.BlockGetter;
+import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.BedBlock;
 import net.minecraft.world.level.block.DoorBlock;
 import net.minecraft.world.level.block.state.BlockState;
@@ -133,6 +135,41 @@ public final class PlacementDyPredictionJournal {
     private static final OverlayCells EMPTY_OVERLAY =
             new OverlayCells(null, new long[0], new SlabAnchorAttachment.PlacementDyFact[0]);
     private static volatile OverlayCells overlayCells = EMPTY_OVERLAY;
+
+    private static final class RenderReadContext {
+        int depth;
+        OverlayCells overlay;
+        PublishedRenderAttachments.View backing;
+    }
+
+    private static final ThreadLocal<RenderReadContext> RENDER_READ_CONTEXT =
+            ThreadLocal.withInitial(RenderReadContext::new);
+
+    /** One immutable backing/overlay pair for all subject and neighbor reads in an emission. */
+    public static void beginRenderRead() {
+        RenderReadContext context = RENDER_READ_CONTEXT.get();
+        if (context.depth++ == 0) {
+            context.overlay = overlayCells;
+            context.backing = SlabAnchorClientSync.captureRenderAttachments();
+        }
+    }
+
+    public static void endRenderRead() {
+        RenderReadContext context = RENDER_READ_CONTEXT.get();
+        if (--context.depth == 0) {
+            context.overlay = null;
+            context.backing = null;
+        }
+    }
+
+    public static boolean isRenderReadActive() {
+        return RENDER_READ_CONTEXT.get().depth > 0;
+    }
+
+    static PublishedRenderAttachments.View capturedRenderBacking() {
+        RenderReadContext context = RENDER_READ_CONTEXT.get();
+        return context.depth == 0 ? SlabAnchorClientSync.captureRenderAttachments() : context.backing;
+    }
 
     private static ClientLevel currentLevel;
     private static long generation;
@@ -310,17 +347,20 @@ public final class PlacementDyPredictionJournal {
         if (pos == null) {
             return SlabAnchorAttachment.PlacementDyFact.absent();
         }
-        OverlayCells overlay = overlayCells;
-        if (overlay != EMPTY_OVERLAY) {
-            ClientLevel level = Minecraft.getInstance().level;
-            if (level != null && level == overlay.level()) {
-                int index = Arrays.binarySearch(overlay.keys(), pos.asLong());
-                if (index >= 0) {
-                    return overlay.facts()[index];
-                }
+        // Read the overlay first: retirement happens after backing publication, so a reader
+        // that observes retirement must subsequently capture the published authoritative facts.
+        RenderReadContext context = RENDER_READ_CONTEXT.get();
+        OverlayCells overlay = context.depth == 0 ? overlayCells : context.overlay;
+        PublishedRenderAttachments.View snapshot = context.depth == 0
+                ? SlabAnchorClientSync.captureRenderAttachments() : context.backing;
+        Object level = view instanceof Level ? view : snapshot.level();
+        if (overlay != EMPTY_OVERLAY && level != null && level == overlay.level()) {
+            int index = Arrays.binarySearch(overlay.keys(), pos.asLong());
+            if (index >= 0) {
+                return overlay.facts()[index];
             }
         }
-        return backingFact(view, pos);
+        return SlabAnchorClientSync.renderBackingFact(snapshot, view, pos);
     }
 
     /**
@@ -368,18 +408,16 @@ public final class PlacementDyPredictionJournal {
         overlayCells = new OverlayCells(currentLevel, keys, facts);
     }
 
-    /** Direct authoritative backing read. This method never consults overlay ownership. */
+    /** Main-thread CAS reads remain authoritative; render readers use published backing facts. */
     public static SlabAnchorAttachment.PlacementDyFact backingFact(BlockGetter view, BlockPos pos) {
         if (pos == null) {
             return SlabAnchorAttachment.PlacementDyFact.absent();
         }
-        if (view instanceof ClientLevel level) {
+        if (view instanceof ClientLevel level && Minecraft.getInstance().isSameThread()) {
             return SlabAnchorAttachment.rawPlacementDyFact(level, pos);
         }
-        ClientLevel level = Minecraft.getInstance().level;
-        return level == null
-                ? SlabAnchorAttachment.PlacementDyFact.absent()
-                : SlabAnchorAttachment.rawPlacementDyFact(level, pos);
+        return SlabAnchorClientSync.renderBackingFact(
+                capturedRenderBacking(), view, pos);
     }
 
     public static synchronized CellDebug debugCell(BlockPos pos) {

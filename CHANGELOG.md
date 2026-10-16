@@ -1,3 +1,17 @@
+## [0.6.3-alpha+26.2-26.3]
+
+See LAW.md — this changelog does not redefine the law.
+
+For Minecraft 26.2 and 26.3 on Fabric. Requires Fabric API and Java 25.
+
+- Prevent chunk generation from freezing when Lootr initializes a chest minecart during chunk loading. The cart now takes its rail height on its first normal tick. Thanks to [1unarea](https://github.com/peetsamods/slabbed/issues/102) for the report and thread dumps.
+- Make block rendering read stable copies of stored heights and placement markers, avoiding reads from chunk data while it is being changed. This addresses the attachment-read race investigated for [#96](https://github.com/peetsamods/slabbed/issues/96), reported by rompeballer; the exact intermittent crash has not been reproduced again, so the report is not yet confirmed resolved.
+- Allow trapdoors above fences and walls without treating their invisible entity barrier as occupied building space. Real overlap still blocks placement, and ordinary underside placement remains supported. Thanks to [ch66w](https://github.com/peetsamods/slabbed/issues/98) and [thomashahn42-hash](https://github.com/peetsamods/slabbed/issues/98#issuecomment-6119953750) for the placement reports.
+
+The exact Minecraft 26.2/Lootr combination reported by [iSeoull in #105](https://github.com/peetsamods/slabbed/issues/105) remains unverified. The confirmed chunk-loading reproduction used Minecraft 26.3 with Lootr 1.25.42.124. No blanket resolution of #105 is claimed.
+
+Known validation limits: the full Lithium/Lootr suite is not green. Five redstone checks also fail on the prior release; four other failures are vanilla catalog expectations affected by Lootr. These checks remain outside this patch. Rapid world replacement with queued render jobs remains unproven.
+
 ## [0.6.2-alpha+26.2-26.3]
 
 See LAW.md — this changelog does not redefine the law.

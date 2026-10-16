@@ -6,7 +6,9 @@
     "SlabRigCommandGameTestMixin",
     "BlockItemFixtureGameTestMixin",
     "TerrainSlabsCompatGameTestMixin",
-    "PendingHangChunkMixin"
+    "PendingHangChunkMixin",
+    "RenderAttachmentReadGameTestMixin",
+    "RenderChunkLookupGameTestMixin"
   ],
   "client": [
     "PlacementDyPredictionJournalGameTestMixin",
