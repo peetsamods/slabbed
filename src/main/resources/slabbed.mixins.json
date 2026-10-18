@@ -14,6 +14,7 @@
     "CampfireParticleMixin",
     "CandleParticleMixin",
     "CarpetBlockMixin",
+    "ChiseledBookShelfHitMixin",
     "CushionRestsOnDrawnTopMixin",
     "ClipContextBlockAccessor",
     "DecoratedPotParticleMixin",

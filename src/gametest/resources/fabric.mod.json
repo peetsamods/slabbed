@@ -126,7 +126,8 @@
       "com.slabbed.test.BoatVisibleSurfacePlacementTest",
       "com.slabbed.config.SlabbedConfigFileTest",
       "com.slabbed.test.PotSeatOptionTest",
-      "com.slabbed.test.ManualDyAdjustLawTest"
+      "com.slabbed.test.ManualDyAdjustLawTest",
+      "com.slabbed.test.ChiseledBookShelfHitTest"
     ],
     "fabric-client-gametest": [
       "com.slabbed.test.EventParticleFrozenDyClientGameTest",
@@ -142,7 +143,8 @@
       "com.slabbed.test.RailSlopeRenderClientGameTest",
       "com.slabbed.test.FenceCeilingRenderClientGameTest",
       "com.slabbed.test.SlabbedSettingsScreenClientGameTest",
-      "com.slabbed.test.PistonMovingRenderDyOwnerClientGameTest"
+      "com.slabbed.test.PistonMovingRenderDyOwnerClientGameTest",
+      "com.slabbed.test.ChiseledBookShelfHitClientGameTest"
     ]
   },
   "mixins": [
