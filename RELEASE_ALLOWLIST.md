@@ -103,6 +103,7 @@ anything. The split above puts the fine granularity only where a leak has actual
 | `com/slabbed/mixin/CampfireParticleMixin` | Particle origin follows the lowered block. |
 | `com/slabbed/mixin/CandleParticleMixin` | Particle origin follows the lowered block. |
 | `com/slabbed/mixin/CarpetBlockMixin` | Carpet support/shape over a lowered slab. |
+| `com/slabbed/mixin/ChiseledBookShelfHitMixin` | Bookshelf insertion and removal select the slot on the drawn front face. |
 | `com/slabbed/mixin/CushionRestsOnDrawnTopMixin` | A cushion may rest on a lowered block's drawn top. |
 | `com/slabbed/mixin/DecoratedPotParticleMixin` | Particle origin follows the lowered block. |
 | `com/slabbed/mixin/FencePaneSlabConnectionMixin` | Fence/pane connection against a lowered slab. |

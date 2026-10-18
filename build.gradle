@@ -423,6 +423,8 @@ sourceSets {
             include("com/slabbed/test/PublishedRenderAttachmentsTest.java")
             include("com/slabbed/test/RenderAttachmentReadProbe.java")
             include("com/slabbed/test/TrapdoorPlacementAdmissionTest.java")
+            include("com/slabbed/test/ChiseledBookShelfHitTest.java")
+            include("com/slabbed/test/ChiseledBookShelfHitClientGameTest.java")
             include("com/slabbed/test/RailSlopeProfileTest.java")
             include("com/slabbed/test/RailVisualSignalTest.java")
             include("com/slabbed/test/RedstoneWireVisualStepTest.java")

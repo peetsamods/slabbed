@@ -1,3 +1,11 @@
+## [0.6.4-alpha+26.2-26.3]
+
+See LAW.md — this changelog does not redefine the law.
+
+For Minecraft 26.2 and 26.3 on Fabric. Requires Fabric API and Java 25.
+
+- Fix chiseled bookshelves resting on slabs selecting the lower slot when you click an upper slot. Inserting and removing books now follows the slot you aim at. Thanks to [rand0musemame](https://github.com/peetsamods/slabbed/issues/106) for the report.
+
 ## [0.6.3-alpha+26.2-26.3]
 
 See LAW.md — this changelog does not redefine the law.
