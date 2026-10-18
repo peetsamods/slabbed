@@ -58,6 +58,7 @@ public final class ChiseledBookShelfHitClientGameTest implements FabricClientGam
             Slabbed.LOGGER.info(
                     "SLABBED_CLIENT_GAMETEST_CASE_COUNT:ChiseledBookShelfHitClientGameTest:{}", passed);
             Slabbed.LOGGER.info("SLABBED_CLIENT_GAMETEST_PASS:ChiseledBookShelfHitClientGameTest");
+            Slabbed.LOGGER.info("CLIENT_GAMETEST | ChiseledBookShelfHitClientGameTest | PASS");
         } catch (AssertionError error) {
             throw error;
         } catch (Exception error) {
