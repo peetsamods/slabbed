@@ -8,5 +8,17 @@
   "slabbed.settings.pot_seat.vanilla_float.tooltip": "Flower pots keep the small gap vanilla leaves above the surface. This only changes pots you place from now on, and on a server it is the server's setting that decides.",
   "key.category.slabbed.slabbed": "Slabbed",
   "key.slabbed.manual_dy_lower": "Lower block height",
-  "key.slabbed.manual_dy_raise": "Raise block height"
+  "key.slabbed.manual_dy_raise": "Raise block height",
+  "slabbed.report.entry": "Report a Slabbed issue",
+  "slabbed.report.compact_entry": "Slabbed issues",
+  "slabbed.report.explanation": "Open a new issue at github.com/peetsamods/slabbed in your browser. GitHub requires an account. You add the symptoms and reproduction steps, then submit it yourself. Submitted issues are public.",
+  "slabbed.report.versions": "Only these client version details will be prefilled (server versions are not collected):",
+  "slabbed.report.privacy": "No logs, mod list, player identifiers, server addresses, chat, local paths or world data are included. Nothing is sent until you choose Open GitHub.",
+  "slabbed.report.ready": "Review the details above before opening GitHub. Cancel or Escape closes this screen without sending anything.",
+  "slabbed.report.open": "Open GitHub",
+  "slabbed.report.copy": "Copy safe report link",
+  "slabbed.report.copied": "Link copied",
+  "slabbed.report.safe_link": "Safe report link (select and copy):",
+  "slabbed.report.requested": "Browser opening requested. If it did not open, copy the safe report link below and paste it into your browser. No issue has been submitted by Slabbed.",
+  "slabbed.report.failed": "The browser could not be opened. Copy the safe report link below and paste it into your browser."
 }

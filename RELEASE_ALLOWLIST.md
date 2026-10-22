@@ -145,6 +145,11 @@ anything. The split above puts the fine granularity only where a leak has actual
 | --- | --- |
 | `com/slabbed/client/SlabbedClient` | Client entrypoint (fabric.mod.json `client`). The dangling ScreenshotCaptureService/GapFillerOverlay reflective hooks were removed by the allowlist ruling; the remaining dev-only hook (DyFingerprintDump) is gated on `isDevelopmentEnvironment()` and resolves by reflection, so the release class holds no hard link to excluded classes. |
 | `com/slabbed/client/PlacementDyPredictionJournal` | The C3 client prediction journal — the shipped prediction/correction apply path. Carries the `debugCell()`/`CellDebug` observation seam on purpose: PlacementDyPredictionClientGameTest asserts journal cell state through it against the REAL shipped path, and there is no equivalent observation point outside the class. Inert unless called; nothing shipped calls it. |
+| `com/slabbed/client/IssueReport` | Bounded allowlisted version report and encoded GitHub draft URL. |
+| `com/slabbed/client/IssueReportSession` | Explicit confirmation and repeated-click guard; no background activity. |
+| `com/slabbed/client/IssueReportPlacement` | Collision-free pause menu placement using existing widget bounds. |
+| `com/slabbed/client/IssueReportClient` | Client-only report entrypoints and vanilla browser compatibility seam. |
+| `com/slabbed/client/IssueReportScreen` | Scrollable version review with explicit browser action and local copy fallback. |
 | `com/slabbed/client/BetaNoticeClient` | Shipped one-time beta notice on world join. |
 | `com/slabbed/client/BetaNoticeSessionGate` | Per-session gate for the beta notice. |
 | `com/slabbed/client/BetaNoticeDismissedWorlds` | Per-world "don't show again" store for the beta notice. |
