@@ -32,7 +32,12 @@ public final class IssueReportTest {
         String decoded = URLDecoder.decode(params[1].substring(5), StandardCharsets.UTF_8);
         check(decoded.equals(report.body()), "percent encoding round trip, including literal plus");
         check(decoded.contains("0.6.4-alpha+26.2-26.3"), "platform qualifier preserved");
-        check(decoded.contains("Steps to reproduce") && decoded.contains("Expected behavior"), "player prompts");
+        check(decoded.contains("### What were you doing when the problem happened?\n"
+                + "Tell us what you clicked or did, in order, so we can try it too.\n"),
+                "plain-language action question and help text stay together");
+        check(!decoded.toLowerCase(java.util.Locale.ROOT).contains("steps to reproduce"),
+                "generated player draft contains no reproduction jargon");
+        check(decoded.contains("Expected behavior"), "expected behavior prompt preserved");
         for (String invalid : new String[] {null, "", "0.1\nprivate-data", "1.0&body=override", "1.0#fragment",
                 "https://invalid.example", "1.0/path", "1.0\\path", "1.0 ", "世界", "1".repeat(81)}) {
             var unsafe = new IssueReport(invalid, invalid, invalid, invalid);
