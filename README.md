@@ -8,7 +8,7 @@ chosen when it was placed; a later neighbour edit must not move it. See `LAW.md`
 
 - Minecraft 26.2 and 26.3 on Fabric, from one jar. Fabric Loader and Fabric API (0.152.2 or newer
   on 26.2) are required. Java 25 builds and runs it.
-- Version: see `gradle.properties`; the current cycle is `0.6.3-alpha+26.2-26.3`.
+- Version: see `gradle.properties`; the current cycle is `0.6.5-alpha+26.2-26.3`.
 - The jar is compiled against 26.3; the few places where 26.2 differs are chosen when the game starts
   (`com.slabbed.compat`, and `shim/mc-26.2` for classes that must be compiled against 26.2). Every
   release is proven on both versions with the `harness/fabric-26.2` leg and the two scanners in `tools/`.
@@ -35,6 +35,14 @@ Install the normal Slabbed jar and Fabric API. Keep client and server Slabbed ve
 real multiplayer deployment, and never use a TEST jar as a release artifact. The
 `-Dslabbed.frozenDy` compatibility flag for worlds built before 0.5 must match on both sides as well;
 the CHANGELOG's Known limitations explain what it does and what it costs.
+
+## Reporting an issue
+
+Choose **Report a Slabbed issue** on the title screen or pause menu, or open chat to use the report
+link in the alpha notice. Review the four version details, then choose **Open GitHub** to open a
+prefilled draft in your browser. You describe the problem and submit it yourself; submitted issues
+are public. The report includes no logs, mod list, player identifiers, server addresses, chat,
+local paths or world data. **Copy safe report link** is available if the browser does not open.
 
 ## Diagnostics
 
