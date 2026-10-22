@@ -32,7 +32,7 @@ record IssueReport(String minecraft, String loader, String slabbed, String fabri
         return "### Client versions\n" + diagnostics()
                 + "\n\n### What happened?\nDescribe the symptoms here."
                 + "\n\n### What were you doing when the problem happened?\n"
-                + "Tell us what you clicked or did, in order, so we can try it too.\n1. \n"
+                + "Tell me what you clicked or did, in order, so I can try it too.\n1. \n"
                 + "\n### Expected behavior\nDescribe what you expected.\n";
     }
 
