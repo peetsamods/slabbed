@@ -12,6 +12,7 @@ import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.client.gui.screens.PauseScreen;
 import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.gui.screens.TitleScreen;
 import net.minecraft.network.chat.Component;
 
 import java.net.URI;
@@ -24,8 +25,7 @@ public final class IssueReportClient {
     public static void init() {
         ClientCommandRegistrationCallback.EVENT.register((dispatcher, access) ->
                 dispatcher.register(ClientCommands.literal("slabbed_report_issue").executes(context -> {
-                    Minecraft client = Minecraft.getInstance();
-                    pendingChatRequest = new PendingRequest(client.gui.screen(), client.level);
+                    queueReview();
                     return 1;
                 })));
         // Defer until the click/command handler finishes. RunCommand may retain ChatScreen,
@@ -42,11 +42,12 @@ public final class IssueReportClient {
             }
         });
         ScreenEvents.AFTER_INIT.register((client, screen, width, height) -> {
-            if (!(screen instanceof PauseScreen pause) || !pause.showsPauseMenu()) return;
+            boolean titleMenu = screen instanceof TitleScreen;
+            if (!titleMenu && (!(screen instanceof PauseScreen pause) || !pause.showsPauseMenu())) return;
             Button button = Button.builder(Component.translatable("slabbed.report.entry"),
                     ignored -> open(client, screen)).bounds(0, 0, 176, 20).build();
             button.setTooltip(Tooltip.create(Component.translatable("slabbed.report.entry")));
-            var positioner = new PauseEntryPositioner(screen, button);
+            var positioner = new MenuEntryPositioner(screen, button, titleMenu);
             positioner.update();
             Screens.getWidgets(screen).add(button);
             // Recheck after other callbacks/mods have added their controls.
@@ -55,21 +56,40 @@ public final class IssueReportClient {
         });
     }
 
-    private static final class PauseEntryPositioner {
+    /** Consume only the notice's exact local action before vanilla can forward a command. */
+    public static boolean handleNoticeClick(String command) {
+        if (!IssueReportSession.isReportCommand(command)) return false;
+        queueReview();
+        return true;
+    }
+
+    private static void queueReview() {
+        Minecraft client = Minecraft.getInstance();
+        pendingChatRequest = new PendingRequest(client.gui.screen(), client.level);
+    }
+
+    private static final class MenuEntryPositioner {
         private final Screen screen;
         private final Button button;
+        private final boolean titleMenu;
         private java.util.List<IssueReportPlacement.Box> previous = java.util.List.of();
 
-        PauseEntryPositioner(Screen screen, Button button) {
+        MenuEntryPositioner(Screen screen, Button button, boolean titleMenu) {
             this.screen = screen;
             this.button = button;
+            this.titleMenu = titleMenu;
         }
 
         void update() {
             var geometry = new ArrayList<IssueReportPlacement.Box>();
             geometry.add(new IssueReportPlacement.Box(0, 0, screen.width, screen.height));
-            // Keep the pause title clear as well as every registered control, including non-buttons.
-            geometry.add(new IssueReportPlacement.Box(screen.width / 2 - 100, 32, 200, 20));
+            // Keep title artwork/footer or the pause title clear as well as all controls.
+            if (titleMenu) {
+                geometry.add(new IssueReportPlacement.Box(screen.width / 2 - 155, 30, 310, 90));
+                geometry.add(new IssueReportPlacement.Box(0, screen.height - 14, screen.width, 14));
+            } else {
+                geometry.add(new IssueReportPlacement.Box(screen.width / 2 - 100, 32, 200, 20));
+            }
             for (var child : screen.children()) {
                 if (child != button && child instanceof AbstractWidget widget && widget.visible) {
                     geometry.add(new IssueReportPlacement.Box(widget.getX(), widget.getY(),

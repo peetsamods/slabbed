@@ -10,7 +10,7 @@ import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.CommonComponents;
 import net.minecraft.network.chat.Component;
 
-/** The single review boundary for both player entrypoints; construction performs no I/O. */
+/** The single review boundary for all player entrypoints; construction performs no I/O. */
 final class IssueReportScreen extends Screen {
     private final Screen parent;
     private final IssueReportSession session;

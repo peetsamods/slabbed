@@ -14,8 +14,10 @@ public final class IssueReportTest {
     public static void main(String[] args) {
         versionsAndEncoding();
         explicitActionsOnly();
+        noticeCommand();
         deferredEntry();
         placement();
+        titleMenuPlacement();
         System.out.println("ISSUE_REPORT_TEST_PASS checks=" + checks);
     }
 
@@ -85,6 +87,15 @@ public final class IssueReportTest {
         check(missingNative.state() == IssueReportSession.State.FAILED, "native failure retains fallback");
     }
 
+    private static void noticeCommand() {
+        check(IssueReportSession.isReportCommand("/slabbed_report_issue"), "notice report command is handled locally");
+        check(IssueReportSession.isReportCommand("slabbed_report_issue"), "prefix-free vanilla command is handled locally");
+        for (String other : new String[] {null, "", "/slabbed_report_issue extra", "/slabbed_report_issue_other",
+                "/slabbed_dismiss_beta_notice", "/help", " /slabbed_report_issue"}) {
+            check(!IssueReportSession.isReportCommand(other), "unrelated or extended commands are left untouched");
+        }
+    }
+
     private static void deferredEntry() {
         Object level = new Object(), chat = new Object();
         check(IssueReportSession.canOpenRequest(level, level, chat, chat, true), "clicked command with retained chat reaches review");
@@ -116,6 +127,24 @@ public final class IssueReportTest {
         check(IssueReportPlacement.find(320, 240, 176, List.of(new IssueReportPlacement.Box(0, 0, 320, 240))).isEmpty(),
                 "fully occupied menu never overlays another mod");
         check(IssueReportPlacement.find(30, 30, 176, List.of()).isEmpty(), "impossible size safely rejected");
+    }
+
+    private static void titleMenuPlacement() {
+        for (int[] size : new int[][] {{320, 240}, {427, 240}, {640, 360}, {854, 480}}) {
+            int center = size[0] / 2;
+            int firstRow = size[1] / 4 + 48;
+            var occupied = new ArrayList<IssueReportPlacement.Box>();
+            occupied.add(new IssueReportPlacement.Box(center - 155, 30, 310, 90));
+            occupied.add(new IssueReportPlacement.Box(0, size[1] - 14, size[0], 14));
+            for (int row = 0; row < 3; row++) {
+                occupied.add(new IssueReportPlacement.Box(center - 100, firstRow + row * 24, 200, 20));
+            }
+            occupied.add(new IssueReportPlacement.Box(center - 124, firstRow + 84, 248, 20));
+            var button = IssueReportPlacement.find(size[0], size[1], 176, occupied).orElseThrow();
+            check(occupied.stream().noneMatch(button::overlaps), "title entry clears logo, footer and vanilla controls");
+            check(button.y() >= 8 && button.y() + button.height() <= size[1] - 4,
+                    "title entry stays visible at normal and narrow scales");
+        }
     }
 
     private static void check(boolean condition, String message) {

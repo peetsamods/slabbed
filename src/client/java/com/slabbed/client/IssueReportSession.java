@@ -26,6 +26,10 @@ final class IssueReportSession {
         }
     }
 
+    static boolean isReportCommand(String command) {
+        return "/slabbed_report_issue".equals(command) || "slabbed_report_issue".equals(command);
+    }
+
     static boolean canOpenRequest(Object requestedLevel, Object currentLevel,
                                   Object requestedScreen, Object currentScreen, boolean playerPresent) {
         return playerPresent && requestedLevel != null && requestedLevel == currentLevel
