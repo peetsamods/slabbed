@@ -31,7 +31,8 @@ record IssueReport(String minecraft, String loader, String slabbed, String fabri
     String body() {
         return "### Client versions\n" + diagnostics()
                 + "\n\n### What happened?\nDescribe the symptoms here."
-                + "\n\n### Steps to reproduce\n1. \n"
+                + "\n\n### What were you doing when the problem happened?\n"
+                + "Tell us what you clicked or did, in order, so we can try it too.\n1. \n"
                 + "\n### Expected behavior\nDescribe what you expected.\n";
     }
 
