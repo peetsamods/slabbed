@@ -117,6 +117,12 @@ jobs:
           cache-read-only: ${{ github.event_name == 'pull_request' }}
       - name: Check headless display support
         run: command -v xvfb-run
+      - name: Install software graphics libraries
+        timeout-minutes: 5
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libegl-dev libegl-mesa0 libgl1-mesa-dri mesa-vulkan-drivers mesa-utils
+          xvfb-run -a glxinfo -B
       - name: Build release and proof companions
         run: ./gradlew --no-daemon --stacktrace --console=plain assemble testkitJar diagnosticsJar
       - name: Run the 26.2 client leg against the release jar
