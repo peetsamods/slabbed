@@ -18,6 +18,7 @@ public final class IssueReportTest {
         deferredEntry();
         placement();
         titleMenuPlacement();
+        pauseMenuNearbyPlacement();
         System.out.println("ISSUE_REPORT_TEST_PASS checks=" + checks);
     }
 
@@ -35,7 +36,7 @@ public final class IssueReportTest {
         check(decoded.equals(report.body()), "percent encoding round trip, including literal plus");
         check(decoded.contains("0.6.4-alpha+26.2-26.3"), "platform qualifier preserved");
         check(decoded.contains("### What were you doing when the problem happened?\n"
-                + "Tell us what you clicked or did, in order, so we can try it too.\n"),
+                + "Tell me what you clicked or did, in order, so I can try it too.\n"),
                 "plain-language action question and help text stay together");
         check(!decoded.toLowerCase(java.util.Locale.ROOT).contains("steps to reproduce"),
                 "generated player draft contains no reproduction jargon");
@@ -145,6 +146,33 @@ public final class IssueReportTest {
             check(button.y() >= 8 && button.y() + button.height() <= size[1] - 4,
                     "title entry stays visible at normal and narrow scales");
         }
+    }
+
+    private static void pauseMenuNearbyPlacement() {
+        for (int[] size : new int[][] {{976, 640}, {854, 480}, {640, 360}, {427, 240}, {320, 240}, {320, 180}}) {
+            int center = size[0] / 2;
+            int firstRow = (size[1] - 116) / 4;
+            var occupied = new ArrayList<IssueReportPlacement.Box>();
+            occupied.add(new IssueReportPlacement.Box(center - 100, 32, 200, 20));
+            occupied.add(new IssueReportPlacement.Box(center - 102, firstRow, 204, 20));
+            for (int row = 1; row < 4; row++) {
+                occupied.add(new IssueReportPlacement.Box(center - 102, firstRow + row * 24, 98, 20));
+                occupied.add(new IssueReportPlacement.Box(center + 4, firstRow + row * 24, 98, 20));
+            }
+            var disconnect = new IssueReportPlacement.Box(center - 102, firstRow + 96, 204, 20);
+            occupied.add(disconnect);
+            int preferredY = disconnect.y() + disconnect.height() + 8;
+            var button = IssueReportPlacement.findNear(size[0], size[1], 176, preferredY, occupied).orElseThrow();
+            check(occupied.stream().noneMatch(button::overlaps), "nearby pause entry avoids all menu controls");
+            check(button.x() == center - 88 && button.y() == preferredY,
+                    "pause report stays centered just below Save and Quit at every tested scale");
+            occupied.add(new IssueReportPlacement.Box(button.x(), button.y(), 40, 20));
+            var relocated = IssueReportPlacement.findNear(size[0], size[1], 176, preferredY, occupied).orElseThrow();
+            check(occupied.stream().noneMatch(relocated::overlaps), "nearby entry moves around another mod");
+        }
+        check(IssueReportPlacement.findNear(320, 240, 176, 140,
+                List.of(new IssueReportPlacement.Box(0, 0, 320, 240))).isEmpty(),
+                "fully crowded nearby placement never overlaps controls");
     }
 
     private static void check(boolean condition, String message) {

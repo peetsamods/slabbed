@@ -13,6 +13,7 @@ import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.client.gui.screens.PauseScreen;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.gui.screens.TitleScreen;
+import net.minecraft.network.chat.CommonComponents;
 import net.minecraft.network.chat.Component;
 
 import java.net.URI;
@@ -90,20 +91,25 @@ public final class IssueReportClient {
             } else {
                 geometry.add(new IssueReportPlacement.Box(screen.width / 2 - 100, 32, 200, 20));
             }
+            int preferredY = titleMenu ? screen.height - 24 : screen.height / 4 + 132;
             for (var child : screen.children()) {
                 if (child != button && child instanceof AbstractWidget widget && widget.visible) {
                     geometry.add(new IssueReportPlacement.Box(widget.getX(), widget.getY(),
                             widget.getWidth(), widget.getHeight()));
+                    if (!titleMenu && (widget.getMessage().equals(CommonComponents.disconnectButtonLabel(true))
+                            || widget.getMessage().equals(CommonComponents.disconnectButtonLabel(false)))) {
+                        preferredY = widget.getY() + widget.getHeight() + 8;
+                    }
                 }
             }
             if (geometry.equals(previous)) return;
             previous = java.util.List.copyOf(geometry);
             var occupied = geometry.subList(1, geometry.size());
-            var place = IssueReportPlacement.find(screen.width, screen.height, 176, occupied);
+            var place = IssueReportPlacement.findNear(screen.width, screen.height, 176, preferredY, occupied);
             button.setMessage(Component.translatable("slabbed.report.entry"));
             if (place.isEmpty()) {
                 // A crowded modded menu may have room for the compact label and full tooltip.
-                place = IssueReportPlacement.find(screen.width, screen.height, 100, occupied);
+                place = IssueReportPlacement.findNear(screen.width, screen.height, 100, preferredY, occupied);
                 button.setMessage(Component.translatable("slabbed.report.compact_entry"));
             }
             button.visible = place.isPresent();
