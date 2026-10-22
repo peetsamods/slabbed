@@ -1,3 +1,14 @@
+## [0.6.5-alpha+26.2-26.3]
+
+See LAW.md — this changelog does not redefine the law.
+
+For Minecraft 26.2 and 26.3 on Fabric. Requires Fabric API and Java 25.
+
+### NEW
+
+- Report a Slabbed issue from the title screen, pause menu, or alpha notice. Review the Minecraft, Fabric Loader, Slabbed and Fabric API versions before opening a prefilled GitHub draft in your browser. Describe the problem and submit it yourself; submitted issues are public.
+- Copy a safe report link if the browser does not open. Reports include only the four reviewed versions, with no logs, mod list, player identifiers, server addresses, chat, local paths or world data.
+
 ## [0.6.4-alpha+26.2-26.3]
 
 See LAW.md — this changelog does not redefine the law.
