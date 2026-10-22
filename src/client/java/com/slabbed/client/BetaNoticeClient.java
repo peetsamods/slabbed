@@ -83,6 +83,11 @@ public final class BetaNoticeClient {
         return Component.literal(
                         "Slabbed is in " + channel + " — expect some rough edges while it's being developed. ")
                 .withStyle(ChatFormatting.GRAY, ChatFormatting.ITALIC)
+                .append(Component.literal("[Report a Slabbed issue]")
+                        .withStyle(ChatFormatting.AQUA, ChatFormatting.UNDERLINE)
+                        .withStyle(style -> style.withClickEvent(
+                                new ClickEvent.RunCommand("/slabbed_report_issue"))))
+                .append(Component.literal(" "))
                 .append(Component.literal("[Don't show again]")
                         .withStyle(ChatFormatting.GRAY, ChatFormatting.UNDERLINE)
                         .withStyle(style -> style.withClickEvent(
