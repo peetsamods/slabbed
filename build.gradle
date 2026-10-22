@@ -1561,3 +1561,11 @@ sourceSets {
 //
 // Lifting this means PORTING the tree to Mojang mappings, not deleting a line.
 sourceSets.main.java.exclude('com/slabbed/dev/**')
+
+// Consent, URL encoding and menu geometry need no game or native window.
+tasks.register("testIssueReporting", Exec) {
+    group = "verification"
+    description = "Verify version-only issue reporting without launching Minecraft."
+    commandLine "bash", rootProject.file("tools/test-issue-reporting.sh").absolutePath
+}
+tasks.named("check").configure { dependsOn("testIssueReporting") }

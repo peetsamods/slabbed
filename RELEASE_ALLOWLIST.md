@@ -88,7 +88,7 @@ anything. The split above puts the fine granularity only where a leak has actual
 | `com/slabbed/compat/*` | Compat hooks and the slab-surface-kind enum consumed by third-party slab mods, plus the running-version seams one jar needs to serve 26.2 and 26.3 (`MinecraftVersions`, `UseItemOnPacketAccess`, `PlayerSwing`). |
 | `com/slabbed/compat/mc262/*` | The Minecraft 26.2 shim classes, compiled against 26.2 in `shim/mc-26.2` and merged here; loaded only when 26.2 is running (today: the Y-offset emitter for Fabric renderer API 14). |
 | `com/slabbed/compat/terrainslabs/*` | Terrain Slabs compat (dual mod-id gate). |
-| `com/slabbed/mixin/client/*` | The 14 client render/interaction mixins declared in `slabbed.client.mixins.json`; every member handles render offset, emitted-effect alignment, remesh, entity light or offset raycast behavior. |
+| `com/slabbed/mixin/client/*` | Client render and interaction mixins declared in `slabbed.client.mixins.json`; handle render offset, emitted-effect alignment, remesh, entity light, offset raycasts and the local issue-report notice action. |
 | `com/slabbed/mixin/torch/*` | `TorchBlockMixin` — torch attachment geometry. |
 
 ### Main mixins (class-level; `com/slabbed/mixin/` is a mixed package)
@@ -145,6 +145,11 @@ anything. The split above puts the fine granularity only where a leak has actual
 | --- | --- |
 | `com/slabbed/client/SlabbedClient` | Client entrypoint (fabric.mod.json `client`). The dangling ScreenshotCaptureService/GapFillerOverlay reflective hooks were removed by the allowlist ruling; the remaining dev-only hook (DyFingerprintDump) is gated on `isDevelopmentEnvironment()` and resolves by reflection, so the release class holds no hard link to excluded classes. |
 | `com/slabbed/client/PlacementDyPredictionJournal` | The C3 client prediction journal — the shipped prediction/correction apply path. Carries the `debugCell()`/`CellDebug` observation seam on purpose: PlacementDyPredictionClientGameTest asserts journal cell state through it against the REAL shipped path, and there is no equivalent observation point outside the class. Inert unless called; nothing shipped calls it. |
+| `com/slabbed/client/IssueReport` | Bounded allowlisted version report and encoded GitHub draft URL. |
+| `com/slabbed/client/IssueReportSession` | Explicit confirmation and repeated-click guard; no background activity. |
+| `com/slabbed/client/IssueReportPlacement` | Collision-free title and pause menu placement using existing widget bounds. |
+| `com/slabbed/client/IssueReportClient` | Client-only report entrypoints and vanilla browser compatibility seam. |
+| `com/slabbed/client/IssueReportScreen` | Scrollable version review with explicit browser action and local copy fallback. |
 | `com/slabbed/client/BetaNoticeClient` | Shipped one-time beta notice on world join. |
 | `com/slabbed/client/BetaNoticeSessionGate` | Per-session gate for the beta notice. |
 | `com/slabbed/client/BetaNoticeDismissedWorlds` | Per-world "don't show again" store for the beta notice. |

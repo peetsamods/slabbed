@@ -83,10 +83,17 @@ public final class BetaNoticeClient {
         return Component.literal(
                         "Slabbed is in " + channel + " — expect some rough edges while it's being developed. ")
                 .withStyle(ChatFormatting.GRAY, ChatFormatting.ITALIC)
+                .append(Component.literal("[Report a Slabbed issue]")
+                        .withStyle(ChatFormatting.AQUA, ChatFormatting.UNDERLINE)
+                        .withStyle(style -> style.withClickEvent(
+                                new ClickEvent.RunCommand("/slabbed_report_issue"))))
+                .append(Component.literal(" "))
                 .append(Component.literal("[Don't show again]")
                         .withStyle(ChatFormatting.GRAY, ChatFormatting.UNDERLINE)
                         .withStyle(style -> style.withClickEvent(
-                                new ClickEvent.RunCommand("/slabbed_dismiss_beta_notice"))));
+                                new ClickEvent.RunCommand("/slabbed_dismiss_beta_notice"))))
+                .append(Component.literal(" Open chat to use these links, or report from the title or pause menu.")
+                        .withStyle(ChatFormatting.GRAY));
     }
 
     /** The running mod version, or {@code null} if the container cannot be resolved. */

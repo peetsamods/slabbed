@@ -25,6 +25,7 @@ public final class SlabbedClient implements ClientModInitializer {
                 Boolean.getBoolean("slabbed.bsfb.live.trace"));
         initDyFingerprintDump();
         BetaNoticeClient.init();
+        IssueReportClient.init();
         FrozenDyModeClient.init();
         // Ships in EVERY jar, default off — the standing debug-tooling rule, under the maintainer's
         // 2026-08-07 reading that the command must be INVOCABLE on a shipped jar rather than merely
