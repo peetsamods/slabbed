@@ -28,6 +28,7 @@ public final class SlabbedModelLoadingPlugin {
     private static final Map<Class<?>, Optional<Method>> VANILLA_ADAPTER_METHODS =
             new ConcurrentHashMap<>();
     private static final Set<Class<?>> FAILED_EXTERNAL_EMITTER_CHECKS = ConcurrentHashMap.newKeySet();
+    private static final Set<Class<?>> FAILED_WRAP_ATTEMPTS = ConcurrentHashMap.newKeySet();
 
     private SlabbedModelLoadingPlugin() {
     }
@@ -73,7 +74,23 @@ public final class SlabbedModelLoadingPlugin {
         // mistake a null-safe result for an instruction to skip the real model.
         for (Map.Entry<ModelResourceLocation, BakedModel> entry : models.entrySet()) {
             BakedModel original = entry.getValue();
-            BakedModel updated = replacement.apply(entry.getKey(), original);
+            BakedModel updated;
+            try {
+                updated = replacement.apply(entry.getKey(), original);
+            } catch (RuntimeException | LinkageError refused) {
+                // A model another mod registered may refuse an eager query at bake time (a wrapper
+                // whose delegate is not loaded yet, a lazily resolved model). That model keeps its
+                // own identity and renderer ownership; the rest of the registry is still wrapped.
+                // One warning per model class so a large registry cannot flood the log.
+                if (original != null && FAILED_WRAP_ATTEMPTS.add(original.getClass())) {
+                    Slabbed.LOGGER.warn(
+                            "Could not wrap model {} ({}); preserving renderer ownership",
+                            entry.getKey(),
+                            original.getClass().getName(),
+                            refused);
+                }
+                continue;
+            }
             if (updated != original) {
                 entry.setValue(updated);
             }
@@ -84,14 +101,17 @@ public final class SlabbedModelLoadingPlugin {
         if (isNamedClusterAdapter(model)) {
             return new OffsetBlockStateModel(model);
         }
+        // Identity and wrapper checks come first: they read nothing from the model, so a foreign
+        // wrapper (or a model already wrapped here) is never asked an eager question it may refuse.
         if (model == null
+                || id == null
+                || model instanceof OffsetBlockStateModel
+                || model instanceof BakedModelWrapper<?>
                 || ChainCeilingGeometry.isModelLocation(id)
                 || ModelResourceLocation.INVENTORY_VARIANT.equals(id.getVariant())
                 || model.isCustomRenderer()
                 || (model instanceof IDynamicBakedModel && !isNamedVanillaComposite(model))
-                || model instanceof BakedModelWrapper<?>
-                || usesExternalQuadEmitter(model)
-                || model instanceof OffsetBlockStateModel) {
+                || usesExternalQuadEmitter(model)) {
             return model;
         }
         return new OffsetBlockStateModel(model);

@@ -103,6 +103,48 @@ final class SlabbedModelLoadingPluginTest {
         assertSame(item, models.get(itemId), "inventory model identity remains unchanged");
     }
 
+    @Test
+    void aModelThatRefusesAnEagerQueryKeepsItsIdentityWithoutStoppingTheSweep() {
+        ModelResourceLocation refusingId = ModelResourceLocation.vanilla("compat_refusing", "normal");
+        ModelResourceLocation wrapperId = ModelResourceLocation.vanilla("compat_wrapper", "normal");
+        ModelResourceLocation blockId = ModelResourceLocation.vanilla("stone", "normal");
+        BakedModel refusing = new RefusingBakedModel();
+        BakedModel delegateLessWrapper = new DelegateLessWrapper();
+        BakedModel block = new StubBakedModel(false);
+        HashMap<ModelResourceLocation, BakedModel> models = new HashMap<>();
+        models.put(refusingId, refusing);
+        models.put(wrapperId, delegateLessWrapper);
+        models.put(blockId, block);
+
+        SlabbedModelLoadingPlugin.replaceModels(models, SlabbedModelLoadingPlugin::wrapModel);
+
+        assertSame(refusing, models.get(refusingId),
+                "a model that throws from an eager bake-time query keeps its own identity");
+        assertSame(delegateLessWrapper, models.get(wrapperId),
+                "a foreign wrapper is skipped on identity alone and is never queried");
+        assertInstanceOf(OffsetBlockStateModel.class, models.get(blockId),
+                "one refusing model must not stop the ordinary block models from gaining a dy owner");
+    }
+
+    /** A third-party model whose eager queries fail, as a half-initialised lazy model would. */
+    private static final class RefusingBakedModel extends StubBakedModel {
+        private RefusingBakedModel() {
+            super(false);
+        }
+
+        @Override
+        public boolean isCustomRenderer() {
+            throw new NullPointerException("model_not_loaded_yet");
+        }
+    }
+
+    /** A foreign wrapper around nothing: every delegating call would dereference null. */
+    private static final class DelegateLessWrapper extends BakedModelWrapper<BakedModel> {
+        private DelegateLessWrapper() {
+            super(null);
+        }
+    }
+
     private static final class NullProbingRegistry
             extends HashMap<ModelResourceLocation, BakedModel> {
         @Override
