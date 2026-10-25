@@ -5,7 +5,8 @@
   "mixins": [
     "ServerParticleCaptureMixin",
     "WorldParticleCaptureMixin",
-    "PendingHangChunkMixin"
+    "PendingHangChunkMixin",
+    "Issue78ChunkLookupProbeMixin"
   ],
   "client": [
     "ItemFrameRenderMatrixCaptureMixin",

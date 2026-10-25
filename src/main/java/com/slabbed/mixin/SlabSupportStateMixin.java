@@ -26,6 +26,7 @@ import net.minecraft.block.enums.DoubleBlockHalf;
 import net.minecraft.block.enums.SlabType;
 import net.minecraft.entity.EntityType;
 import net.minecraft.registry.Registries;
+import net.minecraft.server.world.ServerWorld;
 import net.minecraft.state.property.Properties;
 import net.minecraft.util.Identifier;
 import net.minecraft.util.math.BlockPos;
@@ -75,7 +76,7 @@ public abstract class SlabSupportStateMixin {
 
     private VoxelShape slabbed$translateCollision(BlockView world, BlockPos pos,
                                                    java.util.function.Supplier<VoxelShape> original) {
-        if (slabbed$readingBaseCollision.get() || slabbed$isUnsafeAsyncShapeContext()
+        if (slabbed$readingBaseCollision.get() || slabbed$isUnsafeAsyncShapeContext(world)
                 || !SlabAnchorAttachment.usesFrozenPlacementHeight(world, pos)) {
             return original.get();
         }
@@ -417,7 +418,7 @@ public abstract class SlabSupportStateMixin {
             at = @At("RETURN"), cancellable = true)
     private void slabbed$offsetOakFenceAndGrindstoneCollision(BlockView world, BlockPos pos, ShapeContext ctx,
                                                               CallbackInfoReturnable<VoxelShape> cir) {
-        if (slabbed$isUnsafeAsyncShapeContext()) {
+        if (slabbed$isUnsafeAsyncShapeContext(world)) {
             return;
         }
         BlockState self = (BlockState) (Object) this;
@@ -447,7 +448,7 @@ public abstract class SlabSupportStateMixin {
         // In 1.21.1, getOutlineShape is called by light/opacity workers (Worker-Main, ForkJoinPool)
         // during spawn-prep. SlabSupport.getYOffset accesses chunk/anchor state and can block via
         // CompletableFuture.join, deadlocking the server. Return vanilla shape on those threads.
-        if (slabbed$isUnsafeAsyncShapeContext()) {
+        if (slabbed$isUnsafeAsyncShapeContext(world)) {
             return;
         }
 
@@ -497,7 +498,11 @@ public abstract class SlabSupportStateMixin {
         }
     }
 
-    private static boolean slabbed$isUnsafeAsyncShapeContext() {
+    private static boolean slabbed$isUnsafeAsyncShapeContext(BlockView world) {
+        // Server-world shape queries must return before chunk-backed policy reads on any worker.
+        if (world instanceof ServerWorld serverWorld && !serverWorld.getServer().isOnThread()) {
+            return true;
+        }
         String name = Thread.currentThread().getName();
         return name.startsWith("Worker-Main") || name.contains("ForkJoinPool");
     }

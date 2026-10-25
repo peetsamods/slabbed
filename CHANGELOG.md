@@ -1,3 +1,11 @@
+## [Unreleased] — Minecraft 1.21.1 (Fabric)
+
+See LAW.md — this changelog does not redefine the law.
+
+### FIXED
+
+- Fixed an existing-world loading freeze with ScalableLux caused by a background lighting query waiting for a chunk through Slabbed's shape handling. Reported in [#78](https://github.com/peetsamods/slabbed/issues/78).
+
 ## [0.6.1-alpha+1.21.1-fabric]
 
 See LAW.md — this changelog does not redefine the law.

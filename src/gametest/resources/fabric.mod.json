@@ -13,7 +13,8 @@
   ],
   "entrypoints": {
     "main": [
-      "com.slabbed.test.TerrainSlabsTestShim"
+      "com.slabbed.test.TerrainSlabsTestShim",
+      "com.slabbed.test.Issue78LightShapeLookupProbe"
     ],
     "client": [
       "com.slabbed.test.AttachmentRemeshProbe",
@@ -51,7 +52,8 @@
       "com.slabbed.test.RailSlopeProfileTest",
       "com.slabbed.test.FenceCeilingConnectionTest",
       "com.slabbed.test.RailVisualSignalTest",
-      "com.slabbed.test.RedstoneWireVisualStepTest"
+      "com.slabbed.test.RedstoneWireVisualStepTest",
+      "com.slabbed.test.Issue78LightShapeLookupProbe"
     ]
   },
   "depends": {
