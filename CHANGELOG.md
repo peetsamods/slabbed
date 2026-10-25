@@ -1,4 +1,4 @@
-## [Unreleased] — NeoForge 1.21.1
+## [0.6.2-alpha+1.21.1]
 
 See LAW.md — this changelog does not redefine the law.
 
