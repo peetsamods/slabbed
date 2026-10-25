@@ -1,3 +1,9 @@
+## [Unreleased] — NeoForge 26.2 and 26.3
+
+See LAW.md — this changelog does not redefine the law.
+
+- Prevent chunk generation from freezing when a mod such as Lootr initializes a chest minecart while a chunk is still loading. A new cart no longer reads the rail under it during initialization; it takes its rail height on its first normal tick, exactly as the Fabric 26.2/26.3 line does since 0.6.3. Reported for the Fabric line in [#102](https://github.com/peetsamods/slabbed/issues/102) and [#105](https://github.com/peetsamods/slabbed/issues/105); the NeoForge jars carried the same initialization read.
+
 ## [0.6.2-alpha+26.2-neoforge] and [0.6.2-alpha+26.3-neoforge]
 
 See LAW.md — this changelog does not redefine the law.

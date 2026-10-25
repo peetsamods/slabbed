@@ -7,6 +7,8 @@ public final class PendingHangChunkProbe {
     public static ServerChunkCache manager;
     public static int blockingReads;
     public static int nonblockingReads;
+    public static boolean failOnBlockingRead;
+    private static volatile Thread ownerThread;
 
     private PendingHangChunkProbe() {}
 
@@ -14,9 +16,17 @@ public final class PendingHangChunkProbe {
         manager = value;
         blockingReads = 0;
         nonblockingReads = 0;
+        failOnBlockingRead = false;
+        ownerThread = Thread.currentThread();
+    }
+
+    public static boolean activeFor(ServerChunkCache value) {
+        return ownerThread == Thread.currentThread() && manager == value;
     }
 
     public static void end() {
+        ownerThread = null;
         manager = null;
+        failOnBlockingRead = false;
     }
 }

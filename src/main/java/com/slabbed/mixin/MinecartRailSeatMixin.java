@@ -97,42 +97,12 @@ public abstract class MinecartRailSeatMixin extends Entity implements RailSeatDy
 
 
     /**
-     * The ONE position entry point a new cart has. The (EntityType, Level, DDD) constructor reaches
-     * it after {@code super(type, level)} has built {@code entityData} and assigned the final
-     * behaviour, and {@code createMinecart} reaches it on a fully constructed entity BEFORE its own
-     * rail-cell derivation runs. The seat is still 0 here, so the cell below resolves exactly as
-     * vanilla's would.
-     */
-    @Inject(method = "setInitialPos(DDD)V", at = @At("TAIL"))
-    private void slabbed$seatOnSpawn(double x, double y, double z, CallbackInfo ci) {
-        if (!(this.level() instanceof ServerLevel level)) {
-            return;
-        }
-        // Structure generation positions its chest carts on a worker thread. A block read from
-        // there is answered by the server thread, which may itself be waiting on this worker, so
-        // the read must not happen here at all: the seat is bound by the tick hook below on the
-        // first server tick instead. Do not replace this with a chunk-presence check — that only
-        // covers the unloaded case, not the cross-thread wait on a loaded chunk.
-        if (!level.getServer().isSameThread()) {
-            return;
-        }
-        BlockPos cell = this.getCurrentBlockPosOrRailBelow();
-        // Never force a chunk load from a spawn: an unloaded cell simply seats nothing.
-        if (!level.hasChunkAt(cell)) {
-            return;
-        }
-        double dy = slabbed$seatAt(level, cell);
-        if (!Double.isFinite(dy) || dy == 0.0d) {
-            return;
-        }
-        slabbed$setRailSeatDy(dy);
-        // snapTo sets the old position too, so a freshly placed cart never lerps down from grid
-        // height on its first rendered frame.
-        this.snapTo(x, y + dy, z, this.getYRot(), this.getXRot());
-    }
-
-    /**
      * Re-bind the seat before the behaviour runs.
+     *
+     * <p>Initialization must not read rails: {@code setInitialPos} is also called while chunk
+     * entities are being populated on the server thread. Even deriving the rail cell can request
+     * that pending chunk before a presence guard can run. The first normal entity tick binds the
+     * seat after integration, for both worker-positioned and server-positioned carts.
      *
      * <p>ON A RAIL the LOGICAL height is held fixed across a seat change — the cart is moved by
      * (new - old) — so the rail geometry sees the same grid Y on both sides of the seam. That is the
