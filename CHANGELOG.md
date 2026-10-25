@@ -1,4 +1,4 @@
-## [Unreleased] — Minecraft 1.21.1 (Fabric)
+## [0.6.2-alpha+1.21.1-fabric]
 
 See LAW.md — this changelog does not redefine the law.
 
