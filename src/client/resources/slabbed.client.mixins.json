@@ -9,6 +9,7 @@
     "CarpetDyShapeMixin",
     "ClientPlayerInteractionManagerPredictionSequenceMixin",
     "ClientWorldPlacementDyAckMixin",
+    "DebugHudOffsetRaycastMixin",
     "GameRendererPickOffsetRaycastMixin",
     "ItemFrameRenderOffsetMixin",
     "MinecartRenderOffsetMixin",
