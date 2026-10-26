@@ -1,4 +1,4 @@
-## [0.6.2-alpha.1+26.2-neoforge] and [0.6.2-alpha.1+26.3-neoforge]
+## [0.6.3-alpha+26.2-neoforge] and [0.6.3-alpha+26.3-neoforge]
 
 See LAW.md — this changelog does not redefine the law.
 
