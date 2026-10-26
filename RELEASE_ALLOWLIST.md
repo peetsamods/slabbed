@@ -127,6 +127,7 @@ com/slabbed/mixin/client/
 com/slabbed/mixin/client/BlockEntityOffsetMixin.class
 com/slabbed/mixin/client/BlockModelDyTranslateMixin.class
 com/slabbed/mixin/client/CarpetDyShapeMixin.class
+com/slabbed/mixin/client/DebugHudOffsetRaycastMixin.class
 com/slabbed/mixin/client/GameRendererPickOffsetRaycastMixin.class
 com/slabbed/mixin/client/ItemFrameDrawnFaceRenderMixin.class
 com/slabbed/mixin/client/PaintingDrawnFaceRenderMixin.class
@@ -274,6 +275,7 @@ com/slabbed/mixin/client/
 com/slabbed/mixin/client/BlockEntityOffsetMixin.java
 com/slabbed/mixin/client/BlockModelDyTranslateMixin.java
 com/slabbed/mixin/client/CarpetDyShapeMixin.java
+com/slabbed/mixin/client/DebugHudOffsetRaycastMixin.java
 com/slabbed/mixin/client/GameRendererPickOffsetRaycastMixin.java
 com/slabbed/mixin/client/ItemFrameDrawnFaceRenderMixin.java
 com/slabbed/mixin/client/PaintingDrawnFaceRenderMixin.java
