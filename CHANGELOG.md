@@ -1,3 +1,11 @@
+## [Unreleased] — Minecraft 26.2–26.3 (Fabric)
+
+See LAW.md — this changelog does not redefine the law.
+
+### FIXED
+
+- The F3 debug screen's "Targeted Block" readout now names the lowered block you are looking at. The debug screen performs its own grid-walking raycast, separate from the crosshair pick, so aiming at the side of a slab placed on a slab reported the block space below it. The readout's block raycast and the block-tag lines now use the same offset-aware raycast as the crosshair; the fluid readout is unchanged. Reported in [#100](https://github.com/peetsamods/slabbed/issues/100) on another version line. Mods that run their own raycast (Jade's block readout, for example) are not changed by this.
+
 ## [0.6.5-alpha+26.2-26.3]
 
 See LAW.md — this changelog does not redefine the law.
