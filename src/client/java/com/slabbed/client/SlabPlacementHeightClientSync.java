@@ -72,6 +72,17 @@ public final class SlabPlacementHeightClientSync {
                     pos.getX() - 1, pos.getY() - 1, pos.getZ() - 1,
                     pos.getX() + 1, pos.getY() + 1, pos.getZ() + 1);
         });
+        // Chunk-level presence for the mesh screen: a chunk with no published facts and no
+        // outstanding prediction anywhere answers absent for every cell, so the screen can
+        // skip the per-cell lookups across that chunk. Same answer as the per-cell path.
+        SlabPlacementHeightAttachment.installClientRenderChunkFactPresence(chunkKey -> {
+            if (!ClientRenderDyPrediction.isEmpty()) {
+                return true;
+            }
+            RenderSnapshotState published = RENDER_SNAPSHOTS;
+            return published.level() == Minecraft.getInstance().level
+                    && published.chunks().containsKey(chunkKey);
+        });
         SlabPlacementHeightAttachment.installClientRenderHalfStepsLookup(packed -> {
             RenderSnapshotState published = RENDER_SNAPSHOTS;
             if (published.level() != Minecraft.getInstance().level) {

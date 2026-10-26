@@ -81,6 +81,11 @@ public final class SlabAnchorAttachment {
      * in common code.
      */
     public static Predicate<BlockPos> clientAnchorLookup = null;
+    /**
+     * Chunk-level twin of {@link #clientAnchorLookup} for the mesh screen: whether the chunk keyed
+     * as {@code ChunkPos.asLong} holds any anchor at all. Null means unknown and answers "may".
+     */
+    public static java.util.function.LongPredicate clientChunkAnchorPresence = null;
     public static Predicate<BlockPos> clientFrozenFlatLookup = null;
     public static Predicate<BlockPos> clientLoweredSlabCarrierLookup = null;
     public static Predicate<BlockPos> clientCompoundFullBlockAnchorLookup = null;
@@ -887,6 +892,16 @@ public final class SlabAnchorAttachment {
      * Returns false for any {@link BlockGetter} that is not a full {@link Level}, so it is
      * safe to call from shape mixins that may receive partial views during chunk gen.
      */
+    /**
+     * True when the chunk holding {@code chunkKey} may carry an anchor visible to
+     * {@link #isAnchored} on a non-level (mesh) view; false guarantees no cell of it is anchored
+     * there. Unknown (no hook) answers true.
+     */
+    public static boolean clientChunkMayHoldAnchors(long chunkKey) {
+        java.util.function.LongPredicate presence = clientChunkAnchorPresence;
+        return presence == null || presence.test(chunkKey);
+    }
+
     public static boolean isAnchored(BlockGetter world, BlockPos pos) {
         if (pos == null) {
             return false;

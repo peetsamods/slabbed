@@ -11,6 +11,7 @@ import java.util.List;
 import java.util.OptionalInt;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.BiConsumer;
+import java.util.function.LongPredicate;
 import java.util.function.LongToIntFunction;
 import java.util.stream.IntStream;
 import java.util.stream.LongStream;
@@ -43,6 +44,14 @@ public final class SlabPlacementHeightAttachment {
     public static final int ABSENT_HALF_STEPS = Integer.MIN_VALUE;
 
     private static volatile LongToIntFunction clientRenderHalfStepsLookup;
+    /**
+     * Chunk-level presence for the mesh: whether a chunk (keyed as {@code ChunkPos.asLong}) may
+     * hold ANY stored fact or outstanding prediction the mesh lookup could return. The mesh screen
+     * consults it once per column instead of once per cell, so ordinary terrain in a chunk with no
+     * placement facts pays one map probe instead of a lookup per block walked. Absent (null) means
+     * unknown, which answers "may hold" and keeps every per-cell lookup.
+     */
+    private static volatile LongPredicate clientRenderChunkFactPresence;
     /** Told after an authoritative fact is stored or removed; listeners never write the store. */
     private static final List<BiConsumer<Level, BlockPos>> CHANGE_LISTENERS = new CopyOnWriteArrayList<>();
 
@@ -196,6 +205,23 @@ public final class SlabPlacementHeightAttachment {
                         || !isWithinPlacementEnvelope(halfSteps)
                 ? Double.NaN
                 : offsetForHalfSteps((byte) halfSteps);
+    }
+
+    /**
+     * True when the chunk holding {@code chunkKey} may hold a stored fact or an outstanding
+     * prediction visible to {@link #storedOffset} on a non-level (mesh) view. False is a
+     * guarantee that every cell of that chunk answers absent there, so a caller may skip the
+     * per-cell lookups for the whole chunk. Unknown (no hook installed) answers true.
+     */
+    public static boolean clientRenderChunkMayHoldFacts(long chunkKey) {
+        LongPredicate presence = clientRenderChunkFactPresence;
+        return presence == null || presence.test(chunkKey);
+    }
+
+    public static LongPredicate installClientRenderChunkFactPresence(LongPredicate presence) {
+        LongPredicate previous = clientRenderChunkFactPresence;
+        clientRenderChunkFactPresence = presence;
+        return previous;
     }
 
     /**

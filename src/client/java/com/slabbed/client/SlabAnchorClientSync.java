@@ -9,6 +9,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.chunk.RenderChunkRegion;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.core.BlockPos;
+import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.chunk.LevelChunk;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.neoforge.attachment.AttachmentType;
@@ -37,6 +38,13 @@ import java.util.function.Supplier;
 public final class SlabAnchorClientSync {
     private static final Map<Long, LevelChunk> TRACKED_CHUNKS = new HashMap<>();
     private static final Map<AttachmentSnapshotKey, LongOpenHashSet> ATTACHMENT_SNAPSHOTS = new HashMap<>();
+    /**
+     * Chunks whose main-thread anchor snapshot is non-empty. Replaced copy-on-write on the
+     * client thread wherever the snapshot changes, so mesh workers read an immutable set and
+     * answer "no anchors here" without touching chunk data. It can lag the live attachment by
+     * at most one poll tick, which is the same tick that schedules the rerender for the change.
+     */
+    private static volatile LongOpenHashSet ANCHORED_CHUNKS = new LongOpenHashSet();
     private static boolean initialized;
 
     private record AttachmentSnapshotKey(long chunkPos, AttachmentType<LongOpenHashSet> attachmentType) {
@@ -61,6 +69,9 @@ public final class SlabAnchorClientSync {
         // access chunk attachments.  Register a client-world fallback so anchor queries
         // from the model render path resolve correctly after a supporting BS is broken.
         SlabAnchorAttachment.clientAnchorLookup = pos -> {
+            if (!ANCHORED_CHUNKS.contains(ChunkPos.asLong(pos.getX() >> 4, pos.getZ() >> 4))) {
+                return false;
+            }
             Minecraft mc = Minecraft.getInstance();
             if (mc == null || mc.level == null) {
                 return false;
@@ -72,6 +83,9 @@ public final class SlabAnchorClientSync {
             LongOpenHashSet set = chunk.getExistingDataOrNull(SlabAnchorAttachment.ANCHOR_TYPE.get());
             return set != null && set.contains(pos.asLong());
         };
+        // Chunk-level twin for the mesh screen: one attachment probe per column instead of
+        // one per cell walked. Same answer as the per-cell lookup above for every cell.
+        SlabAnchorAttachment.clientChunkAnchorPresence = chunkKey -> ANCHORED_CHUNKS.contains(chunkKey);
         SlabAnchorAttachment.clientFrozenFlatLookup = pos -> {
             LongOpenHashSet set = clientAttachmentSet(pos, SlabAnchorAttachment.FROZEN_FLAT_TYPE);
             return set != null && set.contains(pos.asLong());
@@ -165,6 +179,29 @@ public final class SlabAnchorClientSync {
         long chunkPos = chunk.getPos().toLong();
         TRACKED_CHUNKS.remove(chunkPos);
         ATTACHMENT_SNAPSHOTS.keySet().removeIf(key -> key.chunkPos() == chunkPos);
+        updateAnchoredChunk(chunkPos, false);
+    }
+
+    /** Copy-on-write membership change; a no-op when the chunk's presence is unchanged. */
+    private static void updateAnchoredChunk(long chunkPos, boolean anchored) {
+        LongOpenHashSet current = ANCHORED_CHUNKS;
+        if (current.contains(chunkPos) == anchored) {
+            return;
+        }
+        LongOpenHashSet replacement = new LongOpenHashSet(current);
+        if (anchored) {
+            replacement.add(chunkPos);
+        } else {
+            replacement.remove(chunkPos);
+        }
+        ANCHORED_CHUNKS = replacement;
+    }
+
+    private static void recordAnchorSnapshot(long chunkPos, Supplier<AttachmentType<LongOpenHashSet>> type,
+            LongOpenHashSet snapshot) {
+        if (type == SlabAnchorAttachment.ANCHOR_TYPE) {
+            updateAnchoredChunk(chunkPos, snapshot != null && !snapshot.isEmpty());
+        }
     }
 
     private static LongOpenHashSet clientAttachmentSet(
@@ -184,6 +221,9 @@ public final class SlabAnchorClientSync {
         if (mc.level == null) {
             TRACKED_CHUNKS.clear();
             ATTACHMENT_SNAPSHOTS.clear();
+            if (!ANCHORED_CHUNKS.isEmpty()) {
+                ANCHORED_CHUNKS = new LongOpenHashSet();
+            }
             return;
         }
         if (mc.levelRenderer == null) {
@@ -216,6 +256,7 @@ public final class SlabAnchorClientSync {
         LongOpenHashSet newSet = copyAttachmentSet(currentSet);
 
         logReloadJumpSync("attachedSetPoll", chunk, attachmentType, oldSet, newSet);
+        recordAnchorSnapshot(key.chunkPos(), attachmentType, newSet);
         scheduleRerendersForSet(mc, oldSet, attachmentType);
         scheduleRerendersForSet(mc, newSet, attachmentType);
         ATTACHMENT_SNAPSHOTS.put(key, newSet);
@@ -226,7 +267,9 @@ public final class SlabAnchorClientSync {
             Supplier<AttachmentType<LongOpenHashSet>> attachmentType
     ) {
         AttachmentSnapshotKey key = new AttachmentSnapshotKey(chunk.getPos().toLong(), attachmentType.get());
-        ATTACHMENT_SNAPSHOTS.put(key, copyAttachmentSet(chunk.getExistingDataOrNull(attachmentType.get())));
+        LongOpenHashSet snapshot = copyAttachmentSet(chunk.getExistingDataOrNull(attachmentType.get()));
+        recordAnchorSnapshot(key.chunkPos(), attachmentType, snapshot);
+        ATTACHMENT_SNAPSHOTS.put(key, snapshot);
     }
 
     private static LongOpenHashSet copyAttachmentSet(LongOpenHashSet set) {

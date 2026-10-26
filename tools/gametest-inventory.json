@@ -30,6 +30,10 @@
       "classification": "registered_server"
     },
     {
+      "path": "com/slabbed/test/MeshScreenChunkPresenceTest.java",
+      "classification": "registered_server"
+    },
+    {
       "path": "com/slabbed/test/DySpecificationTest.java",
       "classification": "registered_server"
     },

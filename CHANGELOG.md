@@ -2,6 +2,7 @@
 
 See LAW.md — this changelog does not redefine the law.
 
+- Reduce chunk-mesh work on ordinary terrain: the render pass now proves a whole chunk free of stored heights and anchors once instead of asking at every block it walks, and remembers which block states are thin surface layers. The rendered result is unchanged; in a same-world profile, section rebuilds spent about a fifth less processor time. This is partial progress on the stutter reported in [#92](https://github.com/peetsamods/slabbed/issues/92) and [#87](https://github.com/peetsamods/slabbed/issues/87): the remaining cost is the per-block column walk itself, which is tracked separately.
 - Harden the model-baking pass: a block model from another mod that fails an eager query while Slabbed wraps the model registry now keeps its own model instead of stopping the game, and foreign model wrappers are skipped on identity alone without being queried. Reported in [#108](https://github.com/peetsamods/slabbed/issues/108); the exact crash there is not reproduced, so this is a safety net, not a confirmed fix.
 
 ## [0.6.1-alpha+1.21.1]

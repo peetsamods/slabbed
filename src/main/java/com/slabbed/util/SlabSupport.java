@@ -60,6 +60,8 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.phys.shapes.VoxelShape;
 import java.util.function.Predicate;
 import net.minecraft.world.level.BlockGetter;
+import net.minecraft.world.level.Level;
+import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.EmptyBlockGetter;
 import net.minecraft.world.level.LevelReader;
 
@@ -92,11 +94,24 @@ public final class SlabSupport {
 
     /** Returns true for non-structural surface layers that must not author placement height. */
     public static boolean isThinTopLayer(BlockState state) {
-        return state != null
-                && (state.hasProperty(SnowLayerBlock.LAYERS)
-                        || !hasExplicitAttachmentRoleProperty(state)
-                                && hasThinFloorLayerGeometry(state));
+        if (state == null) {
+            return false;
+        }
+        Boolean cached = THIN_TOP_LAYER.get(state);
+        if (cached != null) {
+            return cached;
+        }
+        // Pure in the state: the property set is immutable and the geometry leg reads the
+        // permanent per-state outline metrics, so the first answer is the only answer.
+        boolean thin = state.hasProperty(SnowLayerBlock.LAYERS)
+                || !hasExplicitAttachmentRoleProperty(state) && hasThinFloorLayerGeometry(state);
+        THIN_TOP_LAYER.putIfAbsent(state, thin);
+        return thin;
     }
+
+    /** Per-state memo of {@link #isThinTopLayer}; the mesh column walk asks it per cell. */
+    private static final ConcurrentHashMap<BlockState, Boolean> THIN_TOP_LAYER =
+            new ConcurrentHashMap<>();
 
     private static boolean hasExplicitAttachmentRoleProperty(BlockState state) {
         return state.hasProperty(BlockStateProperties.HANGING)
@@ -2711,14 +2726,18 @@ public final class SlabSupport {
             return false;
         }
         try {
-            if (Double.isFinite(SlabPlacementHeightAttachment.storedOffset(world, pos))
-                    || SlabAnchorAttachment.isAnchored(world, pos)) {
+            // One chunk-level presence probe per column replaces a marker lookup per cell walked:
+            // a chunk the mesh view can prove holds no fact, prediction or anchor answers absent
+            // for every cell in it, so the walks below read only block states there. The answer
+            // is identical either way; only the cost differs.
+            boolean markers = meshMarkersPossible(world, pos.getX() >> 4, pos.getZ() >> 4);
+            if (meshMarkerAt(world, pos, markers)) {
                 return true;
             }
             if (!isMeshScreenBelowResolvedState(state)) {
                 return true;
             }
-            if (meshScreenColumnSuspicious(world, pos)) {
+            if (meshScreenColumnSuspicious(world, pos, markers)) {
                 return true;
             }
             BlockPos.MutableBlockPos neighborProbe = new BlockPos.MutableBlockPos();
@@ -2736,9 +2755,13 @@ public final class SlabSupport {
                     // solid support below (checked above) no horizontal lane can move this cell.
                     continue;
                 }
-                if (Double.isFinite(SlabPlacementHeightAttachment.storedOffset(world, neighborProbe))
-                        || SlabAnchorAttachment.isAnchored(world, neighborProbe)
-                        || meshScreenColumnSuspicious(world, neighborProbe)) {
+                int neighborChunkX = neighborProbe.getX() >> 4;
+                int neighborChunkZ = neighborProbe.getZ() >> 4;
+                boolean neighborMarkers = neighborChunkX == (pos.getX() >> 4) && neighborChunkZ == (pos.getZ() >> 4)
+                        ? markers
+                        : meshMarkersPossible(world, neighborChunkX, neighborChunkZ);
+                if (meshMarkerAt(world, neighborProbe, neighborMarkers)
+                        || meshScreenColumnSuspicious(world, neighborProbe, neighborMarkers)) {
                     return true;
                 }
             }
@@ -2746,6 +2769,28 @@ public final class SlabSupport {
         } catch (IndexOutOfBoundsException outsideRenderRegion) {
             return true;
         }
+    }
+
+    /**
+     * Whether any cell of chunk ({@code chunkX}, {@code chunkZ}) can carry a stored fact,
+     * prediction or anchor as seen through {@code world}. A level view keeps the per-cell reads
+     * (its chunks answer directly); only the mesh view, whose lookups go through the client
+     * bridges, can prove a whole chunk empty. Unknown answers true.
+     */
+    private static boolean meshMarkersPossible(BlockGetter world, int chunkX, int chunkZ) {
+        if (world instanceof Level) {
+            return true;
+        }
+        long chunkKey = ChunkPos.asLong(chunkX, chunkZ);
+        return SlabPlacementHeightAttachment.clientRenderChunkMayHoldFacts(chunkKey)
+                || SlabAnchorAttachment.clientChunkMayHoldAnchors(chunkKey);
+    }
+
+    /** The per-cell marker read, skipped outright when the cell's chunk proved marker-free. */
+    private static boolean meshMarkerAt(BlockGetter world, BlockPos pos, boolean markersPossible) {
+        return markersPossible
+                && (Double.isFinite(SlabPlacementHeightAttachment.storedOffset(world, pos))
+                || SlabAnchorAttachment.isAnchored(world, pos));
     }
 
     /**
@@ -2785,7 +2830,7 @@ public final class SlabSupport {
      * support matters only within the seat-follower depth; the walk ends cleanly below the
      * world floor and at the depth cap.
      */
-    private static boolean meshScreenColumnSuspicious(BlockGetter world, BlockPos top) {
+    private static boolean meshScreenColumnSuspicious(BlockGetter world, BlockPos top, boolean markersPossible) {
         int minY = world.getMinBuildHeight();
         BlockPos.MutableBlockPos cursor = new BlockPos.MutableBlockPos();
         for (int i = 1; i <= MAX_CHAIN_DEPTH; i++) {
@@ -2798,9 +2843,7 @@ public final class SlabSupport {
             if (cur.isAir()) {
                 return i <= MESH_SCREEN_SEAT_DEPTH;
             }
-            if (cur.getBlock() instanceof SlabBlock
-                    || Double.isFinite(SlabPlacementHeightAttachment.storedOffset(world, cursor))
-                    || SlabAnchorAttachment.isAnchored(world, cursor)) {
+            if (cur.getBlock() instanceof SlabBlock || meshMarkerAt(world, cursor, markersPossible)) {
                 return true;
             }
             if (isThinTopLayer(cur)) {
