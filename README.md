@@ -8,7 +8,7 @@ chosen when it was placed; a later neighbour edit must not move it. See `LAW.md`
 
 - Minecraft 26.2 on NeoForge 26.2.0.88 or newer, and Minecraft 26.3 on NeoForge 26.3.0.48-beta or newer, one jar
   each. No Fabric API or Forgified Fabric API. Java 25 builds and runs it.
-- Version: see `gradle.properties`; the current cycle is `0.6.2-alpha+26.2-neoforge` and `0.6.2-alpha+26.3-neoforge`.
+- Version: see `gradle.properties`; the current cycle is `0.6.2-alpha.1+26.2-neoforge` and `0.6.2-alpha.1+26.3-neoforge`.
 - Both jars come from this one source: the 26.2 build uses the pins in `gradle.properties`, the 26.3 build
   overrides them on the command line (`-Pminecraft_version=26.3 '-Pminecraft_version_range=[26.3,26.4)'
   -Pneo_version=26.3.0.48-beta -Pmod_version=0.6.2-alpha+26.3-neoforge`). The suite runs through

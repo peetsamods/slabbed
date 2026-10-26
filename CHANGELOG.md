@@ -1,4 +1,4 @@
-## [Unreleased] — NeoForge 26.2 and 26.3
+## [0.6.2-alpha.1+26.2-neoforge] and [0.6.2-alpha.1+26.3-neoforge]
 
 See LAW.md — this changelog does not redefine the law.
 
