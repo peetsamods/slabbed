@@ -120,10 +120,10 @@ jobs:
       - name: Check headless display support
         run: command -v xvfb-run
       - name: Install software graphics libraries
-        timeout-minutes: 5
+        timeout-minutes: 10
         run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends libegl-dev libegl-mesa0 libgl1-mesa-dri mesa-vulkan-drivers mesa-utils
+          sudo apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 update
+          sudo apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 install -y --no-install-recommends libegl-dev libegl-mesa0 libgl1-mesa-dri mesa-vulkan-drivers mesa-utils
           xvfb-run -a glxinfo -B
       - name: Build release and proof companions
         run: ./gradlew --no-daemon --stacktrace --console=plain assemble testkitJar diagnosticsJar
