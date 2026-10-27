@@ -1,10 +1,17 @@
-## [0.6.2-alpha+1.21.1]
+## [0.6.7-alpha+1.21.1]
 
 See LAW.md — this changelog does not redefine the law.
 
-- The F3 debug screen's "Targeted Block" readout now names the lowered block you are looking at. The debug screen performs its own grid-walking raycast, separate from the crosshair pick, so aiming at the side of a slab placed on a slab reported the block space below it. The readout's block raycast now uses the same offset-aware raycast as the crosshair; the fluid readout is unchanged. Reported in [#100](https://github.com/peetsamods/slabbed/issues/100) on another version line. Mods that run their own raycast (Jade's block readout, for example) are not changed by this.
-- Reduce chunk-mesh work on ordinary terrain: the render pass now proves a whole chunk free of stored heights and anchors once instead of asking at every block it walks, and remembers which block states are thin surface layers. The rendered result is unchanged; in a same-world profile, section rebuilds spent about a fifth less processor time. This is partial progress on the stutter reported in [#92](https://github.com/peetsamods/slabbed/issues/92) and [#87](https://github.com/peetsamods/slabbed/issues/87): the remaining cost is the per-block column walk itself, which is tracked separately.
-- Harden the model-baking pass: a block model from another mod that fails an eager query while Slabbed wraps the model registry now keeps its own model instead of stopping the game, and foreign model wrappers are skipped on identity alone without being queried. Reported in [#108](https://github.com/peetsamods/slabbed/issues/108); the exact crash there is not reproduced, so this is a safety net, not a confirmed fix.
+For Minecraft 1.21.1 on NeoForge 21.1.233 or newer. Requires Java 21.
+
+### FIXED
+
+- The F3 Targeted Block readout follows the lowered block under the crosshair. Thanks to NSSCaptain for the original report on another game line ([#100](https://github.com/peetsamods/slabbed/issues/100)). Fluid targeting and Jade are unchanged.
+
+### IMPROVED
+
+- Reduce repeated height lookups while building block models: the same block's height is reused across seam checks, and ordinary terrain uses chunk-level absence checks for stored heights and anchors. Thanks to sewzrat ([#92](https://github.com/peetsamods/slabbed/issues/92)) and ALEILGOD ([#87](https://github.com/peetsamods/slabbed/issues/87)) for the redraw-lag reports. The new reuse step reduced CPU time by about 38% in a focused model benchmark against the preceding local implementation; this is not an overall FPS or modpack performance claim.
+- Keep processing other block models when one foreign model rejects an eager query during model baking, and avoid querying wrappers owned by another renderer. Thanks to caohuuminhtrung ([#108](https://github.com/peetsamods/slabbed/issues/108)) for the crash report. This hardening is tested, but the report's exact crash still needs its stack trace and is not confirmed resolved.
 
 ## [0.6.1-alpha+1.21.1]
 

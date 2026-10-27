@@ -240,5 +240,8 @@ public final class SlabHeightStepCullTest {
         boolean got = SlabSupport.isSlabHeightStepFace(world, pos, world.getBlockState(pos), direction);
         ctx.assertTrue(got == expected,
                 message + ": isSlabHeightStepFace(" + direction + ") expected " + expected + ", got " + got);
+        double resolved = SlabSupport.getYOffset(world, pos, world.getBlockState(pos));
+        boolean reused = SlabSupport.isSlabHeightStepFace(world, pos, world.getBlockState(pos), direction, resolved);
+        ctx.assertTrue(reused == got, message + ": reusing the resolved height changed the seam answer");
     }
 }

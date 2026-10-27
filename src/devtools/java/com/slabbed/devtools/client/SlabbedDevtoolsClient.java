@@ -46,6 +46,7 @@ public final class SlabbedDevtoolsClient {
 
     private static void onClientTick(ClientTickEvent.Post event) {
         Minecraft minecraft = Minecraft.getInstance();
+        MeshDyReuseProof.tick(minecraft);
         LiveCursorCaptureClient.onClientTick(minecraft);
         if (minecraft.level != null) {
             LiveCursorIntentRecorder.samplePendingPlacements(

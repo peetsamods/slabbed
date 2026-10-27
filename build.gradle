@@ -46,6 +46,7 @@ def slabbedReleaseExcludes = [
         "com/slabbed/util/SlabbedAuditBridge.java",
         "com/slabbed/util/SlabbedDebug.java"
 ]
+def meshDyReuseDirectory = layout.buildDirectory.dir("run/meshDyReuse")
 def gameTestDirectory = layout.buildDirectory.dir("run/gameTest")
 def p2bProofDirectory = layout.buildDirectory.dir("run/p2bLifecycle")
 def p10cProofDirectory = layout.buildDirectory.dir("run/p10cConsentLifecycle")
@@ -316,6 +317,14 @@ neoForge {
             systemProperty "slabbed.devClassesRoot", sourceSets.main.output.classesDirs.singleFile.absolutePath
             systemProperty "slabbed.devResourcesRoot", sourceSets.main.output.resourcesDir.absolutePath
         }
+        meshDyReuse {
+            client()
+            gameDirectory = meshDyReuseDirectory
+            systemProperty "slabbed.meshDyReuseProof", "true"
+            systemProperty "slabbed.liveCursorIntentRecorder", "false"
+            systemProperty "slabbed.targetDyOverlay", "false"
+            taskBefore tasks.named("devtoolsClasses")
+        }
         server {
             server()
             programArgument "--nogui"
@@ -455,7 +464,7 @@ neoForge {
     runs.configureEach { run ->
         if (run.name == "serverGameTest") {
             run.loadedMods = [mods."${mod_id}", mods.tsshim]
-        } else if (run.name == "client" || run.name == "parityServer" || run.name == "server") {
+        } else if (run.name == "client" || run.name == "meshDyReuse" || run.name == "parityServer" || run.name == "server") {
             run.loadedMods = [mods."${mod_id}", mods.devtools]
         } else {
             run.loadedMods = [mods."${mod_id}"]
@@ -1043,6 +1052,37 @@ tasks.register("runP9SmoothStepsCollisionRed") {
     group = "verification"
     description = "Proves the Smooth Steps fixture detects disabled Slabbed collision following."
     dependsOn(tasks.named("verifyP9SmoothStepsCollisionRed"))
+}
+
+tasks.register("verifyMeshDyReuseProof") {
+    group = "verification"
+    dependsOn(tasks.named("runMeshDyReuse"))
+    doLast {
+        File log = meshDyReuseDirectory.get().file("logs/latest.log").asFile
+        if (!log.isFile()) throw new GradleException("Mesh height reuse proof produced no log")
+        def lines = log.readLines("UTF-8")
+        String pass = "MESH_DY_REUSE PASS rows=18 model=stone sides=6 repeatedPasses=2"
+        if (lines.count { it.endsWith(pass) } != 1 || lines.any { it.contains("MESH_DY_REUSE FAIL") }) {
+            throw new GradleException("Mesh height reuse proof requires one complete PASS and no FAIL")
+        }
+        logger.lifecycle("Mesh height reuse verified: 18 native model cases")
+    }
+}
+
+tasks.named("runMeshDyReuse").configure {
+    doFirst {
+        File log = meshDyReuseDirectory.get().file("logs/latest.log").asFile
+        if (log.exists()) {
+            java.nio.file.Files.move(log.toPath(), new File(log.parentFile,
+                    "before-proof-" + System.nanoTime() + ".log").toPath())
+        }
+    }
+}
+
+tasks.register("runMeshDyReuseProof") {
+    group = "verification"
+    description = "Runs and verifies the isolated native model height-reuse proof."
+    dependsOn(tasks.named("verifyMeshDyReuseProof"))
 }
 
 tasks.register("verifyGameTestCount") {

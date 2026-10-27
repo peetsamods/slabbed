@@ -2880,6 +2880,17 @@ public final class SlabSupport {
      * predicate conservatively leaves vanilla culling unchanged.
      */
     public static boolean isSlabHeightStepFace(BlockGetter world, BlockPos pos, BlockState state, Direction direction) {
+        return isSlabHeightStepFace(world, pos, state, direction, false, 0.0);
+    }
+
+    /** Reuses the subject height already resolved by this block's render context. */
+    public static boolean isSlabHeightStepFace(BlockGetter world, BlockPos pos, BlockState state,
+                                              Direction direction, double resolvedSelfDy) {
+        return isSlabHeightStepFace(world, pos, state, direction, true, resolvedSelfDy);
+    }
+
+    private static boolean isSlabHeightStepFace(BlockGetter world, BlockPos pos, BlockState state,
+                                               Direction direction, boolean selfResolved, double resolvedSelfDy) {
         if (STEP_CULL_DISABLED || world == null || pos == null || state == null || direction == null
                 || CompatHooks.shouldSkipOffsetView(world)) {
             return false;
@@ -2897,7 +2908,7 @@ public final class SlabSupport {
         if (neighbor.isAir()) {
             return false;
         }
-        double selfDy = getYOffset(world, pos, state);
+        double selfDy = selfResolved ? resolvedSelfDy : getYOffset(world, pos, state);
         double neighborDy = getYOffset(world, neighborPos, neighbor);
         return Math.abs(selfDy - neighborDy) > 1.0e-6;
     }

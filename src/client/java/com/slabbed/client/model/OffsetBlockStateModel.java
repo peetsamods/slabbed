@@ -134,10 +134,11 @@ public final class OffsetBlockStateModel extends BakedModelWrapper<BakedModel> {
                 return;
             }
             chainAlternateGeometry = ChainCeilingGeometry.usesAlternateGeometry(view, pos, state);
-            dy = (float) ClientDy.dyFor(view, pos, state);
+            double resolvedDy = ClientDy.dyFor(view, pos, state);
+            dy = (float) resolvedDy;
             int bits = 0;
             for (Direction direction : Direction.Plane.HORIZONTAL) {
-                if (SlabSupport.isSlabHeightStepFace(view, pos, state, direction)) {
+                if (SlabSupport.isSlabHeightStepFace(view, pos, state, direction, resolvedDy)) {
                     bits |= 1 << direction.get2DDataValue();
                 }
             }
