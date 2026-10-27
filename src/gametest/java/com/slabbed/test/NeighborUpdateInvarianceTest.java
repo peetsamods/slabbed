@@ -85,6 +85,72 @@ import java.util.List;
  */
 public final class NeighborUpdateInvarianceTest {
 
+    /**
+     * LAW.md: add_bottom_slab_below reaches the existing column without replacing either subject.
+     * The provenance-free control must move, proving this mutation can expose a lost placement record.
+     */
+    @GameTest(templateName = "fabric-gametest-api-v1:empty")
+    public void addingBottomSlabBelowItemPlacedColumnKeepsBothHeights(TestContext h) {
+        ServerWorld world = h.getWorld();
+        h.assertTrue(!SlabAnchorAttachment.FROZEN_DY_ENABLED, "exercise shipped per-cell provenance mode");
+        List<Runnable> checks = new ArrayList<>();
+        for (boolean creative : new boolean[]{false, true}) {
+            BlockPos subject = h.getAbsolutePos(new BlockPos(creative ? 8 : 3, 4, 3));
+            PlayerEntity player = creative ? h.createMockCreativePlayer() : h.createMockSurvivalPlayer();
+            player.getAbilities().creativeMode = creative;
+            world.setBlockState(subject.west(), Blocks.STONE.getDefaultState(), Block.NOTIFY_ALL);
+            world.setBlockState(subject.down(2), Blocks.STONE.getDefaultState(), Block.NOTIFY_ALL);
+            useAccepted(h, player, Items.STONE, subject.west(), Direction.EAST);
+            useAccepted(h, player, Items.STONE, subject, Direction.UP);
+            for (BlockPos cell : new BlockPos[]{subject, subject.up()}) {
+                BlockState beforeState = world.getBlockState(cell);
+                var beforeFact = SlabAnchorAttachment.rawPlacementDyFact(world, cell);
+                var context = net.minecraft.block.ShapeContext.of(player);
+                var outline = beforeState.getOutlineShape(world, cell, context).getBoundingBox();
+                var collision = beforeState.getCollisionShape(world, cell, context).getBoundingBox();
+                h.assertTrue(beforeState.isOf(Blocks.STONE) && SlabAnchorAttachment.isModernPlacement(world, cell)
+                                && beforeFact.present() && sameHeight(landedDy(world, cell), 0.0) && sameHeight(dy(world, cell), 0.0),
+                        "real item placement must author flat stone and modern provenance");
+                checks.add(() -> {
+                    BlockState after = world.getBlockState(cell);
+                    h.assertTrue(after.equals(beforeState)
+                                    && SlabAnchorAttachment.rawPlacementDyFact(world, cell).equals(beforeFact)
+                                    && SlabAnchorAttachment.isModernPlacement(world, cell)
+                                    && sameHeight(dy(world, cell), 0.0)
+                                    && after.getOutlineShape(world, cell, context).getBoundingBox().equals(outline)
+                                    && after.getCollisionShape(world, cell, context).getBoundingBox().equals(collision),
+                            "adding a slab below must preserve state, stored height, outline and collision; creative=" + creative);
+                });
+            }
+            useAccepted(h, player, Items.STONE_SLAB, subject.down(2), Direction.UP);
+            BlockState slab = world.getBlockState(subject.down());
+            h.assertTrue(slab.isOf(Blocks.STONE_SLAB) && slab.get(SlabBlock.TYPE) == SlabType.BOTTOM,
+                    "mutation must really add the bottom slab immediately under the existing column");
+        }
+        checks.forEach(Runnable::run);
+        BlockPos legacy = h.getAbsolutePos(new BlockPos(12, 4, 3));
+        world.setBlockState(legacy.down(2), Blocks.STONE.getDefaultState(), Block.NOTIFY_ALL);
+        world.setBlockState(legacy, Blocks.STONE.getDefaultState(), Block.NOTIFY_ALL);
+        h.assertTrue(!SlabAnchorAttachment.isModernPlacement(world, legacy) && sameHeight(dy(world, legacy), 0),
+                "reachability control starts flat without provenance");
+        useAccepted(h, h.createMockSurvivalPlayer(), Items.STONE_SLAB, legacy.down(2), Direction.UP);
+        h.assertTrue(sameHeight(dy(world, legacy), -0.5),
+                "reachability: the same slab insertion must expose the provenance-free legacy height path");
+        h.waitAndRun(5, () -> {
+            checks.forEach(Runnable::run);
+            Slabbed.LOGGER.info("SLAB_UNDER_COLUMN PASS survival=2 creative=2 outline=4 collision=4 immediateAndDelayed=true legacyControl=-0.5");
+            h.complete();
+        });
+    }
+
+    private static void useAccepted(TestContext h, PlayerEntity player, Item item, BlockPos owner, Direction face) {
+        ItemStack stack = new ItemStack(item);
+        player.setStackInHand(Hand.MAIN_HAND, stack);
+        Vec3d hit = Vec3d.ofCenter(owner).add(face.getOffsetX() * 0.5, face.getOffsetY() * 0.5, face.getOffsetZ() * 0.5);
+        var result = stack.useOnBlock(new ItemUsageContext(player, Hand.MAIN_HAND, new BlockHitResult(hit, face, owner, false)));
+        h.assertTrue(result.isAccepted(), "fixture item placement must be accepted: " + item + " result=" + result);
+    }
+
     // ── real-useOnBlock placement ───────────────────────────────────────────
     private static void place(TestContext h, Item item, BlockPos clicked, Direction face, double yNudge) {
         placeStack(h, new ItemStack(item), clicked, face, yNudge);
