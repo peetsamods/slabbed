@@ -1,10 +1,14 @@
-## [Unreleased] — Minecraft 26.2–26.3 (Fabric)
+## [0.6.6-alpha+26.2-26.3]
 
 See LAW.md — this changelog does not redefine the law.
 
+For Minecraft 26.2 and 26.3 on Fabric. Requires Fabric API and Java 25.
+
 ### FIXED
 
-- The F3 debug screen's "Targeted Block" readout now names the lowered block you are looking at. The debug screen performs its own grid-walking raycast, separate from the crosshair pick, so aiming at the side of a slab placed on a slab reported the block space below it. The readout's block raycast and the block-tag lines now use the same offset-aware raycast as the crosshair; the fluid readout is unchanged. Reported in [#100](https://github.com/peetsamods/slabbed/issues/100) on another version line. Mods that run their own raycast (Jade's block readout, for example) are not changed by this.
+- Lowered blocks keep their drawn height when Fusion replaces or appends block models. Thanks to lilonkish ([#112](https://github.com/peetsamods/slabbed/issues/112)) and EnormeKartoffel ([#116](https://github.com/peetsamods/slabbed/issues/116)) for the reports. Tested with Fusion 1.3.16 on Minecraft 26.2 using a focused resource pack; the reporters' exact packs remain unverified. This does not advertise Fusion support on 26.3, for which no official compatible Fusion build was available.
+- Blocks animated by Stupid Block Animations now start at their stored height and rotate around the correct lowered position, avoiding the half-block snap when the animation finishes. Thanks to bluegamer1166 ([#115](https://github.com/peetsamods/slabbed/issues/115)). Tested with Stupid Block Animations 0.1.3 on both game versions.
+- The F3 Targeted Block and block-tag readouts follow the lowered block under the crosshair. Thanks to NSSCaptain for the original report on the Fabric 1.20.1 line ([#100](https://github.com/peetsamods/slabbed/issues/100)). The fluid readout is unchanged; this does not change Jade on this game line.
 
 ## [0.6.5-alpha+26.2-26.3]
 

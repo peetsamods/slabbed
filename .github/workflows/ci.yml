@@ -83,10 +83,12 @@ jobs:
           python3 tools/linkage-scan.py "$JAR" - "$GUH/caches/fabric-loom/26.2/minecraft-client.jar" --lib "$FA262" \
             --allow-class 'com/slabbed/compat/PlayerSwing$Modern' --allow-class 'com/slabbed/client/model/YOffsetEmitter'
           CFG="--config src/main/resources/slabbed.mixins.json --config src/client/resources/slabbed.client.mixins.json --config src/diagnostics/resources/slabbed.diagnostics.client.mixins.json"
+          # Optional compatibility targets are absent from the vanilla scan classpath;
+          # verify them with their installed mods in the compatibility client fixtures.
           python3 tools/mixin-target-scan.py "$GUH/caches/fabric-loom/26.3/minecraft-client.jar" src/main/java src/client/java src/diagnostics/java $CFG \
-            --skip LegacyRedStoneWireBlockMixin
+            --skip LegacyRedStoneWireBlockMixin --skip FusionBlockModelModifierMixin --skip StupidBlockAnimationsRendererMixin
           python3 tools/mixin-target-scan.py "$GUH/caches/fabric-loom/26.2/minecraft-client.jar" src/main/java src/client/java src/diagnostics/java $CFG \
-            --skip RedstoneWireBlockMixin --skip CushionRestsOnDrawnTopMixin
+            --skip RedstoneWireBlockMixin --skip CushionRestsOnDrawnTopMixin --skip FusionBlockModelModifierMixin --skip StupidBlockAnimationsRendererMixin
 
   client-verify:
     name: Client GameTests (${{ matrix.minecraft }})

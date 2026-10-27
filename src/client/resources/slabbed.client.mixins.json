@@ -12,6 +12,8 @@
     "ClientLevelLevelExtractorAccessor",
     "DebugHudOffsetRaycastMixin",
     "EntityLightProbeLoweredBandMixin",
+    "FusionBlockModelModifierMixin",
+    "StupidBlockAnimationsRendererMixin",
     "GameRendererCrosshairRetargetMixin",
     "ItemFrameDrawnFaceRenderMixin",
     "IssueReportClickMixin",
