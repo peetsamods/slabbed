@@ -1,3 +1,13 @@
+## [0.6.8-alpha+1.20.1]
+
+See LAW.md — this changelog does not redefine the law.
+
+For Minecraft 1.20.1 on Fabric. Requires Fabric Loader 0.16 or newer, Fabric API 0.92.x, and Java 17 or newer.
+
+### FIXED
+
+- Jade now identifies a lowered slab when aiming at its side, including when another block is behind it. Nearer fluids, entities and ordinary blocks still take priority. Thanks to NSSCaptain ([#100](https://github.com/peetsamods/slabbed/issues/100)). Tested with Jade 11.13.3; Jade remains optional. The F3 correction from 0.6.3-alpha is retained.
+
 ## [0.6.3-alpha+1.20.1]
 
 See LAW.md — this changelog does not redefine the law.

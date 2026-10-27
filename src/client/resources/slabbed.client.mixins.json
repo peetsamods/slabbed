@@ -12,6 +12,7 @@
     "DebugHudOffsetRaycastMixin",
     "GameRendererPickOffsetRaycastMixin",
     "ItemFrameRenderOffsetMixin",
+    "JadeOffsetRaycastMixin",
     "MinecartRenderOffsetMixin",
     "PistonBlockEntityRenderScopeMixin",
     "RedstoneBurnoutParticleMixin"
