@@ -1,3 +1,11 @@
+## [Unreleased] — Minecraft 26.2–26.3 (Fabric)
+
+See LAW.md — this changelog does not redefine the law.
+
+### FIXED
+
+- Arrows that land on a lowered block now rest on it and despawn normally. An arrow that entered the block's grid cell above the drawn top was judged "in the ground" by the raw block shape and released by the real one every tick, so it hung in the air with its despawn timer reset forever. Reported in [#121](https://github.com/peetsamods/slabbed/issues/121).
+
 ## [0.6.6-alpha+26.2-26.3]
 
 See LAW.md — this changelog does not redefine the law.

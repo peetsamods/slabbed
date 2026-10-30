@@ -96,6 +96,7 @@
       "com.slabbed.test.LandingRuleLawTest",
       "com.slabbed.test.TrapdoorPlacementAdmissionTest",
       "com.slabbed.test.JumpPlacementClearanceTest",
+      "com.slabbed.test.ArrowLoweredLeavesLifecycleTest",
       "com.slabbed.test.UpwardContinuationValidationTest",
       "com.slabbed.test.DeepObjectOwnerHitRescueTest",
       "com.slabbed.test.HangingUndersideHitRescueTest",

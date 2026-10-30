@@ -8,7 +8,8 @@
     "TerrainSlabsCompatGameTestMixin",
     "PendingHangChunkMixin",
     "RenderAttachmentReadGameTestMixin",
-    "RenderChunkLookupGameTestMixin"
+    "RenderChunkLookupGameTestMixin",
+    "AbstractArrowLifecycleAccessor"
   ],
   "client": [
     "PlacementDyPredictionJournalGameTestMixin",
