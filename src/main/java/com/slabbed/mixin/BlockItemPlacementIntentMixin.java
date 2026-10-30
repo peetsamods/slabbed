@@ -3,6 +3,7 @@ package com.slabbed.mixin;
 import com.llamalad7.mixinextras.injector.wrapmethod.WrapMethod;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
+import com.llamalad7.mixinextras.sugar.Local;
 import com.slabbed.anchor.SlabAnchorAttachment;
 import com.slabbed.compat.CompatHooks;
 import com.slabbed.network.PlacementDyCorrectionServer;
@@ -1764,6 +1765,46 @@ public abstract class BlockItemPlacementIntentMixin {
     ) {
         // 26.1.2 port: diagnostic side effect deferred until core compile is restored.
         return outgoing;
+    }
+
+    @WrapOperation(method = "canPlace", at = @At(value = "INVOKE",
+            target = "Lnet/minecraft/world/level/Level;isUnobstructed(Lnet/minecraft/world/level/block/state/BlockState;Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/phys/shapes/CollisionContext;)Z"))
+    private boolean slabbed$checkPlayerClearanceAtLanding(
+            Level world, BlockState state, BlockPos pos, CollisionContext shapeContext,
+            Operation<Boolean> original, @Local(argsOnly = true) BlockPlaceContext context
+    ) {
+        boolean unobstructed = original.call(world, state, pos, shapeContext);
+        if (unobstructed || !SlabAnchorAttachment.FROZEN_DY_ENABLED || context.getPlayer() == null) {
+            return unobstructed;
+        }
+        RootAim rootAim = C3_ROOT_AIM.get();
+        LandingResolver.PlacementAim aim = rootAim == null ? null : rootAim.resolverAim();
+        LandingResolver.Family family = LandingResolver.classify(state);
+        if (aim == null || family == LandingResolver.Family.UNSUPPORTED
+                || LandingResolver.compatOwnsFinalState(state)
+                || (aim.replacementSameCell() && aim.ownerPos().equals(pos))) {
+            return false;
+        }
+        PlacementFrame frame = slabbed$c3Frame();
+        LandingResolver.PlacementAim resolveAim = frame != null && frame.itemRelocated
+                && frame.actualContext != null
+                ? LandingResolver.captureRelocatedAim(frame.actualContext) : aim;
+        LandingResolver.PlacementResolution resolution = LandingResolver.resolve(
+                world, resolveAim, pos, state, family);
+        if (resolution == null || !resolution.targetCell().equals(pos)
+                || !Double.isFinite(resolution.landingDy())
+                || resolution.landingDy() >= -LOWERED_VISUAL_BOUNDARY_EPSILON) {
+            return false;
+        }
+        VoxelShape body = SlabSupport.unloweredCollisionShape(state, world, pos, shapeContext);
+        if (!Shapes.joinIsNotEmpty(body.move(pos), Shapes.create(context.getPlayer().getBoundingBox()),
+                BooleanOp.AND)) {
+            return false;
+        }
+        // LAW.md: use the placement-time landing without minting or changing a stored fact.
+        // Include the placing player: actual body overlap must still reject placement.
+        return world.isUnobstructed(null,
+                body.move(pos.getX(), pos.getY() + resolution.landingDy(), pos.getZ()));
     }
 
     @WrapMethod(method = "canPlace")
