@@ -95,6 +95,7 @@
       "com.slabbed.test.DeepCompoundTowerLawTest",
       "com.slabbed.test.LandingRuleLawTest",
       "com.slabbed.test.TrapdoorPlacementAdmissionTest",
+      "com.slabbed.test.JumpPlacementClearanceTest",
       "com.slabbed.test.UpwardContinuationValidationTest",
       "com.slabbed.test.DeepObjectOwnerHitRescueTest",
       "com.slabbed.test.HangingUndersideHitRescueTest",

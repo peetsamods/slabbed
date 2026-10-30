@@ -1269,6 +1269,18 @@ public final class SlabSupport {
         return vanillaCollisionShape(state, getter, pos);
     }
 
+    /** Keeps entity-sensitive collision rules when checking a candidate before its height is stored. */
+    public static VoxelShape unloweredCollisionShape(BlockState state, CollisionGetter getter, BlockPos pos,
+                                                     CollisionContext context) {
+        boolean previous = isVanillaCollisionShapeQuery();
+        VANILLA_COLLISION_SHAPE_QUERY.set(Boolean.TRUE);
+        try {
+            return state.getCollisionShape(getter, pos, context);
+        } finally {
+            VANILLA_COLLISION_SHAPE_QUERY.set(previous);
+        }
+    }
+
     private static VoxelShape vanillaCollisionShape(BlockState state, CollisionGetter getter, BlockPos pos) {
         boolean previous = isVanillaCollisionShapeQuery();
         VANILLA_COLLISION_SHAPE_QUERY.set(Boolean.TRUE);
