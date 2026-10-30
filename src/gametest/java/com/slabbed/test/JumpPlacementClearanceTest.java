@@ -11,12 +11,14 @@ import net.minecraft.world.InteractionHand;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.GameType;
+import net.minecraft.world.level.EmptyBlockGetter;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.SlabBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.SlabType;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.Vec3;
+import net.minecraft.world.phys.shapes.VoxelShape;
 
 /** Placement clearance follows the candidate's landing body, including the placing player. */
 public final class JumpPlacementClearanceTest {
@@ -84,6 +86,15 @@ public final class JumpPlacementClearanceTest {
             BlockHitResult hit = new BlockHitResult(new Vec3(support.getX() + 0.5d,
                     support.getY() + (slab ? 0.5d : 1.0d), support.getZ() + 0.5d),
                     Direction.UP, support, false);
+            VoxelShape rawBody = Blocks.STONE.defaultBlockState()
+                    .getCollisionShape(EmptyBlockGetter.INSTANCE, BlockPos.ZERO);
+            require(helper, level.isUnobstructed(null, rawBody.move(target))
+                            == (!otherPlayer && feetAboveCell >= 1.0d),
+                    "premise: the ordinary cube must expose the intended entity obstruction");
+            VoxelShape landingBody = rawBody.move(target.getX(), target.getY() + (slab ? -0.5d : 0.0d),
+                    target.getZ());
+            require(helper, level.isUnobstructed(null, landingBody) == (accepted || occupied),
+                    "the final body's entity clearance must be established before the placement action");
             player.gameMode.useItemOn(player, level, held, InteractionHand.MAIN_HAND, hit);
             BlockState result = level.getBlockState(target);
             require(helper, result.is(accepted ? Blocks.STONE : occupied ? Blocks.GOLD_BLOCK : Blocks.AIR),
