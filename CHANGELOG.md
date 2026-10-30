@@ -1,10 +1,15 @@
-## [Unreleased] — Minecraft 26.2–26.3 (Fabric)
+## [0.6.9-alpha+26.2-26.3]
 
 See LAW.md — this changelog does not redefine the law.
 
+For Minecraft 26.2 and 26.3 on Fabric. Requires Fabric API and Java 25.
+
 ### FIXED
 
-- Arrows that land on a lowered block now rest on it and despawn normally. An arrow that entered the block's grid cell above the drawn top was judged "in the ground" by the raw block shape and released by the real one every tick, so it hung in the air with its despawn timer reset forever. Reported in [#121](https://github.com/peetsamods/slabbed/issues/121).
+- Jumping from a bottom slab and placing a block beneath yourself now works once you have cleared the block's lowered body. Placement still refuses a body that overlaps the player or another entity. Thanks to Crownsync ([#120](https://github.com/peetsamods/slabbed/issues/120)) for the report.
+- Arrows that land on lowered blocks now rest on the drawn surface and despawn normally, instead of hanging in the air with their despawn timer repeatedly reset. Thanks to bluegamer1166 ([#121](https://github.com/peetsamods/slabbed/issues/121)) for the report and screenshot.
+
+Behavior was checked in-game on Minecraft 26.2 with dispenser-fired arrows on vanilla leaves and stone. The reporter's Soft Leaves setup remains unverified.
 
 ## [0.6.6-alpha+26.2-26.3]
 

@@ -8,7 +8,7 @@ chosen when it was placed; a later neighbour edit must not move it. See `LAW.md`
 
 - Minecraft 26.2 and 26.3 on Fabric, from one jar. Fabric Loader and Fabric API (0.152.2 or newer
   on 26.2) are required. Java 25 builds and runs it.
-- Version: see `gradle.properties`; the current cycle is `0.6.5-alpha+26.2-26.3`.
+- Version: see `gradle.properties`; the current cycle is `0.6.9-alpha+26.2-26.3`.
 - The jar is compiled against 26.3; the few places where 26.2 differs are chosen when the game starts
   (`com.slabbed.compat`, and `shim/mc-26.2` for classes that must be compiled against 26.2). Every
   release is proven on both versions with the `harness/fabric-26.2` leg and the two scanners in `tools/`.
