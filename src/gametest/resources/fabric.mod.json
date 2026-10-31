@@ -146,7 +146,11 @@
       "com.slabbed.test.FenceCeilingRenderClientGameTest",
       "com.slabbed.test.SlabbedSettingsScreenClientGameTest",
       "com.slabbed.test.PistonMovingRenderDyOwnerClientGameTest",
-      "com.slabbed.test.ChiseledBookShelfHitClientGameTest"
+      "com.slabbed.test.ChiseledBookShelfHitClientGameTest",
+      "com.slabbed.test.ReplacementModelOffsetClientGameTest"
+    ],
+    "client": [
+      "com.slabbed.test.ReplacementModelOffsetClientGameTest$Fixtures"
     ]
   },
   "mixins": [
