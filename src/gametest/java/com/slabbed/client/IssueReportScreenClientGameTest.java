@@ -169,6 +169,19 @@ public final class IssueReportScreenClientGameTest implements FabricClientGameTe
             });
             context.takeScreenshot("report-long-actions");
             context.runOnClient(client -> {
+                FittingMultiLineTextWidget review = find(large, FittingMultiLineTextWidget.class);
+                require(review.maxScrollAmount() > 0, "the large review must require inner scrolling");
+                viewport(large).setScrollAmount(0);
+                review.setScrollAmount(review.maxScrollAmount());
+                require(Math.abs(review.scrollAmount() - review.maxScrollAmount()) < 0.001d,
+                        "the review viewport must reach the end of the complete report");
+                checkFooter(large, "edit");
+                Slabbed.LOGGER.info("REPORT_PREVIEW_SCROLL final_row=sample_999 scroll={} max={}",
+                        review.scrollAmount(), review.maxScrollAmount());
+            });
+            context.takeScreenshot("report-long-preview-end");
+            context.runOnClient(client -> {
+                viewport(large).setScrollAmount(viewport(large).maxScrollAmount());
                 press(button(large, "open_blank"));
                 require(opened.getLast().toString().equals(IssueReport.DESTINATION)
                                 && opened.getLast().getRawQuery() == null,
