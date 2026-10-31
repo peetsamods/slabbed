@@ -147,7 +147,8 @@
       "com.slabbed.test.SlabbedSettingsScreenClientGameTest",
       "com.slabbed.test.PistonMovingRenderDyOwnerClientGameTest",
       "com.slabbed.test.ChiseledBookShelfHitClientGameTest",
-      "com.slabbed.test.ReplacementModelOffsetClientGameTest"
+      "com.slabbed.test.ReplacementModelOffsetClientGameTest",
+      "com.slabbed.client.IssueReportScreenClientGameTest"
     ],
     "client": [
       "com.slabbed.test.ReplacementModelOffsetClientGameTest$Fixtures"

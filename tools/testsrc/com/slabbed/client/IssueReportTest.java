@@ -4,16 +4,22 @@ import java.net.URI;
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 
-/** Runs without Minecraft, native libraries, network or a desktop. */
+/** Synthetic report contracts run without Minecraft, native libraries, network or a desktop. */
 public final class IssueReportTest {
     private static int checks;
-
     public static void main(String[] args) {
-        versionsAndEncoding();
-        explicitActionsOnly();
+        versionContext();
+        untouchedDescriptionsCannotReachExternalEffects();
+        collectedMetadataCannotInjectReportStructure();
+        editedModListsCanBeChangedAndRemoved();
+        encodedPayloadUsesOnlyTheReviewedDestinationAndText();
+        longReportsCopyInFullAndOpenOnlyABlankIssue();
+        reviewBackAndCloseGuardEveryExternalEffect();
+        failureAndDeferredEntryRemainFailClosed();
         noticeCommand();
         deferredEntry();
         placement();
@@ -22,70 +28,177 @@ public final class IssueReportTest {
         System.out.println("ISSUE_REPORT_TEST_PASS checks=" + checks);
     }
 
-    private static void versionsAndEncoding() {
-        var report = new IssueReport("26.3", "0.19.5", "0.6.4-alpha+26.2-26.3", "0.160.5+26.3");
-        check(report.diagnostics().equals("Minecraft: 26.3\nFabric Loader: 0.19.5"
-                + "\nSlabbed: 0.6.4-alpha+26.2-26.3\nFabric API: 0.160.5+26.3"), "exact allowlist");
-        URI uri = report.uri();
-        check(uri.getScheme().equals("https") && uri.getHost().equals("github.com")
-                && uri.getPath().equals("/peetsamods/slabbed/issues/new"), "fixed HTTPS destination");
-        check(uri.getUserInfo() == null && uri.getFragment() == null, "no credentials or fragment");
-        String[] params = uri.getRawQuery().split("&");
-        check(params.length == 2 && params[0].equals("title=Slabbed+issue"), "only title and body parameters");
-        String decoded = URLDecoder.decode(params[1].substring(5), StandardCharsets.UTF_8);
-        check(decoded.equals(report.body()), "percent encoding round trip, including literal plus");
-        check(decoded.contains("0.6.4-alpha+26.2-26.3"), "platform qualifier preserved");
-        check(decoded.contains("### What were you doing when the problem happened?\n"
-                + "Tell me what you clicked or did, in order, so I can try it too.\n"),
-                "plain-language action question and help text stay together");
-        check(!decoded.toLowerCase(java.util.Locale.ROOT).contains("steps to reproduce"),
-                "generated player draft contains no reproduction jargon");
-        check(decoded.contains("Expected behavior"), "expected behavior prompt preserved");
-        for (String invalid : new String[] {null, "", "0.1\nprivate-data", "1.0&body=override", "1.0#fragment",
-                "https://invalid.example", "1.0/path", "1.0\\path", "1.0 ", "世界", "1".repeat(81)}) {
-            var unsafe = new IssueReport(invalid, invalid, invalid, invalid);
-            check(unsafe.diagnostics().equals("Minecraft: unavailable\nFabric Loader: unavailable"
-                    + "\nSlabbed: unavailable\nFabric API: unavailable"), "malformed version rejected");
-            check(unsafe.uri().toString().length() <= IssueReport.MAX_URL_LENGTH, "invalid metadata bounded");
+    private static void versionContext() {
+        check(versions().diagnostics().equals("Minecraft: 26.3\nFabric Loader: 0.19.5\nSlabbed: 0.6.9-alpha+26.2-26.3\nFabric API: 0.160.5+26.3"), "version context and platform qualifiers preserved");
+        for (String invalid : new String[]{null, "", "1\nextra", "1&body=override", "1#fragment", "1/path", "1\\path", "1 ", "世界", "1".repeat(81)}) {
+            var snapshot = new IssueReport(invalid, invalid, invalid, invalid);
+            check(snapshot.diagnostics().equals("Minecraft: unavailable\nFabric Loader: unavailable\nSlabbed: unavailable\nFabric API: unavailable"), "malformed version context rejected");
+            check(snapshot.prefilledUri().isEmpty(), "a snapshot alone cannot open a report");
         }
         String maximum = "1" + "+".repeat(79);
-        var bounded = new IssueReport(maximum, maximum, maximum, maximum);
-        check(bounded.minecraft().equals(maximum), "maximum metadata accepted");
-        check(bounded.uri().toASCIIString().length() <= 2048, "worst-case encoded report <= 2048");
-        check(new IssueReport("1.21.11", "0.18.4", "0.6.2-alpha+1.21.9-1.21.11", "0.141.3+1.21.11")
-                .uri().getHost().equals("github.com"), "other semantic version shapes");
+        var report = new IssueReport(maximum, maximum, maximum, maximum).withDetails("Glass", "Placed it.", "It floated.", IssueReport.WorldType.SINGLEPLAYER, null);
+        check(report.minecraft().equals(maximum) && report.browserUri().toString().length() <= 2048, "maximum version metadata keeps the URL cap");
     }
 
-    private static void explicitActionsOnly() {
-        var report = new IssueReport("26.3", "0.19.5", "0.6.4-alpha+26.2-26.3", "0.160.5+26.3");
-        AtomicInteger calls = new AtomicInteger();
-        IssueReportSession.Browser browser = uri -> { check(uri.equals(report.uri()), "preview equals outbound snapshot"); calls.incrementAndGet(); };
-        var cancelled = new IssueReportSession(report);
-        check(calls.get() == 0, "construction performs no I/O");
-        cancelled.report().uri();
-        check(calls.get() == 0, "copy/preview generation performs no I/O");
-        cancelled.close();
-        cancelled.open(browser);
-        check(calls.get() == 0 && cancelled.state() == IssueReportSession.State.CLOSED, "Cancel/Back before confirmation sends nothing");
-        var active = new IssueReportSession(report);
-        active.open(browser);
-        active.open(browser);
-        check(calls.get() == 1 && active.state() == IssueReportSession.State.REQUESTED, "repeated Open calls open once");
-        active.close();
-        active.open(browser);
-        check(calls.get() == 1, "interrupted/closed screen never opens again");
-        var reopened = new IssueReportSession(report);
-        reopened.open(browser);
-        check(calls.get() == 2, "fresh repeated entry requires a new explicit confirmation");
-        AtomicInteger failedCalls = new AtomicInteger();
-        var failed = new IssueReportSession(report);
-        failed.open(uri -> { failedCalls.incrementAndGet(); throw new java.io.IOException("unavailable"); });
-        failed.open(browser);
-        check(failedCalls.get() == 1 && calls.get() == 2 && failed.state() == IssueReportSession.State.FAILED, "failure never retries silently");
-        check(failed.report().uri().equals(report.uri()), "failure retains copyable safe link");
-        var missingNative = new IssueReportSession(report);
-        missingNative.open(uri -> { throw new UnsatisfiedLinkError("unavailable"); });
-        check(missingNative.state() == IssueReportSession.State.FAILED, "native failure retains fallback");
+    private static IssueReport versions() {
+        return new IssueReport("26.3", "0.19.5", "0.6.9-alpha+26.2-26.3", "0.160.5+26.3");
+    }
+
+    private static IssueReport complete(IssueReport.ModList mods) {
+        return versions().withDetails("Glass floats", "Placed glass on a slab.",
+                "The glass floats above the slab.", IssueReport.WorldType.SINGLEPLAYER, mods);
+    }
+
+    private static void untouchedDescriptionsCannotReachExternalEffects() {
+        check(!versions().valid(), "a version snapshot is not a report description");
+        for (String text : List.of("", "  ", "Describe the symptoms here.",
+                "Tell me what you clicked or did, in order, so I can try it too.\n1. ", "1.")) {
+            check(!versions().withDetails("Glass issue", text, text,
+                    IssueReport.WorldType.SINGLEPLAYER, IssueReport.ModList.empty()).valid(),
+                    "empty and starter descriptions must not pass review");
+        }
+        check(!versions().withDetails("Glass issue", "Placed glass.", "It floated.",
+                IssueReport.WorldType.UNSPECIFIED, null).valid(), "world type must be chosen");
+        check(versions().withDetails("Menu issue", "Opened the settings menu.", "A control is missing.",
+                IssueReport.WorldType.MENUS, null).valid(), "title-menu reports need no invented world type");
+        var calls = new AtomicInteger();
+        var session = new IssueReportSession(versions());
+        session.open(uri -> calls.incrementAndGet());
+        check(!session.copyText(value -> calls.incrementAndGet()), "unreviewed text cannot be copied");
+        check(!session.review(null) && !session.review(versions()) && calls.get() == 0,
+                "missing descriptions must not cause any external effect");
+    }
+
+    private static void collectedMetadataCannotInjectReportStructure() {
+        var raw = new ArrayList<IssueReport.ClientMod>();
+        raw.add(new IssueReport.ClientMod("zeta_mod", "2.0+build"));
+        raw.add(new IssueReport.ClientMod("alpha_mod", "1.2.3"));
+        raw.add(new IssueReport.ClientMod("alpha_mod", "9.9"));
+        raw.add(new IssueReport.ClientMod("bad\n### heading", "1.0"));
+        raw.add(new IssueReport.ClientMod("sample_mod", "1&title=changed"));
+        raw.add(new IssueReport.ClientMod("sample_two", "1\n~~~\nextra"));
+        raw.add(new IssueReport.ClientMod("sample_three", "x".repeat(81)));
+        raw.add(null);
+        IssueReport.ModList mods = IssueReport.collectMods(raw);
+        check(mods.text().equals("alpha_mod 1.2.3\nzeta_mod 2.0+build") && mods.omitted() == 6,
+                "only bounded ID/version tokens may be included, with explicit omissions");
+        String body = complete(mods).body();
+        check(body.contains("~~~text\nalpha_mod 1.2.3\nzeta_mod 2.0+build\n~~~")
+                        && !body.contains("title=changed") && !body.contains("### heading")
+                        && body.contains("not a complete inventory"),
+                "metadata must remain literal rows rather than headings or URL fields");
+        boolean immutable = false;
+        try { mods.rows().add(new IssueReport.ClientMod("other_mod", "1")); }
+        catch (UnsupportedOperationException expected) { immutable = true; }
+        check(immutable, "reviewed metadata must not mutate behind the preview");
+    }
+
+    private static void editedModListsCanBeChangedAndRemoved() {
+        IssueReport.ModList mods = IssueReport.editedMods(
+                "zeta_mod 2.0\nalpha_mod 9.9\nbad/value 1.0\n# heading");
+        check(mods.text().equals("alpha_mod 9.9\nzeta_mod 2.0") && mods.omitted() == 2,
+                "edited rows must use the same metadata boundary");
+        check(IssueReport.editedMods("").rows().isEmpty(), "all rows can be removed");
+        IssueReport withoutMods = complete(IssueReport.ModList.empty());
+        check(!withoutMods.body().contains("Included client mods")
+                        && !withoutMods.body().contains("alpha_mod"), "removal must remove the whole list");
+        check(complete(mods.withAdditionalOmissions(3)).body().contains("Omitted 5"),
+                "collection and edit omissions must remain visible");
+    }
+
+    private static void encodedPayloadUsesOnlyTheReviewedDestinationAndText() {
+        IssueReport report = versions().withDetails("Glass & snow ☃",
+                "Placed glass.\nLooked at it? x=1&body=changed",
+                "It floats. 🧱", IssueReport.WorldType.MULTIPLAYER, IssueReport.ModList.empty());
+        URI uri = report.prefilledUri().orElseThrow();
+        check(uri.getScheme().equals("https") && uri.getHost().equals("github.com")
+                        && uri.getPath().equals("/peetsamods/slabbed/issues/new")
+                        && uri.getUserInfo() == null && uri.getFragment() == null,
+                "user text cannot change the destination");
+        var query = new HashMap<String, String>();
+        for (String pair : uri.getRawQuery().split("&")) {
+            String[] parts = pair.split("=", 2);
+            query.put(parts[0], URLDecoder.decode(parts[1], StandardCharsets.UTF_8));
+        }
+        check(query.size() == 2 && query.get("title").equals("Glass & snow ☃")
+                        && query.get("body").equals(report.body())
+                        && query.get("body").contains("It floats. 🧱"),
+                "one UTF-8 encoding must preserve exactly the reviewed title and body");
+    }
+
+    private static void longReportsCopyInFullAndOpenOnlyABlankIssue() {
+        int boundary = -1;
+        for (int length = 1; length < 4096; length++) {
+            var report = versions().withDetails("Glass", "Placed it.", "x".repeat(length),
+                    IssueReport.WorldType.SINGLEPLAYER, null);
+            if (report.prefilledUri().map(uri -> uri.toString().length() == IssueReport.MAX_URL_LENGTH)
+                    .orElse(false)) { boundary = length; break; }
+        }
+        check(boundary > 0, "the exact URL boundary must be exercised");
+        var tooLong = versions().withDetails("Glass", "Placed it.", "x".repeat(boundary + 1),
+                IssueReport.WorldType.SINGLEPLAYER, null);
+        check(tooLong.prefilledUri().isEmpty()
+                        && tooLong.browserUri().toString().equals(IssueReport.DESTINATION)
+                        && tooLong.copyText().contains("x".repeat(boundary + 1)),
+                "over-limit URLs must become blank destinations without truncating copied text");
+        var many = new ArrayList<IssueReport.ClientMod>();
+        for (int index = 0; index < IssueReport.MAX_MOD_ROWS + 2; index++)
+            many.add(new IssueReport.ClientMod("example_" + index, "1.2.3"));
+        var mods = IssueReport.collectMods(many);
+        check(mods.rows().size() == IssueReport.MAX_MOD_ROWS && mods.omitted() == 2,
+                "large metadata collections must disclose their limit");
+        var largeReport = complete(mods);
+        check(largeReport.prefilledUri().isEmpty()
+                        && largeReport.copyText().contains("example_4095 1.2.3")
+                        && largeReport.copyText().contains("Omitted 2"),
+                "the full reviewed list and omission notice must survive the text-copy fallback");
+    }
+
+    private static void reviewBackAndCloseGuardEveryExternalEffect() {
+        var session = new IssueReportSession(versions());
+        var opened = new ArrayList<URI>();
+        var copied = new ArrayList<String>();
+        IssueReport report = complete(IssueReport.editedMods("example_mod 1.2.3"));
+        check(session.review(report), "an actual description can be reviewed");
+        check(session.copyText(copied::add) && copied.getFirst().equals(report.copyText()),
+                "copy text must match the immutable preview");
+        check(session.copyLink(copied::add)
+                        && copied.getLast().equals(report.prefilledUri().orElseThrow().toString()),
+                "copy link must use the same reviewed report");
+        session.open(opened::add);
+        session.open(opened::add);
+        check(opened.size() == 1, "repeated clicks must not open twice");
+        session.back();
+        check(!session.copyText(copied::add), "going back invalidates the old review");
+        check(session.review(complete(IssueReport.ModList.empty())), "an edited report can be reviewed again");
+        session.open(opened::add);
+        check(opened.size() == 2 && !opened.getLast().toString().contains("example_mod"),
+                "removed mod data must not reappear in a new review");
+        session.close();
+        session.open(opened::add);
+        check(!session.review(report) && !session.copyText(copied::add)
+                        && !session.copyLink(copied::add) && opened.size() == 2,
+                "closed callbacks must neither send nor copy an old report");
+    }
+
+    private static void failureAndDeferredEntryRemainFailClosed() {
+        var session = new IssueReportSession(versions());
+        session.review(complete(IssueReport.ModList.empty()));
+        session.open(uri -> { throw new IllegalStateException("synthetic opener failure"); });
+        check(session.state() == IssueReportSession.State.FAILED
+                        && session.copyText(value -> { }), "browser failure must retain local copy recovery");
+        check(!session.copyText(value -> { throw new IllegalStateException("synthetic clipboard failure"); }),
+                "clipboard failure must not pretend success");
+        Object level = new Object(), screen = new Object();
+        check(IssueReportSession.canOpenRequest(level, level, screen, screen, true)
+                        && IssueReportSession.canOpenRequest(level, level, screen, null, true)
+                        && !IssueReportSession.canOpenRequest(level, new Object(), screen, screen, true)
+                        && !IssueReportSession.canOpenRequest(level, level, screen, new Object(), true)
+                        && !IssueReportSession.canOpenRequest(level, level, screen, screen, false),
+                "deferred chat entry must reject a replaced screen, world or player");
+        check(IssueReportSession.isReportCommand("/slabbed_report_issue")
+                        && !IssueReportSession.isReportCommand("/slabbed_report_issue extra"),
+                "only the exact local report action may be consumed");
     }
 
     private static void noticeCommand() {
