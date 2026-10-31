@@ -131,6 +131,20 @@ public final class IssueReportClient {
                 .map(mod -> mod.getMetadata().getVersion().getFriendlyString()).orElse(null);
     }
 
+    /** Only the explicit client-mod opt-in reads this list; no paths or other metadata are queried. */
+    static Iterable<IssueReport.ClientMod> loadedClientMods() {
+        var rows = new ArrayList<IssueReport.ClientMod>();
+        for (var mod : FabricLoader.getInstance().getAllMods()) {
+            try {
+                var metadata = mod.getMetadata();
+                rows.add(new IssueReport.ClientMod(metadata.getId(), metadata.getVersion().getFriendlyString()));
+            } catch (RuntimeException | LinkageError failure) {
+                rows.add(null);
+            }
+        }
+        return rows;
+    }
+
     static void openBrowser(URI uri) throws ReflectiveOperationException {
         // The native URI opener moved in 26.3. Resolve only this vanilla compatibility seam;
         // both implementations may report OS failure asynchronously, so Copy link stays visible.

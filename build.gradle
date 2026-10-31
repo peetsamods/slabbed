@@ -360,6 +360,7 @@ sourceSets {
             include("com/slabbed/test/Slabbed2612ConnectorSurvivalTest.java")
             include("com/slabbed/test/Slabbed2612CollisionDepthTest.java")
             include("com/slabbed/test/ReplacementModelOffsetClientGameTest.java")
+            include("com/slabbed/client/IssueReportScreenClientGameTest.java")
             include("com/slabbed/test/Slabbed2612CompoundMatrixTest.java")
             include("com/slabbed/test/RedstoneGateOnTerrainSlabsPlacementTest.java")
             include("com/slabbed/test/SlabHeightStepCullGh24Test.java")
@@ -1569,7 +1570,7 @@ sourceSets.main.java.exclude('com/slabbed/dev/**')
 // Consent, URL encoding and menu geometry need no game or native window.
 tasks.register("testIssueReporting", Exec) {
     group = "verification"
-    description = "Verify version-only issue reporting without launching Minecraft."
+    description = "Verify reviewed issue report consent, metadata and URL boundaries without launching Minecraft."
     commandLine "bash", rootProject.file("tools/test-issue-reporting.sh").absolutePath
 }
 tasks.named("check").configure { dependsOn("testIssueReporting") }
