@@ -1,4 +1,4 @@
-## [0.7.0-alpha+26.2-26.3]
+## [0.6.10-alpha+26.2-26.3]
 
 See LAW.md — this changelog does not redefine the law.
 
