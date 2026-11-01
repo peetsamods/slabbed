@@ -29,7 +29,7 @@ public final class IssueReportTest {
     }
 
     private static void versionContext() {
-        check(versions().diagnostics().equals("Minecraft: 26.3\nFabric Loader: 0.19.5\nSlabbed: 0.7.0-alpha+26.2-26.3\nFabric API: 0.160.5+26.3"), "version context and platform qualifiers preserved");
+        check(versions().diagnostics().equals("Minecraft: 26.3\nFabric Loader: 0.19.5\nSlabbed: 0.6.10-alpha+26.2-26.3\nFabric API: 0.160.5+26.3"), "version context and platform qualifiers preserved");
         for (String invalid : new String[]{null, "", "1\nextra", "1&body=override", "1#fragment", "1/path", "1\\path", "1 ", "世界", "1".repeat(81)}) {
             var snapshot = new IssueReport(invalid, invalid, invalid, invalid);
             check(snapshot.diagnostics().equals("Minecraft: unavailable\nFabric Loader: unavailable\nSlabbed: unavailable\nFabric API: unavailable"), "malformed version context rejected");
@@ -41,7 +41,7 @@ public final class IssueReportTest {
     }
 
     private static IssueReport versions() {
-        return new IssueReport("26.3", "0.19.5", "0.7.0-alpha+26.2-26.3", "0.160.5+26.3");
+        return new IssueReport("26.3", "0.19.5", "0.6.10-alpha+26.2-26.3", "0.160.5+26.3");
     }
 
     private static IssueReport complete(IssueReport.ModList mods) {
