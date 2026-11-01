@@ -32,7 +32,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 /** Real widgets with synthetic metadata and local effect recorders; no report data leaves the test. */
 public final class IssueReportScreenClientGameTest implements FabricClientGameTest {
     private static IssueReport versions() {
-        return new IssueReport("26.3", "0.19.5", "0.6.9-alpha+26.2-26.3", "0.160.5+26.3");
+        return new IssueReport("26.3", "0.19.5", "0.7.0-alpha+26.2-26.3", "0.160.5+26.3");
     }
 
     @Override

@@ -1,3 +1,25 @@
+## [0.7.0-alpha+26.2-26.3]
+
+See LAW.md — this changelog does not redefine the law.
+
+For Minecraft 26.2 and 26.3 on Fabric. Requires Fabric API and Java 25.
+
+### FIXED
+
+- Glass drawn by Clean and Clear Glass keeps its stored height on slabs, aligning the model with the selection outline. The height shift runs once after late model replacements. Thanks to W0lvif ([#122](https://github.com/peetsamods/slabbed/issues/122)) for the report.
+
+### IMPROVED
+
+- The issue-report form asks for a short title, what you did, what happened, and where it happened before you can review a report. Untouched starter text cannot open a draft.
+- Review the complete report before opening GitHub. The screen explains that opening a prefilled link sends its text to GitHub before an issue is submitted, and that submitted issues are public.
+- Copy the full report text when a report is too long for the 2048-character link limit, then open a blank issue and paste it. Long reports are not silently shortened.
+
+### NEW
+
+- Optionally include client mod IDs and versions in a report. This starts off, reads the list only when selected, and lets you edit entries or remove the entire list before opening GitHub. Logs, local paths, player identifiers, server addresses, world data, resource packs, shaders and settings are not automatically collected.
+
+The glass change was checked with Clean and Clear Glass 26.3.0 on Minecraft 26.3 using regular glass, tinted glass and mixed slab stacks. Automated replacement-model checks cover both game versions. Panes, stained glass and the reporter's full renderer, shader and resource-pack combination remain unverified.
+
 ## [0.6.9-alpha+26.2-26.3]
 
 See LAW.md — this changelog does not redefine the law.
