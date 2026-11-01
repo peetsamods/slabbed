@@ -676,6 +676,15 @@ def slabbedGitSha = { ->
 }()
 def slabbedBuildTime = java.time.Instant.now().toString()
 
+// Both public archives identify the same release and source revision.
+tasks.named("sourcesJar", Jar).configure {
+    filesMatching("fabric.mod.json") { expand(version: project.version) }
+    manifest {
+        attributes 'Slabbed-Git-Sha': slabbedGitSha,
+                   'Slabbed-Build-Time': slabbedBuildTime
+    }
+}
+
 // ---------------------------------------------------------------------------------------------
 // Test kit for the per-version proof harness (harness/, NOT a release artifact).
 // One jar serves 26.2 and 26.3, and each version must run the suite against the EXACT release jar.
