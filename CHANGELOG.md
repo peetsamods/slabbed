@@ -1,3 +1,15 @@
+## [0.6.11-alpha+26.2-26.3]
+
+See LAW.md — this changelog does not redefine the law.
+
+For Minecraft 26.2 and 26.3 on Fabric. Requires Fabric API and Java 25.
+
+### FIXED
+
+- Prevent a chunk-rendering crash with Sodium and Continuity when blocks are lowered or meet blocks at a different stored height. The existing glass-model height correction is retained. Thanks to Skwishyat for the crash log and details ([#126](https://github.com/peetsamods/slabbed/issues/126#issuecomment-6571308366)).
+
+This addresses the reproduced Sodium/Continuity rendering failure. The cause of the original Minecraft 26.2 world-entry freeze report remains unconfirmed.
+
 ## [0.6.10-alpha+26.2-26.3]
 
 See LAW.md — this changelog does not redefine the law.
