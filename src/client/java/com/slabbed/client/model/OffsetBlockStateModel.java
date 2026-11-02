@@ -127,14 +127,31 @@ public final class OffsetBlockStateModel implements BlockStateModel {
                 return;
             }
             boolean stepSeam = dy != 0.0f || seam.anyMismatchedNeighborDy();
-            QuadEmitter out = stepSeam ? YOffsetEmitters.wrapWithTransform(emitter, dy, seam) : emitter;
-            fabricWrapped.emitQuads(out, view, pos, state, random, seam);
+            if (stepSeam) {
+                // Mesh output may require the backend's own emitter instance. Keep the height
+                // transform outside late model processing without substituting that instance.
+                emitter.pushTransform(quad -> {
+                    if (dy != 0.0f) {
+                        for (int vertex = 0; vertex < 4; vertex++) {
+                            quad.pos(vertex, quad.x(vertex), quad.y(vertex) + dy, quad.z(vertex));
+                        }
+                    }
+                    return seam.transform(quad);
+                });
+                try {
+                    fabricWrapped.emitQuads(emitter, view, pos, state, random, seam);
+                } finally {
+                    emitter.popTransform();
+                }
+            } else {
+                fabricWrapped.emitQuads(emitter, view, pos, state, random, seam);
+            }
             // Phase 3a band emission PULLED after live rejection (TEST (9), 2026-07-07): BAKE_LOCK_UV
             // derives UVs from vertex positions, and band tops exceed the unit square — the UVs walk off
             // the block's sprite into NEIGHBORING ATLAS SPRITES, painting alien texture strips on every
             // stack. Take-2 must use explicit uv() with V clamped/tiled inside the sprite (see design doc);
             // until then no band is emitted. The plan function + its pins remain.
-            // slabbed$emitGapFillBand(out, view, pos, dy);
+            // slabbed$emitGapFillBand(emitter, view, pos, dy);
         } finally {
             PlacementDyPredictionJournal.endRenderRead();
         }
