@@ -148,6 +148,7 @@
       "com.slabbed.test.PistonMovingRenderDyOwnerClientGameTest",
       "com.slabbed.test.ChiseledBookShelfHitClientGameTest",
       "com.slabbed.test.ReplacementModelOffsetClientGameTest",
+      "com.slabbed.test.EmitterIdentityClientGameTest",
       "com.slabbed.client.IssueReportScreenClientGameTest"
     ],
     "client": [
