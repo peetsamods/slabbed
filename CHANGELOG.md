@@ -1,3 +1,11 @@
+## [0.6.12-alpha+1.21.1]
+
+For Minecraft 1.21.1 on NeoForge 21.1.233 or newer. Requires Java 21.
+
+### IMPROVED
+
+- Reuse static column checks within each chunk section rebuild. In a focused moving-light test, this reduced CPU time inside the section compiler by about 30% compared with 0.6.7-alpha. Frame timing stayed close in that test; performance in other worlds and modpacks can vary. This is a partial improvement for [#92](https://github.com/peetsamods/slabbed/issues/92).
+
 ## [0.6.7-alpha+1.21.1]
 
 See LAW.md — this changelog does not redefine the law.
