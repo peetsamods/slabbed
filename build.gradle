@@ -131,6 +131,7 @@ sourceSets {
                     "com/slabbed/test/CombinedSlabChainingMatrixTest.java",
                     "com/slabbed/test/DeepDyConsentTest.java",
                     "com/slabbed/test/MeshScreenChunkPresenceTest.java",
+                    "com/slabbed/test/MeshColumnCacheTest.java",
                     "com/slabbed/test/DySpecificationTest.java",
                     "com/slabbed/test/HangingSeatRememberedTest.java",
                     "com/slabbed/test/HangingLoadDeferralTest.java",

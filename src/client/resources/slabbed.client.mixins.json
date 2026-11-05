@@ -10,7 +10,8 @@
     "GameRendererPickOffsetRaycastMixin",
     "ItemFrameDrawnFaceRenderMixin",
     "PaintingDrawnFaceRenderMixin",
-    "MinecartRenderOffsetMixin"
+    "MinecartRenderOffsetMixin",
+    "SectionCompilerMeshColumnCacheMixin"
   ],
   "injectors": { "defaultRequire": 1 }
 }

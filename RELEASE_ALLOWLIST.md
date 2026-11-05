@@ -132,6 +132,7 @@ com/slabbed/mixin/client/GameRendererPickOffsetRaycastMixin.class
 com/slabbed/mixin/client/ItemFrameDrawnFaceRenderMixin.class
 com/slabbed/mixin/client/PaintingDrawnFaceRenderMixin.class
 com/slabbed/mixin/client/MinecartRenderOffsetMixin.class
+com/slabbed/mixin/client/SectionCompilerMeshColumnCacheMixin.class
 com/slabbed/mixin/torch/
 com/slabbed/mixin/torch/TorchBlockMixin.class
 com/slabbed/util/
@@ -159,6 +160,8 @@ com/slabbed/util/SlabSupport$AttachmentRole.class
 com/slabbed/util/SlabSupport$CompoundSlabRemapDecision.class
 com/slabbed/util/SlabSupport$SupportResolutionContext.class
 com/slabbed/util/SlabSupport.class
+com/slabbed/util/MeshColumnCache.class
+com/slabbed/util/MeshColumnCache$Scope.class
 com/slabbed/util/SlabbedOffsetColliderClip$OwnerWindowCollector.class
 com/slabbed/util/SlabbedOffsetColliderClip.class
 com/slabbed/util/SlabbedOffsetRaycast$NearestCollector.class
@@ -280,6 +283,7 @@ com/slabbed/mixin/client/GameRendererPickOffsetRaycastMixin.java
 com/slabbed/mixin/client/ItemFrameDrawnFaceRenderMixin.java
 com/slabbed/mixin/client/PaintingDrawnFaceRenderMixin.java
 com/slabbed/mixin/client/MinecartRenderOffsetMixin.java
+com/slabbed/mixin/client/SectionCompilerMeshColumnCacheMixin.java
 com/slabbed/mixin/torch/
 com/slabbed/mixin/torch/TorchBlockMixin.java
 com/slabbed/util/
@@ -292,6 +296,7 @@ com/slabbed/util/SlabEnsembleCoherence.java
 com/slabbed/util/SlabbedDiagnosticsBridge.java
 com/slabbed/util/SlabdyRowFormatter.java
 com/slabbed/util/SlabSupport.java
+com/slabbed/util/MeshColumnCache.java
 com/slabbed/util/SlabbedOffsetColliderClip.java
 com/slabbed/util/SlabbedOffsetRaycast.java
 com/slabbed/util/SlabbedServerHitValidation.java

@@ -2831,29 +2831,49 @@ public final class SlabSupport {
      * world floor and at the depth cap.
      */
     private static boolean meshScreenColumnSuspicious(BlockGetter world, BlockPos top, boolean markersPossible) {
+        // Presence is read by the caller on every screen entry. Marker-bearing columns never
+        // consult this geometry memo, including predictions which have not become facts yet.
+        MeshColumnCache.Scope memo = markersPossible ? null : MeshColumnCache.current(world);
+        if (memo != null) {
+            byte cached = memo.lookup(top);
+            if (cached != 0) {
+                return cached == 2;
+            }
+        }
+        boolean staticGeometry = memo != null;
         int minY = world.getMinBuildHeight();
         BlockPos.MutableBlockPos cursor = new BlockPos.MutableBlockPos();
         for (int i = 1; i <= MAX_CHAIN_DEPTH; i++) {
             int y = top.getY() - i;
             if (y < minY) {
-                return false;
+                return rememberMeshColumn(memo, top, false, staticGeometry);
             }
             cursor.set(top.getX(), y, top.getZ());
             BlockState cur = world.getBlockState(cursor);
+            if (staticGeometry && cur.getBlock().hasDynamicShape()) {
+                staticGeometry = false;
+            }
             if (cur.isAir()) {
-                return i <= MESH_SCREEN_SEAT_DEPTH;
+                return rememberMeshColumn(memo, top, i <= MESH_SCREEN_SEAT_DEPTH, staticGeometry);
             }
             if (cur.getBlock() instanceof SlabBlock || meshMarkerAt(world, cursor, markersPossible)) {
-                return true;
+                return rememberMeshColumn(memo, top, true, staticGeometry);
             }
             if (isThinTopLayer(cur)) {
-                return i <= MESH_SCREEN_SEAT_DEPTH;
+                return rememberMeshColumn(memo, top, i <= MESH_SCREEN_SEAT_DEPTH, staticGeometry);
             }
             if (i <= MESH_SCREEN_SEAT_DEPTH && !cur.isSolidRender(world, cursor)) {
-                return true;
+                return rememberMeshColumn(memo, top, true, staticGeometry);
             }
         }
-        return false;
+        return rememberMeshColumn(memo, top, false, staticGeometry);
+    }
+
+    private static boolean rememberMeshColumn(MeshColumnCache.Scope memo, BlockPos top, boolean result, boolean staticGeometry) {
+        if (staticGeometry) {
+            memo.remember(top, result);
+        }
+        return result;
     }
 
     /**
