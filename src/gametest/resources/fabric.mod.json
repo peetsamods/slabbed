@@ -129,7 +129,8 @@
       "com.slabbed.config.SlabbedConfigFileTest",
       "com.slabbed.test.PotSeatOptionTest",
       "com.slabbed.test.ManualDyAdjustLawTest",
-      "com.slabbed.test.ChiseledBookShelfHitTest"
+      "com.slabbed.test.ChiseledBookShelfHitTest",
+      "com.slabbed.test.LoweredCarpetVibrationTest"
     ],
     "fabric-client-gametest": [
       "com.slabbed.test.EventParticleFrozenDyClientGameTest",
@@ -149,7 +150,9 @@
       "com.slabbed.test.ChiseledBookShelfHitClientGameTest",
       "com.slabbed.test.ReplacementModelOffsetClientGameTest",
       "com.slabbed.test.EmitterIdentityClientGameTest",
-      "com.slabbed.client.IssueReportScreenClientGameTest"
+      "com.slabbed.test.ExposedStepFlatLightingClientGameTest",
+      "com.slabbed.client.IssueReportScreenClientGameTest",
+      "com.slabbed.client.IssueReportEntryClientGameTest"
     ],
     "client": [
       "com.slabbed.test.ReplacementModelOffsetClientGameTest$Fixtures"
@@ -157,7 +160,9 @@
   },
   "mixins": [
     "slabbed-test31.mixins.json",
-    "slabbed.rig.mixins.json"
+    "slabbed.rig.mixins.json",
+    "slabbed-crop-test.mixins.json",
+    "slabbed-footstep-test.mixins.json"
   ],
   "depends": {
     "fabricloader": ">=0.18.1",

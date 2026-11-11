@@ -1,6 +1,7 @@
 package com.slabbed.util;
 
 import com.slabbed.anchor.SlabAnchorAttachment;
+import com.slabbed.compat.CompatHooks;
 import it.unimi.dsi.fastutil.longs.Long2DoubleOpenHashMap;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 import net.minecraft.core.BlockPos;
@@ -236,7 +237,8 @@ public final class SlabbedOffsetRaycast {
                 dyMemo.put(key, dy);
             }
             // A ceiling-connected post can enter the next cell without moving its stored seat.
-            if (dy == 0.0 && FenceCeilingConnection.postTop(world,pos,state,dy)<=1.0d) {
+            if (dy == 0.0 && FenceCeilingConnection.postTop(world,pos,state,dy)<=1.0d
+                    && !CompatHooks.terrainSlabsHandlesObjectOffsetAt(world, pos, state)) {
                 return; // ordinary flush geometry is covered by its primary cell
             }
             shapeTested.add(key);

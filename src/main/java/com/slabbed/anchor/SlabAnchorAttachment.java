@@ -1126,7 +1126,8 @@ public final class SlabAnchorAttachment {
         if (!movedByPiston && replacementPreservesAnchor(world, pos, oldState, newState)) {
             return;
         }
-        removeAnchor(world, chunk, pos);
+        boolean preservePlacementDy = OffgridSurvivorTransition.consume(world, pos, oldState, newState);
+        removeAnchor(world, chunk, pos, preservePlacementDy);
     }
 
     /**
@@ -1149,6 +1150,10 @@ public final class SlabAnchorAttachment {
      * change, and the position-only form performed nine separate chunk lookups for one cell.
      */
     public static void removeAnchor(Level world, LevelChunk chunk, BlockPos pos) {
+        removeAnchor(world, chunk, pos, false);
+    }
+
+    private static void removeAnchor(Level world, LevelChunk chunk, BlockPos pos, boolean preservePlacementDy) {
         if (world == null || world.isClientSide() || chunk == null || pos == null) {
             return;
         }
@@ -1177,7 +1182,7 @@ public final class SlabAnchorAttachment {
         // FROZEN-DY (Step 0): the stored placement height dies with the block, so a fresh placement in
         // the same cell captures its own aim from scratch.
         Long2DoubleOpenHashMap dyMap = chunk.getAttached(PLACEMENT_DY_TYPE);
-        if (dyMap != null && dyMap.containsKey(pos.asLong())) {
+        if (!preservePlacementDy && dyMap != null && dyMap.containsKey(pos.asLong())) {
             Long2DoubleOpenHashMap copy = new Long2DoubleOpenHashMap(dyMap);
             copy.defaultReturnValue(Double.NaN);
             copy.remove(pos.asLong());

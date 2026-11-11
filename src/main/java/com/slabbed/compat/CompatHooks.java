@@ -2,6 +2,8 @@ package com.slabbed.compat;
 
 import com.slabbed.compat.terrainslabs.TerrainSlabsCompat;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.core.BlockPos;
+import net.minecraft.world.level.BlockGetter;
 
 import java.util.function.Predicate;
 
@@ -84,4 +86,9 @@ public final class CompatHooks {
         }
         return false;
     }
+    /** Positional ownership for a new placement; state-only classifiers retain their role policy. */
+    public static boolean terrainSlabsHandlesObjectOffsetAt(BlockGetter world, BlockPos pos, BlockState state) {
+        return TerrainSlabsCompat.isLoaded() && TerrainSlabsCompat.handlesObjectOffsetAt(world, pos, state);
+    }
+
 }

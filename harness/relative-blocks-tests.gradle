@@ -1,0 +1,22 @@
+import groovy.json.JsonSlurper
+import groovy.json.JsonOutput
+
+// Opt-in real-mod compatibility proof; the ordinary suite does not require RPB.
+// ./gradlew25 -I harness/relative-blocks-tests.gradle -PrelativeTestJar=<verified-jar> runClientGameTest
+allprojects {
+    afterEvaluate {
+        if (!project.hasProperty('relativeTestJar')) {
+            throw new GradleException('Set -PrelativeTestJar to a verified Relatively Placed Blocks JAR')
+        }
+        dependencies { gametestImplementation files(project.property('relativeTestJar')) }
+        sourceSets.gametest.java.include('com/slabbed/test/RelativeBlocksCompatibilityClientGameTest.java')
+        tasks.named('processGametestResources') {
+            doLast {
+                def metadata = new File(destinationDir, 'fabric.mod.json')
+                def parsed = new JsonSlurper().parse(metadata)
+                parsed.entrypoints['fabric-client-gametest'] = ['com.slabbed.test.RelativeBlocksCompatibilityClientGameTest']
+                metadata.text = JsonOutput.prettyPrint(JsonOutput.toJson(parsed))
+            }
+        }
+    }
+}

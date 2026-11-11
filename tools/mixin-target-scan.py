@@ -171,7 +171,9 @@ def main():
                         pass
                     if not has_member(sup, members, owner, name, desc, 'method'):
                         problems.append(f'{f}: target {owner}.{name}{desc or ""}')
-                for am in ACCESSOR_RE.finditer(src):
+                # Like injection targets above, accessors on external mod classes are outside
+                # this game-jar-only scan; their mixins are exercised by real-mod client tests.
+                for am in ACCESSOR_RE.finditer(src) if mc_owners else ():
                     name = am.group(2); checked += 1
                     kind = 'field' if am.group(1) == 'Accessor' else 'method'
                     if not any(has_member(sup, members, o, name, None, kind) for o in mc_owners):
