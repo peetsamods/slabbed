@@ -487,6 +487,7 @@ configurations {
 }
 
 dependencies {
+    compileOnly "org.sinytra.forgified-fabric-api:fabric-renderer-api-v1:3.4.1+9125b6dc19"
     gametestImplementation "org.sinytra.forgified-fabric-api:forgified-fabric-api:${project.ffapi_version}"
     p8testImplementation "maven.modrinth:countereds-terrain-slabs:3.1.2"
     p8testImplementation "maven.modrinth:architectury-api:13.0.8+neoforge"
@@ -500,6 +501,7 @@ dependencies {
     p9smoothstepstestImplementation "maven.modrinth:countereds-terrain-slabs:3.1.2"
     p9smoothstepstestImplementation "maven.modrinth:architectury-api:13.0.8+neoforge"
     testImplementation "org.sinytra.forgified-fabric-api:fabric-renderer-api-v1:3.4.1+9125b6dc19"
+    testImplementation "org.sinytra.forgified-fabric-api:fabric-api-base:0.4.42+d1308ded19"
     // Sable 2.0.5 for NeoForge 1.21.1: compile-only for the optional compatibility mixins, and a
     // real runtime mod only inside the isolated P11 physics proof server.
     sableCompile "maven.modrinth:sable:U678xqle"

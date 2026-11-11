@@ -46,6 +46,8 @@ com/slabbed/client/SlabbedClientFlags.class
 com/slabbed/client/SlabbedModelLoadingPlugin.class
 com/slabbed/client/model/
 com/slabbed/client/model/ChainCeilingGeometry.class
+com/slabbed/client/model/ContinuityModelAdmission.class
+com/slabbed/client/model/ContinuityQuadOffset.class
 com/slabbed/client/model/OffsetBlockStateModel$FullMeshBoundsSample.class
 com/slabbed/client/model/OffsetBlockStateModel$MeshBounds.class
 com/slabbed/client/model/OffsetBlockStateModel$ModelDyOwnerSample.class
@@ -126,6 +128,7 @@ com/slabbed/mixin/WallTorchParticleMixin.class
 com/slabbed/mixin/client/
 com/slabbed/mixin/client/BlockEntityOffsetMixin.class
 com/slabbed/mixin/client/BlockModelDyTranslateMixin.class
+com/slabbed/mixin/client/ContinuityCtmOffsetMixin.class
 com/slabbed/mixin/client/CarpetDyShapeMixin.class
 com/slabbed/mixin/client/DebugHudOffsetRaycastMixin.class
 com/slabbed/mixin/client/GameRendererPickOffsetRaycastMixin.class
@@ -215,6 +218,8 @@ com/slabbed/client/SlabbedClientFlags.java
 com/slabbed/client/SlabbedModelLoadingPlugin.java
 com/slabbed/client/model/
 com/slabbed/client/model/ChainCeilingGeometry.java
+com/slabbed/client/model/ContinuityModelAdmission.java
+com/slabbed/client/model/ContinuityQuadOffset.java
 com/slabbed/client/model/OffsetBlockStateModel.java
 com/slabbed/client/runtime/
 com/slabbed/compat/
@@ -277,6 +282,7 @@ com/slabbed/mixin/WallTorchParticleMixin.java
 com/slabbed/mixin/client/
 com/slabbed/mixin/client/BlockEntityOffsetMixin.java
 com/slabbed/mixin/client/BlockModelDyTranslateMixin.java
+com/slabbed/mixin/client/ContinuityCtmOffsetMixin.java
 com/slabbed/mixin/client/CarpetDyShapeMixin.java
 com/slabbed/mixin/client/DebugHudOffsetRaycastMixin.java
 com/slabbed/mixin/client/GameRendererPickOffsetRaycastMixin.java
