@@ -3,6 +3,7 @@ package com.slabbed.client;
 import com.slabbed.Slabbed;
 import com.slabbed.anchor.SlabAnchorAttachment;
 import com.slabbed.util.SlabSupport;
+import it.unimi.dsi.fastutil.HashCommon;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.client.Minecraft;
@@ -19,6 +20,7 @@ import net.neoforged.neoforge.event.level.ChunkEvent;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Objects;
 import java.util.function.Supplier;
 
 /**
@@ -48,6 +50,12 @@ public final class SlabAnchorClientSync {
     private static boolean initialized;
 
     private record AttachmentSnapshotKey(long chunkPos, AttachmentType<LongOpenHashSet> attachmentType) {
+        @Override
+        public int hashCode() {
+            // Packed chunk axes must mix before folding: x ^ z clusters nearby chunks
+            // into equal-hash tree bins whose non-Comparable keys require linear searches.
+            return 31 * Long.hashCode(HashCommon.mix(chunkPos)) + Objects.hashCode(attachmentType);
+        }
     }
 
     private SlabAnchorClientSync() {
