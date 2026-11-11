@@ -1,0 +1,18 @@
+import groovy.json.JsonSlurper
+import groovy.json.JsonOutput
+
+allprojects {
+    afterEvaluate {
+        if (!project.hasProperty('cinematicTestJar')) throw new GradleException('Set -PcinematicTestJar to the verified Cinematic Interactions 0.18.28 Fabric 26.3 JAR')
+        dependencies { gametestImplementation files(project.property('cinematicTestJar')) }
+        sourceSets.gametest.java.include('com/slabbed/test/CinematicTableClientGameTest.java')
+        tasks.named('processGametestResources') {
+            doLast {
+                def metadata = new File(destinationDir, 'fabric.mod.json')
+                def parsed = new JsonSlurper().parse(metadata)
+                parsed.entrypoints['fabric-client-gametest'] = ['com.slabbed.test.CinematicTableClientGameTest']
+                metadata.text = JsonOutput.prettyPrint(JsonOutput.toJson(parsed))
+            }
+        }
+    }
+}

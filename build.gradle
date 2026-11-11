@@ -209,6 +209,11 @@ base {
 
 repositories {
     maven {
+        name = "Terraformers"
+        url = "https://maven.terraformersmc.com/"
+        content { includeGroup "com.terraformersmc" }
+    }
+    maven {
         name = "Fabric"
         url = "https://maven.fabricmc.net/"
     }
@@ -216,6 +221,12 @@ repositories {
 }
 
 dependencies {
+    // Minecraft runs on Java 25; only the optional API's published variant requires that target.
+    clientCompileOnly("com.terraformersmc:modmenu:21.0.0") {
+        attributes {
+            attribute(org.gradle.api.attributes.java.TargetJvmVersion.TARGET_JVM_VERSION_ATTRIBUTE, 25)
+        }
+    }
     // To change the versions see the gradle.properties file
     minecraft "com.mojang:minecraft:${project.minecraft_version}"
     implementation "net.fabricmc:fabric-loader:${project.loader_version}"
@@ -353,6 +364,9 @@ sourceSets {
             include("com/slabbed/test/HangingLoadDeferralTest.java")
             include("com/slabbed/test/PendingHangChunkProbe.java")
             include("com/slabbed/test/TrampledSupportConversionTest.java")
+            include("com/slabbed/test/LoweredCarpetVibrationTest.java")
+            include("com/slabbed/test/mixin/FootstepCaptureGameTestMixin.java")
+            include("com/slabbed/test/mixin/RelaxedCropSurvivalGameTestMixin.java")
             include("com/slabbed/test/Slabbed2612LoweringContractTest.java")
             include("com/slabbed/test/Slabbed2612DyFingerprintTest.java")
             include("com/slabbed/test/Slabbed2612UseOnPlacementTest.java")
@@ -361,7 +375,11 @@ sourceSets {
             include("com/slabbed/test/Slabbed2612CollisionDepthTest.java")
             include("com/slabbed/test/ReplacementModelOffsetClientGameTest.java")
             include("com/slabbed/test/EmitterIdentityClientGameTest.java")
+            include("com/slabbed/test/ExposedStepFlatLightingClientGameTest.java")
             include("com/slabbed/client/IssueReportScreenClientGameTest.java")
+            include("com/slabbed/client/IssueReportEntryClientGameTest.java")
+            include("com/slabbed/test/BetterBlockEntitiesClientGameTest.java")
+            include("com/slabbed/test/bbe/**")
             include("com/slabbed/test/Slabbed2612CompoundMatrixTest.java")
             include("com/slabbed/test/RedstoneGateOnTerrainSlabsPlacementTest.java")
             include("com/slabbed/test/SlabHeightStepCullGh24Test.java")

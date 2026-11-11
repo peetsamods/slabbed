@@ -3,6 +3,8 @@ package com.slabbed.compat.terrainslabs;
 import com.slabbed.compat.CompatSlabSurfaceKind;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.core.BlockPos;
+import net.minecraft.world.level.BlockGetter;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.SlabBlock;
@@ -53,6 +55,7 @@ public final class TerrainSlabsCompat {
      * {@code null} when TS is absent or its internals moved (→ VegetationBlock-role fallback).
      */
     private static final MethodHandle TS_IS_STATE_VALID_ON_TOP = resolveOnTopProbe();
+    private static final MethodHandle TS_SHOULD_SHIFT = resolveOffsetOwnershipProbe();
 
     private static MethodHandle resolveOnTopProbe() {
         if (!LOADED) {
@@ -68,6 +71,38 @@ public final class TerrainSlabsCompat {
             // TS build without this internal (e.g. legacy terrainslabs 2.x) — fall back to the
             // VegetationBlock role below; never crash compat resolution.
             return null;
+        }
+    }
+
+    private static MethodHandle resolveOffsetOwnershipProbe() {
+        if (!LOADED) {
+            return null;
+        }
+        try {
+            Class<?> helper = Class.forName("net.countered.terrainslabs.util.OnTopHelper");
+            return MethodHandles.publicLookup().findStatic(helper, "shouldShift",
+                    MethodType.methodType(boolean.class, BlockGetter.class, BlockPos.class, BlockState.class));
+        } catch (Throwable unavailable) {
+            return null;
+        }
+    }
+
+    /**
+     * Placement defers where Terrain Slabs applies its own vertical shift to the actual cell.
+     * Unknown positional capabilities retain conservative role-based deferral.
+     */
+    public static boolean handlesObjectOffsetAt(BlockGetter world, BlockPos pos, BlockState state) {
+        if (!handlesObjectOffset(state)) {
+            return false;
+        }
+        MethodHandle probe = TS_SHOULD_SHIFT;
+        if (world == null || pos == null || probe == null) {
+            return true;
+        }
+        try {
+            return (boolean) probe.invokeExact(world, pos, state);
+        } catch (Throwable unavailable) {
+            return true;
         }
     }
 

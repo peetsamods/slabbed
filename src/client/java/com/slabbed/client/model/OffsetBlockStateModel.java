@@ -10,6 +10,7 @@ import net.fabricmc.fabric.api.client.renderer.v1.mesh.MutableQuadView;
 import net.fabricmc.fabric.api.client.renderer.v1.mesh.QuadEmitter;
 import net.fabricmc.fabric.api.client.renderer.v1.mesh.QuadTransform;
 import net.fabricmc.fabric.api.client.renderer.v1.model.FabricBlockStateModel;
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.block.BlockAndTintGetter;
 import net.minecraft.client.renderer.block.MovingBlockRenderState;
 import net.minecraft.client.renderer.block.dispatch.BlockStateModel;
@@ -371,6 +372,14 @@ public final class OffsetBlockStateModel implements BlockStateModel {
         public boolean transform(MutableQuadView quad) {
             Direction cullFace = quad.cullFace();
             if (cullFace != null && mismatched(cullFace)) {
+                if (Float.isFinite(dy) && Math.abs(dy + 0.5f) <= 1.0e-6f
+                        && cullFace.getAxis() != Direction.Axis.Y
+                        && !Minecraft.getInstance().options.ambientOcclusion().get()) {
+                    ExposedStepFlatLighting.apply(view, pos, state, dy, cullFace, quad, () -> {
+                        BlockPos neighborPos = pos.relative(cullFace);
+                        return slabbed$modelDyUnguarded(view, neighborPos, view.getBlockState(neighborPos));
+                    });
+                }
                 quad.cullFace(null);
                 quad.nominalFace(cullFace);
             }

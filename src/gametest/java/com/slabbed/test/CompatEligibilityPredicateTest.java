@@ -181,6 +181,13 @@ public final class CompatEligibilityPredicateTest {
      * {@code TerrainSlabsCompat.shouldSkipOffset} and this row fails. Before this class existed that
      * mutation was invisible to the entire suite.
      */
+    private static final ThreadLocal<java.lang.invoke.MethodHandle> POSITIONAL_PROBE_FIXTURE =
+            new ThreadLocal<>();
+
+    public static java.lang.invoke.MethodHandle positionalProbeFixture() {
+        return POSITIONAL_PROBE_FIXTURE.get();
+    }
+
     @GameTest(structure = "fabric-gametest-api-v1:empty")
     public void twinsDifferOnlyByNamespaceAndTheShippedRuleSplitsThem(GameTestHelper helper) {
         ELIGIBILITY_CLASSIFIER_TEST_GATE.set(Boolean.TRUE);
@@ -239,6 +246,47 @@ public final class CompatEligibilityPredicateTest {
                     "with the mod absent and no gate, compat eligibility must be false for every "
                             + "state - a true answer here means the predicate is reachable in a "
                             + "configuration that has no compat mod, which would affect real players");
+        }
+        helper.succeed();
+    }
+
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void unknownPositionalCapabilityRetainsConservativeObjectOwnership(GameTestHelper helper) {
+        if (net.fabricmc.loader.api.FabricLoader.getInstance().isModLoaded("terrain_slabs")
+                || net.fabricmc.loader.api.FabricLoader.getInstance().isModLoaded("terrainslabs")) {
+            throw helper.assertionException("This row requires the optional positional helper to be absent");
+        }
+        BlockPos pos = helper.absolutePos(new BlockPos(2, 2, 2));
+        ELIGIBILITY_CLASSIFIER_TEST_GATE.set(Boolean.TRUE);
+        try {
+            if (!CompatHooks.terrainSlabsHandlesObjectOffset(Blocks.WHEAT.defaultBlockState())) {
+                throw helper.assertionException("The existing on-top role fixture must be active");
+            }
+            if (!LandingResolver.compatOwnsFinalStateAt(
+                    helper.getLevel(), pos, Blocks.WHEAT.defaultBlockState())) {
+                throw helper.assertionException("An unavailable positional helper must retain role deferral");
+            }
+            java.lang.invoke.MethodHandle throwing = java.lang.invoke.MethodHandles.throwException(
+                    boolean.class, IllegalStateException.class).bindTo(
+                            new IllegalStateException("Optional positional capability unavailable"));
+            throwing = java.lang.invoke.MethodHandles.dropArguments(throwing, 0,
+                    net.minecraft.world.level.BlockGetter.class, BlockPos.class, BlockState.class);
+            POSITIONAL_PROBE_FIXTURE.set(throwing);
+            if (!LandingResolver.compatOwnsFinalStateAt(
+                    helper.getLevel(), pos, Blocks.WHEAT.defaultBlockState())) {
+                throw helper.assertionException("A throwing positional helper must retain role deferral");
+            }
+            if (LandingResolver.compatOwnsFinalStateAt(
+                    helper.getLevel(), pos, Blocks.STONE.defaultBlockState())) {
+                throw helper.assertionException("An ordinary block must not acquire optional-mod ownership");
+            }
+        } finally {
+            POSITIONAL_PROBE_FIXTURE.remove();
+            ELIGIBILITY_CLASSIFIER_TEST_GATE.set(Boolean.FALSE);
+        }
+        if (LandingResolver.compatOwnsFinalStateAt(
+                helper.getLevel(), pos, Blocks.WHEAT.defaultBlockState())) {
+            throw helper.assertionException("Absent optional mods must leave positional ownership inactive");
         }
         helper.succeed();
     }

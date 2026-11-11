@@ -22,9 +22,16 @@
     "LevelExtractorImportantDirtyAccessor",
     "LocalPlayerPickOffsetRaycastMixin",
     "MinecartRendererRailFrameMixin",
-    "MultiPlayerGameModePredictionSequenceMixin"
+    "MultiPlayerGameModePredictionSequenceMixin",
+    "BetterBlockEntitiesMeshOffsetMixin",
+    "SodiumRenderContextAccessor",
+    "SodiumBlockOriginAccessor",
+    "CinematicTableStationMixin",
+    "CinematicTableLayoutMixin",
+    "CinematicTableRendererMixin"
   ],
   "injectors": {
     "defaultRequire": 1
-  }
+  },
+  "plugin": "com.slabbed.mixin.CinematicMixinConfigPlugin"
 }

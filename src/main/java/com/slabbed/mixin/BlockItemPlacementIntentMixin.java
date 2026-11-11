@@ -39,6 +39,7 @@ import net.minecraft.world.phys.shapes.BooleanOp;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.tags.BlockTags;
 import net.minecraft.world.phys.Vec3;
 import net.minecraft.world.phys.shapes.VoxelShape;
 import net.minecraft.world.phys.shapes.Shapes;
@@ -224,7 +225,13 @@ public abstract class BlockItemPlacementIntentMixin {
                 || support.getBlock() instanceof net.minecraft.world.level.block.FarmlandBlock)) {
             return null;
         }
-        if (getPlacementState(context) == null) {
+        BlockState placement = getPlacementState(context);
+        if (placement == null) {
+            return null;
+        }
+        // Planting a crop preserves its growth support even when compatibility broadens survival.
+        if (support.getBlock() instanceof net.minecraft.world.level.block.FarmlandBlock
+                && placement.is(BlockTags.CROPS)) {
             return null;
         }
         world.setBlockAndUpdate(supportPos, Blocks.DIRT.defaultBlockState());
@@ -517,7 +524,7 @@ public abstract class BlockItemPlacementIntentMixin {
         Level world = frame.actualContext.getLevel();
         BlockPos primary = frame.actualContext.getClickedPos().immutable();
         BlockState finalState = world.getBlockState(primary);
-        if (finalState.isAir() || slabbed$c3CompatOwns(finalState)) {
+        if (finalState.isAir() || LandingResolver.compatOwnsFinalStateAt(world, primary, finalState)) {
             frame.pending = new PendingCapture(Map.of());
             return;
         }
@@ -677,10 +684,6 @@ public abstract class BlockItemPlacementIntentMixin {
                     "[C3] client prediction batch construction failed; recorder action dropped", exception);
         }
         return true;
-    }
-
-    private static boolean slabbed$c3CompatOwns(BlockState state) {
-        return LandingResolver.compatOwnsFinalState(state);
     }
 
     private static boolean slabbed$isOrdinaryLoweredFullBlock(UseOnContext context, BlockPos pos, BlockState state) {

@@ -72,6 +72,7 @@ anything. The split above puts the fine granularity only where a leak has actual
 | `LICENSE_slabbed` | The mod's licence, copied in by the `jar` block. |
 | `fabric.mod.json` | Mod descriptor. Required by the loader. |
 | `slabbed.mixins.json` | Main mixin config. Required by the loader. |
+| `slabbed.relativeblocks.mixins.json` | Version-gated Relatively Placed Blocks compositor mixins. |
 | `slabbed.client.mixins.json` | Client mixin config. Required by the loader. |
 | `assets/slabbed/**` | The mod's own lang file and chain-ceiling-support block models. |
 
@@ -106,6 +107,7 @@ anything. The split above puts the fine granularity only where a leak has actual
 | `com/slabbed/mixin/ChiseledBookShelfHitMixin` | Bookshelf insertion and removal select the slot on the drawn front face. |
 | `com/slabbed/mixin/CushionRestsOnDrawnTopMixin` | A cushion may rest on a lowered block's drawn top. |
 | `com/slabbed/mixin/DecoratedPotParticleMixin` | Particle origin follows the lowered block. |
+| `com/slabbed/mixin/EntityLoweredFootstepMixin` | Footstep vibrations respect a lowered dampening surface actually touching the feet. |
 | `com/slabbed/mixin/FencePaneSlabConnectionMixin` | Fence/pane connection against a lowered slab. |
 | `com/slabbed/mixin/HangingSignAttachedMixin` | Hanging-sign attachment from above. |
 | `com/slabbed/mixin/HangingEntityRememberedSeatMixin` | A hung decoration (frame, painting) remembers the drawn face it was hung on: seat minted once, synced, applied to the box; entity position untouched (maintainer ruling, 2026-09-13). |
@@ -129,6 +131,9 @@ anything. The split above puts the fine granularity only where a leak has actual
 | `com/slabbed/mixin/ServerInteractBlockHitToleranceMixin` | Server-side hit tolerance for offset targeting. |
 | `com/slabbed/mixin/SlabSupportBlockMixin` | Slab support surface. |
 | `com/slabbed/mixin/SlabSupportStateMixin` | Slab support state. |
+| `com/slabbed/mixin/RelativeBlocksMixinConfigPlugin` | Admits the compositor adapter only on verified Minecraft and Relatively Placed Blocks versions. |
+| `com/slabbed/mixin/RelativeBlocksClusterDataAccessor` | Reads the layout and member state needed to distinguish cached member outlines from raw barrier geometry. |
+| `com/slabbed/mixin/RelativeBlocksClusterShapeMixin` | Relatively Placed Blocks aggregate outlines apply their stored seat once while preserving member selection shapes. |
 | `com/slabbed/mixin/AbstractArrowOffsetClipMixin` | Arrows/tridents hit a lowered block where it is drawn. |
 | `com/slabbed/mixin/ArmorStandItemVisibleTopMixin` | An armor stand's free-space check reads the band the stand will actually occupy over a lowered support (maintainer ruling, 2026-09-06). |
 | `com/slabbed/mixin/ClipContextBlockAccessor` | Reads a clip's block mode so the collider-clip supplement only answers COLLIDER queries. |
@@ -136,6 +141,7 @@ anything. The split above puts the fine granularity only where a leak has actual
 | `com/slabbed/mixin/LivingEntitySightOffsetClipMixin` | Mob sight is blocked by a lowered block's drawn body. |
 | `com/slabbed/mixin/ProjectileBlockClipOffsetMixin` | Projectiles hit a lowered block where it is drawn. |
 | `com/slabbed/mixin/ServerExplosionOcclusionOffsetClipMixin` | Explosions are sheltered by a lowered block's drawn body. |
+| `com/slabbed/mixin/CinematicMixinConfigPlugin` | Optional client table-scene adapter gate; loads no Minecraft or third-party classes. |
 | `com/slabbed/mixin/SlabbedMixinConfigPlugin` | Mixin config plugin: withholds the explosion-occlusion redirect while Lithium owns the same call site, and admits the two Lithium sweeper mixins only after byte-checking Lithium's sweepers (maintainer ruling, 2026-09-02); loads no Minecraft class. |
 | `com/slabbed/mixin/WallSlabConnectionMixin` | Wall connection against a lowered slab. |
 
@@ -147,7 +153,8 @@ anything. The split above puts the fine granularity only where a leak has actual
 | `com/slabbed/client/PlacementDyPredictionJournal` | The C3 client prediction journal — the shipped prediction/correction apply path. Carries the `debugCell()`/`CellDebug` observation seam on purpose: PlacementDyPredictionClientGameTest asserts journal cell state through it against the REAL shipped path, and there is no equivalent observation point outside the class. Inert unless called; nothing shipped calls it. |
 | `com/slabbed/client/IssueReport` | Reviewed report text, allowlisted client mod IDs/versions, and bounded GitHub draft URL. |
 | `com/slabbed/client/IssueReportSession` | Explicit confirmation and repeated-click guard; no background activity. |
-| `com/slabbed/client/IssueReportPlacement` | Collision-free title and pause menu placement using existing widget bounds. |
+| `com/slabbed/client/IssueReportPlacement` | Collision-free Options and pause menu placement using existing widget bounds. |
+| `com/slabbed/client/SlabbedModMenu` | Optional Mod Menu screen factory for preparing a local issue report. |
 | `com/slabbed/client/IssueReportClient` | Client-only report entrypoints and vanilla browser compatibility seam. |
 | `com/slabbed/client/IssueReportScreen` | Editable description form and exact review with optional client mod list and full-text copy fallback. |
 | `com/slabbed/client/BetaNoticeClient` | Shipped one-time beta notice on world join. |
@@ -311,3 +318,14 @@ archive path, the build goes red instead of shipping a manifest that misdescribe
   needed only because `verifyReleaseAllowlist` finalizes `jar`/`sourcesJar` and will still fail the
   overall build while anything is unapproved — which is the point. The report is a review aid, not a
   bypass: there is no flag that makes `verifyReleaseAllowlist` pass.
+
+## Approved optional mixed-slab compositor adapter
+
+| Logical unit | Reason |
+| --- | --- |
+| `com/slabbed/mixin/OffgridMixinConfigPlugin` | Verified-version gate for the optional mixed-slab compositor adapter. |
+| `com/slabbed/mixin/client/OffgridMixedSlabModelMixin` | Keeps nested mixed-slab models at one stored seat (LAW.md). |
+| `slabbed.offgrid.mixins.json` | Optional mixed-slab compositor adapter wiring. |
+
+| `com/slabbed/anchor/OffgridSurvivorTransition` | One-shot preservation of an existing mixed-slab member seat (LAW.md). |
+| `com/slabbed/mixin/OffgridMixedSlabBreakMixin` | Binds preservation to the verified mixed-slab unwrap operation (LAW.md). |

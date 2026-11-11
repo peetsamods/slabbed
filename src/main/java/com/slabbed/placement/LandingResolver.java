@@ -166,9 +166,9 @@ public final class LandingResolver {
     }
 
     /**
-     * One final-state ownership gate shared by capture, landing, and hit validation. Terrain Slabs'
-     * on-top registry already owns model, outline, and raycast for its members, so Slabbed must not
-     * author a second stored dy for them.
+     * Conservative state-role classification for admission and hit-validation guards. Placement
+     * capture and landing use the positional gate so deferral follows the actual vertical-offset
+     * owner at the final cell.
      *
      * <p>A TAGGED SLAB is carved out of the two identity-based exclusions: a slab a player just
      * placed is an ordinary slab whoever registered it (LAW.md clause 2), and the compat mod
@@ -187,6 +187,18 @@ public final class LandingResolver {
                 || ((CompatHooks.shouldSkipOffset(state) || CompatHooks.shouldSkipSlabSupport(state))
                         && !SlabSupport.isTaggedSlab(state))
                 || CompatHooks.terrainSlabsHandlesObjectOffset(state);
+    }
+
+    /** Determines the actual offset owner once, at the placement's final cell. */
+    public static boolean compatOwnsFinalStateAt(BlockGetter world, BlockPos pos, BlockState state) {
+        if (state == null) {
+            return false;
+        }
+        Predicate<BlockState> override = compatFinalStateTestOverride;
+        return (override != null && override.test(state))
+                || ((CompatHooks.shouldSkipOffset(state) || CompatHooks.shouldSkipSlabSupport(state))
+                        && !SlabSupport.isTaggedSlab(state))
+                || CompatHooks.terrainSlabsHandlesObjectOffsetAt(world, pos, state);
     }
 
     /** Landings are halves; this tolerance is exactness, not a fuzzy match. */
@@ -255,7 +267,7 @@ public final class LandingResolver {
                 || family == Family.UNSUPPORTED) {
             return null;
         }
-        if (compatOwnsFinalState(placedState)) {
+        if (compatOwnsFinalStateAt(world, placedPos, placedState)) {
             return null;
         }
         if (family == Family.USE_CREATED_FULL_CUBE_CONTACT) {
@@ -308,7 +320,7 @@ public final class LandingResolver {
     ) {
         if (aim == null || actualTarget == null || finalState == null || finalState.isAir()
                 || family == Family.UNSUPPORTED
-                || compatOwnsFinalState(finalState)) {
+                || compatOwnsFinalStateAt(world, actualTarget, finalState)) {
             return null;
         }
         if ((family == Family.PAIRED_FLOOR_SEAT || family == Family.AIM_KEYED_FLOOR_SEAT)

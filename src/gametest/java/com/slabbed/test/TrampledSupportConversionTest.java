@@ -26,6 +26,67 @@ import net.minecraft.world.phys.Vec3;
  * them.
  */
 public final class TrampledSupportConversionTest {
+    private static final ThreadLocal<Boolean> RELAXED_CROP_SURVIVAL = new ThreadLocal<>();
+
+    public static boolean relaxedCropSurvivalActive() {
+        return Boolean.TRUE.equals(RELAXED_CROP_SURVIVAL.get());
+    }
+
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void cropWithRelaxedSurvivalKeepsWetFarmland(GameTestHelper helper) {
+        plantWithRelaxedSurvival(helper, 7);
+    }
+
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void cropWithRelaxedSurvivalKeepsDryFarmland(GameTestHelper helper) {
+        plantWithRelaxedSurvival(helper, 0);
+    }
+
+    private static void plantWithRelaxedSurvival(GameTestHelper helper, int moisture) {
+        ServerLevel level = helper.getLevel();
+        BlockPos soilRel = new BlockPos(2, 2, 2);
+        BlockPos soil = helper.absolutePos(soilRel);
+        BlockPos crop = soil.above();
+        var farmland = Blocks.FARMLAND.defaultBlockState().setValue(
+                net.minecraft.world.level.block.state.properties.BlockStateProperties.MOISTURE, moisture);
+        helper.setBlock(soilRel.below(), Blocks.DIRT.defaultBlockState());
+        helper.setBlock(soilRel, farmland);
+        helper.setBlock(soilRel.above().west(), Blocks.GLOWSTONE.defaultBlockState());
+        helper.startSequence().thenWaitUntil(() -> {
+            if (level.getRawBrightness(crop, 0) < 8) {
+                throw helper.assertionException(soilRel.above(), "Waiting for actual crop light");
+            }
+        }).thenExecute(() -> {
+            if (!Blocks.WHEAT.defaultBlockState().is(net.minecraft.tags.BlockTags.CROPS)) {
+                throw helper.assertionException(soilRel, "The planted state must carry crop semantics");
+            }
+            Player player = helper.makeMockPlayer(net.minecraft.world.level.GameType.SURVIVAL);
+            player.setPos(soil.getX() + 0.5d, soil.getY() + 2.0d, soil.getZ() + 0.5d);
+            ItemStack seeds = new ItemStack(Items.WHEAT_SEEDS);
+            player.setItemInHand(InteractionHand.MAIN_HAND, seeds);
+            RELAXED_CROP_SURVIVAL.set(true);
+            try {
+                level.setBlockAndUpdate(soil, Blocks.DIRT.defaultBlockState());
+                boolean survivesDirt = Blocks.WHEAT.defaultBlockState().canSurvive(level, crop);
+                level.setBlockAndUpdate(soil, farmland);
+                if (!survivesDirt) {
+                    throw helper.assertionException(soilRel, "Compatibility survival premise must be active");
+                }
+                Vec3 hit = new Vec3(soil.getX() + 0.5d, soil.getY() + 0.9375d, soil.getZ() + 0.5d);
+                InteractionResult result = seeds.useOn(new net.minecraft.world.item.context.UseOnContext(
+                        player, InteractionHand.MAIN_HAND,
+                        new BlockHitResult(hit, Direction.UP, soil, false)));
+                if (!result.consumesAction() || !level.getBlockState(soil).equals(farmland)
+                        || !level.getBlockState(crop).is(Blocks.WHEAT)) {
+                    throw helper.assertionException(soilRel,
+                            "Relaxed survival must not turn crop planting into soil conversion");
+                }
+            } finally {
+                RELAXED_CROP_SURVIVAL.remove();
+            }
+        }).thenSucceed();
+    }
+
 
     @GameTest(structure = "fabric-gametest-api-v1:empty")
     public void placingSlabOnDirtPathConvertsItToDirt(GameTestHelper helper) {

@@ -1,6 +1,7 @@
 package com.slabbed.test.mixin;
 
 import com.llamalad7.mixinextras.injector.ModifyReturnValue;
+import com.llamalad7.mixinextras.injector.ModifyExpressionValue;
 import com.slabbed.compat.terrainslabs.TerrainSlabsCompat;
 import com.slabbed.test.BottomSlabSpawnProofTest;
 import com.slabbed.test.CompatEligibilityPredicateTest;
@@ -75,4 +76,13 @@ public abstract class TerrainSlabsCompatGameTestMixin {
         return TerrainSlabsCompat.isLoaded()
                 || CompatEligibilityPredicateTest.eligibilityClassifierTestGate();
     }
+    @ModifyExpressionValue(method = "handlesObjectOffsetAt", at = @At(value = "FIELD",
+            target = "Lcom/slabbed/compat/terrainslabs/TerrainSlabsCompat;TS_SHOULD_SHIFT:Ljava/lang/invoke/MethodHandle;"),
+            remap = false)
+    private static java.lang.invoke.MethodHandle slabbed$scopedPositionalProbe(
+            java.lang.invoke.MethodHandle original) {
+        java.lang.invoke.MethodHandle fixture = CompatEligibilityPredicateTest.positionalProbeFixture();
+        return fixture == null ? original : fixture;
+    }
+
 }

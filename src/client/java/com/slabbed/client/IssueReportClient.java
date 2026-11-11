@@ -12,7 +12,7 @@ import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.client.gui.screens.PauseScreen;
 import net.minecraft.client.gui.screens.Screen;
-import net.minecraft.client.gui.screens.TitleScreen;
+import net.minecraft.client.gui.screens.options.OptionsScreen;
 import net.minecraft.network.chat.CommonComponents;
 import net.minecraft.network.chat.Component;
 
@@ -43,12 +43,13 @@ public final class IssueReportClient {
             }
         });
         ScreenEvents.AFTER_INIT.register((client, screen, width, height) -> {
-            boolean titleMenu = screen instanceof TitleScreen;
-            if (!titleMenu && (!(screen instanceof PauseScreen pause) || !pause.showsPauseMenu())) return;
+            boolean optionsMenu = screen instanceof OptionsScreen
+                    && !FabricLoader.getInstance().isModLoaded("modmenu");
+            if (!optionsMenu && (!(screen instanceof PauseScreen pause) || !pause.showsPauseMenu())) return;
             Button button = Button.builder(Component.translatable("slabbed.report.entry"),
                     ignored -> open(client, screen)).bounds(0, 0, 176, 20).build();
             button.setTooltip(Tooltip.create(Component.translatable("slabbed.report.entry")));
-            var positioner = new MenuEntryPositioner(screen, button, titleMenu);
+            var positioner = new MenuEntryPositioner(screen, button, optionsMenu);
             positioner.update();
             Screens.getWidgets(screen).add(button);
             // Recheck after other callbacks/mods have added their controls.
@@ -72,31 +73,26 @@ public final class IssueReportClient {
     private static final class MenuEntryPositioner {
         private final Screen screen;
         private final Button button;
-        private final boolean titleMenu;
+        private final boolean optionsMenu;
         private java.util.List<IssueReportPlacement.Box> previous = java.util.List.of();
 
-        MenuEntryPositioner(Screen screen, Button button, boolean titleMenu) {
+        MenuEntryPositioner(Screen screen, Button button, boolean optionsMenu) {
             this.screen = screen;
             this.button = button;
-            this.titleMenu = titleMenu;
+            this.optionsMenu = optionsMenu;
         }
 
         void update() {
             var geometry = new ArrayList<IssueReportPlacement.Box>();
             geometry.add(new IssueReportPlacement.Box(0, 0, screen.width, screen.height));
-            // Keep title artwork/footer or the pause title clear as well as all controls.
-            if (titleMenu) {
-                geometry.add(new IssueReportPlacement.Box(screen.width / 2 - 155, 30, 310, 90));
-                geometry.add(new IssueReportPlacement.Box(0, screen.height - 14, screen.width, 14));
-            } else {
-                geometry.add(new IssueReportPlacement.Box(screen.width / 2 - 100, 32, 200, 20));
-            }
-            int preferredY = titleMenu ? screen.height - 24 : screen.height / 4 + 132;
+            geometry.add(new IssueReportPlacement.Box(screen.width / 2 - 100,
+                    optionsMenu ? 8 : 32, 200, 20));
+            int preferredY = optionsMenu ? screen.height - 24 : screen.height / 4 + 132;
             for (var child : screen.children()) {
                 if (child != button && child instanceof AbstractWidget widget && widget.visible) {
                     geometry.add(new IssueReportPlacement.Box(widget.getX(), widget.getY(),
                             widget.getWidth(), widget.getHeight()));
-                    if (!titleMenu && (widget.getMessage().equals(CommonComponents.disconnectButtonLabel(true))
+                    if (!optionsMenu && (widget.getMessage().equals(CommonComponents.disconnectButtonLabel(true))
                             || widget.getMessage().equals(CommonComponents.disconnectButtonLabel(false)))) {
                         preferredY = widget.getY() + widget.getHeight() + 8;
                     }
@@ -122,8 +118,13 @@ public final class IssueReportClient {
     }
 
     private static void open(Minecraft client, Screen parent) {
-        client.gui.setScreen(new IssueReportScreen(parent, new IssueReport(
-                version("minecraft"), version("fabricloader"), version("slabbed"), version("fabric-api"))));
+        client.gui.setScreen(createScreen(parent));
+    }
+
+    /** Creates a fresh local draft for either the optional mod menu or the fallback menus. */
+    public static Screen createScreen(Screen parent) {
+        return new IssueReportScreen(parent, new IssueReport(
+                version("minecraft"), version("fabricloader"), version("slabbed"), version("fabric-api")));
     }
 
     private static String version(String id) {

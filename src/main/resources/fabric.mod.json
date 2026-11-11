@@ -11,20 +11,32 @@
     ],
     "client": [
       "com.slabbed.client.SlabbedClient"
+    ],
+    "modmenu": [
+      "com.slabbed.client.SlabbedModMenu"
     ]
   },
   "mixins": [
+    {
+      "config": "slabbed.relativeblocks.mixins.json"
+    },
     {
       "config": "slabbed.mixins.json"
     },
     {
       "config": "slabbed.client.mixins.json",
       "environment": "client"
+    },
+    {
+      "config": "slabbed.offgrid.mixins.json"
     }
   ],
   "depends": {
     "fabricloader": "*",
     "fabric-api": ">=0.152.2",
-    "minecraft": ["26.2", "26.3"]
+    "minecraft": [
+      "26.2",
+      "26.3"
+    ]
   }
 }

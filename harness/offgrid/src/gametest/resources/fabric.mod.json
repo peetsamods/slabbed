@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "id": "offgrid_compatibility_proof",
+  "version": "0.0.0-dev.issue124",
+  "name": "Offgrid compatibility proof",
+  "environment": "*",
+  "entrypoints": {
+    "fabric-client-gametest": [
+      "proof.OffgridCompatibilityClientGameTest"
+    ]
+  },
+  "depends": {
+    "fabricloader": ">=0.19.5",
+    "fabric-api": "*",
+    "minecraft": "~26.3",
+    "offgrid": "*"
+  }
+}

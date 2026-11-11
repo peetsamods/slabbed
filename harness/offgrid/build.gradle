@@ -1,0 +1,15 @@
+plugins { id 'net.fabricmc.fabric-loom' version '1.17.20' }
+version = '0.0.0-dev.issue124'
+loom { splitEnvironmentSourceSets() }
+fabricApi { configureTests { createSourceSet = true } }
+repositories { maven { url 'https://maven.fabricmc.net/' }; mavenCentral() }
+dependencies {
+ minecraft 'com.mojang:minecraft:26.3'
+ implementation 'net.fabricmc:fabric-loader:0.19.5'
+ implementation 'net.fabricmc.fabric-api:fabric-api:0.160.5+26.3'
+ gametestImplementation files(project.property('offgridJar'))
+ if(project.hasProperty('slabbedJar')) gametestImplementation files(project.property('slabbedJar'))
+}
+java { sourceCompatibility = JavaVersion.VERSION_25; targetCompatibility = JavaVersion.VERSION_25 }
+
+loom { runs { clientGameTest { property 'offgrid.test.modelOnly', System.getProperty('offgrid.test.modelOnly', 'false') } } }
