@@ -754,3 +754,28 @@ sourceSets.test.runtimeClasspath += sourceSets.client.output + sourceSets.client
 tasks.named("test", Test) {
     useJUnitPlatform()
 }
+
+// Native particle proof is isolated from ordinary development profiles.
+loom {
+    runs {
+        particleClientProbe {
+            client()
+            name = "Slabbed Particle Display Probe"
+            source sourceSets.gametest
+            runDir "build/run/particle-client-probe"
+            property "slabbed.particleClientProbe", "true"
+            property "slabbed.frozenDy", "true"
+        }
+    }
+}
+tasks.named("runParticleClientProbe").configure {
+    long startedAt = 0L
+    doFirst { startedAt = System.currentTimeMillis() }
+    doLast {
+        File log = new File(workingDir, "logs/latest.log")
+        if (!log.exists() || log.lastModified() < startedAt
+                || !log.text.contains("[PARTICLE_LAZY] GREEN") || log.text.contains("[PARTICLE_LAZY] RED")) {
+            throw new GradleException("Particle display client proof did not report a fresh passing result.")
+        }
+    }
+}

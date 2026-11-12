@@ -1,6 +1,7 @@
 package com.slabbed.test.mixin;
 
 import com.slabbed.test.ParticleSinkAudit;
+import com.slabbed.test.ParticleSinkSamples;
 import net.minecraft.client.render.WorldRenderer;
 import net.minecraft.client.world.ClientWorld;
 import net.minecraft.particle.ParticleEffect;
@@ -29,6 +30,7 @@ public abstract class ClientParticleSinkCaptureMixin {
     ) {
         ParticleSinkAudit.record(effect, false, alwaysSpawn,
                 x, y, z, velocityX, velocityY, velocityZ);
+        ParticleSinkSamples.record(effect, false, alwaysSpawn, x, y, z, velocityX, velocityY, velocityZ);
         renderer.addParticle(effect, alwaysSpawn, x, y, z, velocityX, velocityY, velocityZ);
     }
 
@@ -49,6 +51,7 @@ public abstract class ClientParticleSinkCaptureMixin {
     ) {
         ParticleSinkAudit.record(effect, important, alwaysSpawn,
                 x, y, z, velocityX, velocityY, velocityZ);
+        ParticleSinkSamples.record(effect, important, alwaysSpawn, x, y, z, velocityX, velocityY, velocityZ);
         renderer.addParticle(effect, alwaysSpawn, important,
                 x, y, z, velocityX, velocityY, velocityZ);
     }

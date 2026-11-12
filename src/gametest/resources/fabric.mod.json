@@ -14,13 +14,15 @@
   "entrypoints": {
     "main": [
       "com.slabbed.test.TerrainSlabsTestShim",
-      "com.slabbed.test.Issue78LightShapeLookupProbe"
+      "com.slabbed.test.Issue78LightShapeLookupProbe",
+      "com.slabbed.test.ParticleDisplayLazyFixtures"
     ],
     "client": [
       "com.slabbed.test.AttachmentRemeshProbe",
       "com.slabbed.test.ExtendedDepthClientProbe",
       "com.slabbed.test.Mc1211GoblinRouteClientEntrypoint",
-      "com.slabbed.test.KeepOnlyReopenProbe"
+      "com.slabbed.test.KeepOnlyReopenProbe",
+      "com.slabbed.test.ParticleDisplayClientProbe"
     ],
     "fabric-gametest": [
       "com.slabbed.test.Mc1211GoblinRouteCanaryGameTest",
@@ -53,7 +55,8 @@
       "com.slabbed.test.FenceCeilingConnectionTest",
       "com.slabbed.test.RailVisualSignalTest",
       "com.slabbed.test.RedstoneWireVisualStepTest",
-      "com.slabbed.test.Issue78LightShapeLookupProbe"
+      "com.slabbed.test.Issue78LightShapeLookupProbe",
+      "com.slabbed.test.ParticleDisplayLazyTest"
     ]
   },
   "depends": {

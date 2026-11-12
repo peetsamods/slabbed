@@ -11,7 +11,7 @@ import net.minecraft.world.World;
 /** Carries one block's frozen visual height through its vanilla display-particle call. */
 public final class BlockDisplayParticleContext {
 
-    private static final ThreadLocal<Scope> ACTIVE = new ThreadLocal<>();
+    private static final ThreadLocal<Frames> FRAMES = ThreadLocal.withInitial(Frames::new);
 
     private BlockDisplayParticleContext() {
     }
@@ -19,30 +19,33 @@ public final class BlockDisplayParticleContext {
     public static void runBlockDisplayTick(
             Block block, BlockState state, World world, BlockPos pos, Random random
     ) {
-        Scope previous = ACTIVE.get();
-        double dy = SlabSupport.getYOffset(world, pos, state);
-        if (Double.isFinite(dy) && dy != 0.0d) {
-            ACTIVE.set(new Scope(pos.toImmutable(), dy));
-        } else {
-            ACTIVE.remove();
-        }
+        Frames frames = FRAMES.get();
+        Scope previous = frames.active;
+        Scope scope = frames.free;
+        if (scope == null) scope = new Scope();
+        else frames.free = scope.next;
+        scope.open(world, pos, state);
+        frames.active = scope;
+        // Every tick owns its scope, including flat and silent blocks. Resolve height only
+        // when a particle needs it; an inner flat tick must not reuse an outer block's offset.
         try {
             block.randomDisplayTick(state, world, pos, random);
         } finally {
-            if (previous == null) {
-                ACTIVE.remove();
-            } else {
-                ACTIVE.set(previous);
-            }
+            frames.active = previous;
+            scope.world = null;
+            scope.state = null;
+            scope.next = frames.free;
+            frames.free = scope;
         }
     }
 
+    /** Reports emission ownership without forcing a height lookup. */
     public static boolean isActive() {
-        return ACTIVE.get() != null;
+        return FRAMES.get().active != null;
     }
 
     public static double translateActiveY(double y) {
-        Scope scope = ACTIVE.get();
+        Scope scope = FRAMES.get().active;
         if (scope == null) {
             return y;
         }
@@ -50,31 +53,32 @@ public final class BlockDisplayParticleContext {
             scope.sourceY = y;
         }
         scope.translationCalls++;
-        return y + scope.dy;
+        double dy = scope.resolveDy();
+        return dy == 0.0d ? y : y + dy;
     }
 
     public static BlockPos activeOwner() {
-        Scope scope = ACTIVE.get();
-        return scope == null ? null : scope.owner;
+        Scope scope = FRAMES.get().active;
+        return scope == null || scope.resolveDy() == 0.0d ? null : scope.owner.toImmutable();
     }
 
     public static double activeDy() {
-        Scope scope = ACTIVE.get();
-        return scope == null ? 0.0d : scope.dy;
+        Scope scope = FRAMES.get().active;
+        return scope == null ? 0.0d : scope.resolveDy();
     }
 
     public static double activeSourceY() {
-        Scope scope = ACTIVE.get();
+        Scope scope = FRAMES.get().active;
         return scope == null ? Double.NaN : scope.sourceY;
     }
 
     public static int activeTranslationCalls() {
-        Scope scope = ACTIVE.get();
+        Scope scope = FRAMES.get().active;
         return scope == null ? 0 : scope.translationCalls;
     }
 
     public static void clearActiveTranslationObservation() {
-        Scope scope = ACTIVE.get();
+        Scope scope = FRAMES.get().active;
         if (scope != null) {
             scope.sourceY = Double.NaN;
             scope.translationCalls = 0;
@@ -88,15 +92,40 @@ public final class BlockDisplayParticleContext {
         return Double.isFinite(dy) ? y + dy : y;
     }
 
+    private static final class Frames {
+        private Scope active;
+        private Scope free;
+    }
+
+    /** Reused per-thread frames avoid allocating for the many display ticks that emit nothing. */
     private static final class Scope {
-        private final BlockPos owner;
-        private final double dy;
+        private final BlockPos.Mutable owner = new BlockPos.Mutable();
+        private World world;
+        private BlockState state;
+        private Scope next;
+        private boolean resolved;
+        private double dy;
         private double sourceY = Double.NaN;
         private int translationCalls;
 
-        private Scope(BlockPos owner, double dy) {
-            this.owner = owner;
-            this.dy = dy;
+        private void open(World world, BlockPos owner, BlockState state) {
+            this.world = world;
+            this.owner.set(owner);
+            this.state = state;
+            next = null;
+            resolved = false;
+            dy = 0.0d;
+            sourceY = Double.NaN;
+            translationCalls = 0;
+        }
+
+        private double resolveDy() {
+            if (!resolved) {
+                double value = SlabSupport.getYOffset(world, owner, state);
+                dy = Double.isFinite(value) ? value : 0.0d;
+                resolved = true;
+            }
+            return dy;
         }
     }
 }
