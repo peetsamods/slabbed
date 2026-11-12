@@ -256,6 +256,9 @@ dependencies {
     modClientImplementation "net.fabricmc.fabric-api:fabric-renderer-api-v1:${project.fabric_version}"
     modClientImplementation "net.fabricmc.fabric-api:fabric-model-loading-api-v1:${project.fabric_version}"
 
+    testImplementation "org.junit.jupiter:junit-jupiter:5.11.4"
+    testRuntimeOnly "org.junit.platform:junit-platform-launcher:1.11.4"
+
     // fabric-gametest-api-v1 is included in fabric-api bundle (already on main classpath,
     // extended to the gametest source set by configureTests { createSourceSet = true })
 }
@@ -743,4 +746,11 @@ tasks.named("runFenceClientProbe").configure {
             throw new GradleException("Fence ceiling client proof did not report a fresh passing result.")
         }
     }
+}
+
+// Client model admission is tested without launching a game or loading optional mods.
+sourceSets.test.compileClasspath += sourceSets.client.output + sourceSets.client.compileClasspath
+sourceSets.test.runtimeClasspath += sourceSets.client.output + sourceSets.client.runtimeClasspath
+tasks.named("test", Test) {
+    useJUnitPlatform()
 }
