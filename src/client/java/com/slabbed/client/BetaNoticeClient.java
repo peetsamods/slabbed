@@ -92,7 +92,7 @@ public final class BetaNoticeClient {
                         .withStyle(ChatFormatting.GRAY, ChatFormatting.UNDERLINE)
                         .withStyle(style -> style.withClickEvent(
                                 new ClickEvent.RunCommand("/slabbed_dismiss_beta_notice"))))
-                .append(Component.literal(" Open chat to use these links, or report from the title or pause menu.")
+                .append(Component.literal(" Open chat to use these links, or report from the pause menu.")
                         .withStyle(ChatFormatting.GRAY));
     }
 
