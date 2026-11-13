@@ -24,6 +24,7 @@ public final class IssueReportClient {
     private static PendingRequest pendingChatRequest;
 
     public static void init() {
+        IssueReportPreferences.load();
         ClientCommandRegistrationCallback.EVENT.register((dispatcher, access) ->
                 dispatcher.register(ClientCommands.literal("slabbed_report_issue").executes(context -> {
                     queueReview();
@@ -45,7 +46,8 @@ public final class IssueReportClient {
         ScreenEvents.AFTER_INIT.register((client, screen, width, height) -> {
             boolean optionsMenu = screen instanceof OptionsScreen
                     && !FabricLoader.getInstance().isModLoaded("modmenu");
-            if (!optionsMenu && (!(screen instanceof PauseScreen pause) || !pause.showsPauseMenu())) return;
+            if (!optionsMenu && (!(screen instanceof PauseScreen pause) || !pause.showsPauseMenu()
+                    || !IssueReportPreferences.showPauseButton())) return;
             Button button = Button.builder(Component.translatable("slabbed.report.entry"),
                     ignored -> open(client, screen)).bounds(0, 0, 176, 20).build();
             button.setTooltip(Tooltip.create(Component.translatable("slabbed.report.entry")));
@@ -83,6 +85,11 @@ public final class IssueReportClient {
         }
 
         void update() {
+            if (!optionsMenu && !IssueReportPreferences.showPauseButton()) {
+                button.visible = false;
+                previous = java.util.List.of();
+                return;
+            }
             var geometry = new ArrayList<IssueReportPlacement.Box>();
             geometry.add(new IssueReportPlacement.Box(0, 0, screen.width, screen.height));
             geometry.add(new IssueReportPlacement.Box(screen.width / 2 - 100,

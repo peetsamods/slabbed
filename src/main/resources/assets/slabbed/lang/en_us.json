@@ -44,5 +44,8 @@
   "slabbed.report.copy_text": "Copy report text",
   "slabbed.report.text_copied": "Report text copied",
   "slabbed.report.copy_failed": "Could not copy",
-  "slabbed.report.blank_requested": "Blank GitHub issue requested; no report text was included in that link. Paste the copied report yourself. Slabbed has not submitted anything."
+  "slabbed.report.blank_requested": "Blank GitHub issue requested; no report text was included in that link. Paste the copied report yourself. Slabbed has not submitted anything.",
+  "slabbed.report.show_pause_button": "Show report button on pause screen",
+  "slabbed.report.menu_preference_hint": "Saved immediately on this device. You can still open this reporter from Mod Menu, or Options without Mod Menu.",
+  "slabbed.report.preference_save_failed": "Could not save this setting. Your previous choice is unchanged."
 }

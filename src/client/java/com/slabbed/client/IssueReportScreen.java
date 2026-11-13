@@ -34,6 +34,7 @@ final class IssueReportScreen extends Screen {
     private String modText = "";
     private int collectionOmissions;
     private Button reviewButton;
+    private boolean preferenceSaveFailed;
 
     IssueReportScreen(Screen parent, IssueReport versions) {
         this(parent, versions, IssueReportClient::loadedClientMods,
@@ -87,6 +88,13 @@ final class IssueReportScreen extends Screen {
     }
 
     private void addDraft(LinearLayout content, int width) {
+        content.addChild(Checkbox.builder(label("show_pause_button"), font).maxWidth(width)
+                .selected(IssueReportPreferences.showPauseButton()).onValueChange((box, selected) -> {
+                    preferenceSaveFailed = !IssueReportPreferences.setShowPauseButton(selected);
+                    rebuildWidgets();
+                }).build());
+        content.addChild(text(label("menu_preference_hint"), width));
+        if (preferenceSaveFailed) content.addChild(text(label("preference_save_failed"), width));
         content.addChild(text(label("draft_explanation"), width));
         content.addChild(text(label("short_title"), width));
         EditBox titleBox = content.addChild(new EditBox(font, width, 20, label("short_title")));

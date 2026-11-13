@@ -334,3 +334,5 @@ archive path, the build goes red instead of shipping a manifest that misdescribe
 
 | `com/slabbed/mixin/FancyWorldAnimationsMixinConfigPlugin` | Exact-version gate for optional animated geometry adapters. |
 | `slabbed.fwa.mixins.json` | Optional animated placement and chain-bridge adapter wiring. |
+
+| `com/slabbed/client/IssueReportPreferences` | Persistent local pause-menu visibility preference; no world or report data. |

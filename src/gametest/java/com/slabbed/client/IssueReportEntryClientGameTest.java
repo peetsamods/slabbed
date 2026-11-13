@@ -9,6 +9,8 @@ import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
+import net.minecraft.client.gui.components.Checkbox;
+import net.minecraft.client.gui.screens.PauseScreen;
 import net.minecraft.client.gui.layouts.LayoutElement;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.gui.screens.TitleScreen;
@@ -34,6 +36,19 @@ public final class IssueReportEntryClientGameTest implements FabricClientGameTes
                 : new int[][]{{854, 480, 1}, {854, 480, 2}, {1280, 720, 3},
                         {1280, 960, 4}, {1920, 1080, 4}};
         try {
+            require(IssueReportPreferences.setShowPauseButton(true), "Enable default for test");
+            Path prefs = Files.createTempDirectory("slabbed-menu-test").resolve("menu.json");
+            require(IssueReportPreferences.read(prefs), "Missing file preserves shipped default");
+            Files.writeString(prefs, "{broken");
+            require(IssueReportPreferences.read(prefs), "Malformed file preserves shipped default");
+            Files.writeString(prefs, "{\"showPauseButton\":\"false\"}");
+            require(IssueReportPreferences.read(prefs), "Wrong type preserves shipped default");
+            require(IssueReportPreferences.write(prefs, false) && !IssueReportPreferences.read(prefs),
+                    "Disabled preference persists");
+            require(IssueReportPreferences.write(prefs, true) && IssueReportPreferences.read(prefs),
+                    "Reenabled preference persists");
+            require(!IssueReportPreferences.write(prefs.resolve("blocked.json"), false),
+                    "Write failure must be reported");
             for (int index = 0; index < sizes.length; index++) {
                 int[] size = sizes[index];
                 context.getInput().resizeWindow(size[0], size[1]);
@@ -145,6 +160,21 @@ public final class IssueReportEntryClientGameTest implements FabricClientGameTes
                 click(context, target, prefix + "-open-report");
                 context.waitForScreen(IssueReportScreen.class);
                 context.takeScreenshot(prefix + "-report");
+                if (index == 0) {
+                    Screen draft = context.computeOnClient(client -> client.gui.screen());
+                    Checkbox toggle = context.computeOnClient(client -> preference(draft));
+                    require(toggle.selected(), "Pause entry starts enabled");
+                    click(context, toggle, prefix + "-disable-pause");
+                    context.runOnClient(client -> {
+                        IssueReportPreferences.load();
+                        require(!IssueReportPreferences.showPauseButton(), "Disabled choice survives reload");
+                        require(!preference(draft).selected(), "UI reflects saved state");
+                    });
+
+                } else {
+                    require(context.computeOnClient(client -> !preference(client.gui.screen()).selected()),
+                            "Reporter remains accessible while pause entry is hidden");
+                }
                 key(context, InputConstants.KEY_ESCAPE, prefix + "-back");
                 context.waitFor(client -> client.gui.screen() == parent, 200);
                 Button keyboardTarget = context.computeOnClient(client -> modMenu
@@ -169,12 +199,55 @@ public final class IssueReportEntryClientGameTest implements FabricClientGameTes
                 row.put("passed", true);
                 write();
             }
+            try (var world = context.worldBuilder().setUseConsistentSettings(true).create()) {
+                context.waitFor(client -> client.player != null && client.level != null
+                        && client.gui.screen() == null, 400);
+                context.setScreen(() -> new PauseScreen(true));
+                context.waitForScreen(PauseScreen.class);
+                context.waitTicks(3);
+                Screen pause = context.computeOnClient(client -> client.gui.screen());
+                require(context.computeOnClient(client -> reports(pause).isEmpty()),
+                        "Disabled pause button must not exist in a real world");
+                context.takeScreenshot("pause-hidden");
+                context.setScreen(() -> IssueReportClient.createScreen(pause));
+                context.waitForScreen(IssueReportScreen.class);
+                Checkbox toggle = context.computeOnClient(client -> preference(client.gui.screen()));
+                click(context, toggle, "reenable-pause");
+                context.runOnClient(client -> {
+                    IssueReportPreferences.load();
+                    require(IssueReportPreferences.showPauseButton(), "Enabled choice survives reload");
+                });
+                key(context, InputConstants.KEY_ESCAPE, "return-reenabled-pause");
+                context.waitForScreen(PauseScreen.class);
+                context.waitTicks(3);
+                Button pauseEntry = context.computeOnClient(client -> reports(client.gui.screen()).stream()
+                        .findFirst().orElseThrow(() -> new AssertionError("Reenabled pause entry missing")));
+                context.takeScreenshot("pause-reenabled");
+                click(context, pauseEntry, "pause-reenabled-open");
+                context.waitForScreen(IssueReportScreen.class);
+                Checkbox hide = context.computeOnClient(client -> preference(client.gui.screen()));
+                click(context, hide, "hide-existing-pause-entry");
+                key(context, InputConstants.KEY_ESCAPE, "pause-reenabled-back");
+                context.waitForScreen(PauseScreen.class);
+                require(context.computeOnClient(client -> reports(client.gui.screen()).isEmpty()),
+                        "Returning from reporter must remove the previously visible pause entry");
+                context.takeScreenshot("pause-hidden-after-return");
+                context.runOnClient(client -> require(IssueReportPreferences.setShowPauseButton(true),
+                        "Restore test default"));
+            }
             context.setScreen(TitleScreen::new);
             context.waitForScreen(TitleScreen.class);
             Slabbed.LOGGER.info("CLIENT_GAMETEST | IssueReportEntryClientGameTest | PASS modmenu={} rows={}", modMenu, rows.size());
         } catch (Exception failure) {
             throw new RuntimeException(failure);
         }
+    }
+
+    private static Checkbox preference(Screen screen) {
+        return IssueReportScreenClientGameTest.all(screen).stream().filter(Checkbox.class::isInstance)
+                .map(Checkbox.class::cast).filter(box -> box.getMessage().getString().equals(
+                        Component.translatable("slabbed.report.show_pause_button").getString()))
+                .findFirst().orElseThrow();
     }
 
     private static Object field(Object owner, String name) throws ReflectiveOperationException {

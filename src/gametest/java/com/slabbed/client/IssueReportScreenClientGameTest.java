@@ -51,7 +51,7 @@ public final class IssueReportScreenClientGameTest implements FabricClientGameTe
             show(context, form);
             context.takeScreenshot("report-initial-structure");
             context.runOnClient(client -> {
-                require(reads.get() == 0 && !find(form, Checkbox.class).selected(),
+                require(reads.get() == 0 && !field(form, Checkbox.class, "include_mods").selected(),
                         "opening the form must not collect a mod list");
                 Button review = button(form, "review");
                 require(!review.active, "empty descriptions must disable review");
@@ -68,7 +68,7 @@ public final class IssueReportScreenClientGameTest implements FabricClientGameTe
                             "the requested GUI scale must actually be active");
                     require(field(form, EditBox.class, "short_title").getValue().equals("Glass floats"),
                             "GUI scaling must retain the draft");
-                    require(!find(form, Checkbox.class).selected() && reads.get() == 0,
+                    require(!field(form, Checkbox.class, "include_mods").selected() && reads.get() == 0,
                             "GUI scaling must not opt into or collect metadata");
                     checkFooter(form, "review");
                     Slabbed.LOGGER.info("REPORT_FORM_LAYOUT scale={} width={} height={}", scale, form.width, form.height);
@@ -76,12 +76,26 @@ public final class IssueReportScreenClientGameTest implements FabricClientGameTe
                 context.takeScreenshot("report-form-scale-" + scale);
             }
             context.runOnClient(client -> {
-                press(find(form, Checkbox.class));
+                press(field(form, Checkbox.class, "include_mods"));
                 require(reads.get() == 1, "explicit opt-in must collect once");
                 MultiLineEditBox mods = field(form, MultiLineEditBox.class, "mods_edit");
                 require(mods.getValue().equals("alpha_mod 1.2.3\nbeta_mod 2.0"),
                         "the editor must display exactly the included IDs and versions");
                 mods.setValue("alpha_mod 9.9");
+                checkPreferenceFailure(form);
+                String worldLabel = find(form, CycleButton.class).getMessage().getString();
+                for (int toggle = 0; toggle < 2; toggle++) {
+                    press(field(form, Checkbox.class, "show_pause_button"));
+                    require(field(form, EditBox.class, "short_title").getValue().equals("Glass floats")
+                                    && field(form, MultiLineEditBox.class, "steps").getValue().equals("Placed glass on a slab.")
+                                    && field(form, MultiLineEditBox.class, "happened").getValue().equals("The glass floats above it.")
+                                    && find(form, CycleButton.class).getMessage().getString().equals(worldLabel)
+                                    && field(form, Checkbox.class, "include_mods").selected()
+                                    && field(form, MultiLineEditBox.class, "mods_edit").getValue().equals("alpha_mod 9.9"),
+                            "Menu toggle must retain all draft fields and edited mod list");
+                    require(reads.get() == 1 && opened.isEmpty() && copied.isEmpty(),
+                            "Menu toggle must not collect or transmit report data");
+                }
                 viewport(form).setScrollAmount(viewport(form).maxScrollAmount());
             });
             context.takeScreenshot("report-mod-editor");
@@ -118,7 +132,7 @@ public final class IssueReportScreenClientGameTest implements FabricClientGameTe
             context.takeScreenshot("report-reviewed-short");
             context.runOnClient(client -> {
                 press(button(form, "edit"));
-                require(reads.get() == 1 && find(form, Checkbox.class).selected(),
+                require(reads.get() == 1 && field(form, Checkbox.class, "include_mods").selected(),
                         "back must preserve edits without recollecting");
                 require(field(form, MultiLineEditBox.class, "mods_edit").getValue().equals("alpha_mod 9.9"),
                         "back must retain the edited list");
@@ -127,8 +141,8 @@ public final class IssueReportScreenClientGameTest implements FabricClientGameTe
                 require(!preview(form).contains("alpha_mod") && !preview(form).contains("Included client mods"),
                         "the entire list must be removable from review");
                 press(button(form, "edit"));
-                require(!find(form, Checkbox.class).selected(), "removing the list must turn off the opt-in");
-                press(find(form, Checkbox.class));
+                require(!field(form, Checkbox.class, "include_mods").selected(), "removing the list must turn off the opt-in");
+                press(field(form, Checkbox.class, "include_mods"));
                 require(reads.get() == 2, "a new explicit opt-in may take a fresh snapshot");
                 field(form, MultiLineEditBox.class, "mods_edit").setValue("");
                 press(button(form, "review"));
@@ -150,11 +164,11 @@ public final class IssueReportScreenClientGameTest implements FabricClientGameTe
             }, copied::add, opened::add));
             show(context, large);
             context.runOnClient(client -> {
-                require(!find(large, Checkbox.class).selected() && largeReads.get() == 0
+                require(!field(large, Checkbox.class, "include_mods").selected() && largeReads.get() == 0
                                 && field(large, EditBox.class, "short_title").getValue().isEmpty(),
                         "reopening starts a fresh draft with mod opt-in off");
                 fill(large);
-                press(find(large, Checkbox.class));
+                press(field(large, Checkbox.class, "include_mods"));
                 require(field(large, MultiLineEditBox.class, "mods_edit").getValue().contains("sample_999 1.2.3"),
                         "a large list must not be silently clipped by the editor");
                 press(button(large, "review"));
@@ -205,6 +219,36 @@ public final class IssueReportScreenClientGameTest implements FabricClientGameTe
         context.waitFor(client -> client.gui.screen() == screen && !screen.children().isEmpty(), 400);
     }
 
+    private static void checkPreferenceFailure(IssueReportScreen form) {
+        var config = net.fabricmc.loader.api.FabricLoader.getInstance().getConfigDir()
+                .resolve("slabbed-report-menu.json");
+        var backup = config.resolveSibling("slabbed-report-menu-test-backup.json");
+        boolean existed = java.nio.file.Files.exists(config);
+        boolean previous = IssueReportPreferences.showPauseButton();
+        try {
+            java.nio.file.Files.createDirectories(config.getParent());
+            if (existed) java.nio.file.Files.move(config, backup);
+            java.nio.file.Files.createDirectory(config);
+            java.nio.file.Files.writeString(config.resolve("blocker"), "test");
+            press(field(form, Checkbox.class, "show_pause_button"));
+            require(IssueReportPreferences.showPauseButton() == previous
+                            && field(form, Checkbox.class, "show_pause_button").selected() == previous,
+                    "A failed save must retain the prior active setting and checkbox");
+            require(all(form).stream().anyMatch(node -> node instanceof net.minecraft.client.gui.components.MultiLineTextWidget widget
+                            && widget.getMessage().getString().equals(Component.translatable(
+                            "slabbed.report.preference_save_failed").getString())),
+                    "A failed preference save must be explained on screen");
+        } catch (java.io.IOException failure) {
+            throw new RuntimeException(failure);
+        } finally {
+            try {
+                java.nio.file.Files.deleteIfExists(config.resolve("blocker"));
+                java.nio.file.Files.deleteIfExists(config);
+                if (existed) java.nio.file.Files.move(backup, config);
+            } catch (java.io.IOException failure) { throw new RuntimeException(failure); }
+        }
+    }
+
     private static void fill(IssueReportScreen form) {
         field(form, EditBox.class, "short_title").setValue("Glass floats");
         field(form, MultiLineEditBox.class, "steps").setValue("Placed glass on a slab.");
@@ -231,7 +275,7 @@ public final class IssueReportScreenClientGameTest implements FabricClientGameTe
                 .orElseThrow(() -> new AssertionError("missing report widget: " + type.getSimpleName()));
     }
 
-    private static List<GuiEventListener> all(Screen screen) {
+    static List<GuiEventListener> all(Screen screen) {
         var result = new ArrayList<GuiEventListener>();
         Set<GuiEventListener> seen = Collections.newSetFromMap(new IdentityHashMap<>());
         collect(screen, result, seen);
