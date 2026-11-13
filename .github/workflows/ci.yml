@@ -79,16 +79,19 @@ jobs:
           FA263=$(find "$GUH/caches/modules-2" -name "fabric-api-$(grep '^fabric_version=' gradle.properties | cut -d= -f2).jar" | head -1)
           test -n "$FA262" && test -n "$FA263"
           python3 tools/linkage-scan.py "$JAR" - "$GUH/caches/fabric-loom/26.3/minecraft-client.jar" --lib "$FA263" \
-            --allow-class 'com/slabbed/compat/mc262/'
+            --allow-class 'com/slabbed/compat/mc262/' --allow-class 'com/slabbed/mixin/client/LegacyBlockOverlayMixin'
           python3 tools/linkage-scan.py "$JAR" - "$GUH/caches/fabric-loom/26.2/minecraft-client.jar" --lib "$FA262" \
-            --allow-class 'com/slabbed/compat/PlayerSwing$Modern' --allow-class 'com/slabbed/client/model/YOffsetEmitter'
+            --allow-class 'com/slabbed/compat/PlayerSwing$Modern' --allow-class 'com/slabbed/client/model/YOffsetEmitter' \
+            --allow-class 'com/slabbed/client/LoweredBlockOverlay$Modern' --allow-class 'com/slabbed/mixin/client/ModernBlockOverlayMixin'
           CFG="--config src/main/resources/slabbed.mixins.json --config src/client/resources/slabbed.client.mixins.json --config src/diagnostics/resources/slabbed.diagnostics.client.mixins.json"
+          # Overlay adapters are isolated by MinecraftVersions and CinematicMixinConfigPlugin;
+          # scan each adapter on its active game version, not the version where it is withheld.
           # Optional compatibility targets are absent from the vanilla scan classpath;
           # verify them with their installed mods in the compatibility client fixtures.
           python3 tools/mixin-target-scan.py "$GUH/caches/fabric-loom/26.3/minecraft-client.jar" src/main/java src/client/java src/diagnostics/java $CFG \
-            --skip LegacyRedStoneWireBlockMixin --skip FusionBlockModelModifierMixin --skip StupidBlockAnimationsRendererMixin
+            --skip LegacyRedStoneWireBlockMixin --skip LegacyBlockOverlayMixin --skip FusionBlockModelModifierMixin --skip StupidBlockAnimationsRendererMixin
           python3 tools/mixin-target-scan.py "$GUH/caches/fabric-loom/26.2/minecraft-client.jar" src/main/java src/client/java src/diagnostics/java $CFG \
-            --skip RedstoneWireBlockMixin --skip CushionRestsOnDrawnTopMixin --skip FusionBlockModelModifierMixin --skip StupidBlockAnimationsRendererMixin
+            --skip RedstoneWireBlockMixin --skip CushionRestsOnDrawnTopMixin --skip ModernBlockOverlayMixin --skip FusionBlockModelModifierMixin --skip StupidBlockAnimationsRendererMixin
 
   client-verify:
     name: Client GameTests (${{ matrix.minecraft }})
