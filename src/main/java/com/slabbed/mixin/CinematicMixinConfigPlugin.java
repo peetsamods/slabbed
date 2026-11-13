@@ -11,11 +11,14 @@ import org.spongepowered.asm.mixin.extensibility.IMixinInfo;
 /** Optional scene adapters are admitted only for their verified third-party API version. */
 public final class CinematicMixinConfigPlugin implements IMixinConfigPlugin {
     private boolean supported;
+    private boolean modern;
 
     @Override
     public void onLoad(String mixinPackage) {
         var loader = FabricLoader.getInstance();
         var cinematic = loader.getModContainer("cinematic");
+        modern = loader.getModContainer("minecraft").map(mod ->
+                !mod.getMetadata().getVersion().getFriendlyString().startsWith("26.2")).orElse(false);
         supported = cinematic.map(mod -> mod.getMetadata().getVersion().getFriendlyString().equals("0.18.28"))
                 .orElse(false)
                 && loader.getModContainer("minecraft").map(mod ->
@@ -27,6 +30,8 @@ public final class CinematicMixinConfigPlugin implements IMixinConfigPlugin {
     }
 
     @Override public boolean shouldApplyMixin(String target, String mixin) {
+        if (mixin.endsWith(".ModernBlockOverlayMixin")) return modern;
+        if (mixin.endsWith(".LegacyBlockOverlayMixin")) return !modern;
         return !mixin.startsWith("com.slabbed.mixin.client.CinematicTable") || supported;
     }
     @Override public String getRefMapperConfig() { return null; }

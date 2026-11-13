@@ -29,6 +29,10 @@
     },
     {
       "config": "slabbed.offgrid.mixins.json"
+    },
+    {
+      "environment": "client",
+      "config": "slabbed.fwa.mixins.json"
     }
   ],
   "depends": {

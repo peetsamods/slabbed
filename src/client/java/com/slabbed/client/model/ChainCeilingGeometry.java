@@ -52,8 +52,6 @@ public final class ChainCeilingGeometry {
             new EnumMap<>(ChainBridgeTextureVariant.class);
     private static final Map<ChainBridgeTextureVariant, Identifier> MODEL_IDS =
             new EnumMap<>(ChainBridgeTextureVariant.class);
-    private static final Map<ChainBridgeTextureVariant, BlockStateModel> BAKED =
-            new EnumMap<>(ChainBridgeTextureVariant.class);
 
     static {
         for (ChainBridgeTextureVariant variant : ChainBridgeTextureVariant.values()) {
@@ -111,19 +109,10 @@ public final class ChainCeilingGeometry {
         return true;
     }
 
-    private static BlockStateModel alternateModel(ChainBridgeTextureVariant variant) {
-        BlockStateModel cached = BAKED.get(variant);
-        if (cached != null) {
-            return cached;
-        }
+    /** Resolves against the current model manager so resource reloads cannot reuse stale geometry. */
+    public static BlockStateModel alternateModel(ChainBridgeTextureVariant variant) {
         Minecraft client = Minecraft.getInstance();
-        if (client == null || client.getModelManager() == null) {
-            return null;
-        }
-        BlockStateModel baked = ((FabricModelManager) client.getModelManager()).getModel(KEYS.get(variant));
-        if (baked != null) {
-            BAKED.put(variant, baked);
-        }
-        return baked;
+        if (client == null || client.getModelManager() == null) return null;
+        return ((FabricModelManager) client.getModelManager()).getModel(KEYS.get(variant));
     }
 }

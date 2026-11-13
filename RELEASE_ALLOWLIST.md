@@ -98,6 +98,8 @@ anything. The split above puts the fine granularity only where a leak has actual
 | --- | --- |
 | `com/slabbed/mixin/BaseRailBlockSlopeShapeMixin` | A rail's outline and raycast box are sized from the slope it is drawn with, so a lowered rail rising to its neighbour can be targeted where it is drawn (maintainer ruling, 2026-09-28). |
 | `com/slabbed/mixin/BlockCollisionsLoweredAboveMixin` | Collision against a lowered slab above. |
+| `com/slabbed/client/LoweredBlockOverlay` | Screen overlays follow stored block geometry with version-specific vanilla eligibility. |
+| `com/slabbed/mixin/EntitySuffocationGeometryMixin` | Suffocation follows shifted solid geometry and its lowered owners. |
 | `com/slabbed/mixin/BlockItemPlacementIntentMixin` | Captures placement intent for the WYSIWYG placement law. |
 | `com/slabbed/mixin/BlockOnPlacedAnchorMixin` | Writes the anchor on placement. |
 | `com/slabbed/mixin/CampfireCookingParticleMixin` | Particle origin follows the lowered block. |
@@ -329,3 +331,6 @@ archive path, the build goes red instead of shipping a manifest that misdescribe
 
 | `com/slabbed/anchor/OffgridSurvivorTransition` | One-shot preservation of an existing mixed-slab member seat (LAW.md). |
 | `com/slabbed/mixin/OffgridMixedSlabBreakMixin` | Binds preservation to the verified mixed-slab unwrap operation (LAW.md). |
+
+| `com/slabbed/mixin/FancyWorldAnimationsMixinConfigPlugin` | Exact-version gate for optional animated geometry adapters. |
+| `slabbed.fwa.mixins.json` | Optional animated placement and chain-bridge adapter wiring. |
