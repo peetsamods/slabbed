@@ -67,6 +67,9 @@ public final class BetaNoticeVersionChannelTest {
             throw helper.assertionException(
                     "the alpha notice must NOT say 'in beta' — the channel word is hardcoded again: " + alphaText);
         }
+        if (alphaText.contains("title") || !alphaText.contains("pause menu")) {
+            throw helper.assertionException("the notice must name an available report entry");
+        }
         String betaText = BetaNoticeClient.noticeMessage("beta").getString().toLowerCase(Locale.ROOT);
         if (!betaText.contains("in beta")) {
             throw helper.assertionException("the beta notice must say 'in beta' — got: " + betaText);
