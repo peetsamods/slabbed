@@ -19,6 +19,7 @@
     "ClipContextBlockAccessor",
     "DecoratedPotParticleMixin",
     "EntityLoweredFootstepMixin",
+    "EntitySuffocationGeometryMixin",
     "FencePaneSlabConnectionMixin",
     "HangingSignAttachedMixin",
     "HangingEntityRememberedSeatMixin",
