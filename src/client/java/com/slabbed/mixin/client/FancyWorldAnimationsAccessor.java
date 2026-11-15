@@ -1,6 +1,7 @@
 package com.slabbed.mixin.client;
 
 import net.minecraft.core.BlockPos;
+import net.minecraft.world.phys.AABB;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Pseudo;
 import org.spongepowered.asm.mixin.gen.Invoker;
@@ -10,4 +11,5 @@ import org.spongepowered.asm.mixin.gen.Invoker;
 @Mixin(targets = "fr.madu59.fwa.anims.Animation", remap = false)
 public interface FancyWorldAnimationsAccessor {
     @Invoker("getPos") BlockPos slabbed$getPos();
+    @Invoker("getBoundingBox") AABB slabbed$getBounds();
 }

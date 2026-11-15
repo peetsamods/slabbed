@@ -389,15 +389,11 @@ public abstract class SlabSupportStateMixin {
     // This is SOURCE-SCOPED: blocks that override getCollisionShape (fences,
     // walls, panes) never route through getShape, so they are unaffected. The
     // old getCollisionShape OFFSET inject (slabbed$offsetOakFence...) is gone.
-    @Unique
-    private static final ThreadLocal<Boolean> SLABBED$IN_COLLISION_QUERY =
-            ThreadLocal.withInitial(() -> Boolean.FALSE);
-
     @Inject(method = "getCollisionShape(Lnet/minecraft/world/level/BlockGetter;Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/phys/shapes/CollisionContext;)Lnet/minecraft/world/phys/shapes/VoxelShape;",
             at = @At("HEAD"))
     private void slabbed$collisionQueryEnter(BlockGetter world, BlockPos pos, CollisionContext ctx,
                                              CallbackInfoReturnable<VoxelShape> cir) {
-        SLABBED$IN_COLLISION_QUERY.set(Boolean.TRUE);
+        SlabSupport.setCollisionShapeQuery(true);
     }
 
     /**
@@ -432,7 +428,7 @@ public abstract class SlabSupportStateMixin {
             at = @At("RETURN"), cancellable = true)
     private void slabbed$collisionQueryExit(BlockGetter world, BlockPos pos, CollisionContext ctx,
                                             CallbackInfoReturnable<VoxelShape> cir) {
-        SLABBED$IN_COLLISION_QUERY.set(Boolean.FALSE);
+        SlabSupport.setCollisionShapeQuery(false);
         if (SlabSupport.isVanillaCollisionShapeQuery()) {
             return;
         }
@@ -461,8 +457,8 @@ public abstract class SlabSupportStateMixin {
         // (within-cell) for that path so the cell-bounded broadphase samples it;
         // only the outline/visual gets lowered. Consume the flag so a stray
         // set (e.g. getCollisionShape on a non-colliding block) cannot leak.
-        if (Boolean.TRUE.equals(SLABBED$IN_COLLISION_QUERY.get())) {
-            SLABBED$IN_COLLISION_QUERY.set(Boolean.FALSE);
+        if (SlabSupport.isCollisionShapeQuery()) {
+            SlabSupport.setCollisionShapeQuery(false);
             return;
         }
 

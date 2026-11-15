@@ -134,6 +134,9 @@
       "com.slabbed.test.LoweredCarpetVibrationTest"
     ],
     "fabric-client-gametest": [
+      "com.slabbed.test.CarpetMovementClientGameTest",
+      "com.slabbed.test.DeepBlockBreakingClientGameTest",
+      "com.slabbed.test.LoweredParticleLightClientGameTest",
       "com.slabbed.test.EventParticleFrozenDyClientGameTest",
       "com.slabbed.test.PlacementDyPredictionClientGameTest",
       "com.slabbed.test.SlabbedLabLiveCursorIntentRecorderContractClientGameTest",
@@ -147,6 +150,7 @@
       "com.slabbed.test.MinecartRenderRailSnapClientGameTest",
       "com.slabbed.test.RailSlopeRenderClientGameTest",
       "com.slabbed.test.FenceCeilingRenderClientGameTest",
+      "com.slabbed.test.LeashKnotSeatClientGameTest",
       "com.slabbed.test.SlabbedSettingsScreenClientGameTest",
       "com.slabbed.test.PistonMovingRenderDyOwnerClientGameTest",
       "com.slabbed.test.ChiseledBookShelfHitClientGameTest",

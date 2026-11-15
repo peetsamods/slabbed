@@ -109,6 +109,75 @@ public final class LoweredCarpetVibrationTest {
         }
     }
 
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void mossCarpetPlacementAllowsWalkingAcrossSlabs(GameTestHelper helper) {
+        checkPlacedMovement(helper, Blocks.MOSS_CARPET.defaultBlockState(), false);
+    }
+
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void woolCarpetPlacementAllowsWalkingAcrossSlabs(GameTestHelper helper) {
+        checkPlacedMovement(helper, woolCarpet(), false);
+    }
+
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void bareSlabAllowsWalkingAcrossLane(GameTestHelper helper) {
+        checkPlacedMovement(helper, null, false);
+    }
+
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void mossCarpetPlacementAllowsWalkingAcrossFullBlocks(GameTestHelper helper) {
+        checkPlacedMovement(helper, Blocks.MOSS_CARPET.defaultBlockState(), true);
+    }
+
+    private static void checkPlacedMovement(GameTestHelper helper, BlockState carpet, boolean fullBlock) {
+        ServerLevel level = helper.getLevel();
+        boolean previousFrozen = com.slabbed.anchor.SlabAnchorAttachment.FROZEN_DY_ENABLED;
+        com.slabbed.anchor.SlabAnchorAttachment.FROZEN_DY_ENABLED = true;
+        Player player = helper.makeMockPlayer(GameType.SURVIVAL);
+        double supportHeight = fullBlock ? 1.0d : 0.5d;
+        double surfaceHeight = supportHeight + (carpet == null ? 0.0d : 0.0625d);
+        try {
+            for (int x = 1; x <= 5; x++) {
+                BlockPos support = helper.absolutePos(new BlockPos(x, 2, 2));
+                level.setBlockAndUpdate(support, fullBlock ? Blocks.STONE.defaultBlockState()
+                        : Blocks.DEEPSLATE_TILE_SLAB.defaultBlockState());
+                if (carpet != null) {
+                    player.setPos(support.getX() + 0.5d, support.getY() + 2.0d, support.getZ() + 0.5d);
+                    ItemStack stack = new ItemStack(carpet.getBlock());
+                    player.setItemInHand(InteractionHand.MAIN_HAND, stack);
+                    var result = stack.useOn(new UseOnContext(player, InteractionHand.MAIN_HAND,
+                            new BlockHitResult(new Vec3(support.getX() + 0.5d,
+                                    support.getY() + supportHeight, support.getZ() + 0.5d),
+                                    Direction.UP, support, false)));
+                    BlockState placed = level.getBlockState(support.above());
+                    if (!result.consumesAction() || !placed.is(carpet.getBlock())
+                            || Math.abs(SlabSupport.getYOffset(level, support.above(), placed)
+                                    - (fullBlock ? 0.0d : -0.5d)) > 1.0e-6d) {
+                        throw helper.assertionException(new BlockPos(x, 2, 2),
+                                "Real placement must preserve the intended carpet height");
+                    }
+                }
+            }
+            BlockPos start = helper.absolutePos(new BlockPos(1, 2, 2));
+            player.setPos(start.getX() + 0.2d, start.getY() + surfaceHeight, start.getZ() + 0.5d);
+            for (int step = 0; step < 35; step++) {
+                player.setOnGround(true);
+                player.move(net.minecraft.world.entity.MoverType.SELF, new Vec3(0.1d, -0.05d, 0.0d));
+                if (Math.abs(player.getY() - (start.getY() + surfaceHeight)) > 1.0e-6d) {
+                    throw helper.assertionException(new BlockPos(1, 2, 2),
+                            "Walking must remain on the placed collision top");
+                }
+            }
+            if (Math.abs(player.getX() - (start.getX() + 3.7d)) > 1.0e-5d) {
+                throw helper.assertionException(new BlockPos(1, 2, 2),
+                        "Walking must cross the complete lane without a collision snag");
+            }
+            helper.succeed();
+        } finally {
+            com.slabbed.anchor.SlabAnchorAttachment.FROZEN_DY_ENABLED = previousFrozen;
+        }
+    }
+
     private static BlockState woolCarpet() {
         return net.minecraft.core.registries.BuiltInRegistries.BLOCK.getValue(
                 net.minecraft.resources.Identifier.withDefaultNamespace("white_carpet")).defaultBlockState();
