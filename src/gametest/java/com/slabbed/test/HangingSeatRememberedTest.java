@@ -39,6 +39,96 @@ import net.minecraft.world.phys.AABB;
  */
 public final class HangingSeatRememberedTest {
 
+    /** The knot and the actual rope endpoint share the fence's remembered seat. */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void leashKnotAndRopeEndpointSitOnLoweredFence(GameTestHelper helper) {
+        boolean frozen = SlabAnchorAttachment.FROZEN_DY_ENABLED;
+        SlabAnchorAttachment.FROZEN_DY_ENABLED = true;
+        try {
+            ServerLevel level = helper.getLevel();
+            BlockPos rel = new BlockPos(2, 3, 2);
+            helper.setBlock(rel.below(), bottomSlab());
+            helper.setBlock(rel, Blocks.OAK_FENCE.defaultBlockState());
+            BlockPos fence = helper.absolutePos(rel);
+            SlabAnchorAttachment.writePlacementDy(level, fence, -0.5d);
+            helper.setBlock(rel.below(), Blocks.AIR.defaultBlockState());
+            double dy = com.slabbed.util.SlabSupport.getYOffset(level, fence, level.getBlockState(fence));
+            if (Math.abs(dy + 0.5d) > EPS) {
+                throw helper.assertionException(rel, "premise: fence must be lowered by half a block");
+            }
+            // Entity construction visits origin before receiving its actual attachment cell.
+            level.getChunk(0, 0);
+            var knot = net.minecraft.world.entity.decoration.LeashFenceKnotEntity.getOrCreateKnot(level, fence);
+            double expected = fence.getY() + 0.375d + dy;
+            if (Math.abs(knot.getBoundingBox().minY - expected) > EPS) {
+                throw helper.assertionException(rel, "knot box must use lowered fence seat; expected " + expected
+                        + " got " + knot.getBoundingBox().minY);
+            }
+            if (Math.abs(knot.getRopeHoldPosition(1.0f).y - expected - 0.2d) > EPS) {
+                throw helper.assertionException(rel, "rope endpoint must meet lowered knot");
+            }
+            if (!knot.survives() || !knot.getPos().equals(fence)) {
+                throw helper.assertionException(rel, "lowering must preserve fence attachment and survival");
+            }
+            // A support replacement would move a recomputed seat; the knot must keep its own fact.
+            SlabAnchorAttachment.writePlacementDy(level, fence, 0.0d);
+            knot.tick();
+            TagValueOutput output = TagValueOutput.createWithContext(ProblemReporter.DISCARDING, level.registryAccess());
+            knot.saveWithoutId(output);
+            var reloaded = EntityTypes.LEASH_KNOT.create(level, EntitySpawnReason.LOAD);
+            if (reloaded == null) {
+                throw helper.assertionException("could not create reloaded leash knot");
+            }
+            reloaded.load(TagValueInput.create(ProblemReporter.DISCARDING, level.registryAccess(), output.buildResult()));
+            if (Math.abs(knot.getBoundingBox().minY - expected) > EPS
+                    || Math.abs(reloaded.getBoundingBox().minY - expected) > EPS
+                    || Math.abs(reloaded.getRopeHoldPosition(1.0f).y - expected - 0.2d) > EPS
+                    || !reloaded.getPos().equals(fence) || !reloaded.survives()) {
+                throw helper.assertionException(rel, "knot seat must persist after support height changes and reload");
+            }
+            helper.succeed();
+        } finally {
+            SlabAnchorAttachment.FROZEN_DY_ENABLED = frozen;
+        }
+    }
+
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void leashKnotOnFlushFenceKeepsVanillaAttachment(GameTestHelper helper) {
+        BlockPos rel = new BlockPos(2, 3, 2);
+        helper.setBlock(rel.below(), Blocks.STONE.defaultBlockState());
+        helper.setBlock(rel, Blocks.OAK_FENCE.defaultBlockState());
+        BlockPos fence = helper.absolutePos(rel);
+        var knot = net.minecraft.world.entity.decoration.LeashFenceKnotEntity.getOrCreateKnot(helper.getLevel(), fence);
+        double expected = fence.getY() + 0.375d;
+        if (Math.abs(knot.getBoundingBox().minY - expected) > EPS
+                || Math.abs(knot.getRopeHoldPosition(1.0f).y - expected - 0.2d) > EPS
+                || !knot.survives() || !knot.getPos().equals(fence)) {
+            throw helper.assertionException(rel, "flush fence must retain vanilla knot geometry and attachment");
+        }
+        helper.succeed();
+    }
+
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void deeplyLoweredFenceReusesItsExistingKnot(GameTestHelper helper) {
+        boolean frozen = SlabAnchorAttachment.FROZEN_DY_ENABLED;
+        SlabAnchorAttachment.FROZEN_DY_ENABLED = true;
+        try {
+            BlockPos rel = new BlockPos(2, 3, 2);
+            helper.setBlock(rel, Blocks.OAK_FENCE.defaultBlockState());
+            BlockPos fence = helper.absolutePos(rel);
+            SlabAnchorAttachment.writePlacementDy(helper.getLevel(), fence, -2.5d);
+            var first = net.minecraft.world.entity.decoration.LeashFenceKnotEntity.getOrCreateKnot(helper.getLevel(), fence);
+            var second = net.minecraft.world.entity.decoration.LeashFenceKnotEntity.getOrCreateKnot(helper.getLevel(), fence);
+            if (first != second || Math.abs(first.getBoundingBox().minY - fence.getY() - 0.375d + 2.5d) > EPS
+                    || net.minecraft.world.entity.decoration.LeashFenceKnotEntity.getKnot(helper.getLevel(), fence.above()).isPresent()) {
+                throw helper.assertionException(rel, "a deep knot must be lowered and reused, never duplicated");
+            }
+            helper.succeed();
+        } finally {
+            SlabAnchorAttachment.FROZEN_DY_ENABLED = frozen;
+        }
+    }
+
     private static final double EPS = 1.0e-6d;
 
     private static BlockState bottomSlab() {

@@ -1249,6 +1249,18 @@ public final class SlabSupport {
     public static final boolean POT_FLOOR_SUPPORT =
             "true".equalsIgnoreCase(System.getProperty("slabbed.potFloorSupport", "false"));
 
+    private static final ThreadLocal<Boolean> COLLISION_SHAPE_QUERY =
+            ThreadLocal.withInitial(() -> Boolean.FALSE);
+
+    /** Shape adapters must not shift a collision basis before the collision owner applies dy. */
+    public static boolean isCollisionShapeQuery() {
+        return Boolean.TRUE.equals(COLLISION_SHAPE_QUERY.get());
+    }
+
+    public static void setCollisionShapeQuery(boolean active) {
+        COLLISION_SHAPE_QUERY.set(active);
+    }
+
     private static final ThreadLocal<Boolean> VANILLA_COLLISION_SHAPE_QUERY =
             ThreadLocal.withInitial(() -> Boolean.FALSE);
 

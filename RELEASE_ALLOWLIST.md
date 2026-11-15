@@ -113,6 +113,7 @@ anything. The split above puts the fine granularity only where a leak has actual
 | `com/slabbed/mixin/FencePaneSlabConnectionMixin` | Fence/pane connection against a lowered slab. |
 | `com/slabbed/mixin/HangingSignAttachedMixin` | Hanging-sign attachment from above. |
 | `com/slabbed/mixin/HangingEntityRememberedSeatMixin` | A hung decoration (frame, painting) remembers the drawn face it was hung on: seat minted once, synced, applied to the box; entity position untouched (maintainer ruling, 2026-09-13). |
+| `com/slabbed/mixin/LeashKnotRememberedSeatMixin` | Persisted and synced leash-knot seat, bounding box and rope endpoint (LAW.md). |
 | `com/slabbed/mixin/ItemFrameWysiwygMixin` | Item-frame remembered seat persisted in save data. |
 | `com/slabbed/mixin/ItemStackUseCreatedContactMixin` | Use-on contact point for offset placement. |
 | `com/slabbed/mixin/LevelChunkOccupantChangeAnchorMixin` | Clears a cell's stored height when its block kind is replaced, at the one write funnel every removal passes (maintainer ruling, 2026-09-06). |
@@ -130,6 +131,7 @@ anything. The split above puts the fine granularity only where a leak has actual
 | `com/slabbed/mixin/RedstoneWireEvaluatorVisualStepMixin` | A wire beside a lowered half-step also reads the wire drawn on the slab next to it, in both wire evaluators' shared incoming-signal read (maintainer ruling, 2026-09-28). |
 | `com/slabbed/mixin/PaintingRememberedSeatMixin` | Painting remembered seat persisted in save data. |
 | `com/slabbed/mixin/ScaffoldingLoweredStandMixin` | Scaffolding standing layer gated at the lowered drawn top. |
+| `com/slabbed/mixin/ServerBlockBreakingReachMixin` | Drawn-owner block-breaking reach validation. |
 | `com/slabbed/mixin/ServerInteractBlockHitToleranceMixin` | Server-side hit tolerance for offset targeting. |
 | `com/slabbed/mixin/SlabSupportBlockMixin` | Slab support surface. |
 | `com/slabbed/mixin/SlabSupportStateMixin` | Slab support state. |
