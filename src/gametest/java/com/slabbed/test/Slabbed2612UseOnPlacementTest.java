@@ -9,6 +9,7 @@ import net.minecraft.core.Direction;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.InteractionHand;
+import net.minecraft.world.InteractionResult;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.context.UseOnContext;
@@ -577,10 +578,136 @@ public final class Slabbed2612UseOnPlacementTest {
 
     /** Generalised: place ANY block the player holds via the real useOn path; returns the placed ABSOLUTE pos. */
     private static BlockPos placeBlockVia(Player player, BlockPos clickAbs, Direction face, Vec3 hit, Block block) {
+        useBlockItem(player, clickAbs, face, hit, block);
+        return clickAbs.relative(face);
+    }
+
+    private static InteractionResult useBlockItem(Player player, BlockPos clickAbs, Direction face, Vec3 hit, Block block) {
         ItemStack stack = new ItemStack(block);
         player.setItemInHand(InteractionHand.MAIN_HAND, stack);
-        stack.useOn(new UseOnContext(player, InteractionHand.MAIN_HAND, new BlockHitResult(hit, face, clickAbs, false)));
-        return clickAbs.relative(face);
+        return stack.useOn(new UseOnContext(player, InteractionHand.MAIN_HAND,
+                new BlockHitResult(hit, face, clickAbs, false)));
+    }
+
+    private static void assertAcceptedUse(GameTestHelper helper, Player player, BlockPos clicked,
+                                          Direction face, Vec3 hit, Block held) {
+        InteractionResult result = useBlockItem(player, clicked, face, hit, held);
+        if (!result.consumesAction()) {
+            throw helper.assertionException(helper.relativePos(clicked),
+                    "useOn with " + held + " on the " + face + " face must succeed, got " + result);
+        }
+    }
+
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void craftingTableKeepsCompoundSeatAfterSupportBreak(GameTestHelper helper) {
+        boolean previousFrozen = SlabAnchorAttachment.FROZEN_DY_ENABLED;
+        SlabAnchorAttachment.FROZEN_DY_ENABLED = true;
+        try {
+            ServerLevel level = helper.getLevel();
+            BlockPos slabRel = new BlockPos(3, 3, 3);
+            BlockPos slab = helper.absolutePos(slabRel);
+            BlockPos table = slab.above();
+            BlockPos tableRel = slabRel.above();
+            helper.setBlock(slabRel.below(), bottomSlab());
+            helper.setBlock(slabRel, bottomSlab());
+            SlabAnchorAttachment.writePlacementDy(level, slab, -0.5);
+            assertBlockDy(helper, level, slab, slabRel, Blocks.STONE_SLAB, -0.5, "fixture: lowered support");
+            if (level.getBlockState(slab).getValue(SlabBlock.TYPE) != SlabType.BOTTOM
+                    || !level.getBlockState(table).isAir()) {
+                throw helper.assertionException(tableRel, "fixture: an empty cell above a lowered bottom slab");
+            }
+
+            Player player = mockPlayerNear(helper, slab.north(3));
+            // The bottom slab's half-height top face is shifted down another half block.
+            Vec3 visibleTop = upHit(slab).add(0, -1.0, 0);
+            assertAcceptedUse(helper, player, slab, Direction.UP, visibleTop, Blocks.CRAFTING_TABLE);
+            assertBlockDy(helper, level, table, tableRel, Blocks.CRAFTING_TABLE, -1.0, "placed crafting table");
+            assertStoredDy(helper, level, table, tableRel, -1.0, "placed crafting table");
+
+            if (!level.destroyBlock(slab, false) || !level.getBlockState(slab).isAir()) {
+                throw helper.assertionException(slabRel, "breaking the immediate support must leave air");
+            }
+            assertBlockDy(helper, level, table, tableRel, Blocks.CRAFTING_TABLE, -1.0, "crafting table after support break");
+            assertStoredDy(helper, level, table, tableRel, -1.0, "crafting table after support break");
+        } finally {
+            SlabAnchorAttachment.FROZEN_DY_ENABLED = previousFrozen;
+        }
+        helper.succeed();
+    }
+
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void slabSeatsFlushOnStoneAfterFloorBecomesBottomSlab(GameTestHelper helper) {
+        boolean previousFrozen = SlabAnchorAttachment.FROZEN_DY_ENABLED;
+        SlabAnchorAttachment.FROZEN_DY_ENABLED = true;
+        try {
+            ServerLevel level = helper.getLevel();
+            BlockPos floorRel = new BlockPos(3, 2, 3);
+            BlockPos floor = helper.absolutePos(floorRel);
+            BlockPos stone = floor.above();
+            BlockPos stoneRel = floorRel.above();
+            BlockPos slab = stone.above();
+            BlockPos slabRel = stoneRel.above();
+            helper.setBlock(floorRel, Blocks.STONE.defaultBlockState());
+            if (!level.getBlockState(floor).is(Blocks.STONE) || !level.getBlockState(stone).isAir()) {
+                throw helper.assertionException(stoneRel, "fixture: an empty cell above a full stone floor");
+            }
+            Player player = mockPlayerNear(helper, floor.north(3));
+            assertAcceptedUse(helper, player, floor, Direction.UP, upHit(floor), Blocks.STONE);
+            assertBlockDy(helper, level, stone, stoneRel, Blocks.STONE, 0.0, "stone on the full floor");
+            assertStoredDy(helper, level, stone, stoneRel, 0.0, "stone on the full floor");
+
+            helper.setBlock(floorRel, bottomSlab());
+            if (!level.getBlockState(floor).equals(bottomSlab()) || !level.getBlockState(slab).isAir()) {
+                throw helper.assertionException(floorRel, "fixture: a bottom slab floor and an empty cell above the stone");
+            }
+            assertBlockDy(helper, level, stone, stoneRel, Blocks.STONE, 0.0, "stone after floor replacement");
+            assertStoredDy(helper, level, stone, stoneRel, 0.0, "stone after floor replacement");
+
+            assertAcceptedUse(helper, player, stone, Direction.UP, upHit(stone), Blocks.STONE_SLAB);
+            if (!level.getBlockState(slab).equals(bottomSlab())) {
+                throw helper.assertionException(slabRel, "the top-center click must place a bottom slab above the stone");
+            }
+            assertBlockDy(helper, level, slab, slabRel, Blocks.STONE_SLAB, 0.0, "slab on the flush stone");
+            assertStoredDy(helper, level, slab, slabRel, 0.0, "slab on the flush stone");
+        } finally {
+            SlabAnchorAttachment.FROZEN_DY_ENABLED = previousFrozen;
+        }
+        helper.succeed();
+    }
+
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void upperSideClickExtendsTopSlabLoweredOneBlock(GameTestHelper helper) {
+        boolean previousFrozen = SlabAnchorAttachment.FROZEN_DY_ENABLED;
+        SlabAnchorAttachment.FROZEN_DY_ENABLED = true;
+        try {
+            ServerLevel level = helper.getLevel();
+            BlockPos topRel = new BlockPos(3, 3, 3);
+            BlockPos top = helper.absolutePos(topRel);
+            BlockPos adjacent = top.east();
+            BlockState topSlab = Blocks.STONE_SLAB.defaultBlockState().setValue(SlabBlock.TYPE, SlabType.TOP);
+            helper.setBlock(topRel.below(), bottomSlab());
+            helper.setBlock(topRel, topSlab);
+            SlabAnchorAttachment.writePlacementDy(level, top, -1.0);
+            assertBlockDy(helper, level, top, topRel, Blocks.STONE_SLAB, -1.0, "fixture: lowered top slab");
+            if (!level.getBlockState(top).equals(topSlab) || !level.getBlockState(adjacent).isAir()) {
+                throw helper.assertionException(topRel, "fixture: a top slab with an empty cell to its east");
+            }
+
+            Player player = mockPlayerNear(helper, top.east(3));
+            // The visible side spans Y-0.5 through Y. Aim at Y-0.1, in the upper part of that face.
+            assertAcceptedUse(helper, player, top, Direction.EAST, eastHitOffset(top, -1.0, 0.9), Blocks.STONE_SLAB);
+            BlockState clickedAfter = level.getBlockState(top);
+            if (!clickedAfter.equals(topSlab)) {
+                throw helper.assertionException(topRel, "the clicked slab must stay TOP, got " + clickedAfter);
+            }
+            BlockState extended = level.getBlockState(adjacent);
+            if (!extended.is(Blocks.STONE_SLAB) || extended.getValue(SlabBlock.TYPE) == SlabType.DOUBLE) {
+                throw helper.assertionException(topRel.east(), "the adjacent cell must gain a single slab, got " + extended);
+            }
+        } finally {
+            SlabAnchorAttachment.FROZEN_DY_ENABLED = previousFrozen;
+        }
+        helper.succeed();
     }
 
     /**
