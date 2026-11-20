@@ -267,6 +267,10 @@ public final class SlabRigHangingDirectStateStoreTest {
         Map<String, List<String>> provenance = parseProvenance(
                 fixtureRoot.resolve("PROVENANCE.tsv"));
         validateProvenance(provenance);
+        Process privateContentCheck = new ProcessBuilder("python3",
+                projectRoot.resolve("tools/verify-discretion.py").toString(),
+                "fixture", fixtureRoot.toString()).inheritIO().start();
+        requireFixture(privateContentCheck.waitFor() == 0, "fixture privacy verification failed");
         verifyPrivacyAndFixedUuids(tree);
 
         if (verifyHistoricalSources) {
@@ -446,7 +450,6 @@ public final class SlabRigHangingDirectStateStoreTest {
     private static void verifyPrivacyAndFixedUuids(FixtureTree tree) throws IOException {
         List<String> forbidden = List.of(
                 "/" + "Users" + "/",
-                "historical-fixture-identity",
                 "Modrinth" + "App",
                 "SLABBED" + "-MC 26.2",
                 "Universal Testing" + " World",

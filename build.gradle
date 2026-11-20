@@ -911,15 +911,7 @@ def pruneClientOnlyEntriesManifest = { File artifact ->
     }
 }
 
-// Discretion law (maintainer ruling, 2026-08-07; jar gate added 2026-08-27): the maintainer's
-// personal name and machine username must never ship in a release artifact. These caught a real
-// leak once — 43 name-prefixed log-marker literals compiled into allowlisted classes — so they
-// are jar-content tokens, not paranoia. Assembled from pieces, same as the S-6 hook, so this
-// file's own text can never match its own gate (and never re-introduces the strings it bans).
-def discretionForbiddenTokens = [
-        "historical-fixture-identity", "historical-fixture-identity", "historical-fixture-identity", "historical-fixture-identity", "sch" + "ohl",
-]
-def releaseHygieneForbiddenTokens = discretionForbiddenTokens + [
+def releaseHygieneForbiddenTokens = [
         "LiveCursorIntentRecorder",
         "SlabModelStaleSentinel",
         "TargetDyOverlay",
@@ -940,11 +932,18 @@ tasks.register("verifyReleaseJarHygiene") {
             tasks.named("jar").flatMap { it.archiveFile },
             tasks.named("sourcesJar").flatMap { it.archiveFile })
 
+    inputs.files("tools/verify-discretion.py", "tools/discretion-reviewers",
+            "tools/reviewed-content.json", "tools/reviewed-content.json.sig")
     doLast {
-        [
-                tasks.named("jar").get().archiveFile.get().asFile,
-                tasks.named("sourcesJar").get().archiveFile.get().asFile
-        ].each { archive ->
+        ["jar": "binary", "sourcesJar": "sources"].each { taskName, label ->
+            def archive = tasks.named(taskName).get().archiveFile.get().asFile
+            def discretion = providers.exec {
+                commandLine "python3", rootProject.file("tools/verify-discretion.py"), label, archive
+                ignoreExitValue = true
+            }
+            if (discretion.result.get().exitValue != 0) {
+                throw new GradleException(discretion.standardError.asText.get().trim())
+            }
             def violations = []
             def entryNames = new HashSet<String>()
             def manifestBytes = null
