@@ -1,6 +1,7 @@
 package com.slabbed.anchor;
 
 import com.slabbed.Slabbed;
+import io.netty.buffer.Unpooled;
 import it.unimi.dsi.fastutil.longs.Long2ByteOpenHashMap;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 import java.util.List;
@@ -8,6 +9,8 @@ import net.fabricmc.fabric.api.attachment.v1.AttachmentType;
 import net.fabricmc.fabric.api.networking.v1.PacketByteBufs;
 import net.fabricmc.fabric.api.networking.v1.PlayerLookup;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
+import net.minecraft.nbt.NbtCompound;
+import net.minecraft.nbt.NbtElement;
 import net.minecraft.network.PacketByteBuf;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.server.world.ServerWorld;
@@ -18,15 +21,11 @@ import net.minecraft.world.chunk.WorldChunk;
 /**
  * Server-to-client carrier for the chunk attachments on Minecraft 1.20.1.
  *
- * <p>Fabric API's data attachments on this version can save but not sync: there is no
- * {@code syncWith}. Every height fact Slabbed stores lives in a chunk attachment and the client reads
- * it from its copy of the chunk, so this class does the one thing the newer lines get from the API:
- * when a player starts watching a chunk the current value of every attachment type is sent (one
- * message per type, so a dense chunk never approaches the payload cap), and after every server-side
- * write the changed type is re-sent to the players tracking that chunk. The client installs each
- * message with {@code setAttached} / {@code removeAttached} on its chunk, so every client read path and
- * the existing change poll stay exactly as they are. A client chunk unload drops the values with the
- * chunk; nothing has to be cleared explicitly.
+ * <p>Fabric API's data attachments on this version can save but cannot sync. The initial saved
+ * placement data travels with the chunk so it can be installed before the chunk is visible. Separate
+ * messages carry the remaining attachments, support older clients and update the watching clients
+ * after server-side changes. The client installs each value on the chunk and the existing change
+ * poll refreshes its geometry.
  *
  * <p>Wire format per message: chunk position (long), attachment index (varint, the position in
  * {@link #TYPES}), presence byte (0 = removed, 1 = value follows), then the type's own compact
@@ -35,6 +34,9 @@ import net.minecraft.world.chunk.WorldChunk;
 public final class SlabAnchorSync {
 
     public static final Identifier CHANNEL = new Identifier(Slabbed.MOD_ID, "chunk_attachments");
+    private static final String INITIAL_PLACEMENT = Slabbed.MOD_ID + ":placement_snapshot_v1";
+    private static final String HEIGHTS = "heights";
+    private static final String MARKERS = "markers";
 
     /** The synced attachment types, in wire order. Append only: the index travels on the wire. */
     static final List<AttachmentType<?>> TYPES = List.of(
@@ -50,6 +52,72 @@ public final class SlabAnchorSync {
             SlabAnchorAttachment.PLACEMENT_DY_TYPE);
 
     private SlabAnchorSync() {
+    }
+
+    /**
+     * Carries the two placement attachments in the same packet as the block sections. Vanilla
+     * reads only known heightmap names, so the namespaced entry leaves its packet format intact.
+     */
+    public static void writeInitialPlacement(WorldChunk chunk, NbtCompound heightmaps) {
+        NbtCompound snapshot = new NbtCompound();
+        writeSnapshotAttachment(chunk, snapshot, HEIGHTS, SlabAnchorAttachment.PLACEMENT_DY_TYPE);
+        writeSnapshotAttachment(chunk, snapshot, MARKERS, SlabAnchorAttachment.MODERN_PLACEMENT_TYPE);
+        heightmaps.put(INITIAL_PLACEMENT, snapshot);
+    }
+
+    private static void writeSnapshotAttachment(WorldChunk chunk, NbtCompound snapshot, String key,
+            AttachmentType<?> type) {
+        if (!chunk.hasAttached(type)) {
+            return;
+        }
+        PacketByteBuf buf = encode(chunk, TYPES.indexOf(type), type);
+        try {
+            byte[] data = new byte[buf.readableBytes()];
+            buf.readBytes(data);
+            snapshot.putByteArray(key, data);
+        } finally {
+            buf.release();
+        }
+    }
+
+    /** Installs both decoded values before the new client chunk is made available to renderers. */
+    public static void readInitialPlacement(WorldChunk chunk, NbtCompound heightmaps) {
+        if (!heightmaps.contains(INITIAL_PLACEMENT, NbtElement.COMPOUND_TYPE)) {
+            return;
+        }
+        NbtCompound snapshot = heightmaps.getCompound(INITIAL_PLACEMENT);
+        Update heights;
+        Update markers;
+        try {
+            heights = readSnapshotAttachment(chunk, snapshot, HEIGHTS, SlabAnchorAttachment.PLACEMENT_DY_TYPE);
+            markers = readSnapshotAttachment(chunk, snapshot, MARKERS, SlabAnchorAttachment.MODERN_PLACEMENT_TYPE);
+        } catch (IllegalArgumentException | IndexOutOfBoundsException e) {
+            Slabbed.LOGGER.warn("Ignoring invalid initial placement data for chunk {}", chunk.getPos());
+            return;
+        }
+        apply(chunk, heights);
+        apply(chunk, markers);
+    }
+
+    private static Update readSnapshotAttachment(WorldChunk chunk, NbtCompound snapshot, String key,
+            AttachmentType<?> type) {
+        long position = chunk.getPos().toLong();
+        if (!snapshot.contains(key)) {
+            return new Update(position, type, null);
+        }
+        if (!snapshot.contains(key, NbtElement.BYTE_ARRAY_TYPE)) {
+            throw new IllegalArgumentException("Expected encoded attachment");
+        }
+        PacketByteBuf buf = new PacketByteBuf(Unpooled.wrappedBuffer(snapshot.getByteArray(key)));
+        try {
+            Update update = decode(buf);
+            if (update.chunkPos() != position || update.type() != type || buf.isReadable()) {
+                throw new IllegalArgumentException("Invalid initial placement attachment");
+            }
+            return update;
+        } finally {
+            buf.release();
+        }
     }
 
     /** Everything a newly watching player needs for this chunk: one message per attachment type. */
@@ -131,8 +199,12 @@ public final class SlabAnchorSync {
     }
 
     /** Installs a decoded message on a client-side chunk (every client read path reads the chunk). */
-    @SuppressWarnings("unchecked")
     public static void install(WorldChunk chunk, Update update) {
+        apply(chunk, update);
+    }
+
+    @SuppressWarnings("unchecked")
+    private static void apply(WorldChunk chunk, Update update) {
         if (update.value() == null) {
             chunk.removeAttached(update.type());
         } else {

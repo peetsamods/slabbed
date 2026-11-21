@@ -38,6 +38,7 @@
     "FencePaneSlabConnectionMixin",
     "WallSlabConnectionMixin",
     "ScaffoldingLoweredStandMixin",
+    "ChunkDataPlacementSnapshotMixin",
     "ChunkWatchAttachmentSyncMixin"
   ],
   "client": [],

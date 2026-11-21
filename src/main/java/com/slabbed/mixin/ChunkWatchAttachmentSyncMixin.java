@@ -13,9 +13,8 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 /**
  * When a player starts watching a chunk, Slabbed's chunk attachments follow the chunk data on the
- * same connection (TAIL: always after the chunk packet itself), so the client never renders a
- * freshly received chunk without its stored heights. 1.20.1 sends chunk data from
- * {@code ThreadedAnvilChunkStorage}; later versions moved this into {@code ChunkDataSender}.
+ * same connection. The chunk packet itself carries initial placement data for clients that
+ * can read it. These messages cover other attachments and remain the fallback for older peers.
  */
 @Mixin(ThreadedAnvilChunkStorage.class)
 public abstract class ChunkWatchAttachmentSyncMixin {

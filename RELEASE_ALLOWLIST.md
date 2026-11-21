@@ -137,6 +137,7 @@ before this line's behaviour work closes — see the note beneath the table.
 | `com/slabbed/mixin/ArmorStandItemOffsetPlacementMixin` | Places armor stands against the stored visible support plane while retaining vanilla item collision and entity-data handling. |
 | `com/slabbed/mixin/BlockItemPlacementIntentMixin` | Captures placement intent for the placement law. |
 | `com/slabbed/mixin/BlockOnPlacedAnchorMixin` | Writes the dy anchor on placement. |
+| `com/slabbed/mixin/ChunkDataPlacementSnapshotMixin` | Carries initial placement heights and their markers in the same packet as the block sections. |
 | `com/slabbed/mixin/ChunkWatchAttachmentSyncMixin` | Sends the chunk's Slabbed attachments right after the chunk data when a player starts watching it (1.20.1 `ThreadedAnvilChunkStorage.sendChunkDataPackets`). |
 | `com/slabbed/mixin/BlockOnStateReplacedAnchorMixin` | Clears the dy anchor on state replacement; a same-shape kind change keeps it. |
 | `com/slabbed/mixin/LegacyHeightBeforeSupportEditMixin` | Records existing heights immediately before a slab edit when capture is enabled. Uses the established placement-height store. |
