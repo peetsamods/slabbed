@@ -14,7 +14,7 @@
 3	PaneBlock
 3	PointedDripstoneBlock
 3	PowderSnowBlock
-44	SlabBlock
+43	SlabBlock
 1	SnowBlock
 4	SporeBlossomBlock
 1	StairsBlock

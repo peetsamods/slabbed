@@ -111,10 +111,6 @@ public final class SlabAnchorClientSync {
             LongOpenHashSet set = clientAttachmentSet(pos, SlabAnchorAttachment.MODERN_PLACEMENT_TYPE);
             return set != null && set.contains(pos.asLong());
         };
-        SlabAnchorAttachment.clientLegacyHeightCaptureLookup = pos -> {
-            LongOpenHashSet set = clientAttachmentSet(pos, SlabAnchorAttachment.LEGACY_HEIGHT_CAPTURE_TYPE);
-            return set != null && set.contains(pos.asLong());
-        };
         SlabAnchorAttachment.clientPostPolicyPredictionLookup = pos -> {
             MinecraftClient mc = MinecraftClient.getInstance();
             return mc != null && mc.world != null
@@ -193,7 +189,6 @@ public final class SlabAnchorClientSync {
         scheduleInitialRerenders(chunk, SlabAnchorAttachment.COMPOUND_VISIBLE_SIDE_DOUBLE_SLAB_TYPE);
         scheduleInitialRerenders(chunk, SlabAnchorAttachment.COMPOUND_VISIBLE_OWNER_TOP_SLAB_TYPE);
         scheduleInitialRerenders(chunk, SlabAnchorAttachment.MODERN_PLACEMENT_TYPE);
-        scheduleInitialRerenders(chunk, SlabAnchorAttachment.LEGACY_HEIGHT_CAPTURE_TYPE);
 
         snapshotAttachment(chunk, SlabAnchorAttachment.ANCHOR_TYPE);
         snapshotAttachment(chunk, SlabAnchorAttachment.FROZEN_FLAT_TYPE);
@@ -204,7 +199,6 @@ public final class SlabAnchorClientSync {
         snapshotAttachment(chunk, SlabAnchorAttachment.COMPOUND_VISIBLE_SIDE_DOUBLE_SLAB_TYPE);
         snapshotAttachment(chunk, SlabAnchorAttachment.COMPOUND_VISIBLE_OWNER_TOP_SLAB_TYPE);
         snapshotAttachment(chunk, SlabAnchorAttachment.MODERN_PLACEMENT_TYPE);
-        snapshotAttachment(chunk, SlabAnchorAttachment.LEGACY_HEIGHT_CAPTURE_TYPE);
 
         // FROZEN-DY: rerender stored-height cells already synced at chunk-load time, then
         // snapshot the dy map so the poll can catch later attachment syncs.
@@ -258,9 +252,6 @@ public final class SlabAnchorClientSync {
             pollAttachmentChange(mc, chunk, SlabAnchorAttachment.COMPOUND_VISIBLE_SIDE_DOUBLE_SLAB_TYPE);
             pollAttachmentChange(mc, chunk, SlabAnchorAttachment.COMPOUND_VISIBLE_OWNER_TOP_SLAB_TYPE);
             pollAttachmentChange(mc, chunk, SlabAnchorAttachment.MODERN_PLACEMENT_TYPE);
-            if (SlabAnchorAttachment.legacyCaptureEnabled(mc.world)) {
-                pollAttachmentChange(mc, chunk, SlabAnchorAttachment.LEGACY_HEIGHT_CAPTURE_TYPE);
-            }
         }
     }
 

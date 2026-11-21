@@ -111,6 +111,7 @@ exclusion can leave a manifest advertising a class the archive no longer has. Th
 | `com/slabbed/anchor/ChunkPositionSetPacketCodec` | Compact per-chunk network codec for packed block positions — the anchor set's sync wire. |
 | `com/slabbed/anchor/ChunkPositionDyMapPacketCodec` | Compact per-chunk network codec for the placement-height map — the store's sync wire, the sibling of the row above. Groups by 16-cubed section, stores occupancy as a non-empty-word mask, and stores heights as a per-section palette. Ported from the Fabric 1.21.11 line 2026-09-03 to replace a raw sixteen-bytes-per-height wire form that overflowed Fabric's attachment ceiling at 1,024 stored heights in one chunk; the same measurement now fits 64,000. Pure encoding: no world access, no file or network I/O of its own, no registration. |
 | `com/slabbed/anchor/SlabAnchorSync` | 1.20.1 server-to-client carrier for the chunk attachments (Fabric's attachments cannot sync here): one message per attachment type on chunk watch and after every server write; the client installs it on its chunk. |
+| `com/slabbed/anchor/LegacyCaptureLogin` | Checks that both sides support live prediction before a server enables new legacy height capture. Off by default. |
 | `com/slabbed/anchor/PlacementDyOverlay` | The client-prediction overlay that sits above the authoritative store without writing it — the shared decision logic `PlacementDyPredictionClient` (client) supplies platform wiring for. No file or network access beyond the ordinary sync path. |
 | `com/slabbed/anchor/C3TestPhaseTrace` | Inert-by-default ordering sink for the placement-capture path, called from `BlockItemPlacementIntentMixin` at its two ordering-critical points. While no trace span is open — the shipped case — every call is a single boolean read and an immediate return. Production plumbing, not debug tooling, and lives in `src/main` because a `src/gametest` class is not visible to it. |
 
@@ -138,6 +139,7 @@ before this line's behaviour work closes — see the note beneath the table.
 | `com/slabbed/mixin/BlockOnPlacedAnchorMixin` | Writes the dy anchor on placement. |
 | `com/slabbed/mixin/ChunkWatchAttachmentSyncMixin` | Sends the chunk's Slabbed attachments right after the chunk data when a player starts watching it (1.20.1 `ThreadedAnvilChunkStorage.sendChunkDataPackets`). |
 | `com/slabbed/mixin/BlockOnStateReplacedAnchorMixin` | Clears the dy anchor on state replacement; a same-shape kind change keeps it. |
+| `com/slabbed/mixin/LegacyHeightBeforeSupportEditMixin` | Records existing heights immediately before a slab edit when capture is enabled. Uses the established placement-height store. |
 | `com/slabbed/mixin/CarpetBlockMixin` | Carpet support and shape over a lowered slab. |
 | `com/slabbed/mixin/FencePaneSlabConnectionMixin` | Fence and pane connection against a lowered slab. |
 | `com/slabbed/mixin/HangingSignAttachedMixin` | Hanging-sign attachment from above. |
@@ -175,6 +177,7 @@ before this line's behaviour work closes — see the note beneath the table.
 | `com/slabbed/client/ClientDy` | Client-only dy policy for visual alignment of thin carpet layers on bottom slabs. |
 | `com/slabbed/client/PlacementDyPredictionClient` | Thin client wiring for `PlacementDyOverlay`: level identity, the raw backing read, targeted rerenders, and lifecycle events. Never writes the chunk's placement-dy attachment itself. |
 | `com/slabbed/client/SlabAnchorClientSync` | Receives anchor sync from the server. |
+| `com/slabbed/client/LegacyCaptureClientPolicy` | Enables client prediction only when the connected server requests legacy height capture during login. |
 | `com/slabbed/client/SlabbedModelLoadingPlugin` | Installs the offset block-state model and the alternate chain-ceiling geometry. |
 | `com/slabbed/client/SlabbedClientFlags` | Sole members are `GAP_FILL` and `TARGET_DY_OVERLAY`, read by shipped client code via `getstatic`. Two constants and a private constructor; both default off (`Boolean.getBoolean`). |
 | `com/slabbed/client/TargetDyOverlay` | The client debug overlay. Passive; reads `SlabbedClientFlags.TARGET_DY_OVERLAY`, default off. |

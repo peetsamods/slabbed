@@ -929,8 +929,8 @@ public final class SlabSupport {
         return pos.getY() + getSupportYOffset(state);
     }
 
-    /** Max blocks to walk down when checking chain offset. */
-    private static final int MAX_CHAIN_DEPTH = 16;
+    /** Maximum reach of the live support chain and the corresponding pre-edit capture. */
+    public static final int MAX_CHAIN_DEPTH = 16;
 
     /** Recursion guard: prevents StackOverflow when isSolidBlock triggers getOutlineShape → getYOffset. */
     private static final ThreadLocal<Boolean> IN_GET_Y_OFFSET = ThreadLocal.withInitial(() -> Boolean.FALSE);
@@ -2835,6 +2835,11 @@ public final class SlabSupport {
         return isVanillaDirectCustomSlabSubject(state) || isSlabSitCandidate(world, pos, state);
     }
 
+    /** A live slab-column read cannot traverse these states to reach a support further below. */
+    public static boolean endsLegacySlabColumn(BlockState state) {
+        return state.isAir() || state.getBlock() instanceof SlabBlock || isThinTopLayer(state);
+    }
+
     /**
      * Walks down from {@code pos} through non-air, non-slab blocks looking
      * for a bottom slab. Returns true as soon as one is found.
@@ -2874,7 +2879,7 @@ public final class SlabSupport {
             if (isTerrainSlabLoweredFullCube(world, cursor, cur)) {
                 return true;
             }
-            if (cur.isAir() || cur.getBlock() instanceof SlabBlock || isThinTopLayer(cur)) {
+            if (endsLegacySlabColumn(cur)) {
                 return false;
             }
             cursor = cursor.down();
@@ -2898,7 +2903,7 @@ public final class SlabSupport {
             if (isTerrainSlabLoweredFullCube(world, cursor, cur)) {
                 return -0.5;
             }
-            if (cur.isAir() || cur.getBlock() instanceof SlabBlock || isThinTopLayer(cur)) {
+            if (endsLegacySlabColumn(cur)) {
                 return 0.0;
             }
             cursor = cursor.down();

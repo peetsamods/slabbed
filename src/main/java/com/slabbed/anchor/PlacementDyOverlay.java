@@ -165,7 +165,6 @@ public final class PlacementDyOverlay {
     private static final ThreadLocal<Integer> CURRENT_SEQUENCE = new ThreadLocal<>();
 
     private static volatile BackingFactProbe backingProbe;
-    private static volatile BackingFactProbe legacyCaptureProbe;
     private static volatile RerenderSink rerenderSink;
 
     private static Object currentLevel;
@@ -184,12 +183,7 @@ public final class PlacementDyOverlay {
 
     /** Arms the overlay. Until this is called nothing here affects any read or any render. */
     public static void installClientHooks(BackingFactProbe probe, RerenderSink sink) {
-        installClientHooks(probe, null, sink);
-    }
-
-    public static void installClientHooks(BackingFactProbe probe, BackingFactProbe legacyProbe, RerenderSink sink) {
         backingProbe = probe;
-        legacyCaptureProbe = legacyProbe;
         rerenderSink = sink;
     }
 
@@ -270,8 +264,8 @@ public final class PlacementDyOverlay {
 
     /** Holds the existing subject's height while its support edit is predicted. */
     public static void holdLegacyHeightBeforeSupportEdit(
-            Object level, BlockPos support, BlockPos subject, int sequence, long rawHeight) {
-        dispatchRerenders(installLocked(level, support, Direction.UP, sequence, Map.of(subject, rawHeight), true));
+            Object level, BlockPos support, int sequence, Map<BlockPos, Long> rawBitsByPos) {
+        dispatchRerenders(installLocked(level, support, Direction.UP, sequence, rawBitsByPos, true));
     }
 
     static synchronized List<BlockPos> installLocked(
@@ -446,7 +440,7 @@ public final class PlacementDyOverlay {
      * probe installed only the timeout can retire, which is the correct inert behaviour.
      */
     private static boolean backingPresentForOwnedCellsLocked(Group group) {
-        BackingFactProbe probe = group.key.legacySupportEdit() ? legacyCaptureProbe : backingProbe;
+        BackingFactProbe probe = backingProbe;
         if (probe == null) {
             return false;
         }

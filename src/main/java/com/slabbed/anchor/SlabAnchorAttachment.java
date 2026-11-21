@@ -8,6 +8,7 @@ import java.util.Map;
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 import com.slabbed.Slabbed;
+import com.slabbed.compat.CompatHooks;
 import com.slabbed.util.SlabSupport;
 import com.slabbed.util.RuntimeDiagnostics;
 import com.slabbed.upgrade.WorldUpgradeRuntimePolicy;
@@ -15,6 +16,7 @@ import it.unimi.dsi.fastutil.longs.Long2ByteOpenHashMap;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 import net.fabricmc.fabric.api.attachment.v1.AttachmentRegistry;
 import net.fabricmc.fabric.api.attachment.v1.AttachmentType;
+import net.fabricmc.fabric.api.event.lifecycle.v1.ServerChunkEvents;
 import net.minecraft.block.Block;
 import net.minecraft.block.BlockEntityProvider;
 import net.minecraft.block.Blocks;
@@ -30,7 +32,6 @@ import net.minecraft.util.Identifier;
 import net.minecraft.util.math.Box;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.BlockView;
-import net.minecraft.world.EmptyBlockView;
 import net.minecraft.world.World;
 import net.minecraft.world.chunk.WorldChunk;
 import net.minecraft.util.shape.VoxelShape;
@@ -78,7 +79,6 @@ public final class SlabAnchorAttachment {
     public static Predicate<BlockPos> clientCompoundVisibleSideDoubleSlabLookup = null;
     public static Predicate<BlockPos> clientCompoundVisibleOwnerTopSlabLookup = null;
     public static Predicate<BlockPos> clientModernPlacementLookup = null;
-    public static Predicate<BlockPos> clientLegacyHeightCaptureLookup = null;
     public static BooleanSupplier clientLegacyCaptureEnabled = () -> false;
     public static Predicate<BlockPos> clientPostPolicyPredictionLookup = null;
 
@@ -212,7 +212,8 @@ public final class SlabAnchorAttachment {
             AttachmentRegistry.<LongOpenHashSet>builder()
                     .persistent(SET_CODEC)
                     .buildAndRegister(MODERN_PLACEMENT_ID);
-    public static final AttachmentType<LongOpenHashSet> LEGACY_HEIGHT_CAPTURE_TYPE =
+    // Read the retired experimental marker so existing saves can upgrade before chunk sync.
+    private static final AttachmentType<LongOpenHashSet> LEGACY_HEIGHT_CAPTURE_TYPE =
             AttachmentRegistry.<LongOpenHashSet>builder()
                     .persistent(SET_CODEC)
                     .buildAndRegister(LEGACY_HEIGHT_CAPTURE_ID);
@@ -378,7 +379,7 @@ public final class SlabAnchorAttachment {
      * placed by an item under this line's placement policy carries a modern marker and reads its
      * stored height; a cell without one (blocks from before this version, worldgen, structures,
      * {@code /setblock}) keeps the live read lanes, so upgrading a world moves nothing. There is no
-     * retro-migration in the default mode.
+     * capture of new legacy heights in the default mode.
      *
      * <p>{@code -Dslabbed.frozenDy=true} remains the opt-in for whole-world frozen reads. Deliberately
      * MUTABLE: fixtures and law rows flip it in-process to run a single scenario under whole-world
@@ -466,19 +467,7 @@ public final class SlabAnchorAttachment {
                 }
                 Long2ByteOpenHashMap candidate = new Long2ByteOpenHashMap(map);
                 candidate.put(key, (byte) quantised);
-                if (ChunkPositionDyMapPacketCodec.encodedByteLength(candidate)
-                        > SYNC_SAFE_ENCODED_BYTES) {
-                    // The chunk is saturated. Decline the new fact rather than let setAttached
-                    // throw and take the whole chunk's synchronization down with it; the cell
-                    // falls back to the live lanes, which is this line's pre-store behaviour.
-                    if (!dyBudgetReported) {
-                        dyBudgetReported = true;
-                        Slabbed.LOGGER.warn(
-                                "[PLACEMENT_DY] chunk {},{} is at its synchronization budget ({} "
-                                        + "bytes); further placement heights there are not stored. "
-                                        + "This message appears once per session.",
-                                chunk.getPos().x, chunk.getPos().z, SYNC_SAFE_ENCODED_BYTES);
-                    }
+                if (!fitsPlacementDyBudget(chunk, candidate)) {
                     continue;
                 }
                 map.put(key, (byte) quantised);
@@ -493,6 +482,20 @@ public final class SlabAnchorAttachment {
             SlabAnchorSync.broadcast(world, chunk, PLACEMENT_DY_TYPE);
         }
         return writes;
+    }
+
+    private static boolean fitsPlacementDyBudget(WorldChunk chunk, Long2ByteOpenHashMap heights) {
+        if (ChunkPositionDyMapPacketCodec.encodedByteLength(heights) <= SYNC_SAFE_ENCODED_BYTES) {
+            return true;
+        }
+        if (!dyBudgetReported) {
+            dyBudgetReported = true;
+            Slabbed.LOGGER.warn(
+                    "[PLACEMENT_DY] chunk {},{} is at its synchronization budget ({} bytes); "
+                            + "further placement heights there are not stored. This message appears once per session.",
+                    chunk.getPos().x, chunk.getPos().z, SYNC_SAFE_ENCODED_BYTES);
+        }
+        return false;
     }
 
     /**
@@ -520,7 +523,7 @@ public final class SlabAnchorAttachment {
         return rawPlacementDyFact(world, pos).valueOrNaN();
     }
 
-    /** True only for a cell placed by an item under the placement policy (modern provenance). */
+    /** True for cells whose height is owned by the persistent placement policy. */
     public static boolean isModernPlacement(BlockView world, BlockPos pos) {
         if (pos == null) {
             return false;
@@ -544,9 +547,6 @@ public final class SlabAnchorAttachment {
         if (isModernPlacement(world, pos)) {
             return true;
         }
-        if (legacyCaptureEnabled(world) && rawLegacyCapturedHeight(world, pos).present()) {
-            return true;
-        }
         // A server never consults the integrated client's prediction overlay. Only the client World
         // or its render-region bridge may select the modern path before provenance sync arrives.
         if (world instanceof World w && !w.isClient()) {
@@ -557,22 +557,10 @@ public final class SlabAnchorAttachment {
                 && clientEffectivePlacementDyLookup.lookup(pos) != null;
     }
 
-    /** Reads a synchronized legacy capture only after both its provenance and value are present. */
-    public static PlacementDyFact rawLegacyCapturedHeight(BlockView view, BlockPos pos) {
-        if (pos == null) {
-            return PlacementDyFact.absent();
-        }
-        if (!(view instanceof World world)) {
-            return clientLegacyHeightCaptureLookup != null && clientLegacyHeightCaptureLookup.test(pos)
-                    ? rawPlacementDyFact(view, pos) : PlacementDyFact.absent();
-        }
-        WorldChunk chunk = world.getChunk(pos.getX() >> 4, pos.getZ() >> 4);
-        LongOpenHashSet positions = chunk == null ? null : chunk.getAttached(LEGACY_HEIGHT_CAPTURE_TYPE);
-        return positions != null && positions.contains(pos.asLong())
-                ? rawPlacementDyFact(view, pos) : PlacementDyFact.absent();
-    }
-
-    /** Stores a factless full block's visible height before its immediate slab support changes. */
+    /**
+     * Freezes a legacy column before a slab edit can change the blocks’ live heights.
+     * Use the existing height and marker format so saved heights outlive capture mode.
+     */
     public static void captureLegacyHeightBeforeSupportEdit(
             WorldChunk chunk, BlockPos support, BlockState replacement) {
         World world = chunk.getWorld();
@@ -587,22 +575,82 @@ public final class SlabAnchorAttachment {
         if (legacyCaptureSlabType(chunk.getBlockState(support)) == legacyCaptureSlabType(replacement)) {
             return;
         }
-        BlockPos pos = support.up();
-        BlockState state = chunk.getBlockState(pos);
-        if (state.isAir() || !state.isFullCube(EmptyBlockView.INSTANCE, BlockPos.ORIGIN)
-                || isModernPlacement(world, pos) || rawPlacementDyFact(world, pos).present()) {
+
+        var captured = new LinkedHashMap<BlockPos, Long>();
+        var existingHeights = chunk.getAttached(PLACEMENT_DY_TYPE);
+        var existingMarkers = chunk.getAttached(MODERN_PLACEMENT_TYPE);
+        for (int distance = 1; distance <= SlabSupport.MAX_CHAIN_DEPTH; distance++) {
+            BlockPos pos = support.up(distance);
+            BlockState state = chunk.getBlockState(pos);
+            if (state.isAir()) {
+                break;
+            }
+            long key = pos.asLong();
+            if (!CompatHooks.shouldSkipOffset(state)
+                    && (existingMarkers == null || !existingMarkers.contains(key))
+                    && (existingHeights == null || !existingHeights.containsKey(key))) {
+                double height = SlabSupport.getYOffset(world, pos, state);
+                if (quantiseDy(height) == UNREPRESENTABLE) {
+                    return;
+                }
+                captured.put(pos, Double.doubleToRawLongBits(height));
+            }
+            // Capture the boundary block itself, but the legacy walk stops there for blocks above it.
+            if (SlabSupport.endsLegacySlabColumn(state)) {
+                break;
+            }
+        }
+
+        if (captured.isEmpty()) {
             return;
         }
-        double height = SlabSupport.getYOffset(world, pos, state);
-        if (!Double.isFinite(height) || quantiseDy(height) == UNREPRESENTABLE) {
-            return;
-        }
-        long rawHeight = Double.doubleToRawLongBits(height);
         if (world.isClient()) {
-            PlacementDyOverlay.holdLegacyHeightBeforeSupportEdit(world, support, pos, sequence, rawHeight);
-        } else if (writePlacementDyBatch(world, Map.of(pos, rawHeight)) == 1) {
-            addToAttachment(world, pos, LEGACY_HEIGHT_CAPTURE_TYPE, "legacy_height_capture");
+            PlacementDyOverlay.holdLegacyHeightBeforeSupportEdit(world, support, sequence, captured);
+            return;
         }
+
+        var heights = existingHeights == null ? newDyMap() : new Long2ByteOpenHashMap(existingHeights);
+        var markers = existingMarkers == null ? new LongOpenHashSet() : new LongOpenHashSet(existingMarkers);
+        for (var entry : captured.entrySet()) {
+            long key = entry.getKey().asLong();
+            heights.put(key, (byte) quantiseDy(Double.longBitsToDouble(entry.getValue())));
+            markers.add(key);
+        }
+        // A saturated chunk must never publish only half of a captured column.
+        if (fitsPlacementDyBudget(chunk, heights)) {
+            chunk.setAttached(PLACEMENT_DY_TYPE, heights);
+            SlabAnchorSync.broadcast(world, chunk, PLACEMENT_DY_TYPE);
+            chunk.setAttached(MODERN_PLACEMENT_TYPE, markers);
+            SlabAnchorSync.broadcast(world, chunk, MODERN_PLACEMENT_TYPE);
+        }
+    }
+
+    private static void migrateLegacyCapture(ServerWorld world, WorldChunk chunk) {
+        var legacy = chunk.getAttached(LEGACY_HEIGHT_CAPTURE_TYPE);
+        if (legacy == null) {
+            return;
+        }
+        var heights = chunk.getAttached(PLACEMENT_DY_TYPE);
+        var existing = chunk.getAttached(MODERN_PLACEMENT_TYPE);
+        var markers = existing == null ? new LongOpenHashSet() : new LongOpenHashSet(existing);
+        boolean changed = false;
+        if (heights != null) {
+            for (long key : legacy) {
+                BlockPos pos = BlockPos.fromLong(key);
+                if (!heights.containsKey(key) || (pos.getX() >> 4) != chunk.getPos().x
+                        || (pos.getZ() >> 4) != chunk.getPos().z) {
+                    continue;
+                }
+                BlockState state = chunk.getBlockState(pos);
+                if (!state.isAir() && !CompatHooks.shouldSkipOffset(state)) {
+                    changed |= markers.add(key);
+                }
+            }
+        }
+        if (changed) {
+            chunk.setAttached(MODERN_PLACEMENT_TYPE, markers);
+        }
+        chunk.removeAttached(LEGACY_HEIGHT_CAPTURE_TYPE);
     }
 
     private static SlabType legacyCaptureSlabType(BlockState state) {
@@ -691,6 +739,7 @@ public final class SlabAnchorAttachment {
                 || PLACEMENT_DY_TYPE == null) {
             throw new IllegalStateException("SlabAnchorAttachment failed to register");
         }
+        ServerChunkEvents.CHUNK_LOAD.register(SlabAnchorAttachment::migrateLegacyCapture);
     }
 
     // ── server-side mutation ──────────────────────────────────────────
@@ -1024,7 +1073,6 @@ public final class SlabAnchorAttachment {
         removeFromAttachment(world, pos, COMPOUND_VISIBLE_OWNER_TOP_SLAB_TYPE,
                 "compound_visible_owner_top_slab");
         removeFromAttachment(world, pos, MODERN_PLACEMENT_TYPE, "modern_placement");
-        removeFromAttachment(world, pos, LEGACY_HEIGHT_CAPTURE_TYPE, "legacy_height_capture");
         // FROZEN-DY: the stored placement height dies with the block, so a fresh placement in the same
         // cell captures its own aim from scratch. Copy-on-write, exactly like the writer.
         if (world != null && !world.isClient()) {

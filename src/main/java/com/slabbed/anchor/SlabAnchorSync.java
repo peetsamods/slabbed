@@ -47,8 +47,7 @@ public final class SlabAnchorSync {
             SlabAnchorAttachment.COMPOUND_VISIBLE_SIDE_DOUBLE_SLAB_TYPE,
             SlabAnchorAttachment.COMPOUND_VISIBLE_OWNER_TOP_SLAB_TYPE,
             SlabAnchorAttachment.MODERN_PLACEMENT_TYPE,
-            SlabAnchorAttachment.PLACEMENT_DY_TYPE,
-            SlabAnchorAttachment.LEGACY_HEIGHT_CAPTURE_TYPE);
+            SlabAnchorAttachment.PLACEMENT_DY_TYPE);
 
     private SlabAnchorSync() {
     }
@@ -58,11 +57,17 @@ public final class SlabAnchorSync {
         if (!ServerPlayNetworking.canSend(player, CHANNEL)) {
             return;
         }
+        int markerIndex = TYPES.indexOf(SlabAnchorAttachment.MODERN_PLACEMENT_TYPE);
         for (int index = 0; index < TYPES.size(); index++) {
             AttachmentType<?> type = TYPES.get(index);
-            if (chunk.hasAttached(type)) {
+            if (index != markerIndex && chunk.hasAttached(type)) {
                 ServerPlayNetworking.send(player, CHANNEL, encode(chunk, index, type));
             }
+        }
+        // A synchronized marker selects the frozen reader. Send its value first without changing wire IDs.
+        if (chunk.hasAttached(SlabAnchorAttachment.MODERN_PLACEMENT_TYPE)) {
+            ServerPlayNetworking.send(player, CHANNEL,
+                    encode(chunk, markerIndex, SlabAnchorAttachment.MODERN_PLACEMENT_TYPE));
         }
     }
 

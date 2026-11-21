@@ -10,7 +10,8 @@ import net.minecraft.util.Identifier;
 /** Negotiates experimental legacy capture before the server sends any world data. */
 public final class LegacyCaptureLogin {
     public static final Identifier CHANNEL = new Identifier(Slabbed.MOD_ID, "legacy_height_capture");
-    public static final byte PROTOCOL = 1;
+    // Both peers must support column prediction and the shared placement marker.
+    public static final byte PROTOCOL = 2;
 
     private LegacyCaptureLogin() {}
 
