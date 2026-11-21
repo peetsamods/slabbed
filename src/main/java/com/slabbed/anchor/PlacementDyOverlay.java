@@ -82,7 +82,11 @@ public final class PlacementDyOverlay {
      * ROOT AIM, so a group names the player action that produced it; the sequence is vanilla's own
      * predicted-action number, which is what the acknowledgement is keyed by.
      */
-    public record GroupKey(long ownerPos, Direction clickedFace, int sequence) {
+    public record GroupKey(long ownerPos, Direction clickedFace, int sequence, boolean legacySupportEdit) {
+        public GroupKey(long ownerPos, Direction clickedFace, int sequence) {
+            this(ownerPos, clickedFace, sequence, false);
+        }
+
         public GroupKey {
             Objects.requireNonNull(clickedFace, "clickedFace");
             if (sequence < 0) {
@@ -161,6 +165,7 @@ public final class PlacementDyOverlay {
     private static final ThreadLocal<Integer> CURRENT_SEQUENCE = new ThreadLocal<>();
 
     private static volatile BackingFactProbe backingProbe;
+    private static volatile BackingFactProbe legacyCaptureProbe;
     private static volatile RerenderSink rerenderSink;
 
     private static Object currentLevel;
@@ -179,7 +184,12 @@ public final class PlacementDyOverlay {
 
     /** Arms the overlay. Until this is called nothing here affects any read or any render. */
     public static void installClientHooks(BackingFactProbe probe, RerenderSink sink) {
+        installClientHooks(probe, null, sink);
+    }
+
+    public static void installClientHooks(BackingFactProbe probe, BackingFactProbe legacyProbe, RerenderSink sink) {
         backingProbe = probe;
+        legacyCaptureProbe = legacyProbe;
         rerenderSink = sink;
     }
 
@@ -258,6 +268,12 @@ public final class PlacementDyOverlay {
         dispatchRerenders(installLocked(level, ownerPos, clickedFace, sequence, rawBitsByPos));
     }
 
+    /** Holds the existing subject's height while its support edit is predicted. */
+    public static void holdLegacyHeightBeforeSupportEdit(
+            Object level, BlockPos support, BlockPos subject, int sequence, long rawHeight) {
+        dispatchRerenders(installLocked(level, support, Direction.UP, sequence, Map.of(subject, rawHeight), true));
+    }
+
     static synchronized List<BlockPos> installLocked(
             Object level,
             BlockPos ownerPos,
@@ -265,12 +281,23 @@ public final class PlacementDyOverlay {
             int sequence,
             Map<BlockPos, Long> rawBitsByPos
     ) {
+        return installLocked(level, ownerPos, clickedFace, sequence, rawBitsByPos, false);
+    }
+
+    private static synchronized List<BlockPos> installLocked(
+            Object level,
+            BlockPos ownerPos,
+            Direction clickedFace,
+            int sequence,
+            Map<BlockPos, Long> rawBitsByPos,
+            boolean legacySupportEdit
+    ) {
         if (level == null || ownerPos == null || clickedFace == null || sequence < 0
                 || rawBitsByPos == null || rawBitsByPos.isEmpty()) {
             return List.of();
         }
         ensureCurrentLevel(level);
-        GroupKey key = new GroupKey(ownerPos.asLong(), clickedFace, sequence);
+        GroupKey key = new GroupKey(ownerPos.asLong(), clickedFace, sequence, legacySupportEdit);
 
         long[] cells = new long[rawBitsByPos.size()];
         int i = 0;
@@ -419,7 +446,7 @@ public final class PlacementDyOverlay {
      * probe installed only the timeout can retire, which is the correct inert behaviour.
      */
     private static boolean backingPresentForOwnedCellsLocked(Group group) {
-        BackingFactProbe probe = backingProbe;
+        BackingFactProbe probe = group.key.legacySupportEdit() ? legacyCaptureProbe : backingProbe;
         if (probe == null) {
             return false;
         }

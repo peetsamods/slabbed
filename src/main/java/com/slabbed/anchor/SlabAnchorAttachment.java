@@ -1,5 +1,6 @@
 package com.slabbed.anchor;
 
+import java.util.function.BooleanSupplier;
 import java.util.function.Predicate;
 import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
@@ -22,12 +23,14 @@ import net.minecraft.block.CarpetBlock;
 import net.minecraft.block.SlabBlock;
 import net.minecraft.block.enums.SlabType;
 import net.minecraft.registry.Registries;
+import net.minecraft.server.world.ServerWorld;
 import net.minecraft.util.math.Direction;
 import net.minecraft.state.property.Properties;
 import net.minecraft.util.Identifier;
 import net.minecraft.util.math.Box;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.BlockView;
+import net.minecraft.world.EmptyBlockView;
 import net.minecraft.world.World;
 import net.minecraft.world.chunk.WorldChunk;
 import net.minecraft.util.shape.VoxelShape;
@@ -75,6 +78,8 @@ public final class SlabAnchorAttachment {
     public static Predicate<BlockPos> clientCompoundVisibleSideDoubleSlabLookup = null;
     public static Predicate<BlockPos> clientCompoundVisibleOwnerTopSlabLookup = null;
     public static Predicate<BlockPos> clientModernPlacementLookup = null;
+    public static Predicate<BlockPos> clientLegacyHeightCaptureLookup = null;
+    public static BooleanSupplier clientLegacyCaptureEnabled = () -> false;
     public static Predicate<BlockPos> clientPostPolicyPredictionLookup = null;
 
     /**
@@ -119,6 +124,8 @@ public final class SlabAnchorAttachment {
             new Identifier(Slabbed.MOD_ID, "compound_visible_owner_top_slabs");
     private static final Identifier PLACEMENT_DY_ID = new Identifier(Slabbed.MOD_ID, "placement_dy");
     private static final Identifier MODERN_PLACEMENT_ID = new Identifier(Slabbed.MOD_ID, "modern_placements");
+    private static final Identifier LEGACY_HEIGHT_CAPTURE_ID =
+            new Identifier(Slabbed.MOD_ID, "legacy_height_captures");
 
     /**
      * Codec for the anchor set.  Backed by {@code long[]} so the NBT representation is
@@ -205,6 +212,10 @@ public final class SlabAnchorAttachment {
             AttachmentRegistry.<LongOpenHashSet>builder()
                     .persistent(SET_CODEC)
                     .buildAndRegister(MODERN_PLACEMENT_ID);
+    public static final AttachmentType<LongOpenHashSet> LEGACY_HEIGHT_CAPTURE_TYPE =
+            AttachmentRegistry.<LongOpenHashSet>builder()
+                    .persistent(SET_CODEC)
+                    .buildAndRegister(LEGACY_HEIGHT_CAPTURE_ID);
 
     // ── FROZEN-DY value store (LAW.md restoration, Slice 2b) ──────────────────────────
     // The law: a block's height is decided ONCE at placement and STAYS. Unlike the presence flags
@@ -367,7 +378,7 @@ public final class SlabAnchorAttachment {
      * placed by an item under this line's placement policy carries a modern marker and reads its
      * stored height; a cell without one (blocks from before this version, worldgen, structures,
      * {@code /setblock}) keeps the live read lanes, so upgrading a world moves nothing. There is no
-     * retro-migration on this line: a legacy cell never acquires a stored value from its live geometry.
+     * retro-migration in the default mode.
      *
      * <p>{@code -Dslabbed.frozenDy=true} remains the opt-in for whole-world frozen reads. Deliberately
      * MUTABLE: fixtures and law rows flip it in-process to run a single scenario under whole-world
@@ -375,6 +386,14 @@ public final class SlabAnchorAttachment {
      */
     public static boolean FROZEN_DY_ENABLED =
             Boolean.parseBoolean(System.getProperty("slabbed.frozenDy", "false"));
+
+    public static final boolean CAPTURE_LEGACY_BEFORE_SUPPORT_EDIT =
+            Boolean.getBoolean("slabbed.captureLegacyBeforeSupportEdit");
+
+    public static boolean legacyCaptureEnabled(BlockView view) {
+        return view instanceof World world && !world.isClient()
+                ? CAPTURE_LEGACY_BEFORE_SUPPORT_EDIT : clientLegacyCaptureEnabled.getAsBoolean();
+    }
 
     /**
      * Writes a server-authoritative C3 batch with at most one attachment publication per chunk.
@@ -525,6 +544,9 @@ public final class SlabAnchorAttachment {
         if (isModernPlacement(world, pos)) {
             return true;
         }
+        if (legacyCaptureEnabled(world) && rawLegacyCapturedHeight(world, pos).present()) {
+            return true;
+        }
         // A server never consults the integrated client's prediction overlay. Only the client World
         // or its render-region bridge may select the modern path before provenance sync arrives.
         if (world instanceof World w && !w.isClient()) {
@@ -533,6 +555,62 @@ public final class SlabAnchorAttachment {
         return clientPostPolicyPredictionLookup != null && clientPostPolicyPredictionLookup.test(pos)
                 && clientEffectivePlacementDyLookup != null
                 && clientEffectivePlacementDyLookup.lookup(pos) != null;
+    }
+
+    /** Reads a synchronized legacy capture only after both its provenance and value are present. */
+    public static PlacementDyFact rawLegacyCapturedHeight(BlockView view, BlockPos pos) {
+        if (pos == null) {
+            return PlacementDyFact.absent();
+        }
+        if (!(view instanceof World world)) {
+            return clientLegacyHeightCaptureLookup != null && clientLegacyHeightCaptureLookup.test(pos)
+                    ? rawPlacementDyFact(view, pos) : PlacementDyFact.absent();
+        }
+        WorldChunk chunk = world.getChunk(pos.getX() >> 4, pos.getZ() >> 4);
+        LongOpenHashSet positions = chunk == null ? null : chunk.getAttached(LEGACY_HEIGHT_CAPTURE_TYPE);
+        return positions != null && positions.contains(pos.asLong())
+                ? rawPlacementDyFact(view, pos) : PlacementDyFact.absent();
+    }
+
+    /** Stores a factless full block's visible height before its immediate slab support changes. */
+    public static void captureLegacyHeightBeforeSupportEdit(
+            WorldChunk chunk, BlockPos support, BlockState replacement) {
+        World world = chunk.getWorld();
+        if (!legacyCaptureEnabled(world) || FROZEN_DY_ENABLED) {
+            return;
+        }
+        int sequence = world.isClient() ? PlacementDyOverlay.currentSequence() : -1;
+        if (world.isClient() ? sequence < 0
+                : !(world instanceof ServerWorld server) || !server.getServer().isOnThread()) {
+            return;
+        }
+        if (legacyCaptureSlabType(chunk.getBlockState(support)) == legacyCaptureSlabType(replacement)) {
+            return;
+        }
+        BlockPos pos = support.up();
+        BlockState state = chunk.getBlockState(pos);
+        if (state.isAir() || !state.isFullCube(EmptyBlockView.INSTANCE, BlockPos.ORIGIN)
+                || isModernPlacement(world, pos) || rawPlacementDyFact(world, pos).present()) {
+            return;
+        }
+        double height = SlabSupport.getYOffset(world, pos, state);
+        if (!Double.isFinite(height) || quantiseDy(height) == UNREPRESENTABLE) {
+            return;
+        }
+        long rawHeight = Double.doubleToRawLongBits(height);
+        if (world.isClient()) {
+            PlacementDyOverlay.holdLegacyHeightBeforeSupportEdit(world, support, pos, sequence, rawHeight);
+        } else if (writePlacementDyBatch(world, Map.of(pos, rawHeight)) == 1) {
+            addToAttachment(world, pos, LEGACY_HEIGHT_CAPTURE_TYPE, "legacy_height_capture");
+        }
+    }
+
+    private static SlabType legacyCaptureSlabType(BlockState state) {
+        // A top slab's placed offset may be published after the block-state edit.
+        if (SlabSupport.isTopSlab(state)) {
+            return SlabType.TOP;
+        }
+        return SlabSupport.isBottomSlab(state) ? SlabType.BOTTOM : null;
     }
 
     /** Marks accepted item-placement cells with modern provenance (the policy is unconditional here). */
@@ -946,6 +1024,7 @@ public final class SlabAnchorAttachment {
         removeFromAttachment(world, pos, COMPOUND_VISIBLE_OWNER_TOP_SLAB_TYPE,
                 "compound_visible_owner_top_slab");
         removeFromAttachment(world, pos, MODERN_PLACEMENT_TYPE, "modern_placement");
+        removeFromAttachment(world, pos, LEGACY_HEIGHT_CAPTURE_TYPE, "legacy_height_capture");
         // FROZEN-DY: the stored placement height dies with the block, so a fresh placement in the same
         // cell captures its own aim from scratch. Copy-on-write, exactly like the writer.
         if (world != null && !world.isClient()) {

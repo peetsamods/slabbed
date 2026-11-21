@@ -47,7 +47,8 @@ public final class SlabAnchorSync {
             SlabAnchorAttachment.COMPOUND_VISIBLE_SIDE_DOUBLE_SLAB_TYPE,
             SlabAnchorAttachment.COMPOUND_VISIBLE_OWNER_TOP_SLAB_TYPE,
             SlabAnchorAttachment.MODERN_PLACEMENT_TYPE,
-            SlabAnchorAttachment.PLACEMENT_DY_TYPE);
+            SlabAnchorAttachment.PLACEMENT_DY_TYPE,
+            SlabAnchorAttachment.LEGACY_HEIGHT_CAPTURE_TYPE);
 
     private SlabAnchorSync() {
     }

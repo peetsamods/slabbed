@@ -34,6 +34,7 @@
     "ServerInteractBlockHitToleranceMixin",
     "BlockOnPlacedAnchorMixin",
     "BlockOnStateReplacedAnchorMixin",
+    "LegacyHeightBeforeSupportEditMixin",
     "FencePaneSlabConnectionMixin",
     "WallSlabConnectionMixin",
     "ScaffoldingLoweredStandMixin",

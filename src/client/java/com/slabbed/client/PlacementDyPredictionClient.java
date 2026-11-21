@@ -38,6 +38,7 @@ public final class PlacementDyPredictionClient {
 
         PlacementDyOverlay.installClientHooks(
                 PlacementDyPredictionClient::backingFact,
+                PlacementDyPredictionClient::legacyCaptureFact,
                 PlacementDyPredictionClient::scheduleExactPlacementDyRerender);
 
         // The overlay-aware read seam. Answers null for every cell it has no opinion about, so the
@@ -86,6 +87,12 @@ public final class PlacementDyPredictionClient {
         }
         return SlabAnchorAttachment.isModernPlacement(mc.world, pos) && fact.present()
                 ? fact : SlabAnchorAttachment.PlacementDyFact.absent();
+    }
+
+    private static SlabAnchorAttachment.PlacementDyFact legacyCaptureFact(long packedPos) {
+        MinecraftClient mc = MinecraftClient.getInstance();
+        return mc == null || mc.world == null ? SlabAnchorAttachment.PlacementDyFact.absent()
+                : SlabAnchorAttachment.rawLegacyCapturedHeight(mc.world, BlockPos.fromLong(packedPos));
     }
 
     /**
