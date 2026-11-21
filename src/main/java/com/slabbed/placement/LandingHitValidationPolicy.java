@@ -20,6 +20,8 @@ import net.minecraft.world.level.block.state.properties.SlabType;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.Vec3;
 import net.minecraft.world.phys.shapes.VoxelShape;
+import net.minecraft.world.phys.shapes.Shapes;
+import net.minecraft.world.phys.shapes.BooleanOp;
 
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
@@ -217,7 +219,7 @@ public final class LandingHitValidationPolicy {
         //    componentDistance <= tolerance together with a NaN shift.
         // Reach is NOT widened by this: isWithinBlockInteractionRange is checked separately and
         // earlier in handleUseItemOn, so a shifted centre cannot extend how far a player can build.
-        if (presentsFullCubeInteractionFace(ownerState)
+        if ((presentsFullCubeInteractionFace(ownerState) || presentsFullCubeOutline(ownerState))
                 && vanillaWouldRejectOnYAlone(ownerPos, hitPos)
                 && insideTranslatedCell(ownerPos, ownerDy, hitPos)) {
             return ownerDy;
@@ -401,6 +403,17 @@ public final class LandingHitValidationPolicy {
         }
         double underside = ownerPos.getY() + ownerDy + bodyMinY;
         return Math.abs(hitPos.y - underside) <= UNDERSIDE_PLANE_EPSILON;
+    }
+
+    // Transparent full cubes have an empty interaction shape, but expose the same selectable
+    // faces as opaque cubes. Exact shape equality excludes hollow or partial bounding boxes.
+    private static boolean presentsFullCubeOutline(BlockState state) {
+        if (state == null) {
+            return false;
+        }
+        VoxelShape outline = state.getShape(EmptyBlockGetter.INSTANCE, BlockPos.ZERO);
+        return outline != null && !outline.isEmpty()
+                && !Shapes.joinIsNotEmpty(outline, Shapes.block(), BooleanOp.NOT_SAME);
     }
 
     /**

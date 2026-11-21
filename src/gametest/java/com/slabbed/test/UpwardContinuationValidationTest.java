@@ -90,6 +90,51 @@ public final class UpwardContinuationValidationTest {
         h.succeed();
     }
 
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void transparentCubeLowerSideValidation(GameTestHelper h) {
+        BlockPos owner = h.absolutePos(new BlockPos(3, 5, 3));
+        BlockState held = Blocks.DIRT.defaultBlockState();
+        for (Block block : new Block[]{Blocks.GLASS, Blocks.TINTED_GLASS,
+                Blocks.ICE, Blocks.SLIME_BLOCK}) {
+            BlockState state = block.defaultBlockState();
+            for (double dy : new double[]{-1.0d, -1.5d, -2.0d}) {
+                Vec3 hit = new Vec3(owner.getX() + 0.5d, owner.getY() + dy + 0.25d, owner.getZ());
+                double shifted = LandingHitValidationPolicy.shiftedCenterDy(
+                        owner, state, dy, Direction.NORTH, hit, held);
+                if (rawBits(shifted) != rawBits(dy)) {
+                    throw h.assertionException(owner, "Full-cube lower side rejected: " + state + " dy=" + dy);
+                }
+                for (Vec3 outside : new Vec3[]{hit.add(0, -0.26d, 0), hit.add(0, 0, -0.01d),
+                        hit.add(0.51d, 0, 0), hit.add(0, 1.01d, 0),
+                        new Vec3(Double.NaN, hit.y, hit.z)}) {
+                    if (!Double.isNaN(LandingHitValidationPolicy.shiftedCenterDy(
+                            owner, state, dy, Direction.NORTH, outside, held))) {
+                        throw h.assertionException(owner, "Full-cube validation admitted outside hit: " + outside);
+                    }
+                }
+            }
+            Vec3 flatHit = new Vec3(owner.getX() + 0.5d, owner.getY() + 0.25d, owner.getZ());
+            if (!Double.isNaN(LandingHitValidationPolicy.shiftedCenterDy(
+                    owner, state, 0.0d, Direction.NORTH, flatHit, held))) {
+                throw h.assertionException(owner, "Flat cube unexpectedly shifted");
+            }
+            Vec3 admitted = new Vec3(owner.getX() + 0.5d, owner.getY() - 0.25d, owner.getZ());
+            if (!Double.isNaN(LandingHitValidationPolicy.shiftedCenterDy(
+                    owner, state, -1.0d, Direction.NORTH, admitted, held))) {
+                throw h.assertionException(owner, "Already admitted transparent cube hit changed");
+            }
+        }
+        for (Block partial : new Block[]{Blocks.GLASS_PANE, Blocks.OAK_FENCE, Blocks.COBBLESTONE_WALL,
+                Blocks.IRON_BARS}) {
+            Vec3 hit = new Vec3(owner.getX() + 0.5d, owner.getY() - 0.75d, owner.getZ());
+            if (!Double.isNaN(LandingHitValidationPolicy.shiftedCenterDy(
+                    owner, partial.defaultBlockState(), -1.0d, Direction.NORTH, hit, held))) {
+                throw h.assertionException(owner, "Partial shape admitted by full-cube rescue: " + partial);
+            }
+        }
+        h.succeed();
+    }
+
     private static FamilyResult exercise(GameTestHelper h, BlockState ownerState, Item heldItem) {
         ServerLevel world = h.getLevel();
         BlockPos owner = h.absolutePos(new BlockPos(3, 3, 3));
