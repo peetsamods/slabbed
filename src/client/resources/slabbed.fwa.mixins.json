@@ -6,6 +6,7 @@
   "client": [
     "FancyWorldAnimationsRendererMixin",
     "FancyWorldAnimationsChainMixin",
+    "FancyWorldAnimationsChainTickMixin",
     "FancyWorldAnimationsAccessor",
     "FancyWorldAnimationsChainAccess",
     "FancyWorldAnimationsBoundsMixin",

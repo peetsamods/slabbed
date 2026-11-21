@@ -164,6 +164,7 @@ anything. The split above puts the fine granularity only where a leak has actual
 | `com/slabbed/client/BetaNoticeClient` | Shipped one-time beta notice on world join. |
 | `com/slabbed/client/BetaNoticeSessionGate` | Per-session gate for the beta notice. |
 | `com/slabbed/client/BetaNoticeDismissedWorlds` | Per-world "don't show again" store for the beta notice. |
+| `com/slabbed/client/FwaPlacementSeat` | Client-thread-published placement offset shared by Fancy World Animations drawing and culling; loaded only through the optional FWA adapter. |
 | `com/slabbed/client/ClientDy` | Client-side dy lookup — the render/collision read path. |
 | `com/slabbed/client/SlabAnchorClientSync` | Receives anchor sync from the server. |
 | `com/slabbed/client/SlabGeometricRemeshScheduler` | Schedules section remeshes when dy changes. |
