@@ -1,3 +1,16 @@
+## [0.6.14-alpha+1.20.1]
+
+See LAW.md — this changelog does not redefine the law.
+
+For Minecraft 1.20.1 on Fabric. Requires Fabric Loader 0.16 or newer, Fabric API 0.92.x, and Java 17 or newer.
+
+### FIXED
+
+- Existing blocks in the affected stack keep their height when you add or remove the slab underneath with legacy height capture enabled. Captured blocks also keep their saved height through piston movement and server restarts. Thanks to NSSCaptain for the reproduction in [#99](https://github.com/peetsamods/slabbed/issues/99).
+- Blocks with saved heights appear at the right height from the first frame when you join or return to an area, even if the separate height updates arrive later.
+
+Legacy height capture is off by default. Enable it with `-Dslabbed.captureLegacyBeforeSupportEdit=true` on the server JVM or the game JVM for singleplayer. An opted-in server requires a compatible client. Turning capture off still leaves previously saved heights in effect.
+
 ## [0.6.8-alpha+1.20.1]
 
 See LAW.md — this changelog does not redefine the law.
